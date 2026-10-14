@@ -157,7 +157,10 @@ KEEP_FOOD = 3              # food a villager won't sell
 STOCK_FOOD = 5             # a larder of five loaves
 FUEL_KEEP = 1              # firewood a villager won't sell
 STOCK_WOOD = 20.0          # ...and what a HOUSE aims to keep stacked
-WOOD_PER_HOUSE = 10.0      # logs a hearth burns in a day -- it is a HOUSE that
+WOOD_PER_HOUSE = 5.0       # logs a hearth burns in a day -- it is a HOUSE that
+                           # was 10, which at ITEM_VALUE 4 coin a log is 40 coin
+                           # a day against a WAGE of 10: heating cost four days'
+                           # wages. Five is a house kept warm for half a wage.
 WARMTH_RATE = WOOD_PER_HOUSE / DAY_LENGTH   # burns wood, not a person
 COLD_HUNGER = 2.0          # a cold house means you need twice the food
 MINT_ITEM = "wood"         # the treasury coins its firewood, one coin the log

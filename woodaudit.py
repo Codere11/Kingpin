@@ -83,7 +83,8 @@ V.rebuild_people(villages)
 V.rebuild_houses(villages)
 
 C = {"fell": 0, "cut": 0, "cut_logs": 0, "tax_logs": 0,
-     "mint": 0, "mint_logs": 0, "mint_fail": 0}
+     "mint": 0, "mint_logs": 0, "mint_fail": 0,
+     "sold_logs": 0, "sold_coin": 0}
 
 # ---- HOOK 1: the tree actually drops -------------------------------------
 _orig_fell = V._FOREST.fell
@@ -124,6 +125,22 @@ def _mint(village, amount):
 
 
 E.monetize = _mint
+
+
+# ---- HOOK 4: the wood actually SOLD, and its price ----------------------
+# The question is not how much is cut, it is what a log FETCHES. A trade of
+# 12,653 logs at 0.2 coin each is a different world from 2,000 logs at 8.
+_orig_settle = E._settle
+
+
+def _settle(village, item, price, qty, seller, buyer):
+    if item == "wood":
+        C["sold_logs"] += int(qty)
+        C["sold_coin"] += int(price) * int(qty)
+    return _orig_settle(village, item, price, qty, seller, buyer)
+
+
+E._settle = _settle
 
 
 def stocks():
@@ -178,9 +195,12 @@ def report():
         # a hearth burns WARMTH_RATE a second; one log is one warmth
         burn = (d["cut_logs"] - d["tax_logs"]) + d["mint_logs"] - (tot1 - tot0)
         print("+%4.0fs  felled %3d (%4.1f/s)  cut_logs %5d  town_tax %4d"
-              "  minted %4d (failed %3d)  BURNED~%6d  [%.1f/s]"
+              "  minted %4d  SOLD %5d logs for %6d coin"
+              "  (%.2f a log)  BURNED~%6d"
               % (el, d["fell"], d["fell"] / el, d["cut_logs"], d["tax_logs"],
-                 d["mint_logs"], d["mint_fail"], burn, burn / el), flush=True)
+                 d["mint_logs"], d["sold_logs"], d["sold_coin"],
+                 (d["sold_coin"] / d["sold_logs"]) if d["sold_logs"] else 0.0,
+                 burn), flush=True)
         print("        stock  town %7.0f  houses %7.0f  pockets %7.0f"
               "   = %8.0f     loggers %3d  with-axe %3d  empty-handed %3d"
               % (store1, house1, purse1, tot1, nl, na, nz), flush=True)
