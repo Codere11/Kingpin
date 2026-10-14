@@ -127,6 +127,18 @@ def story_cold(name, now: float) -> bool:
     return born is not None and now - born >= STORY_LIFETIME
 NPC_SPACING = 22.0                   # personal space villagers keep between them
 LOGGERS_PER_VILLAGE = 2    # hands in the woods (see the quota in offer_post)
+
+# WHAT ONE FELLED TREE YIELDS, IN LOGS. It was 10-30, and measured against the
+# world it was not enough: 665 houses burn WOOD_PER_HOUSE = 10 a day, so the
+# world needs 6,650 logs a day, and the loggers cut 5,964 of them. A shortfall
+# of 686 a day means the village store is never anything but EMPTY -- measured
+# `town 0` at every sample -- and since economy.monetize() coins the town's
+# own firewood to make the sales tax, a town with no wood in the store earns
+# NOTHING from a day's trading. That is the whole of "in is miniscule".
+#
+# +50%, so the woods stop being a deficit and the store can hold a surplus.
+FELL_LOGS_MIN = 15            # was 10
+FELL_LOGS_MAX = 45            # was 30
 WORLD_POP_CAP = 1000       # HARD CAP on living people in the whole world
 TRADERS_PER_VILLAGE = 3    # caravans a village keeps on the road
 _FOREST = None             # set once by main, so villages can find their woods
@@ -1010,7 +1022,8 @@ class NPC:
             # main works and `import trees; trees.fell(...)` here does not.
             if _FOREST is not None:
                 _FOREST.fell(target, now)
-            economy.cut_wood(self.village, self, self.rng.randint(10, 30))
+            economy.cut_wood(self.village, self,
+                             self.rng.randint(FELL_LOGS_MIN, FELL_LOGS_MAX))
             # FELLING TEACHES THE AXE. It never did. gain_axe was called on a
             # soldier's swing, the player's swing and a villager's fight -- and
             # nowhere else -- so a man who spent his whole life in the woods

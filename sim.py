@@ -205,6 +205,47 @@ def reporter():
                           % (sk.farming, sk.axe, sk.movement, sk.shooting))
             line = ("day %-4d  population %4d   %-16s coin %4d  job %-8s  %s\n"
                     % (whole, population(), n.name, n.coins, job, skills))
+        # WHERE IS THE COIN? A village ledger that lends 440 a day and takes
+        # in 50 is not an economy, it is a bank -- and the tax base is only the
+        # men who earned CASH, which the tax log says is 6 hands in a town of
+        # 29. So count the purses against the ledgers: if the coin is sitting
+        # in men's pockets, nothing else in this file will ever balance.
+        try:
+            import village as _vm
+            import wildcrop
+            people = list(_vm.PEOPLE)
+            purses = sum(float(getattr(n, "coins", 0.0)) for n in people)
+            earners = sum(1 for n in people
+                          if float(getattr(n, "book_in", 0.0)) > 0.0)
+            ledgers = 0.0
+            w = wildcrop._WORLD
+            reg = getattr(getattr(w, "ground", None), "villages_v", None)
+            if reg is not None:
+                ledgers = sum(float(getattr(v, "ledger_coins", 0.0))
+                              for v in reg.villages)
+            line += ("       COIN   ledgers %9.0f   purses %9.0f"
+                     "   earned-today %4d of %4d\n"
+                     % (ledgers, purses, earners, len(people)))
+            # WHO HAS IT. If the coin is not in the ledgers and it is not in
+            # the shops, it is in somebody's pocket -- and the trade of the men
+            # holding the most of it says exactly who the economy is feeding.
+            top = sorted((n for n in people if getattr(n, "alive", False)),
+                         key=lambda n: -float(getattr(n, "coins", 0.0)))[:6]
+            line += ("       RICH   " + "   ".join(
+                "%s(%s)%d" % (getattr(n, "name", "?").split()[0],
+                              getattr(n, "job", None) or "idle",
+                              int(getattr(n, "coins", 0.0)))
+                for n in top) + "\n")
+            # AND WHO OWED: a man is taxed on book_in - book_out, so count the
+            # men whose NET cleared the 20-coin tax-free floor.
+            over = sum(1 for n in people
+                       if float(getattr(n, "book_in", 0.0))
+                       - float(getattr(n, "book_out", 0.0)) > 20.0)
+            rich = sum(1 for n in people if float(getattr(n, "coins", 0.0)) > 100.0)
+            line += ("       TAXABLE over-20-net %4d of %4d   purses-over-100 %4d\n"
+                     % (over, len(people), rich))
+        except Exception as _e:
+            line += "       COIN   (unavailable: %r)\n" % (_e,)
         try:
             with open(LOG, "a") as fh:
                 fh.write(line)
