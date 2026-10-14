@@ -173,7 +173,20 @@ ORDER_AT = 0.40            # durability at which a man orders his next tool
 # ran at a loss -- deepest hole first. The rest stays in the common purse.
 TAX_BRACKETS = ((20.0, 0.00), (100.0, 0.15), (300.0, 0.30),
                 (1000.0, 0.45), (float("inf"), 0.60))
-SUBSIDY_SHARE = 0.80
+# THE TAX STAYS IN THE VILLAGE. IT IS NOT REDISTRIBUTED AS COIN.
+#
+# This was 0.80: four fifths of every village's tax was handed straight back
+# out to the poorest men as CASH, the same day it was collected. It was doing
+# nothing the granary does not already do -- economy.dole() feeds a starving
+# man out of the common store for nothing, "nobody dies while there is bread in
+# the store" -- so it was not a safety net, it was the village giving away its
+# own income and then borrowing to pay its wages.
+#
+# With it gone the tax stays where it lands: the village keeps it and pays the
+# people it employs out of it, and the crown takes its half of the profit --
+# which can now actually exist, because a village is no longer forbidden to end
+# the day richer than it started.
+SUBSIDY_SHARE = 0.0
 MAX_STOPS = 5              # villages on one caravan route before heading home
 HOUSE_PURSE = 80           # a house keeps its workers in tools and seed
 HOUSE_KEEP = 100           # ...without a breadwinner giving away his last coin
@@ -755,6 +768,7 @@ def monetize(village, amount: int) -> int:
     if take <= 0:
         return amount
     store_take(village, MINT_ITEM, take)
+    flow(village, 'monetize', (take))
     village.ledger_coins += take
     return amount - take
 
@@ -769,6 +783,7 @@ def _settle(village, item, price, qty, seller, buyer) -> int:
             return 0
         cost = int(round(price * qty))
         store_take(village, item, qty)
+        flow(village, '_settle', (cost))
         village.ledger_coins += cost
         buyer.coins -= cost
     else:
@@ -799,6 +814,7 @@ def _settle(village, item, price, qty, seller, buyer) -> int:
         whole = int(frac)
         village._tax_frac = frac - whole
         monetize(village, whole)
+        flow(village, '_settle', (whole))
         village.ledger_coins += whole
     buyer.stock[item] = buyer.stock.get(item, 0) + qty
     if seller is not None:
@@ -895,6 +911,7 @@ def borrow(village, npc, amount: int) -> int:
     amount = min(amount, village.ledger_coins)
     if amount <= 0:
         return 0
+    flow(village, 'borrow', -(amount))
     village.ledger_coins -= amount
     npc.coins += amount          # THE PRINCIPAL ACTUALLY CHANGES HANDS.
     # Without this the ledger quietly deleted the money, recorded a debt, and
@@ -913,7 +930,46 @@ def repay(village, npc) -> None:
     paid = min(npc.loan, npc.coins)
     npc.coins -= paid
     npc.loan -= paid
+    flow(village, 'repay', (paid))
     village.ledger_coins += paid
+
+
+# ---- CASH FLOW INSTRUMENT (temporary: tells us where a village's money GOES) --
+# The big outgoings have never logged anything: pay_crown, pay_wages,
+# pay_garrison, buy_material and the gunworks all move coin in silence, so a
+# village ledger could bleed 700 a day with nothing in the log to say why.
+FLOW: dict = {}
+_FLOW_DAY = -1
+def flow(village, tag: str, amount) -> None:
+    try:
+        d = FLOW.setdefault(getattr(village, "name", "?"), {})
+        d[tag] = d.get(tag, 0.0) + float(amount)
+    except Exception:
+        pass
+
+
+def flow_report(day) -> None:
+    """One line a day: every village's money in and out, biggest first."""
+    global _FLOW_DAY
+    if _FLOW_DAY == day:
+        return                      # once a day, not once a village
+    _FLOW_DAY = day
+    _note("day %4d  ---------- WHERE THE MONEY GOES ----------" % day)
+    # EVERY town with real movement, not the top eight: the capitals were
+    # draining 1,087 in the day and only 366 of it was in the printed window,
+    # and a report that hides a third of the money is worse than none.
+    for name, d in sorted(FLOW.items(),
+                          key=lambda kv: -abs(sum(kv[1].values()))):
+        inn = sum(v for k, v in d.items() if v > 0)
+        out = sum(v for k, v in d.items() if v < 0)
+        if abs(inn) < 1 and abs(out) < 1:
+            continue
+        parts = " ".join("%s:%+d" % (k, int(v))
+                         for k, v in sorted(d.items(), key=lambda kv: -abs(kv[1]))
+                         if abs(v) >= 1)[:220]
+        _note("day %4d  FLOW %-14s in %6d  out %7d  net %+7d   %s"
+              % (day, name, int(inn), int(out), int(inn + out), parts))
+    FLOW.clear()
 
 
 SHOVEL_LOAN_MARGIN = 1.2    # lend enough to cover the ask and then some
@@ -964,6 +1020,7 @@ def buy_provisions(village, npc) -> int:
                 continue
             if village.ledger_goods.get(item, 0) > 0:
                 store_take(village, item, 1)
+                flow(village, 'buy_provisions', (price))
                 village.ledger_coins += price
             else:
                 seller = next((o for o in village.npcs
@@ -1007,6 +1064,7 @@ def forge_loan(village, npc) -> int:
         paid = int(round(price * take))
         miner.stock["iron"] -= take
         miner.coins += paid
+        flow(village, 'forge_loan', -(paid))
         village.ledger_coins -= paid
         npc.stock["iron"] = npc.stock.get("iron", 0) + take
         npc.loan += paid                       # the forge owes the bank
@@ -1039,6 +1097,7 @@ def service_loan(village, npc) -> None:
     paid = min(npc.loan, spare)
     npc.coins -= paid
     npc.loan -= paid
+    flow(village, 'service_loan', (paid))
     village.ledger_coins += paid
 
 
@@ -1089,7 +1148,9 @@ def crown_dues(village, day: int) -> int:
     cap = village.capital()
     if cap is None or cap is village:
         return 0
+    flow(village, 'crown_dues', -(due))
     village.ledger_coins -= due
+    flow(cap, 'crown_dues', (due))
     cap.ledger_coins += due
     _note("day %4d  %-16s CROWN %5d of %5d profit sent to %s"
           % (day, village.name, due, profit, cap.name))
@@ -1182,6 +1243,7 @@ def pay_crown(village, day: int) -> int:
         return 0
     king.coins += paid
     king.book_in = getattr(king, "book_in", 0.0) + paid
+    flow(village, 'pay_crown', -(paid))
     village.ledger_coins -= paid
     return paid
 
@@ -1270,6 +1332,7 @@ def _buy_off_people(village, item: str, want: int) -> int:
         n.stock[item] = have - take
         n.coins += cost
         n.book_in = n.book_in + cost
+        flow(village, '_buy_off_people', -(cost))
         village.ledger_coins -= cost
         village.ledger_goods[item] = village.ledger_goods.get(item, 0) + take
         got += take
@@ -1297,6 +1360,7 @@ def pay_garrison(village, day: int) -> int:
             break
         n.coins += wage
         n.book_in = n.book_in + wage
+        flow(village, 'pay_garrison', -(wage))
         village.ledger_coins -= wage
         paid += wage
     return paid
@@ -1655,16 +1719,34 @@ def pay_mayor(village, day: int) -> int:
                 float(second.coins) / 20.0)            # a day's worth of his wealth
     want = int(bench * random.uniform(*MAYOR_SHARE))
     want = min(want, KING_WAGE // 2)                   # the King stays 2-3x above
-    paid = int(min(want, max(0, cap.ledger_coins - CROWN_BUFFER)))   # the nation pays
+    # ------------------------------------------------------------------
+    # THE TOWN PAYS ITS OWN MAYOR, OUT OF THE TOWN'S OWN MONEY.
+    #
+    # This paid him out of the CAPITAL's ledger (and skipped the buffer check
+    # by exactly the amount it felt like), so one crown owed its whole nation's
+    # mayors at once: measured, the crown took in 127 coin in a day and paid
+    # out 1,600 in mayoral wages, and because CROWN_BUFFER holds 1,500 back,
+    # the two together were a LID. The crown filled to 1,500, was emptied to
+    # 1,500 by mayors, and never once reached the 4,000 coin that WAR_CHEST
+    # demands -- which is why no army ever marched in any run tonight.
+    #
+    # The wage itself was also the wrong shape: 2-3x the SECOND-RICHEST MAN'S
+    # DAILY TURNOVER, so one trader having a good day raised the mayor's pay
+    # whether or not the town had earned anything. A town pays what it can: a
+    # rich town keeps an expensive mayor, a poor town an inexpensive one, and
+    # the crown is left to the King, the army and the war it wants to fight.
+    paid = int(min(want, max(0, village.ledger_coins - MAYOR_FLOOR)))
     if paid <= 0:
         return 0
     mayor.coins += paid
     mayor.book_in = getattr(mayor, "book_in", 0.0) + paid
-    cap.ledger_coins -= paid
+    flow(village, 'pay_mayor', -(paid))
+    village.ledger_coins -= paid
     return paid
 
 
 def tax_day(village, day: int) -> None:
+    flow_report(day)
     """Settle the day's books: tax the winners, carry the losers. Once a day,
     not once a tick -- pay_wages guards itself and this must too."""
     if getattr(village, "_tax_day", -1) == day:
@@ -1686,6 +1768,7 @@ def tax_day(village, day: int) -> None:
         if paid <= 0:
             continue
         n.coins -= paid
+        flow(village, 'tax_day', (paid))
         village.ledger_coins += paid
         pool += paid
         taxed += 1
@@ -1698,6 +1781,7 @@ def tax_day(village, day: int) -> None:
         if need <= 0:
             continue
         n.coins += need
+        flow(village, 'tax_day', -(need))
         village.ledger_coins -= need
         give -= need
         helped += 1
@@ -1722,6 +1806,7 @@ def pay_wages(village, day: int) -> None:
         paid = min(WAGE, village.ledger_coins)
         npc.coins += paid
         npc.book_in = npc.book_in + paid   # wages are income
+        flow(village, 'pay_wages', -(paid))
         village.ledger_coins -= paid
 
 
