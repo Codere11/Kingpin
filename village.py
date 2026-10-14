@@ -1110,6 +1110,21 @@ class NPC:
             target = best
             self._shop_target = target
             if target is None:
+                # THE WHOLESALE HOUSE. No neighbour has any -- but the TOWN
+                # may. A logger's wood is the town's now (see cut_wood), and
+                # the ledger is where the people buy it: `_settle` with no
+                # seller is the house itself, and the coin goes to the ledger
+                # that pays the loggers' wages. Without this a man whose
+                # neighbours were all out of firewood simply gave up and spent
+                # the night cold, with a store full of logs behind the fence.
+                for item in needs:
+                    if int(vl.ledger_goods.get(item, 0)) <= 0:
+                        continue
+                    price = max(1, economy.ledger_value(vl, item))
+                    if self.coins < price:
+                        continue
+                    if economy._settle(vl, item, price, 1, None, self):
+                        return True
                 return False
         if (target.x - self.x) ** 2 + (target.y - self.y) ** 2 <= 42.0 * 42.0:
             economy.pair_trade(vl, target, self)

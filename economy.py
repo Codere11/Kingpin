@@ -142,6 +142,16 @@ TAXED_OUTPUT = ("iron", "cigar", "dried_mushroom", "beer", "liqueur", "mezcal")
 SALES_TAX = 0.06           # share of every trade taken as coin
 DAY_LENGTH = 600.0         # must match main's day/night cycle
 WAGE = 10                  # a day's pay for a day's work
+LOGGER_WAGE = 15           # AND A WOODSMAN IS AN EMPLOYEE, NOT A MERCHANT.
+                           # He was a free trader selling logs at whatever the
+                           # market bore, and measured over five days he took
+                           # the whole town's money: ledgers 34,509 -> 10,226
+                           # while the richest man alive went from a king with
+                           # 201 to a logger with 1,526. He is paid a wage for
+                           # a day's work now, and the wood he cuts is the
+                           # TOWN's -- see cut_wood.
+LOGGER_KEEP = 10           # logs a woodsman keeps for his own hearth; the
+                           # rest is the town's, because he is its employee
 KING_WAGE = 120            # the crown's salary: twelve days' work for one
 MAYOR_SHARE = (2.0, 3.0)   # of the second-richest man's day, to the mayor
 MAYOR_FLOOR = 20.0         # ...but never less than a decent day's pay
@@ -592,12 +602,26 @@ def take_fifth(village, npc, item: str, made: int) -> int:
 
 
 def cut_wood(village, npc, amount: int) -> None:
-    """A logger's take. The village takes its 20% in wood, the same as a crop."""
-    tax = round(amount * HARVEST_TAX)
-    if amount - tax:
-        npc.stock["wood"] = npc.stock.get("wood", 0) + amount - tax
-    if tax:
-        store_add(village, "wood", tax)
+    """A logger's take. HE IS PAID A WAGE AND THE WOOD IS THE TOWN'S.
+
+    He used to be a free trader: every log he cut was his, he sold it at
+    whatever the market bore, and he kept the lot. Measured over five days of
+    a live world, that one arrangement moved the whole economy into his
+    pocket -- the towns' ledgers fell 34,509 to 10,226, seventy per cent of
+    every coin they had, while the richest man alive went from a king with 201
+    to a logger with 1,526, and 337 men sat on a hundred coins each.
+
+    So he keeps ten logs for his own hearth, the rest goes into the common
+    store, and the town SELLS it to the people who need it. The coin for the
+    wood lands in the ledger that pays his wage, which is the whole point.
+    """
+    amount = int(amount)
+    keep = min(amount, LOGGER_KEEP)
+    rest = amount - keep
+    if keep > 0:
+        npc.stock["wood"] = npc.stock.get("wood", 0) + keep
+    if rest > 0:
+        store_add(village, "wood", rest)
 
 
 # -- what a villager wants, and what he'll pay --------------------------------
@@ -808,17 +832,30 @@ def _settle(village, item, price, qty, seller, buyer) -> int:
             buyer.grade[item] = quality.merge(grade_of(buyer, item), held,
                                               grade_of(seller, item), qty)
         seller.stock[item] -= qty
-        seller.coins += gross                 # the seller keeps the lot
-        seller.book_in = getattr(seller, "book_in", 0.0) + gross
+        # ------------------------------------------------------------------
+        # THE TOWN'S CUT COMES OUT OF THE SALE, NOT OUT OF THIN AIR.
+        #
+        # This said `seller.coins += gross` -- THE SELLER KEEPS THE LOT -- and
+        # then MINTED the town's 6% by coining the town's own firewood. So a
+        # trade moved coin from a buyer's purse to a seller's purse and the
+        # town, which had paid the wage that bought the loaf, took home nothing
+        # it did not have to burn a log for. Measured over five days:
+        #
+        #   ledgers  34,509 -> 10,226      the towns losing 24,283, 70% of all
+        #   purses   79,038 -> 115,197     their money
+        #   richest  Josiah(king)201  ->  Bubba(logger)1,526
+        #
+        # The town's money is not a gift from the forest. It is a share of the
+        # trade it makes possible, and it is taken at the moment of the trade.
+        frac = getattr(village, "_tax_frac", 0.0) + gross * SALES_TAX
+        cut = int(frac)
+        village._tax_frac = frac - cut
+        seller.coins += gross - cut
+        seller.book_in = getattr(seller, "book_in", 0.0) + (gross - cut)
         buyer.book_out = buyer.book_out + gross
         buyer.coins -= gross
-        # The ledger's cut comes out of its own granary, not the seller's purse.
-        frac = getattr(village, "_tax_frac", 0.0) + gross * SALES_TAX
-        whole = int(frac)
-        village._tax_frac = frac - whole
-        monetize(village, whole)
-        flow(village, '_settle', (whole))
-        village.ledger_coins += whole
+        flow(village, '_settle', (cut))
+        village.ledger_coins += cut
     buyer.stock[item] = buyer.stock.get(item, 0) + qty
     if seller is not None:
         # A TRADE IS A RELATIONSHIP. Both men come away knowing the other a
@@ -1799,14 +1836,20 @@ def tax_day(village, day: int) -> None:
 
 
 def pay_wages(village, day: int) -> None:
-    """A day's wage for the watch, out of the common purse."""
+    """A day's wage for the watch -- and for the woodsmen the town employs."""
     if day == village.wage_day:
         return
     village.wage_day = day
     for npc in village.npcs:
-        if not npc.alive or not is_watch(npc):
+        if not npc.alive:
             continue
-        paid = min(WAGE, village.ledger_coins)
+        if is_watch(npc):
+            wage = WAGE
+        elif getattr(npc, "job", None) == "logger":
+            wage = LOGGER_WAGE          # the woods are the town's payroll now
+        else:
+            continue
+        paid = min(wage, village.ledger_coins)
         npc.coins += paid
         npc.book_in = npc.book_in + paid   # wages are income
         flow(village, 'pay_wages', -(paid))
