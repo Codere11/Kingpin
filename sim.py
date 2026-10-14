@@ -244,6 +244,37 @@ def reporter():
             rich = sum(1 for n in people if float(getattr(n, "coins", 0.0)) > 100.0)
             line += ("       TAXABLE over-20-net %4d of %4d   purses-over-100 %4d\n"
                      % (over, len(people), rich))
+            # ---- THE CLASS STRUCTURE ---------------------------------------
+            # By EARNINGS (book_in, which the town books to zero once a day, so
+            # it is one day's income) and by WEALTH (the purse). Both, because
+            # they are not the same ladder: a king earns a salary and owns
+            # nothing, a logger's purse is bounded by his wage now.
+            cl = {}
+            for n in people:
+                if not getattr(n, "alive", False):
+                    continue
+                j = getattr(n, "job", None) or (
+                    "farm" if getattr(n, "farm_plot", None) is not None
+                    else "idle")
+                if getattr(n, "is_king", False):
+                    j = "king"
+                elif getattr(n, "is_mayor", False):
+                    j = "mayor"
+                d = cl.setdefault(j, [0, 0.0, 0.0, []])
+                d[0] += 1
+                d[1] += float(getattr(n, "book_in", 0.0))
+                d[2] += float(getattr(n, "coins", 0.0))
+                d[3].append(float(getattr(n, "coins", 0.0)))
+            rows = sorted(cl.items(), key=lambda kv: -kv[1][1])
+            line += ("       CLASS BY DAILY EARNING (book_in)\n")
+            for j, (c, earned, purse, arr) in rows[:14]:
+                arr.sort()
+                med = arr[len(arr) // 2] if arr else 0.0
+                line += ("         %-9s %4d men   earned %7.0f  (%6.1f each)"
+                         "   purse %8.0f  median %5.0f\n"
+                         % (j, c, earned, earned / max(1, c), purse, med))
+            line += ("       everyone else: %d trades below\n"
+                     % max(0, len(rows) - 14))
         except Exception as _e:
             line += "       COIN   (unavailable: %r)\n" % (_e,)
         try:
