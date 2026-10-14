@@ -46,6 +46,20 @@ SPACING = 55000.0                    # world distance between village cells.
 # times the ground. Nothing per-frame changes: only the villages inside a
 # bubble are ever simulated or drawn, and there are now FEWER of those at once.
 VILLAGE_SCALE = 6.0                  # houses / people / footprint per village
+
+# ---- ONE THOUSAND PEOPLE IN THE WORLD, AND NOT TWO THOUSAND ----
+#
+# The world is a THOUSAND people. The spec in Village.__init__ is texture --
+# which house is crowded and which is not -- but the TOTAL is the size of the
+# world, and it was building 2,084 of them and throwing half away after the
+# loading screen. Two thousand men were named, housed, given wear and a place
+# in the register, and the cache carried every one of them.
+#
+# IT IS SET BY THE HOUSES, because a house is what a man sleeps in. 665 houses
+# across the world at 1.51 a house is a thousand people, and a town's share is
+# its own houses -- the capital is already the biggest town on the map (57
+# houses against 20) and does not need a second thumb on the scale.
+PEOPLE_PER_HOUSE = 1.55
 GOV_W, GOV_H = 240, 220              # the Government: twice a good house
 RADIUS_BASE = 430.0 * VILLAGE_SCALE  # the ground a village owns
 
@@ -2349,16 +2363,13 @@ class Village:
         # doubling the house target just means more failed attempts and the
         # same 460 people. Doubling the PEOPLE per house is what actually
         # doubles the world, and it lands within a few per cent of a thousand.
-        for house in self.houses:            # every house gets 2-6 people
-            n = 2 * (1 + (1 if rng.random() < 0.42 else 0)
-                     + (1 if rng.random() < 0.16 else 0))
-            if self.is_capital:
-                n += 2                       # the capital is where the idle gather
+        for house in self.houses:
+            n = 1 + (1 if rng.random() < 0.42 else 0) \
+                  + (1 if rng.random() < 0.16 else 0)
             spec.append((house, n))
         if not self.is_capital:
             # A village keeps its breadwinners and sends its surplus up to the
-            # capital: the idle populations out here are noticeably thinner, and
-            # the capital's is that much thicker.
+            # capital: the idle populations out here are noticeably thinner.
             for i in range(len(spec)):
                 if spec[i][1] > 1 and rng.random() < 0.35:
                     spec[i] = (spec[i][0], spec[i][1] - 1)
@@ -2373,6 +2384,27 @@ class Village:
             if spec[-1][1] == 0:
                 spec.pop()
         count = sum(n for _h, n in spec)
+
+        # ---- SCALE TO THIS TOWN'S SHARE OF A THOUSAND -------------------
+        # The draws above decide WHICH house is crowded. They do not decide how
+        # big the world is -- that is a thousand people and it is not left to
+        # chance. The roomy houses are filled and the crowded ones thinned until
+        # the town holds exactly its share.
+        want = max(4, int(round(PEOPLE_PER_HOUSE * len(self.houses))))
+        guard = 0
+        while count > want and spec and guard < 5000:
+            spec.sort(key=lambda hn: -hn[1])
+            if spec[0][1] <= 1:
+                break
+            spec[0] = (spec[0][0], spec[0][1] - 1)
+            count -= 1
+            guard += 1
+        guard = 0
+        while count < want and spec and guard < 5000:
+            spec.sort(key=lambda hn: hn[1])
+            spec[0] = (spec[0][0], spec[0][1] + 1)
+            count += 1
+            guard += 1
         wear = biomes.npc_wear(float(biomes.temperature(self.x, self.y, seed)),
                                float(biomes.humidity(self.x, self.y, seed)))
         name_rng = random.Random((code ^ 0x9E3779B9) & 0xFFFFFFFF)

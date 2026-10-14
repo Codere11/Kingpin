@@ -503,6 +503,43 @@ def load_world(screen, clock, villages, world=None) -> None:
     pygame.display.flip()
 
 
+def set_world_population(villages, target: int = 1000) -> int:
+    """The world is a thousand people. Make it exactly so, on either path.
+
+    A town's share is its HOUSES -- a house is what a man sleeps in -- and the
+    cap is set to match so `can_grow` holds it there instead of letting the
+    town expand back to some number no file can account for.
+
+    This runs BEFORE the world cache is written, which is the other half of the
+    bug: the cache carried all 2,084 of them, so a launch that restored from
+    the cache rebuilt two thousand men and then cut half away, every time.
+    """
+    towns = list(villages.villages)
+    if not towns:
+        return 0
+    total = sum(len(v.npcs) for v in towns)
+    if total != target:
+        kept = 0
+        for i, v in enumerate(towns):
+            if i == len(towns) - 1:
+                want = max(1, target - kept)          # the last takes the rest
+            else:
+                # by HOUSES, so a big town keeps a big population
+                houses = max(1, len(getattr(v, "houses", ())))
+                want = max(1, int(round(float(target) * houses
+                                        / float(_total_houses(towns)))))
+            if len(v.npcs) > want:
+                v.npcs[:] = v.npcs[:want]
+            v.capacity = len(v.npcs)
+            kept += len(v.npcs)
+        village_mod.rebuild_people(villages)
+    return sum(len(v.npcs) for v in villages.villages)
+
+
+def _total_houses(towns) -> int:
+    return max(1, sum(len(getattr(v, "houses", ())) for v in towns))
+
+
 def main() -> None:
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
@@ -555,39 +592,29 @@ def main() -> None:
                  village_mod.rebuild_houses(villages)))
     else:
         load_world(screen, clock, villages, world)  # every village, before the first step
+        # THE POPULATION IS SET BEFORE THE CACHE IS WRITTEN. Writing it after
+        # meant the cache held 2,084 people and every later launch restored all
+        # of them and then threw half away again.
+        set_world_population(villages)
         save_cached_world(villages, world.seed)
         village_mod.rebuild_people(villages)
         village_mod.rebuild_houses(villages)
 
-    # ---- ONE THOUSAND PEOPLE, AND A THOUSAND CAP, ALWAYS ----------------
+    # ---- A THOUSAND PEOPLE, AND A THOUSAND CAP, ALWAYS ------------------
     #
-    # THE LAST WORD ON THE SIZE OF THE WORLD, and it runs on both paths -- a
-    # fresh build and a restored save -- because a save carries its own
+    # The last word on the size of the world, and it runs on BOTH paths -- a
+    # fresh build and a restored save -- because an older save carries its own
     # `capacity` and `rebuild_people` trims every town down to it. That is
     # where two thirds of the world has been disappearing: the world is built
     # with 58 people a town, an older save says 17, and the register is cut to
-    # the smaller number before anyone takes a step.
-    #
-    # So the towns keep a share of a thousand in proportion to their houses,
-    # the cap is set to match so `can_grow` holds it there, and no file can
-    # argue. Whatever the save says, the world begins at the size it was
-    # designed for.
-    _TOWN_TARGET = 1000
-    _towns = list(villages.villages)
-    _tot = sum(len(v.npcs) for v in _towns)
-    if _towns and _tot != _TOWN_TARGET:
-        _kept = 0
-        for _i, _v in enumerate(_towns):
-            _want = (_TOWN_TARGET - _kept
-                     if _i == len(_towns) - 1
-                     else max(1, int(round(len(_v.npcs) * _TOWN_TARGET
-                                           / float(_tot)))))
-            if len(_v.npcs) > _want:
-                _v.npcs[:] = _v.npcs[:_want]
-            _v.capacity = len(_v.npcs)
-            _kept += len(_v.npcs)
-        village_mod.rebuild_people(villages)
-        print("population set to %d over %d towns" % (_kept, len(_towns)))
+    # the smaller number before anyone takes a step. Whatever a file says, the
+    # world begins at the size it was designed for.
+    _pop = set_world_population(villages)
+    if _pop <= 0:
+        print("WARNING: the world has no people at all")
+    else:
+        print("population set to %d over %d towns"
+              % (_pop, len(list(villages.villages))))
 
     # ---- BUILD THE GROUND UNDER THE PLAYER **INSIDE THE LOADING SCREEN** ----
     #
