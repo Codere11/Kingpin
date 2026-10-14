@@ -2433,7 +2433,15 @@ class Village:
         self._name_rng = name_rng
         self._name_pool = pool
         self._name_i = idx
-        self.capacity = count             # the village will grow back to this
+        # THE CAPACITY IS THE ROSTER -- NOT THE NUMBER WE AIMED AT.
+        #
+        # This was `count`, the SCALE TARGET, and the two are not the same
+        # number: the patrol takes three men out to spawn as soldiers and the
+        # target was computed before that, so sixteen towns believed they held
+        # two more men than they did. A town grows back to its capacity, so the
+        # world swelled 1,000 -> 1,032 within a day of starting, and the cap
+        # never matched the roster in any file that carried it.
+        self.capacity = len(self.npcs)    # the village will grow back to THIS
         # THE FOUR NUMBERS, once, at build time. capacity has been 8-58 while
         # the spec above says three people a house, and the house count is 19
         # to 57 -- so the number that caps the town is not the number the spec

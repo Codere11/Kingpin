@@ -19,6 +19,7 @@ have a tobacco plot out back. Death brings up a pixelated Game Over screen.
 from __future__ import annotations
 
 import math
+import lanes
 import mine
 import os
 import random
@@ -530,9 +531,14 @@ def set_world_population(villages, target: int = 1000) -> int:
                                         / float(_total_houses(towns)))))
             if len(v.npcs) > want:
                 v.npcs[:] = v.npcs[:want]
-            v.capacity = len(v.npcs)
             kept += len(v.npcs)
         village_mod.rebuild_people(villages)
+    # THE CAP IS SET WHETHER OR NOT ANYTHING WAS TRIMMED. Leaving it out when
+    # the count already equalled the target is how a world of exactly 1,000
+    # people grew to 1,032 inside one day: the towns still held a capacity from
+    # the build, and a town grows back to its capacity.
+    for v in towns:
+        v.capacity = len(v.npcs)
     return sum(len(v.npcs) for v in villages.villages)
 
 
@@ -2669,6 +2675,20 @@ def main() -> None:
     # loop), the MEN (the NPC loop), and everything between and after them --
     # houses, settling, the draw. This is a measurement, not a feature.
     _PH = {"v": 0.0, "m": 0.0, "n": 0.0, "f": 0, "t": time.time()}
+
+    # ---- THE LANES: the world cut so more than one core can hold it -------
+    #
+    # The cut is real and it is AUDITED every time it is remade: every town and
+    # every man in exactly one lane. What is not here yet is the processes --
+    # every lane is still stepped in this process -- so the behaviour today is
+    # exactly what it was, and the split lands on top of a cut that is already
+    # proved. If the audit ever fails the frame falls back to stepping the
+    # whole world, because a lane that has lost a man is worse than no lanes.
+    _LANES = lanes.Partition(1)
+    _LANE_TOWNS = list(villages.villages)
+    _LANE_PEOPLE = list(village_mod.PEOPLE)
+    _lane_timer = 0.0
+    _lane_warned = False
     running = True
     while running:
         dt = min(clock.tick(FPS) / 1000.0, 0.05)
@@ -3074,6 +3094,30 @@ def main() -> None:
             settle_reload()
 
             visible_villages = villages.visible(cam_x, cam_y, vw, vh)
+
+            # ---- RE-CUT THE WORLD, ONCE A SECOND ---------------------
+            # The towns in front of the player must be stepped where he is, so
+            # the cut follows him. Remaking it is cheap (it is a walk over the
+            # towns and the register) but not free, so it is not per-frame.
+            _lane_timer -= dt
+            if _lane_timer <= 0.0:
+                _lane_timer = 1.0
+                _all_t = list(villages.villages)
+                _LANES.recut(_all_t, main_towns=visible_villages)
+                if _LANES.ok(_all_t, village_mod.TRAVELLERS,
+                             village_mod.PEOPLE):
+                    _LANE_TOWNS = _LANES.towns_for(0)
+                    _LANE_PEOPLE = _LANES.people_for(0)
+                else:
+                    # A LANE LOST A MAN. Step the whole world instead --
+                    # correct and slow beats fast and quietly smaller.
+                    _LANE_TOWNS = _all_t
+                    _LANE_PEOPLE = list(village_mod.PEOPLE)
+                    if not _lane_warned:
+                        _lane_warned = True
+                        print("LANES: audit failed -- stepping the whole world",
+                              _LANES.audit(_all_t, village_mod.TRAVELLERS,
+                                           village_mod.PEOPLE))
             view_trees = trees.visible(cam_x, cam_y, vw, vh)
             view_ore = ore_field.visible(cam_x, cam_y, vw, vh)
             for village in visible_villages:        # 5 border guards per village
@@ -3619,7 +3663,7 @@ def main() -> None:
             # not hold. THE GOAL IS STILL EVERY TOWN, EVERY TICK -- but the
             # loan path has to be fixed first or the world starves of it.
             _pt0 = time.perf_counter()
-            for village in villages.villages:
+            for village in _LANE_TOWNS:
                 if not world_tick:
                     break
                 if village in sieges:
@@ -3896,7 +3940,7 @@ def main() -> None:
                 _pt2 = time.perf_counter()
                 _PH["m"] += _pt2 - _pt1
                 _phase = day_phase()
-                for _n in list(village_mod.PEOPLE):
+                for _n in _LANE_PEOPLE:
                     if not _n.alive:
                         _dead_here = True
                         continue
