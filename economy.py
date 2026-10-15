@@ -231,6 +231,8 @@ TOOL_WORN = 30             # ...and a tool with fewer workings left than this
 SMITH_WAGE = 50            # a day's pay for the forge. He is the town's
                            # employee: the iron is the town's, the bench is
                            # the town's, and so is everything he makes.
+FARMER_KEEP_FOOD = 10      # what a farmer keeps of his own crop for his own
+FARMER_KEEP_LEAF = 5       # hearth, a day, before the rest is the town's
 
 
 def tool_dur_mult(grade: int) -> float:
@@ -579,24 +581,60 @@ def store_grade(village, item: str) -> None:
 
 
 def harvest(village, npc, kind: str, rng) -> None:
-    """A villager gathers a crop: the village takes its 20% as goods."""
+    """A farmer brings in a crop. HE IS AN EMPLOYEE AND THE CROP IS THE TOWN'S.
+
+    He keeps FARMER_KEEP_FOOD of food and FARMER_KEEP_LEAF of leaf a day for
+    his own hearth, draws a wage like the woodsman, and everything else he
+    reaps goes onto the common shelf for the town to sell.
+
+    It was "the village takes its 20%" -- a tax on a private crop, which left
+    him a smallholder with a stall. Measured at day 0 of a live world: farm,
+    191 men, earned 0.0 a day each, while a shovel costs 45. When his lasted
+    its ninety swings there was no way on earth for him to buy another, and
+    that is what killed the fields.
+    """
     item, count = crop_yield(kind, rng)
     if not item or count <= 0:
         return
     if kind == "wheat":                    # thresh it too: bread, and grain
         grain = rng.randint(2, 4)
         npc.stock["wheat"] = npc.stock.get("wheat", 0) + grain
-    tax = round(count * HARVEST_TAX)
+    grade = 3
     if item in LEAF:                       # leaf has a grade; grain does not (yet)
-        # A producer grows ONE crop at ONE skill: his stock is as good as his
-        # hands are now, not an average of every leaf he ever picked. (Averaging
-        # it against his earliest, clumsiest harvests froze everyone at F.)
         grade = npc.skills.leaf_grade(npc.quality_cap)
         npc.grade[item] = grade
-    if count - tax:
-        npc.stock[item] = npc.stock.get(item, 0) + count - tax
-    if tax:
-        store_add(village, item, tax, grade if item in LEAF else 3)
+    keep = farmer_keep(npc, item, int(count))
+    if keep > 0:
+        npc.stock[item] = npc.stock.get(item, 0) + keep
+    rest = int(count) - keep
+    if rest > 0:
+        store_add(village, item, rest, grade)
+
+
+def farmer_keep(npc, item: str, count: int) -> int:
+    """How much of this pick he keeps: ten of food a day, five of leaf.
+
+    Counted per DAY, because a harvest arrives a tile at a time and a man may
+    reap a hundred of them before supper. Without the daily tally he would
+    keep ten of every tile and the town would get nothing at all.
+    """
+    v = getattr(npc, "village", None)
+    day = int(getattr(v, "_day", 0.0)) if v is not None else 0
+    if getattr(npc, "keep_day", -1) != day:
+        npc.keep_day = day                 # a fresh day, a fresh ration
+        npc.keep_food = 0
+        npc.keep_leaf = 0
+    if item in FOOD:
+        room = FARMER_KEEP_FOOD - int(getattr(npc, "keep_food", 0))
+        keep = max(0, min(int(count), room))
+        npc.keep_food = int(getattr(npc, "keep_food", 0)) + keep
+        return keep
+    if item in LEAF:
+        room = FARMER_KEEP_LEAF - int(getattr(npc, "keep_leaf", 0))
+        keep = max(0, min(int(count), room))
+        npc.keep_leaf = int(getattr(npc, "keep_leaf", 0)) + keep
+        return keep
+    return int(count)          # grain and anything else is his own
 
 
 def take_fifth(village, npc, item: str, made: int) -> int:
@@ -1867,6 +1905,13 @@ def pay_wages(village, day: int) -> None:
             wage = LOGGER_WAGE          # the woods are the town's payroll now
         elif getattr(npc, "job", None) == "smith":
             wage = SMITH_WAGE           # and so is the forge
+        elif getattr(npc, "farm_plot", None) is not None:
+            wage = LOGGER_WAGE          # A FARMER IS AN EMPLOYEE TOO. He reaps
+                                        # for the town and keeps a ration of
+                                        # it; without the wage he could never
+                                        # buy the shovel he wears out.
+        elif getattr(getattr(npc, "workplace", None), "kind", None) == "mine":
+            wage = LOGGER_WAGE          # and the pit is the town's work as well
         else:
             continue
         paid = min(wage, village.ledger_coins)
