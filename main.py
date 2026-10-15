@@ -2957,6 +2957,15 @@ def main() -> None:
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 pause_open = True
                 pygame.mouse.set_visible(True)
+            elif (event.type == pygame.KEYDOWN and event.key == pygame.K_TAB):
+                # THE PACK NEEDED A KEY ABOVE GROUND AND NEVER HAD ONE.
+                # inventory_open was only ever toggled inside the mine's key
+                # block, so above ground the pack could not be opened at all --
+                # and I never noticed, because I was pressing I for the
+                # inspector and the inspector DOES answer it (main.py, the
+                # observer branch). TAB is free here, so TAB opens the pack.
+                inventory_open = not inventory_open
+                pygame.mouse.set_visible(inventory_open)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_0:
                 empty = hotbar.first_empty()
                 if empty is not None:
