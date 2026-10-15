@@ -530,6 +530,18 @@ def place_orders(village, npc) -> None:
     # anybody chose.
     if npc.tool_uses > TOOL_WORN:
         return
+    # AND HE DOES NOT ORDER WHAT THE TOWN ALREADY HAS ON THE SHELF.
+    #
+    # Without this the brake is only `tool_order`, and that is cleared the
+    # moment the order is filled -- which is BEFORE he has bought the thing.
+    # He still has no tool, so the next tick he books another one, and the
+    # forge hammers him a second, and a third. The shelf read 51, then 728,
+    # then 1016 pickaxes for ninety miners.
+    #
+    # This is a brake that cannot deadlock, because the store is sellable: the
+    # tool is there, on the common shelf, and he buys it like anything else.
+    if int(village.ledger_goods.get(want, 0)) > 0:
+        return
     smith = next((o for o in village.npcs
                   if o.job == "smith" and o.alive), None)
     if smith is None:
