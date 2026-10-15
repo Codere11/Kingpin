@@ -3068,7 +3068,10 @@ def main() -> None:
                 # the ground -- with nothing else changed. The ground around
                 # the PLAYER is never built, because the camera left him.
                 if observer_.target is not None and observer_.target.alive:
-                    player.x, player.y = observer_.target.x, observer_.target.y
+                    # THE PLAYER IS NOT MOVED. He stays exactly where he was --
+                    # pinning him onto the target and letting the camera follow
+                    # the player was the whole confusion. Only the CAMERA goes
+                    # to the watched man; see the cam_x/cam_y above.
                     player.god = True
                     observer_.tick(now)
                 creatures_set_time(now)
@@ -3122,8 +3125,6 @@ def main() -> None:
             player.skill_axe_cd = skills.axe_cooldown()
             _px0, _py0 = player.x, player.y
             player.update(dt, keys, aim, 1.0 - 0.25 * foliage)
-            if observer_.target is not None and observer_.target.alive:
-                player.x, player.y = observer_.target.x, observer_.target.y
             skills.gain_movement(math.hypot(player.x - _px0, player.y - _py0))
             clamp_world()          # the world ends where the loading screen did
             settle_reload()
@@ -4433,8 +4434,21 @@ def main() -> None:
             view_surf = pygame.Surface((vw, vh))
         real_screen = screen
         screen = view_surf
-        cam_x = player.x - vw / 2.0            # the camera on the small frame
-        cam_y = player.y - vh / 2.0
+        # THE CAMERA FOLLOWS THE MAN BEING WATCHED, NOT THE PLAYER.
+        #
+        # It followed player.x/player.y, and watching had been implemented by
+        # MOVING THE PLAYER onto the watched man every frame -- so the player
+        # was dragged about the world with the camera tied to him, and the man
+        # being watched was only ever in shot because the player had been
+        # teleported onto his head. The player is PARKED where he stands; the
+        # camera is the thing that moves.
+        _look = observer_.target
+        if _look is not None and getattr(_look, "alive", False):
+            cam_x = _look.x - vw / 2.0
+            cam_y = _look.y - vh / 2.0
+        else:
+            cam_x = player.x - vw / 2.0
+            cam_y = player.y - vh / 2.0
         draw_exterior(cam_x, cam_y, True)
         draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
         draw_villages = villages.visible(cam_x, cam_y, vw, vh)
