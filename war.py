@@ -912,6 +912,13 @@ class Army:
                           % (npc.name, getattr(npc, "village", None) and
                              npc.village.name or "nowhere",
                              getattr(self.capital, "name", "?")))
+            try:
+                import deaths
+                deaths.record(npc, "KILLED IN ACTION",
+                              detail="in the column of %s"
+                              % getattr(self.capital, "name", "?"))
+            except Exception:
+                pass
             npc.alive = False
             npc.health = 0
             killed += 1

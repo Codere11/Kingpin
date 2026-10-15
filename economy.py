@@ -2058,6 +2058,11 @@ def needs(npc, dt: float) -> bool:
         npc.health = 0
         _note("STARVED  %-16s hunger %.0f  coin %d  food %d"
               % (npc.name, hunger, npc.coins, food_of(npc)))
+        try:
+            import deaths
+            deaths.record(npc, "STARVED")
+        except Exception:
+            pass
         return False
     return True
 

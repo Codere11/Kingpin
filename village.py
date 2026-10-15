@@ -519,6 +519,11 @@ class NPC:
                             max(0, self.health)))
             except Exception:
                 pass
+            try:
+                import deaths
+                deaths.record(self, "KILLED BY A BLOW", detail="%d damage" % amount)
+            except Exception:
+                pass
             self.die()                # A MAN SHOT DEAD SETTLES UP AS WELL.
             # The starvation path called this; a bullet did not -- so the dead
             # stayed in the register and in their town's roster for ever, and
@@ -3596,6 +3601,14 @@ def refugees_on_the_road(now: float, soldiers=()) -> tuple:
             economy._note("CUT DOWN %-16s on the road to %s by a soldier of nation %s"
                   % (npc.name, getattr(dest, "name", "?"),
                      getattr(caught, "nation", "?")))
+            try:
+                import deaths
+                deaths.record(npc, "CUT DOWN ON THE ROAD",
+                              detail="to %s, nation %s"
+                              % (getattr(dest, "name", "?"),
+                                 getattr(caught, "nation", "?")))
+            except Exception:
+                pass
             npc.die()            # a refugee cut down on the road settles up too:
             died += 1            # off the register, off the road
             continue

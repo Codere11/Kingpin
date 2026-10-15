@@ -43,6 +43,12 @@ import persist
 import steering
 import nemesis
 import observer
+# A TOP-LEVEL IMPORT, not a local one inside a function. PyInstaller follows
+# static imports when it decides what to bundle; a `import deaths` buried in a
+# try/except inside a hot function is invisible to it, so the exe would raise
+# ImportError at the moment of a death -- and the except that guards the call
+# would swallow it, and every death would go unrecorded with no sign why.
+import deaths
 import tournament
 import village as village_mod
 import war
@@ -560,6 +566,10 @@ def main() -> None:
         pygame.quit()
         return
     slot, test_mode = chosen
+    try:
+        deaths.banner("game slot %s%s" % (slot, "  TEST MODE" if test_mode else ""))
+    except Exception:
+        pass
     persist.set_test(test_mode)
     persist.set_slot(slot)
     pygame.mouse.set_visible(False)

@@ -74,6 +74,58 @@ class Observer:
         self._last_log_t = 0.0
         self.font = pygame.font.SysFont("dejavusans", 14, bold=True)
         self.small = pygame.font.SysFont("dejavusans", 12)
+        self.goods = False            # show the WORLD INVENTORY instead
+        self._gtot: dict = {}         # item -> total, last sample
+        self._grate: dict = {}        # item -> per game day
+        self._gt = 0.0
+
+    # -- what the world is holding -----------------------------------------
+    def world_goods(self) -> dict:
+        """EVERYTHING IN THE WORLD, by item: every living man's pack, plus every
+        town's common store. Collected through the men themselves -- each man
+        knows his own village -- so no registry is needed and nothing is missed.
+        """
+        import village as V
+        out: dict = {}
+        seen: set = set()
+        for n in V.PEOPLE:
+            if not getattr(n, "alive", False):
+                continue
+            try:
+                for it, q in n.stock.items():
+                    if q:
+                        out[it] = out.get(it, 0) + int(q)
+            except Exception:
+                pass
+            v = getattr(n, "village", None)
+            if v is not None and id(v) not in seen:
+                seen.add(id(v))
+                try:
+                    for it, q in v.ledger_goods.items():
+                        if q:
+                            out[it] = out.get(it, 0) + int(q)
+                except Exception:
+                    pass
+        return out
+
+    def sample_goods(self, now: float = 0.0) -> None:
+        """Once a SECOND of real time: the totals, and the rate each item moves.
+
+        Real time, not the game clock: the observer is drawn whether or not
+        anything is being watched, and the game clock is only handed to tick()
+        while watching. A rate measured against a clock that never advances is
+        a rate of zero, or worse.
+        """
+        t = time.time()
+        if self._gt and t - self._gt < 1.0:
+            return
+        cur = self.world_goods()
+        span = max(1e-6, t - self._gt) if self._gt else 1.0
+        for it, q in cur.items():
+            prev = self._gtot.get(it, q)
+            self._grate[it] = (q - prev) / span * 600.0    # per game day
+        self._gtot = cur
+        self._gt = t
 
     # -- the list ----------------------------------------------------------
     def everyone(self) -> list:
@@ -120,6 +172,14 @@ class Observer:
             return False
         if k == pygame.K_x and self.target is not None:
             self.release()
+            return True
+        if k == pygame.K_g:
+            # G FOR GOODS: the whole world's stock, item by item, with the rate
+            # it is being made or eaten. This is the answer to "where is all the
+            # bread", which until now could only be guessed at from a class
+            # table of purses.
+            self.goods = not self.goods
+            self.scroll = 0
             return True
         if k == pygame.K_f:
             self.filt = (self.filt + 1) % len(FILTER_NAMES)
@@ -260,6 +320,9 @@ class Observer:
         sub = "  value: %s" % (self.filt_key if self.filt_key is not None else "-")
         screen.blit(self.small.render(sub, True, (198, 176, 128)),
                     (panel.left + 12, panel.top + 30))
+        if self.goods:
+            self._draw_goods(screen, panel)
+            return
         rows = self.rows()
         first = panel.top + 52
         per = max(1, (panel.bottom - first - 26) // ROW)
@@ -288,6 +351,41 @@ class Observer:
                                       % (len(rows), len(self.everyone())),
                                       True, (150, 146, 138)),
                     (panel.left + 12, panel.bottom - 20))
+
+    def _draw_goods(self, screen, panel) -> None:
+        """EVERYTHING THE WORLD HOLDS, and which way it is going."""
+        self.sample_goods()
+        tot = self._gtot or self.world_goods()
+        rows = sorted(tot.items(), key=lambda kv: -kv[1])
+        y = panel.top + 52
+        head = "%-14s %10s %14s" % ("ITEM", "IN THE WORLD", "PER GAME DAY")
+        screen.blit(self.small.render(head, True, (198, 176, 128)),
+                    (panel.left + 14, y - 18))
+        made = sum(1 for _i, q in rows if q > 0)
+        for it, q in rows[:26]:
+            r = self._grate.get(it, 0.0)
+            col = (150, 220, 150) if r > 0.5 else (
+                (230, 140, 140) if r < -0.5 else (222, 218, 208))
+            line = "%-14s %10d %+14.0f" % (it, q, r)
+            screen.blit(self.small.render(line, True, col),
+                        (panel.left + 14, y))
+            y += 15
+        note = ("%d kinds held.  GREEN rising, RED falling, plain steady."
+                % made)
+        screen.blit(self.small.render(note, True, (150, 146, 138)),
+                    (panel.left + 14, panel.bottom - 40))
+        dead = ""
+        try:
+            import deaths
+            t = deaths.tail(3)
+            if t:
+                dead = "last deaths: " + " | ".join(
+                    x.strip()[:52] for x in t if x.strip())
+        except Exception:
+            pass
+        if dead:
+            screen.blit(self.small.render(dead, True, (206, 160, 120)),
+                        (panel.left + 14, panel.bottom - 22))
 
     def _draw_target(self, screen, vw, vh) -> None:
         """The watched man's log, and a mark over his head."""
