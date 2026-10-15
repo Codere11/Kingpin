@@ -2550,7 +2550,17 @@ def main() -> None:
         # restored, so every worked tile and every built floor in the world was
         # missing from it. Rebuild what the player can see, once, now -- rather
         # than letting a queued job trickle in behind a blur.
-        ground.refresh_around(player.x, player.y, WIDTH, HEIGHT)
+        # THE GROUND IS BUILT UNDER THE MAN BEING WATCHED TOO.
+        #
+        # refresh_around() was called with player.x/player.y, and the camera now
+        # goes to the watched man -- so at his position the ground had never
+        # been generated at all and the view was BLACK. Same mistake as the
+        # vision eye below, in a different cache.
+        _wt = observer_.target
+        if _wt is not None and getattr(_wt, "alive", False):
+            ground.refresh_around(_wt.x, _wt.y, WIDTH, HEIGHT)
+        else:
+            ground.refresh_around(player.x, player.y, WIDTH, HEIGHT)
         for key, st in data.get("villages", {}).items():
             try:
                 gx, gy = (int(v) for v in key.split(","))
@@ -4482,12 +4492,31 @@ def main() -> None:
         screen_soft = [pygame.Rect(r.x - cam_x, r.y - cam_y, r.w, r.h)
                        for r in soft]
 
-        eye_x = player.x - cam_x + player.facing[0] * 5.0
-        eye_y = player.y - cam_y + player.facing[1] * 5.0
-        foliage = trees.foliage(player.x, player.y)
-        mask = vision.build(vw, vh, eye_x, eye_y, player.facing_angle,
+        # THE EYES BELONG TO THE MAN BEING WATCHED.
+        #
+        # This cast the mask from player.x/player.y, so with the camera sixty
+        # thousand pixels away on somebody else the cone lit a place that was
+        # not on screen and everything else was black -- which is what the
+        # black screen was. A watcher also sees the WHOLE scene rather than one
+        # man's 175 degrees: that is what watching is for.
+        _wt = observer_.target
+        _watch = _wt is not None and getattr(_wt, "alive", False)
+        _src = _wt if _watch else player
+        if _watch:
+            _ang = math.atan2(_src.facing[1], _src.facing[0])  # NPC has no
+        else:                                                  # facing_angle
+            _ang = player.facing_angle
+        eye_x = _src.x - cam_x + _src.facing[0] * 5.0
+        eye_y = _src.y - cam_y + _src.facing[1] * 5.0
+        foliage = trees.foliage(_src.x, _src.y)
+        _cone0 = vision.cone_deg
+        if _watch:
+            vision.cone_deg = 360.0
+        mask = vision.build(vw, vh, eye_x, eye_y, _ang,
                             screen_occluders, screen_soft, 1.0 - 0.25 * foliage)
         screen.blit(mask, (0, 0))
+        if _watch:
+            vision.cone_deg = _cone0
         draw_night()
         if night:                               # guard flashlights, only if seen
             eye_wx = player.x + player.facing[0] * 5.0
