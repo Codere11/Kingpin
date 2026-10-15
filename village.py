@@ -3178,6 +3178,17 @@ class Village:
             wp.worker = npc
             if wp.kind == "smith":
                 npc.stock["iron"] = economy.IRON_STOCK // 4
+            # A MINER IS GIVEN A PICK, the way a farmer is given a shovel and a
+            # woodsman an axe. He was handed nothing at all -- and now that the
+            # pit swings its tool, a miner with an empty hand digs NO IRON, and
+            # with no iron the forge cannot make him a pick. The whole trade
+            # deadlocked on the first day: 95 miners, 0 pickaxes, an empty
+            # shelf, and a world that could never dig again.
+            if wp.kind == "mine":
+                npc.stock["pickaxe"] = 1
+                npc.grade["pickaxe"] = 0
+                npc.tool_uses = economy.TOOL_USES
+                npc.tool_kind = "pickaxe"
             return True
         fixed = len(self.farm_plots) + len(self.workplaces)
         want = max(LOGGERS_PER_VILLAGE, len(self.houses) - fixed)

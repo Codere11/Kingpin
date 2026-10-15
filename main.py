@@ -2728,6 +2728,20 @@ def main() -> None:
                         toast("Empty hands")
                 elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEWHEEL):
                     hotbar.handle_event(event)
+                elif (event.type == pygame.KEYDOWN and test_mode
+                      and event.key == pygame.K_i):
+                    # IN TEST MODE, I IS THE INSPECTOR.
+                    #
+                    # The inventory claims K_i (and K_TAB) a hundred and forty
+                    # lines above the observer, and they sit in the same elif
+                    # chain -- so the inventory won the key and the observer's
+                    # `I` never fired once. The inspector was built, wired and
+                    # drawing, and nobody could open it.
+                    #
+                    # Test mode is for looking at the world, so there I opens
+                    # WHO; in a normal game it opens the pack. TAB is the pack
+                    # in both.
+                    observer_.handle(event, player)
                 elif (event.type == pygame.KEYDOWN
                       and event.key in (pygame.K_i, pygame.K_TAB)):
                     inventory_open = not inventory_open

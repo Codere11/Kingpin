@@ -89,6 +89,34 @@ import nemesis
 import main
 import menu
 
+# ---- THE FAST CLOCK, IF ASKED FOR ----------------------------------------
+# main() computes `dt = min(clock.tick(FPS) / 1000.0, 0.05)` and then caps it
+# again after the time scale. So the world's own speed limit is 0.05 s of game
+# per FRAME, whatever the clock says. Lie to it and the world runs at that cap:
+# at fifty frames a second it is eighteen times real time, one game day every
+# thirty seconds, and thirty days in a quarter of an hour instead of five
+# hours. The loop still runs frame by frame, so nothing is integrated any
+# coarser than 0.05 s -- the same step the game itself allows.
+if os.environ.get("KINGPIN_FAST"):
+    # pygame.time.Clock is a C type and its `tick` cannot be assigned, so the
+    # clock is PROXIED instead: main() builds pygame.time.Clock() and gets this,
+    # every other attribute is passed straight through, and `tick` paces the
+    # loop exactly as before while reporting 50 ms -- which is main's own cap.
+    _RealClock = pygame.time.Clock
+
+    class _FastClock:
+        def __init__(self, *a, **k):
+            self._c = _RealClock(*a, **k)
+
+        def __getattr__(self, name):
+            return getattr(self._c, name)
+
+        def tick(self, *a, **k):
+            self._c.tick(*a, **k)          # still pace the loop
+            return 50                      # ...and report main's own dt cap
+
+    pygame.time.Clock = _FastClock
+
 # THE CANVAS, NOT THE WINDOW, IS WHAT COSTS. The game composes WIDTH x HEIGHT
 # every frame and blits it onto the display; a small display over a big canvas
 # still paints every one of those pixels, in software, on the CPU.
