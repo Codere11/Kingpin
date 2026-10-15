@@ -415,6 +415,19 @@ def produce(npc, dt: float, now: float) -> None:
             npc.produce_acc = min(npc.produce_acc, 2.0)
         return
     if workplace.kind == "mine":
+        # A PICK IS A TOOL AND IT WEARS. The pit never swung one, so a miner's
+        # pickaxe was IMMORTAL: tool_uses never fell, so `near the end of its
+        # life` never came true, so he never ordered another and the forge
+        # never heard from him. A farmer swings a shovel and a woodsman swings
+        # an axe; the pit was the only trade in the world that put no mark on
+        # its tool. Measured: 96 miners, 22 pickaxes, and the ones that existed
+        # lasted for ever.
+        #
+        # AND NO PICK, NO ROCK. He cannot break the face with his hands, so a
+        # miner without a tool produces nothing and the iron stops -- which is
+        # the honest consequence, and it is what sends him to the shelf.
+        if not npc._swing_tool("pickaxe"):
+            return
         npc.produce_acc += daily_rate(IRON_PER_DAY * scale) * dt
         if npc.produce_acc >= 1.0:
             made = int(npc.produce_acc)
@@ -437,12 +450,19 @@ def produce(npc, dt: float, now: float) -> None:
             npc.wage_acc = getattr(npc, "wage_acc", 0.0) + made * MINER_PAY
             whole = int(npc.wage_acc)
             if whole > 0:
-                npc.wage_acc -= whole
-                whole = min(whole, int(v2.ledger_coins))
-                if whole > 0:
-                    v2.ledger_coins -= whole
-                    npc.coins += whole
-                    npc.book_in = getattr(npc, "book_in", 0.0) + whole
+                # HE IS PAID WHAT THE TOWN CAN PAY, AND OWED THE REST.
+                #
+                # This took the whole accrued wage off him FIRST and only then
+                # clamped it to the ledger -- so a town that could not pay lost
+                # the man his wages outright: the accrual was wiped and he was
+                # handed nothing. Measured: 89 miners earning 1.0 a day each at
+                # MINER_PAY = 0.2 a unit, which is five iron dug in a day.
+                paid = min(whole, int(v2.ledger_coins))
+                if paid > 0:
+                    npc.wage_acc -= paid
+                    v2.ledger_coins -= paid
+                    npc.coins += paid
+                    npc.book_in = getattr(npc, "book_in", 0.0) + paid
         return
     # ------------------------------------------------------------------
     # THE FORGE IS THE TOWN'S AND THE SMITH IS ITS EMPLOYEE. See smith_shift.

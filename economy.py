@@ -496,12 +496,10 @@ def place_orders(village, npc) -> None:
     never finds himself standing idle because nobody guessed he would need an
     axe three weeks from now.
     """
-    # One order at a time, and no second order while the first is forged and
-    # waiting: his old tool is still at 40% wear when the new one is finished,
-    # so without this he books another every second and the forge never catches
-    # up. Thirty-nine orders, thirty-two men standing idle, zero delivered.
-    if (npc.tool_order is not None
-            or npc.tool_reserved is not None):
+    # One order at a time. `tool_reserved` was a second lock -- the mark left
+    # when a finished tool was parked on the smith's lap -- and it deadlocked
+    # the whole chain, so fill_orders no longer sets it and nothing sets it.
+    if npc.tool_order is not None:
         return
     # AND A PICKAXE IS A TOOL A MAN ORDERS TOO. This list was ("shovel",
     # "axe"), so no miner in the world ever booked one -- the only reason he
@@ -803,8 +801,16 @@ def surplus(npc, item: str) -> int:
             keep = max(FUEL_KEEP, STOCK_WOOD - (house_wood(house) - own))
         return max(0, own - keep) if item == "wood" else 0
     elif item in TOOLS:
-        worn = (npc.farm_plot is not None
-                or npc.job == "logger")
+        # WHO WEARS THIS TOOL, BY NAME. This was `npc.farm_plot is not None or
+        # npc.job == "logger"` -- which is the same answer for every tool, so a
+        # woodsman kept a spare SHOVEL and a farmer kept a spare AXE, and
+        # neither would sell what the other needed.
+        worn = ((item == "shovel" and npc.farm_plot is not None)
+                or (item == "axe" and getattr(npc, "job", None) == "logger")
+                or (item == "pickaxe"
+                    and (getattr(npc, "job", None) == "mine"
+                         or getattr(getattr(npc, "workplace", None),
+                                    "kind", None) == "mine")))
         keep = TOOL_KEEP if npc.stock.get(item, 0) or worn else 0
         keep += int(getattr(npc, "tool_keep", {}).get(item, 0))   # promised work
     return max(0, npc.stock.get(item, 0) - keep)
