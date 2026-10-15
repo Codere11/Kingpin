@@ -25,31 +25,35 @@ BROW = (96, 66, 46)         # a shade under the hair
 NOSE = (182, 144, 110)   # LIGHTER than the head's outline (150,112,82),
                             # which it was the same colour as -- an invisible nose
 MOUTH = (128, 82, 66)
+TONGUE = (198, 104, 112)     # the working face's whole point
+LID = None                  # filled with the skin at draw time
 
 # Where the features sit, as a fraction of the head's radius.
-EYE_SIDE = 0.40             # half the distance between the eyes
-EYE_UP = 0.18               # the eye line, above the middle
+EYE_SIDE = 0.50             # half the distance between the eyes, of r
+EYE_UP = 0.20               # the eye line, above the middle
 EYE_LOOK = 0.22             # how far the pair shifts toward the facing
-BROW_LIFT = 0.22
-MOUTH_DOWN = 0.46
-NOSE_DOWN = 0.16
+BROW_LIFT = 0.34
+MOUTH_DOWN = 0.42
+NOSE_DOWN = 0.18
+WHITE_R = 0.28              # the eye white, of r
+PUPIL_R = 0.15
 
 
 # ---------------------------------------------------------------------------
 # DRAWN ONCE, THEN BLITTED.
 #
-# A face is about a dozen circles and lines. Ten of those per man per frame,
-# a hundred men on screen at fifty frames, is fifty thousand draw calls a
-# second to produce the SAME PICTURE for every man facing the same way. So a
-# face is rendered once per (radius, of eight directions) -- twenty-four small
-# surfaces at most -- and drawing a face thereafter is one blit.
+# A face is a dozen circles and lines. Ten of those per man per frame, a
+# hundred men on screen at fifty frames, is fifty thousand draw calls a second
+# to produce the SAME PICTURE for everyone facing the same way. So a face is
+# rendered once per (radius, direction, mood) -- at most a few dozen small
+# surfaces -- and drawing a face thereafter is one blit.
 _CACHE: dict = {}
 DIRS = 8
 
 
-def sprite(r: int, dir_i: int):
-    """The face for this head size and direction, made once and kept."""
-    key = (r, dir_i)
+def sprite(r: int, dir_i: int, mood: str = "normal"):
+    """The face for this head size, direction and mood, made once and kept."""
+    key = (r, dir_i, mood)
     got = _CACHE.get(key)
     if got is not None:
         return got
@@ -58,44 +62,78 @@ def sprite(r: int, dir_i: int):
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     c = size // 2
     a = dir_i * (2.0 * math.pi / DIRS)
-    _render(surf, float(c), float(c), r, math.cos(a), math.sin(a))
+    _render(surf, float(c), float(c), r, math.cos(a), math.sin(a), mood)
     _CACHE[key] = surf
     return surf
 
 
-def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float) -> None:
-    """The face itself, into any surface, centred on (hx, hy)."""
+def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
+            mood: str = "normal", skin=(216, 172, 132)) -> None:
+    """The face itself, into any surface, centred on (hx, hy).
+
+    KEPT DELIBERATELY BOLD. At a head of radius eight an eye is four pixels
+    across, and a ring around a four-pixel white reads as a pair of GLASSES --
+    which is what the first version looked like. So: a white disc, a dark
+    pupil in it, and nothing else around it.
+    """
     ex = hx + fx * r * EYE_LOOK
     ey = hy - r * EYE_UP + fy * r * EYE_LOOK
-    sep = max(2, int(round(r * EYE_SIDE)))
-    wr = max(2, int(round(r * 0.26)))
+    sep = max(3, int(round(r * EYE_SIDE)))
+    wr = max(2, int(round(r * WHITE_R)))
+    pr = max(1, int(round(r * PUPIL_R)))
     ix, iy = int(round(ex)), int(round(ey))
-    pygame.draw.circle(screen, WHITE, (ix - sep, iy), wr)
-    pygame.draw.circle(screen, WHITE, (ix + sep, iy), wr)
-    pygame.draw.circle(screen, BROW, (ix - sep, iy), wr, 1)
-    pygame.draw.circle(screen, BROW, (ix + sep, iy), wr, 1)
-    pr = max(1, int(round(wr * 0.62)))
-    px = int(round(ex + fx * wr * 0.55))
-    py = int(round(ey + fy * wr * 0.55))
-    pygame.draw.circle(screen, EYE, (px - sep, py), pr)
-    pygame.draw.circle(screen, EYE, (px + sep, py), pr)
-    by = int(round(ey - wr - r * BROW_LIFT))
+    focusing = (mood == "focus")
+
+    # THE EYES.
+    for sgn in (-1, 1):
+        cx = ix + sgn * sep
+        pygame.draw.circle(screen, WHITE, (cx, iy), wr)
+        if focusing:
+            # A SLIT, AND THEN THE PUPIL ON TOP OF IT. The lid comes FIRST so
+            # that it cuts the white down to a band, and the pupil is drawn
+            # after so the man is still looking at something -- drawn the
+            # other way round the slit was blank and the face went dead.
+            # Sized to the EYE, not the head.
+            pygame.draw.rect(screen, skin,
+                             (cx - wr, iy - wr, wr * 2 + 1,
+                              max(1, int(round(wr * 1.35)))))
+        pygame.draw.circle(screen, EYE,
+                           (cx + int(round(fx * wr * 0.45)),
+                            iy + int(round(fy * wr * 0.45))), pr)
+
+    # THE BROWS. Level, or pulled down and in for the working face.
+    by = int(round(iy - wr - r * (0.10 if focusing else 0.20)))
     bw = max(1, int(round(r * 0.20)))
-    tw = max(1, r // 7)
-    pygame.draw.line(screen, BROW, (ix - sep - bw, by), (ix - sep + bw, by), tw)
-    pygame.draw.line(screen, BROW, (ix + sep - bw, by), (ix + sep + bw, by), tw)
-    if r >= 7:
-        pygame.draw.line(screen, NOSE, (ix, int(round(ey + wr * 0.7))),
+    tw = max(1, r // 6)
+    for sgn in (-1, 1):
+        cx = ix + sgn * sep
+        if focusing:
+            pygame.draw.line(screen, BROW, (cx + sgn * bw, by - tw),
+                             (cx - sgn * bw, by + tw), tw)
+        else:
+            pygame.draw.line(screen, BROW, (cx - bw, by), (cx + bw, by), tw)
+
+    # THE NOSE.
+    if r >= 6:
+        pygame.draw.line(screen, NOSE, (ix, iy + wr),
                          (ix, int(round(hy + r * NOSE_DOWN))), 1)
-    if r >= 5:
-        my = int(round(hy + r * MOUTH_DOWN))
-        hw = max(1, int(round(r * 0.32)))
-        pygame.draw.line(screen, MOUTH, (ix - hw, my), (ix + hw, my),
-                         max(1, r // 8))
+
+    # THE MOUTH.
+    my = int(round(hy + r * MOUTH_DOWN))
+    hw = max(1, int(round(r * (0.16 if focusing else 0.26))))
+    pygame.draw.line(screen, MOUTH, (ix - hw, my), (ix + hw, my), max(1, r // 8))
+
+    # AND THE TONGUE, OUT OF THE CORNER OF IT.
+    if focusing:
+        tr = max(2, int(round(r * 0.24)))
+        tx = ix + hw + tr
+        pygame.draw.circle(screen, TONGUE, (tx, my + 1), tr)
+        pygame.draw.line(screen, (172, 78, 88), (tx, my + 1 - tr),
+                         (tx, my + 1 + tr), 1)
 
 
 def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,
-         fy: float = 0.0) -> None:
+         fy: float = 0.0, mood: str = "normal", skin=(216, 172, 132)) -> None:
     """A face on a head of radius r centred at (hx, hy). One blit after the
     first time, and never raises: a face must not be able to stop a frame."""
     try:
@@ -106,7 +144,7 @@ def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,
             d = int(round(math.atan2(fy, fx) / (2.0 * math.pi / DIRS))) % DIRS
         else:
             d = 0
-        surf = sprite(r, d)
+        surf = sprite(r, d, mood)
         screen.blit(surf, (int(hx) - surf.get_width() // 2,
                            int(hy) - surf.get_height() // 2))
     except Exception:
