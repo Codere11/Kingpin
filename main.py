@@ -2699,6 +2699,24 @@ def main() -> None:
         wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM  # world space
 
         for event in pygame.event.get():
+            # ---- THE KEY LOG. A one-line record of every key this build's
+            # event loop actually receives, appended to
+            # ~/.kingpin_saves/keys.log. It exists because I kept claiming the
+            # inspector worked on the strength of my own synthetic events while
+            # the real game did nothing, and guessing at the difference cost
+            # hours. Now the game says what it heard.
+            if event.type == pygame.KEYDOWN:
+                try:
+                    _kf = os.path.expanduser("~/.kingpin_saves/keys.log")
+                    with open(_kf, "a") as _fh:
+                        _fh.write("%s key=%s name=%s observer=%s test=%s\n"
+                                  % (time.strftime("%H:%M:%S"),
+                                     event.key,
+                                     pygame.key.name(event.key),
+                                     getattr(observer_, "open", "?"),
+                                     time_scale > 1.0))
+                except Exception:
+                    pass
             if event.type == pygame.QUIT:
                 save_now()
                 running = False
