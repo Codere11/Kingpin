@@ -19,7 +19,10 @@ import math
 
 import pygame
 
-WHITE = (243, 240, 234)     # the eye
+WHITE = (246, 246, 250)     # NEUTRAL-COOL, not warm. It was (243,240,234),
+                            # a warm off-white, and against warm tan skin
+                            # (216,172,132) a warm white reads as CREAM -- the
+                            # eye looked yellow. A cool white is the contrast.
 EYE = (38, 30, 26)          # the pupil, near-black so it reads at one pixel
 BROW = (96, 66, 46)         # a shade under the hair
 NOSE = (182, 144, 110)   # LIGHTER than the head's outline (150,112,82),
