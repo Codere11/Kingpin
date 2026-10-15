@@ -410,21 +410,19 @@ def household_share(house, dt: float = 1.0, village=None) -> None:
                         break
                 if given:
                     break
-    # The purse is the family's too. A breadwinner who keeps his brother in
-    # bread but not in tools is only half a household.
+    # THE PURSE IS NOT THE FAMILY'S. BREAD AND FIREWOOD ARE.
+    #
+    # This topped every member's purse up to HOUSE_PURSE out of whoever had
+    # spare coin above HOUSE_KEEP -- "the purse is the family's too" -- so a
+    # man with no trade was handed his brother's wages. Measured at day 10 of a
+    # live world, 164 men with no job were earning 13 coin a day each, 2,128 a
+    # day out of the ledgers, for nothing at all. A household that lets its own
+    # go cold or hungry is not a household; a man who wants a purse takes a
+    # post. He eats from the family larder and the common granary -- see
+    # household_share's food and fuel loops above, and economy.dole.
     for npc in members:
-        if npc.in_interior or npc.coins >= HOUSE_PURSE:
+        if npc.in_interior:
             continue
-        for other in members:
-            if other is npc or other.in_interior:
-                continue
-            spare = other.coins - HOUSE_KEEP
-            if spare <= 0:
-                continue
-            gave = min(spare, HOUSE_PURSE - npc.coins)
-            other.coins -= gave
-            npc.coins += gave
-            break
         if fuel_of(npc) <= 0:
             for other in members:
                 if other is npc or other.in_interior:
