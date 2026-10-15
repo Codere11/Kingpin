@@ -4139,8 +4139,21 @@ def main() -> None:
 
             blood.update(dt)
 
-            cam_x += (player.x - vw / 2 - cam_x) * min(1.0, dt * 9.0)
-            cam_y += (player.y - vh / 2 - cam_y) * min(1.0, dt * 9.0)
+            # THE CAMERA FOLLOWS WHAT IS BEING WATCHED -- INCLUDING THE EASE.
+            #
+            # This eased toward player.x/player.y, which UNDID the watching
+            # override set below it: the camera was put on the watched man and
+            # then dragged back toward the parked player sixty thousand pixels
+            # away, a little every frame. The ground streamed after a point that
+            # was crawling off the man, so the view drifted and the scenery
+            # arrived in the wrong place. The smoothing belongs to whoever the
+            # view belongs to.
+            _wt = observer_.target
+            _watch = _wt is not None and getattr(_wt, "alive", False)
+            _fx = _wt.x if _watch else player.x
+            _fy = _wt.y if _watch else player.y
+            cam_x += (_fx - vw / 2 - cam_x) * min(1.0, dt * 9.0)
+            cam_y += (_fy - vh / 2 - cam_y) * min(1.0, dt * 9.0)
 
             ground.update(6, cam_x, cam_y, vw, vh)   # worker builds ahead of us
             trees.update(now)                        # stumps grow back
