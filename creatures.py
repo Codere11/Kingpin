@@ -11,6 +11,7 @@ import math
 import random
 
 import pygame
+import face
 
 from enemy import AWARE_MEMORY, VIEW_RANGE, Enemy
 from combat import friendly_in_line
@@ -395,10 +396,13 @@ class Soldier(Enemy):
         body = (244, 226, 226) if self.hit_flash > 0.0 else self.color
         pygame.draw.circle(screen, body, (int(sx), int(sy)), 11)
         pygame.draw.circle(screen, (28, 30, 34), (int(sx), int(sy)), 11, 2)
-        pygame.draw.circle(screen, (214, 172, 132),
-                           (int(sx + fx * 2), int(sy + fy * 2 - 2)), 6)
-        pygame.draw.circle(screen, (140, 104, 76),
-                           (int(sx + fx * 2), int(sy + fy * 2 - 2)), 6, 1)
+        # A SOLDIER IS A MAN AND WEARS THE SAME FACE AS EVERYBODY ELSE. The
+        # patrols were the one body of people drawn on their own path, so they
+        # were the one body of people with no face at all.
+        _hx, _hy = sx + fx * 2, sy + fy * 2 - 2
+        pygame.draw.circle(screen, (214, 172, 132), (int(_hx), int(_hy)), 8)
+        pygame.draw.circle(screen, (140, 104, 76), (int(_hx), int(_hy)), 8, 1)
+        face.draw(screen, _hx, _hy, 8, fx, fy)
         # Nation pennant, so the armies are never mistaken for each other.
         pygame.draw.line(screen, (44, 38, 30), (sx + 7, sy - 6), (sx + 7, sy - 30), 2)
         pygame.draw.polygon(screen, self.color,

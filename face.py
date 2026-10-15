@@ -15,6 +15,8 @@ pleased -- they belong here, and every man in the world gets them at once.
 
 from __future__ import annotations
 
+import math
+
 import pygame
 
 WHITE = (243, 240, 234)     # the eye
@@ -33,61 +35,87 @@ MOUTH_DOWN = 0.46
 NOSE_DOWN = 0.16
 
 
-def draw(screen, hx, hy, r: int, fx: float = 0.0, fy: float = 0.0) -> None:
-    """A face on a head of radius r centred at (hx, hy).
+# ---------------------------------------------------------------------------
+# DRAWN ONCE, THEN BLITTED.
+#
+# A face is about a dozen circles and lines. Ten of those per man per frame,
+# a hundred men on screen at fifty frames, is fifty thousand draw calls a
+# second to produce the SAME PICTURE for every man facing the same way. So a
+# face is rendered once per (radius, of eight directions) -- twenty-four small
+# surfaces at most -- and drawing a face thereafter is one blit.
+_CACHE: dict = {}
+DIRS = 8
 
-    EYES WITH WHITES AND PUPILS, BROWS, A NOSE AND A MOUTH, all scaled from r
-    so the same call dresses a villager and the player. The PUPILS shift
-    toward the facing while the whites stay put, which is what makes a man
-    read as looking at something.
-    """
+
+def sprite(r: int, dir_i: int):
+    """The face for this head size and direction, made once and kept."""
+    key = (r, dir_i)
+    got = _CACHE.get(key)
+    if got is not None:
+        return got
+    pad = 3
+    size = 2 * r + 2 * pad + 1
+    surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    c = size // 2
+    a = dir_i * (2.0 * math.pi / DIRS)
+    _render(surf, float(c), float(c), r, math.cos(a), math.sin(a))
+    _CACHE[key] = surf
+    return surf
+
+
+def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float) -> None:
+    """The face itself, into any surface, centred on (hx, hy)."""
+    ex = hx + fx * r * EYE_LOOK
+    ey = hy - r * EYE_UP + fy * r * EYE_LOOK
+    sep = max(2, int(round(r * EYE_SIDE)))
+    wr = max(2, int(round(r * 0.26)))
+    ix, iy = int(round(ex)), int(round(ey))
+    pygame.draw.circle(screen, WHITE, (ix - sep, iy), wr)
+    pygame.draw.circle(screen, WHITE, (ix + sep, iy), wr)
+    pygame.draw.circle(screen, BROW, (ix - sep, iy), wr, 1)
+    pygame.draw.circle(screen, BROW, (ix + sep, iy), wr, 1)
+    pr = max(1, int(round(wr * 0.62)))
+    px = int(round(ex + fx * wr * 0.55))
+    py = int(round(ey + fy * wr * 0.55))
+    pygame.draw.circle(screen, EYE, (px - sep, py), pr)
+    pygame.draw.circle(screen, EYE, (px + sep, py), pr)
+    by = int(round(ey - wr - r * BROW_LIFT))
+    bw = max(1, int(round(r * 0.20)))
+    tw = max(1, r // 7)
+    pygame.draw.line(screen, BROW, (ix - sep - bw, by), (ix - sep + bw, by), tw)
+    pygame.draw.line(screen, BROW, (ix + sep - bw, by), (ix + sep + bw, by), tw)
+    if r >= 7:
+        pygame.draw.line(screen, NOSE, (ix, int(round(ey + wr * 0.7))),
+                         (ix, int(round(hy + r * NOSE_DOWN))), 1)
+    if r >= 5:
+        my = int(round(hy + r * MOUTH_DOWN))
+        hw = max(1, int(round(r * 0.32)))
+        pygame.draw.line(screen, MOUTH, (ix - hw, my), (ix + hw, my),
+                         max(1, r // 8))
+
+
+def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,
+         fy: float = 0.0) -> None:
+    """A face on a head of radius r centred at (hx, hy). One blit after the
+    first time, and never raises: a face must not be able to stop a frame."""
     try:
         r = int(r)
         if r < 4:
             return
-        ex = hx + fx * r * EYE_LOOK
-        ey = hy - r * EYE_UP + fy * r * EYE_LOOK
-        sep = max(2, int(round(r * EYE_SIDE)))
-        wr = max(2, int(round(r * 0.26)))          # eye-white radius
-        ix, iy = int(round(ex)), int(round(ey))
-        # the whites
-        pygame.draw.circle(screen, WHITE, (ix - sep, iy), wr)
-        pygame.draw.circle(screen, WHITE, (ix + sep, iy), wr)
-        pygame.draw.circle(screen, BROW, (ix - sep, iy), wr, 1)
-        pygame.draw.circle(screen, BROW, (ix + sep, iy), wr, 1)
-        # the pupils, looking where he is walking
-        pr = max(1, int(round(wr * 0.62)))
-        px = int(round(ex + fx * wr * 0.55))
-        py = int(round(ey + fy * wr * 0.55))
-        pygame.draw.circle(screen, EYE, (px - sep, py), pr)
-        pygame.draw.circle(screen, EYE, (px + sep, py), pr)
-        # brows
-        by = int(round(ey - wr - r * BROW_LIFT))
-        bw = max(1, int(round(r * 0.20)))
-        tw = max(1, r // 7)
-        pygame.draw.line(screen, BROW, (ix - sep - bw, by), (ix - sep + bw, by), tw)
-        pygame.draw.line(screen, BROW, (ix + sep - bw, by), (ix + sep + bw, by), tw)
-        # nose
-        if r >= 7:
-            ny0 = int(round(ey + wr * 0.7))
-            ny1 = int(round(hy + r * NOSE_DOWN))
-            pygame.draw.line(screen, NOSE, (ix, ny0), (ix, ny1), 1)
-        # mouth
-        if r >= 5:
-            my = int(round(hy + r * MOUTH_DOWN))
-            hw = max(1, int(round(r * 0.32)))
-            pygame.draw.line(screen, MOUTH, (ix - hw, my), (ix + hw, my),
-                             max(1, r // 8))
+        if fx or fy:
+            d = int(round(math.atan2(fy, fx) / (2.0 * math.pi / DIRS))) % DIRS
+        else:
+            d = 0
+        surf = sprite(r, d)
+        screen.blit(surf, (int(hx) - surf.get_width() // 2,
+                           int(hy) - surf.get_height() // 2))
     except Exception:
         pass
 
 
 if __name__ == "__main__":
-    # A quick look at the geometry, for a five-pixel head facing four ways.
-    for f in ((1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)):
-        r = 5
-        ex = f[0] * r * EYE_LOOK
-        ey = -r * EYE_UP + f[1] * r * EYE_LOOK
-        sep = max(1, int(round(r * EYE_SIDE)))
-        print("facing %-12s  eyes at (%.1f,%.1f) sep %d   mouth y %.1f"
-              % (str(f), ex, ey, sep, r * MOUTH_DOWN))
+    print("cached faces after warming 3 sizes x 8 ways:")
+    for rr in (5, 6, 8):
+        for dd in range(DIRS):
+            sprite(rr, dd)
+    print("   surfaces:", len(_CACHE))
