@@ -31,6 +31,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pygame
+from palette import rich, dim
 
 import biomes
 from noise import _hash, fbm, value_noise
@@ -45,10 +46,10 @@ SCATTER_CELL = 64    # one scatter lattice cell; 1-3 details are placed inside
 SCATTER_CHUNK = 256  # scatter is baked into chunk surfaces and blitted
 
 # --- palette ----------------------------------------------------------------
-GRASS_DARK = (46, 84, 40)
-GRASS_LITE = (116, 156, 72)
-GRASS_DRY = (146, 142, 86)
-GRASS_DIRT = (112, 94, 62)
+GRASS_DARK = rich((46, 84, 40))
+GRASS_LITE = rich((116, 156, 72))
+GRASS_DRY = rich((146, 142, 86))
+GRASS_DIRT = rich((112, 94, 62))
 
 
 # plot kinds that count as worked / planted soil (must match crop.py)

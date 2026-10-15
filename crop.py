@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 
 import pygame
+from palette import rich
 
 from world import TILE, World
 
@@ -40,7 +41,7 @@ LEAF_TINT = {
     "marsh":   ((72, 122, 66), (98, 146, 78), (58, 96, 54)),
     "jungle":  ((60, 132, 62), (86, 158, 74), (46, 104, 50)),
 }
-LEAF_DEFAULT = ((64, 102, 44), (94, 148, 62), (50, 88, 36))
+LEAF_DEFAULT = (rich((64, 102, 44)), rich((94, 148, 62)), rich((50, 88, 36)))
 
 
 def stage(elapsed: float) -> int:

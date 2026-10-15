@@ -10,6 +10,7 @@ tree species/density blend the same way.
 from __future__ import annotations
 
 import numpy as np
+from palette import rich
 
 from noise import fbm, value_noise
 
@@ -25,15 +26,15 @@ GRID = (
 
 # ground palette per biome: a shadow tone and a highlight tone
 BIOMES = {
-    "tundra":   {"dark": (198, 208, 218), "lite": (236, 242, 249)},
-    "steppe":   {"dark": (132, 138, 128), "lite": (184, 186, 174)},
-    "taiga":    {"dark": (186, 198, 210), "lite": (224, 232, 242)},
-    "prairie":  {"dark": (126, 134, 68),  "lite": (188, 184, 104)},
-    "woodland": {"dark": (74, 112, 56),   "lite": (136, 166, 86)},
-    "marsh":    {"dark": (64, 90, 58),    "lite": (112, 138, 82)},
-    "desert":   {"dark": (206, 184, 128), "lite": (240, 224, 168)},
-    "savanna":  {"dark": (150, 138, 72),  "lite": (198, 184, 108)},
-    "jungle":   {"dark": (44, 90, 52),    "lite": (96, 152, 72)},
+    "tundra":   {"dark": rich((198, 208, 218)), "lite": rich((236, 242, 249))},
+    "steppe":   {"dark": rich((132, 138, 128)), "lite": rich((184, 186, 174))},
+    "taiga":    {"dark": rich((186, 198, 210)), "lite": rich((224, 232, 242))},
+    "prairie":  {"dark": rich((126, 134, 68)),  "lite": rich((188, 184, 104))},
+    "woodland": {"dark": rich((74, 112, 56)),   "lite": rich((136, 166, 86))},
+    "marsh":    {"dark": rich((64, 90, 58)),    "lite": rich((112, 138, 82))},
+    "desert":   {"dark": rich((206, 184, 128)), "lite": rich((240, 224, 168))},
+    "savanna":  {"dark": rich((150, 138, 72)),  "lite": rich((198, 184, 108))},
+    "jungle":   {"dark": rich((44, 90, 52)),    "lite": rich((96, 152, 72))},
 }
 
 
@@ -131,8 +132,8 @@ def can_plant(t, h, kind: str) -> bool:
     return True
 
 
-_SNOW_COL = {"dark": (214, 224, 236), "lite": (247, 251, 255)}
-_SAND_COL = {"dark": (212, 192, 138), "lite": (244, 230, 178)}
+_SNOW_COL = {"dark": rich((214, 224, 236)), "lite": rich((247, 251, 255))}
+_SAND_COL = {"dark": rich((212, 192, 138)), "lite": rich((244, 230, 178))}
 
 
 def _ssf(x: float) -> float:

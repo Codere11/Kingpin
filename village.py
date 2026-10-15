@@ -20,6 +20,7 @@ from typing import Any
 
 
 import pygame
+from palette import rich, dim
 
 import fence
 import crop
@@ -74,13 +75,13 @@ def village_radius(gx: int, gy: int, spacing: float = SPACING) -> float:
     """
     return RADIUS_BASE * (2.0 if nations.is_capital_cell(gx, gy, spacing) else 1.0)
 EAVE = 14                            # roof overhang around a house footprint
-ROOFS = [(150, 76, 58), (122, 98, 74), (98, 106, 122), (156, 116, 74),
-         (128, 78, 84), (104, 92, 70)]
+ROOFS = [rich(c) for c in ((150, 76, 58), (122, 98, 74), (98, 106, 122), (156, 116, 74),
+         (128, 78, 84), (104, 92, 70))]
 
-WALL = (228, 212, 184)
-WALL_DARK = (150, 128, 100)
-STONE = (176, 168, 152)
-STONE_DARK = (118, 112, 98)
+WALL = rich((228, 212, 184))
+WALL_DARK = rich((150, 128, 100))
+STONE = rich((176, 168, 152))
+STONE_DARK = rich((118, 112, 98))
 
 PLAYER_ID = "player"             # the name a village knows the player by
 
@@ -165,8 +166,8 @@ NATION_PREFIX = ["Red", "Black", "Iron", "Golden", "Salt", "Pine", "Crow",
 NATION_SUFFIX = ["Reach", "Hollow", "Valley", "Crossing", "Flats", "Ridge",
                  "Bend", "Ford", "Bluffs", "Springs", "Hill", "Creek",
                  "March", "Barrens"]
-NATION_COLORS = [(176, 62, 58), (62, 96, 176), (74, 138, 74), (170, 138, 52),
-                 (140, 74, 158), (58, 148, 152), (190, 104, 46), (96, 96, 108)]
+NATION_COLORS = [rich(c) for c in ((176, 62, 58), (62, 96, 176), (74, 138, 74), (170, 138, 52),
+                 (140, 74, 158), (58, 148, 152), (190, 104, 46), (96, 96, 108))]
 
 
 def village_name(gx: int, gy: int, seed: int = 0) -> str:
