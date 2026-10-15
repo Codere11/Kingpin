@@ -2702,6 +2702,16 @@ def main() -> None:
             if event.type == pygame.QUIT:
                 save_now()
                 running = False
+            elif observer_.handle(event, player):
+                # THE INSPECTOR ANSWERS FIRST, ABOVE EVERY MENU.
+                #
+                # Every branch below is an `elif`, so whichever one matches
+                # EATS the key. With the pack open (`elif inventory_open:`) or
+                # any other panel, I never reached the observer at all -- which
+                # is why pressing TAB and then I did nothing: the pack had the
+                # keyboard. The inspector is how the world is looked at, and
+                # the world does not stop for a menu.
+                pass
             elif (test_mode and event.type == pygame.MOUSEBUTTONDOWN
                   and event.button == 1 and speed_button().collidepoint(event.pos)):
                 speed_i = (speed_i + 1) % len(SPEEDS)
@@ -2755,8 +2765,8 @@ def main() -> None:
                     board_open = False
                     pygame.mouse.set_visible(False)
             elif inventory_open:
-                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
-                                                                  pygame.K_ESCAPE):
+                if event.type == pygame.KEYDOWN and event.key in (
+                        pygame.K_e, pygame.K_ESCAPE, pygame.K_TAB):
                     inventory_open = False
                     panel.close()
                     pygame.mouse.set_visible(False)
@@ -2874,8 +2884,6 @@ def main() -> None:
                     pygame.mouse.set_visible(False)
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     try_place()
-            elif observer_.handle(event, player):
-                pass
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_v:
                 _vt = nearest_voter()
                 if _vt is None:
