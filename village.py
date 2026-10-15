@@ -20,6 +20,7 @@ from typing import Any
 
 
 import pygame
+import face
 from palette import rich, dim
 
 import fence
@@ -1801,50 +1802,29 @@ class NPC:
         flash = self.hit_flash > 0.0
         pygame.draw.ellipse(screen, (20, 36, 20), (sx - 12, sy - 4, 24, 9))
 
-        if flash or wear == "normal":
-            body = (242, 232, 232) if flash else self.clothing
-            pygame.draw.circle(screen, body, (int(sx), int(sy)), 10)
-            pygame.draw.circle(screen, (44, 40, 36), (int(sx), int(sy)), 10, 2)
-            pygame.draw.circle(screen, (216, 172, 132), (int(hx), int(hy)), 5)
-            pygame.draw.circle(screen, (150, 112, 82), (int(hx), int(hy)), 5, 1)
-        elif wear == "fur":                        # fur coat + ushanka
-            fur, fur_hi = (176, 156, 122), (214, 196, 162)
-            pygame.draw.circle(screen, fur, (int(sx), int(sy)), 11)
-            for i in range(10):
-                a = i * math.tau / 10.0
-                pygame.draw.circle(screen, fur_hi,
-                                   (int(sx + math.cos(a) * 10), int(sy + math.sin(a) * 10)), 4)
-            pygame.draw.circle(screen, (108, 90, 66), (int(sx), int(sy)), 11, 2)
-            pygame.draw.circle(screen, (150, 128, 98), (int(hx), int(hy)), 8)
-            pygame.draw.circle(screen, (216, 172, 132), (int(hx), int(hy)), 4)
-            pygame.draw.rect(screen, (150, 128, 98), (int(hx - 8), int(hy - 3), 16, 5),
-                             border_radius=2)
-        elif wear == "tuareg":                     # indigo robe + head wrap
-            robe, robe_hi = (56, 74, 122), (34, 48, 88)
-            pygame.draw.circle(screen, robe, (int(sx), int(sy)), 10)
-            pygame.draw.circle(screen, robe_hi, (int(sx), int(sy)), 10, 2)
-            pygame.draw.line(screen, (196, 186, 160), (sx - 7, sy + 4), (sx + 7, sy + 4), 2)
-            pygame.draw.circle(screen, (222, 214, 190), (int(hx), int(hy)), 8)
-            pygame.draw.circle(screen, (158, 150, 130), (int(hx), int(hy)), 8, 1)
-            pygame.draw.rect(screen, (222, 214, 190), (int(hx - 8), int(hy - 2), 16, 5))
-            pygame.draw.line(screen, (34, 32, 36), (hx - 3, hy + 1), (hx + 3, hy + 1), 2)
-        elif wear == "zebra":                      # striped cloth
-            pygame.draw.circle(screen, (234, 230, 222), (int(sx), int(sy)), 10)
-            for dy in (-6, -2, 2, 6):
-                half = int(math.sqrt(max(0.0, 100 - dy * dy)) * 0.92)
-                pygame.draw.line(screen, (32, 30, 34), (sx - half, sy + dy),
-                                 (sx + half, sy + dy), 3)
-            pygame.draw.circle(screen, (44, 40, 36), (int(sx), int(sy)), 10, 2)
-            pygame.draw.circle(screen, (216, 172, 132), (int(hx), int(hy)), 5)
-            pygame.draw.circle(screen, (150, 112, 82), (int(hx), int(hy)), 5, 1)
+        # ONE BODY, ONE FACE, NO ACCESSORIES.
+        #
+        # There were four dressings -- an ordinary coat, a fur coat with an
+        # ushanka, an indigo Tuareg robe with a head wrap, and striped cloth --
+        # chosen by the biome a man was born in. They are gone: everybody is
+        # drawn the same, and the only thing that varies is the colour of his
+        # coat. The wear is still recorded on the man (biomes.npc_wear still
+        # sets it) in case it is wanted again; it is simply not drawn.
+        body = (242, 232, 232) if flash else self.clothing
+        pygame.draw.circle(screen, body, (int(sx), int(sy)), 10)
+        pygame.draw.circle(screen, (44, 40, 36), (int(sx), int(sy)), 10, 2)
+        pygame.draw.circle(screen, (216, 172, 132), (int(hx), int(hy)), 5)
+        pygame.draw.circle(screen, (150, 112, 82), (int(hx), int(hy)), 5, 1)
+        head_r = 5
 
-        if self.is_commander:
-            hx = sx + fx * 2
-            hy = sy + fy * 2 - 2
-            pygame.draw.circle(screen, (46, 52, 74), (int(hx), int(hy - 1)), 8)
-            pygame.draw.rect(screen, (46, 52, 74), (int(hx - 9), int(hy - 5), 18, 4))
-            pygame.draw.line(screen, (214, 184, 96), (hx - 7, hy - 1), (hx + 7, hy - 1), 2)
-            pygame.draw.circle(screen, (214, 184, 96), (int(hx), int(hy - 4)), 2)
+        # ONE FACE FOR EVERYBODY, drawn to the head he happens to have.
+        face.draw(screen, hx, hy, head_r, fx, fy)
+
+        # THE COMMANDER'S HAT IS GONE. It was an eight-pixel cap painted over
+        # the head, so the one man guaranteed to be looked at was the one man
+        # whose face could not be seen -- and the face is drawn BEFORE it, so
+        # the hat covered the eyes in every frame. is_commander still marks him
+        # for the game; he simply wears what everybody else wears.
         if show_name and self.name:
             font = _name_font()
             label = font.render(self.name, True, (242, 238, 224))

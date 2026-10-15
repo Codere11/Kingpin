@@ -7,6 +7,7 @@ from __future__ import annotations
 import math
 
 import pygame
+import face
 
 import items
 import guns
@@ -226,8 +227,11 @@ class Player:
             self._draw_held(screen, held, sx, sy, fx, fy, self.swing_progress)
 
         # head last so it sits on top
-        pygame.draw.circle(screen, (222, 178, 138), (sx + fx * 2, sy + fy * 2 - 2), 6)
-        pygame.draw.circle(screen, (150, 108, 78), (sx + fx * 2, sy + fy * 2 - 2), 6, 1)
+        _hx, _hy = sx + fx * 2, sy + fy * 2 - 2
+        pygame.draw.circle(screen, (222, 178, 138), (_hx, _hy), 6)
+        pygame.draw.circle(screen, (150, 108, 78), (_hx, _hy), 6, 1)
+        # the same face as everybody else, on the bigger head
+        face.draw(screen, _hx, _hy, 6, fx, fy)
 
     @staticmethod
     def _draw_held(screen: pygame.Surface, item_id: str, sx: float, sy: float,
