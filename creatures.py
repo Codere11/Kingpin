@@ -79,24 +79,7 @@ def wolf_tier(spawn, now: float):
         return WOLF_TIERS[1]
     return WOLF_TIERS[0]
 
-_LAMP_GLOW: dict = {}
 
-
-def _lamp_glow(size: int = 190) -> pygame.Surface:
-    """A soft, warm pool of light that fades to nothing at its rim."""
-    surf = _LAMP_GLOW.get(size)
-    if surf is not None:
-        return surf
-    surf = pygame.Surface((size, size), pygame.SRCALPHA)
-    c = size // 2
-    steps = 26
-    for i in range(steps, 0, -1):          # big & faint -> small & bright
-        r = int(c * i / steps)
-        f = 1.0 - i / float(steps)
-        alpha = int(4 + 46 * f * f)
-        pygame.draw.circle(surf, (255, 224, 150, alpha), (c, c), r)
-    _LAMP_GLOW[size] = surf
-    return surf
 
 
 class Soldier(Enemy):
@@ -141,7 +124,6 @@ class Soldier(Enemy):
         self.guard_phase = 0.0
         self.guard_village = None
         self.hostile = False           # set when the village is provoked
-        self.lamp_on = False            # flashlight glow at night
         self.patrol_center = None        # territory patrol: (x, y) or None
         self.patrol_r = 0.0
         self.patrol_phase = 0.0
@@ -309,36 +291,6 @@ class Soldier(Enemy):
             self.facing = (ddx / dist, ddy / dist)
         else:
             self.facing = (nx, ny)          # on watch: square to the fence
-
-    def draw_light(self, screen, cam_x, cam_y):
-        """A soft flashlight effect: a warm pool of light and a hazy beam,
-        added on top of the night shade (both surfaces are cached/blurred)."""
-        sx, sy = self.x - cam_x, self.y - cam_y
-        glow = _lamp_glow()
-        gs = glow.get_width()
-        screen.blit(glow, (sx - gs / 2.0, sy - gs / 2.0),
-                    special_flags=pygame.BLEND_RGBA_ADD)
-
-        ang = math.atan2(self.facing[1], self.facing[0])
-        length = 170.0
-        pad = int(length) + 24
-        surf = getattr(self, "_lamp_surf", None)
-        if surf is None:
-            surf = pygame.Surface((pad * 2, pad * 2), pygame.SRCALPHA)
-            self._lamp_surf = surf
-        else:
-            surf.fill((0, 0, 0, 0))
-        for i in range(12, 0, -1):          # wide & faint -> narrow & bright
-            half = math.radians(3.0 + 12.0 * i / 12.0)
-            f = 1.0 - i / 12.0
-            alpha = int(6 + 44 * f * f)
-            pts = [(pad, pad),
-                   (pad + math.cos(ang - half) * length,
-                    pad + math.sin(ang - half) * length),
-                   (pad + math.cos(ang + half) * length,
-                    pad + math.sin(ang + half) * length)]
-            pygame.draw.polygon(surf, (255, 224, 150, alpha), pts)
-        screen.blit(surf, (sx - pad, sy - pad), special_flags=pygame.BLEND_RGBA_ADD)
 
     def _fire_while_marching(self, dt, target, combat):
         self.fire_cd -= dt

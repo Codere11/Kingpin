@@ -3217,10 +3217,6 @@ def main() -> None:
                         village.patrol_timer = 30.0
                         enemies.extend(village.patrol)
                 village._assign_duty_bodies()
-            for e in enemies:
-                if (getattr(e, "guard_village", None) is not None
-                        or getattr(e, "patrol_center", None) is not None):
-                    e.lamp_on = night
             house_colliders = [house.rect for village in visible_villages
                                for house in village.houses]
             house_colliders += [house.rect for house in built_houses]
@@ -4559,18 +4555,6 @@ def main() -> None:
         if _watch:
             vision.cone_deg = _cone0
         draw_night()
-        if night:                               # guard flashlights, only if seen
-            eye_wx = player.x + player.facing[0] * 5.0
-            eye_wy = player.y + player.facing[1] * 5.0
-            for e in enemies:
-                if not (getattr(e, "lamp_on", False) and e.alive):
-                    continue
-                ex, ey = e.x - cam_x, e.y - cam_y
-                if not (-60 <= ex <= vw + 60 and -60 <= ey <= vh + 60):
-                    continue
-                if vision.is_visible(eye_wx, eye_wy, player.facing_angle,
-                                     e.x, e.y, occluders=occluders):
-                    e.draw_light(screen, cam_x, cam_y)
 
         selected = inventory.selected_stack()
         player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
