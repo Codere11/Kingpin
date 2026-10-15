@@ -223,6 +223,14 @@ VARIETY_MIN = 1            # ...and a taste of every kind of food there is
 LEAF_KEEP = 1
 LEAF_FARMER_KEEP = 5
 TOOL_USES = 90             # workings a plain tool survives
+TOOL_WORN = 30             # ...and a tool with fewer workings left than this
+                           # is REPLACED. The old threshold was TOOL_USES // 4
+                           # = 22, which is close to dead: a farmer went to the
+                           # field with a tool on its last legs and then had
+                           # nothing. Thirty is the smith's cue.
+SMITH_WAGE = 50            # a day's pay for the forge. He is the town's
+                           # employee: the iron is the town's, the bench is
+                           # the town's, and so is everything he makes.
 
 
 def tool_dur_mult(grade: int) -> float:
@@ -450,20 +458,32 @@ def is_worker(npc) -> bool:
 
 
 def wears_tool(npc, item: str) -> bool:
-    """Who uses what. Farmers wear shovels; woodsmen wear axes."""
+    """Who uses what. Farmers wear shovels; woodsmen wear axes.
+
+    AND MINERS WEAR PICKAXES -- which this never said, so no man in the world
+    was ever a pickaxe's owner: `wears_tool` answered False for one, so
+    `needs_tool` answered False, so nobody was ever short of one, so the forge
+    had no reason to make one and `forge_kind` had no way to choose it. A
+    pickaxe has never been produced in this game.
+    """
     if item == "shovel":
         return npc.farm_plot is not None
     if item == "axe":
         return npc.job == "logger"
+    if item == "pickaxe":
+        wp = getattr(npc, "workplace", None)
+        return (getattr(npc, "job", None) == "mine"
+                or getattr(wp, "kind", None) == "mine")
     return False
 
 
 def needs_tool(npc, item: str) -> bool:
+    """Is he down to the last of it, with nothing on the shelf?"""
     if not wears_tool(npc, item):
         return False
     if npc.stock.get(item, 0) > 0:
         return False
-    return npc.tool_uses <= TOOL_USES // 4
+    return npc.tool_uses <= TOOL_WORN
 
 
 def place_orders(village, npc) -> None:
@@ -1845,6 +1865,8 @@ def pay_wages(village, day: int) -> None:
             wage = WAGE
         elif getattr(npc, "job", None) == "logger":
             wage = LOGGER_WAGE          # the woods are the town's payroll now
+        elif getattr(npc, "job", None) == "smith":
+            wage = SMITH_WAGE           # and so is the forge
         else:
             continue
         paid = min(wage, village.ledger_coins)

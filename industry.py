@@ -230,6 +230,107 @@ def gunworks(npc, dt: float) -> bool:
     return made > 0
 
 
+SMITH_WORN = 30              # a tool with fewer workings left than this is
+                             # replaced -- the smith's cue, and every tool in
+                             # the village, not the loudest trade
+SMITHS_PER_DAY = 30          # thirty tools or guns in a day, and no more
+
+
+def _tool_cost(kind: str):
+    """What a thing costs the town in material.
+
+    Built HERE and not at the top of the module: industry is imported by
+    village, which is imported by economy, so at import time economy has not
+    finished and `economy.IRON_PER_TOOL` does not exist yet. Asking for it in a
+    module-level dict took the whole game down with a circular import.
+    """
+    if kind == "rifle":
+        return GUN_IRON, GUN_WOOD
+    if kind == "ammo":
+        return AMMO_IRON, AMMO_WOOD
+    return economy.IRON_PER_TOOL, 0
+
+
+def forge_next(village) -> object:
+    """WHAT THE FORGE OWES THE VILLAGE: the work, not the vote.
+
+    A punch list -- every tool in the village with fewer than SMITH_WORN
+    workings left in it, counted PER KIND so that a hundred woodsmen cannot
+    out-shout one farmer. Then, and only when no tool in the village is worn
+    out, the guns.
+
+    This was `max(tally, key=...)` over an order book: whatever the most men
+    had asked for. With 254 loggers booking axes against 191 farmers booking
+    shovels, "axe" won every day for sixty-four days. The shovels were never
+    replaced, the farmers stopped tilling, and 788 people starved. A forge
+    that serves the loudest trade is not serving the village.
+    """
+    counts: dict = {}
+    for n in village.npcs:
+        if not getattr(n, "alive", False):
+            continue
+        for tool in ("shovel", "pickaxe", "axe"):
+            if economy.needs_tool(n, tool):
+                counts[tool] = counts.get(tool, 0) + 1
+    if counts:
+        return max(counts, key=lambda k: counts[k])
+    # NO TOOL IS WORN: arm the village. A gun is forged as a KIT -- the rifle
+    # and its thirty rounds in the same breath -- so there is never a rifle in
+    # the world that cannot be loaded.
+    armed = sum(1 for n in village.npcs
+                if getattr(n, "alive", False) and economy.is_watch(n))
+    rifles = sum(int(n.stock.get("rifle", 0)) for n in village.npcs
+                 if getattr(n, "alive", False))
+    if armed > rifles:
+        return "rifle"
+    rounds = sum(int(n.stock.get("ammo", 0)) for n in village.npcs
+                 if getattr(n, "alive", False))
+    if rifles and rounds < rifles * economy.AMMO_PER_RIFLE:
+        return "ammo"
+    return None
+
+
+def smith_shift(npc, dt: float, now: float) -> None:
+    """A day at the forge: a wage, the town's iron, and the town's goods.
+
+    He draws his iron and his timber off the common shelf for nothing, and
+    everything he makes goes back onto it -- the people buy their tools from
+    the ledger like everything else, and no coin passes through a private
+    purse on the way. He was an entrepreneur selling his own work, which put
+    a smith at the top of the world's wealth on day one.
+    """
+    v = npc.village
+    if v is None:
+        return
+    store = v.ledger_goods
+    fast = 1.0 + npc.skills.axe
+    npc.produce_acc = (getattr(npc, "produce_acc", 0.0)
+                       + daily_rate(SMITHS_PER_DAY * fast) * dt)
+    npc.produce_acc = min(npc.produce_acc, float(SMITHS_PER_DAY))
+    made = 0
+    while npc.produce_acc >= 1.0 and made < SMITHS_PER_DAY:
+        kind = forge_next(v)
+        if kind is None:
+            npc.produce_acc = 0.0
+            break
+        cost_iron, cost_wood = _tool_cost(kind)
+        if int(store.get("iron", 0)) < cost_iron \
+                or int(store.get("wood", 0)) < cost_wood:
+            npc.produce_acc = 0.0          # no material: the pit must dig it
+            break
+        store["iron"] = int(store.get("iron", 0)) - cost_iron
+        if cost_wood:
+            store["wood"] = int(store.get("wood", 0)) - cost_wood
+        npc.produce_acc -= 1.0
+        made += 1
+        g = npc.skills.leaf_grade(8)
+        # EVERYTHING HE MAKES IS THE TOWN'S, and it goes on the common shelf.
+        economy.store_add(v, kind, 1, g)
+        if kind == "rifle":
+            economy.store_add(v, "ammo", economy.AMMO_PER_RIFLE, g)
+        npc.skills.gain_farming(0.02)      # the forge hones the smith too
+
+
 def produce(npc, dt: float, now: float) -> None:
     """A day at the pit head or the forge. The worker keeps what he makes."""
     workplace = getattr(npc, "workplace", None)
@@ -332,36 +433,18 @@ def produce(npc, dt: float, now: float) -> None:
                     npc.coins += whole
                     npc.book_in = getattr(npc, "book_in", 0.0) + whole
         return
-    # The forge works to a small shelf, and every tool costs its lump of iron.
-    # Count what is FREE of the kind he is about to make -- and count it per
-    # kind. Reserved tools are promised, not stock. Counting every kind
-    # together parked the smith with ten shovels on the shelf, six axe orders
-    # in the book, and not one hammer blow struck in thirty days.
-    gunworks(npc, dt)
-    kind_wanted = forge_kind(npc.village, now)
-    booked = sum(1 for _w, k in getattr(npc, "tool_orders", ()) if k == kind_wanted)
-    free = (int(npc.stock.get(kind_wanted, 0))
-            - int(getattr(npc, "tool_keep", {}).get(kind_wanted, 0)))
-    if free >= max(FORGE_SHELF, booked):
-        return                          # stocked for now, or nothing ordered
-    npc.produce_acc += daily_rate(TOOLS_PER_DAY * scale) * dt
-    made = 0
-    while (npc.produce_acc >= 1.0
-           and npc.stock.get("iron", 0) >= economy.IRON_PER_TOOL):
-        npc.produce_acc -= 1.0
-        npc.stock["iron"] -= economy.IRON_PER_TOOL
-        made += 1
-    if made:
-        kind = kind_wanted
-        # His OWN workmanship goes into the steel: a skilled smith turns out
-        # tools that last, and charges accordingly.
-        g = npc.skills.leaf_grade(8)
-        held = npc.stock.get(kind, 0)
-        npc.grade[kind] = quality.merge(npc.grade.get(kind, g), held, g, made)
-        npc.stock[kind] = held + economy.take_fifth(npc.village, npc, kind, made)
-        npc.skills.gain_farming(0.02 * made)     # the forge hones the smith too
-        economy.fill_orders(npc.village, npc, kind)   # and the order is met
-    npc.produce_acc = min(npc.produce_acc, 2.0)   # no banking a backlog
+    # ------------------------------------------------------------------
+    # THE FORGE IS THE TOWN'S AND THE SMITH IS ITS EMPLOYEE. See smith_shift.
+    #
+    # He is paid economy.SMITH_WAGE a day, the town gives him his iron, and
+    # everything he makes goes onto the common shelf for the town to sell.
+    # He works from a punch list: every tool in the village with fewer than
+    # SMITH_WORN workings left, TOOLS BEFORE GUNS -- and a pickaxe is on that
+    # list at all only because economy.wears_tool now knows a miner is a
+    # pickaxe's owner. It never did, so no pickaxe was ever forged.
+    smith_shift(npc, dt, now)
+    return
+    # (The old order-book forge is gone: see smith_shift and forge_next.)
 
 
 class Workplace:
