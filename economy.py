@@ -511,6 +511,20 @@ def place_orders(village, npc) -> None:
                  if wears_tool(npc, t)), None)
     if want is None or npc.stock.get(want, 0) > 0:
         return
+    # THE USES MUST BELONG TO THE TRADE HE IS IN NOW.
+    #
+    # `tool_uses` is the life left in the tool in his hand, and it does not
+    # travel: a farmer who takes a post at the pit keeps a banked 90 that
+    # described a shovel he has since put down, and 90 reads as "plenty left"
+    # for a pickaxe he has never owned. So he never books one, stands at the
+    # face with an empty hand, and the forge never hears from him. Measured:
+    # 96 miners, 22 pickaxes.
+    #
+    # A tool of a DIFFERENT kind is not a tool of this kind, so the count
+    # starts again from nothing and the book gets its order.
+    if getattr(npc, "tool_kind", None) != want:
+        npc.tool_kind = want
+        npc.tool_uses = 0
     # THIRTY WORKINGS, as asked. It was 40% of the tool's life, which is a
     # different number for a fine tool than a plain one and is not the cue
     # anybody chose.

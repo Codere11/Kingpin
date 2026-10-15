@@ -935,6 +935,11 @@ class NPC:
         A finer tool lasts longer -- but never long enough to pay for itself,
         because the price climbs faster than the work does. False means there is
         nothing left to work with, and he must go and buy one."""
+        # WHICH TOOL THESE USES BELONG TO. A man keeps his `tool_uses` when he
+        # changes trade -- it counted down a shovel he has since put down, and
+        # would go on reading "plenty left" for a pickaxe he has never owned.
+        # Written here, at the swing, because this is where a tool is picked up.
+        self.tool_kind = item
         if self.tool_uses <= 0:
             if self.stock.get(item, 0) <= 0:
                 return False
