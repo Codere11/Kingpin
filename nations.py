@@ -18,10 +18,21 @@ from noise import value_noise
 NAMES = ["Crowlands", "Ashmark", "Redreach"]
 COLORS = [(176, 60, 54), (58, 92, 178), (96, 142, 76)]
 
-CAPITALS = [(-52000.0, -38000.0), (54000.0, -30000.0),
-            (4000.0, 56000.0)]     # scaled with the world: three kingdoms
-            # still cover the whole of it, and no town is left stateless.
-WEIGHTS = [1.02, 1.10, 0.94]        # bigger weight => bigger territory
+# THE CORNERS, NOT THE MIDDLE. Three capitals sat in a triangle around the
+# centre of a world that runs from -100,000 to +100,000, so every kingdom's
+# heartland was crammed into the same few thousand yards and the far edges
+# belonged to whoever happened to be nearest. Pushed out to the corners, each
+# nation owns a real quarter of the map, its capital is as far from its
+# rivals as the world allows, and a conquest has somewhere to march TO.
+CAPITALS = [(-84000.0, -84000.0), (84000.0, -84000.0),
+            (0.0, 84000.0)]        # two far corners and the far south, so
+            # three Voronoi cells tile the square evenly instead of two
+            # taking everything and the third a wedge.
+WEIGHTS = [1.2, 1.2, 0.75]         # bigger weight => bigger territory.
+# Tuned against the new corner capitals: the two northern kingdoms meet in the
+# middle and the southern one takes the rest, and these weights split the map
+# 33% / 33% / 33%. It was 28 / 29 / 43 with the old triangle, which is not a
+# balance, it is a kingdom that starts the game a third bigger than its rivals.
 
 
 def count() -> int:

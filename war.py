@@ -1213,6 +1213,42 @@ def update(armies: list, tick_dt: float = 0.0, now: float = 0.0) -> list:
                     if per > 0:
                         for s in men:
                             s.food = getattr(s, "food", 0) + per
+            # A CAPITAL FALLING TAKES THE WHOLE KINGDOM WITH IT.
+            #
+            # Taking a capital used to be taking one town. The king was routed
+            # with the crowd, village.king went on pointing at a man who had
+            # fled, and every other town of that nation carried on as before --
+            # so a nation could lose its capital and its king and simply sit
+            # headless for ever, its villages still flying its colours.
+            #
+            # THE THRONE IS THE NATION. When it falls the realm changes hands:
+            # every town of the old nation becomes the conqueror's, every king
+            # is deposed, and the crown goes with the capital that was taken.
+            _was_capital = bool(getattr(target, "is_capital", False))
+            _old_nation = target.nation
+            if _was_capital and _old_nation != army.nation:
+                _taken = 0
+                _reg = getattr(target, "registry", None)
+                for _v in (getattr(_reg, "villages", ()) if _reg else ()):
+                    if getattr(_v, "nation", None) != _old_nation:
+                        continue
+                    _v.nation = army.nation
+                    _k = getattr(_v, "king", None)
+                    if _k is not None:
+                        _k.is_king = False
+                        _k.role = None
+                        if getattr(_k, "job", None) == "king":
+                            _k.job = None
+                            _v.free_post(_k)
+                        _v.king = None
+                    for _n in _v.npcs:
+                        if getattr(_n, "alive", False):
+                            _n.nation = army.nation
+                            _n.team = ("nation", army.nation)
+                    _taken += 1
+                economy._note(
+                    "KINGDOM FALLS  %s takes %s and with it %d towns"
+                    % (getattr(army.capital, "name", "?"), target.name, _taken))
             target.nation = army.nation
             # THE WAR IS OVER IN THIS VILLAGE. A provoked village can never
             # have another child -- can_grow() refuses while provoked is set,
