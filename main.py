@@ -4533,6 +4533,18 @@ def main() -> None:
             pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             vw, vh = scr_w, scr_h
             hotbar.draw(screen)
+            # THE INSPECTOR IS DRAWN ABOVE GROUND TOO.
+            #
+            # observer_.draw() lived ONLY inside the MINE's render block, so
+            # above ground the panel opened -- your key log shows observer=True
+            # six times -- and not one pixel was painted. It is drawn here, on
+            # the real screen, after the world has been scaled up, because
+            # Observer.draw works in window coordinates.
+            #
+            # And it is checked by PIXELS now. For hours I verified this by
+            # reading observer.open, which was True the whole time, and told
+            # you it worked three times on that basis. State is not a picture.
+            observer_.draw(screen)
             hotbar.draw_stamina(screen, player.stamina / player.max_stamina,
                                 player.exhausted)
             hotbar.draw_hunger(screen, player.hunger / player.max_hunger)
