@@ -252,31 +252,33 @@ def _tool_cost(kind: str):
 
 
 def forge_next(village) -> object:
-    """WHAT THE FORGE OWES THE VILLAGE: the work, not the vote.
+    """WHAT THE SMITH IS ASKED FOR: his ORDER BOOK, and then the guns.
 
-    A punch list -- every tool in the village with fewer than SMITH_WORN
-    workings left in it, counted PER KIND so that a hundred woodsmen cannot
-    out-shout one farmer. Then, and only when no tool in the village is worn
-    out, the guns.
+    The book is the whole point, and it already knows the rule that matters:
+    `place_orders` refuses a man a second order while his first is unfulfilled
+    -- "thirty-nine orders, thirty-two men standing idle, zero delivered" -- so
+    a smith cannot be told the same thing twice and hammer a tool a second.
 
-    This was `max(tally, key=...)` over an order book: whatever the most men
-    had asked for. With 254 loggers booking axes against 191 farmers booking
-    shovels, "axe" won every day for sixty-four days. The shovels were never
-    replaced, the farmers stopped tilling, and 788 people starved. A forge
-    that serves the loudest trade is not serving the village.
+    This used to count men whose durability was under the line, which is a
+    question asked afresh every tick: a man still short of a tool answered yes
+    again the next second and the next, and every smith in the village took
+    that one live wish and made thirty of it. The shelf read 51, then 731, then
+    1045, then 1297 pickaxes for ninety miners.
+
+    Tools first. With no orders at all, and material on the shelf, the forge
+    arms the village instead: a rifle and its thirty rounds.
     """
-    counts: dict = {}
+    book: list = []
     for n in village.npcs:
-        if not getattr(n, "alive", False):
-            continue
-        for tool in ("shovel", "pickaxe", "axe"):
-            if economy.needs_tool(n, tool):
-                counts[tool] = counts.get(tool, 0) + 1
-    if counts:
-        return max(counts, key=lambda k: counts[k])
-    # NO TOOL IS WORN: arm the village. A gun is forged as a KIT -- the rifle
-    # and its thirty rounds in the same breath -- so there is never a rifle in
-    # the world that cannot be loaded.
+        if getattr(n, "job", None) == "smith":
+            book = list(getattr(n, "tool_orders", ()) or ())
+            break
+    tally: dict = {}
+    for _who, want in book:
+        tally[want] = tally.get(want, 0) + 1
+    if tally:
+        return max(tally, key=lambda k: tally[k])
+    # NO ORDERS AT ALL: arm the village, if the material is there.
     armed = sum(1 for n in village.npcs
                 if getattr(n, "alive", False) and economy.is_watch(n))
     rifles = sum(int(n.stock.get("rifle", 0)) for n in village.npcs
@@ -304,20 +306,21 @@ def smith_shift(npc, dt: float, now: float) -> None:
         return
     store = v.ledger_goods
     fast = 1.0 + npc.skills.axe
+    # HIS PACE IS A MAN'S PACE. The 30-a-day clamp is gone: it was per SMITH,
+    # and with thirty-six of them it was 1,080 tools a day against a demand of
+    # a hundred. What limits him now is the work itself -- a live order and the
+    # material to fill it -- and nothing else.
     npc.produce_acc = (getattr(npc, "produce_acc", 0.0)
                        + daily_rate(SMITHS_PER_DAY * fast) * dt)
-    npc.produce_acc = min(npc.produce_acc, float(SMITHS_PER_DAY))
     made = 0
-    while npc.produce_acc >= 1.0 and made < SMITHS_PER_DAY:
+    while npc.produce_acc >= 1.0:
         kind = forge_next(v)
         if kind is None:
-            npc.produce_acc = 0.0
-            break
+            return                         # NO ORDERS: stand down
         cost_iron, cost_wood = _tool_cost(kind)
         if int(store.get("iron", 0)) < cost_iron \
                 or int(store.get("wood", 0)) < cost_wood:
-            npc.produce_acc = 0.0          # no material: the pit must dig it
-            break
+            return                         # NO MATERIAL: stand down
         store["iron"] = int(store.get("iron", 0)) - cost_iron
         if cost_wood:
             store["wood"] = int(store.get("wood", 0)) - cost_wood
@@ -328,7 +331,15 @@ def smith_shift(npc, dt: float, now: float) -> None:
         economy.store_add(v, kind, 1, g)
         if kind == "rifle":
             economy.store_add(v, "ammo", economy.AMMO_PER_RIFLE, g)
+        # AND THE ORDER IS ANSWERED. fill_orders clears the man's tool_order,
+        # marks the tool reserved for him, and strikes the entry out of the
+        # book. WITHOUT THIS THE BOOK NEVER EMPTIES: the order stays live for
+        # ever, the forge reads it again the next tick, and it hammers the same
+        # pickaxe until the iron runs out.
+        economy.fill_orders(v, npc, kind)
         npc.skills.gain_farming(0.02)      # the forge hones the smith too
+        if made > 500:                     # a guard, not a policy
+            return
 
 
 def produce(npc, dt: float, now: float) -> None:

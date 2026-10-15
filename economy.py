@@ -503,10 +503,18 @@ def place_orders(village, npc) -> None:
     if (npc.tool_order is not None
             or npc.tool_reserved is not None):
         return
-    want = next((t for t in ("shovel", "axe") if wears_tool(npc, t)), None)
+    # AND A PICKAXE IS A TOOL A MAN ORDERS TOO. This list was ("shovel",
+    # "axe"), so no miner in the world ever booked one -- the only reason he
+    # could buy a pickaxe at all was the shelf, and the shelf only ever held
+    # one because forge_next was going behind the book's back.
+    want = next((t for t in ("shovel", "axe", "pickaxe")
+                 if wears_tool(npc, t)), None)
     if want is None or npc.stock.get(want, 0) > 0:
         return
-    if npc.tool_uses > TOOL_USES * ORDER_AT:
+    # THIRTY WORKINGS, as asked. It was 40% of the tool's life, which is a
+    # different number for a fine tool than a plain one and is not the cue
+    # anybody chose.
+    if npc.tool_uses > TOOL_WORN:
         return
     smith = next((o for o in village.npcs
                   if o.job == "smith" and o.alive), None)
