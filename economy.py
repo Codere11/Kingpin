@@ -539,19 +539,29 @@ def place_orders(village, npc) -> None:
 
 
 def fill_orders(village, smith, kind: str) -> int:
-    """A hammered tool goes to the man who ordered it, and is held for him."""
+    """A hammered tool ANSWERS an order, and then goes on the town shelf.
+
+    It used to be parked on the SMITH's own shelf as `tool_keep` and marked on
+    the man as `tool_reserved` -- a second delivery system, and it deadlocked:
+    economy.count_available counts `tool_keep` as KEPT, so the reserved tool was
+    hidden from the market, so the very man who ordered it could not find a
+    seller, and `tool_reserved` stopped him ordering another. He waited for
+    ever and the smith held the tool. Measured: 96 miners, 22 pickaxes.
+
+    The store is the one place a tool is sold. Send it there -- smith_shift has
+    already put it on the shelf -- and clear the order so the man can book
+    another when this one wears.
+    """
     done = 0
     for order in list(getattr(smith, "tool_orders", ())):
         who, want = order
         if want != kind:
             continue
-        if not who.alive:
-            smith.tool_orders.remove(order)
-            continue
-        who.tool_order = None
-        who.tool_reserved = kind            # forged and waiting for him
         smith.tool_orders.remove(order)
-        smith.tool_keep[kind] = smith.tool_keep.get(kind, 0) + 1   # reserved
+        if not getattr(who, "alive", False):
+            continue
+        who.tool_order = None               # answered; he may book again
+        who.tool_reserved = None
         done += 1
     return done
 
