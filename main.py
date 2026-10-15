@@ -2685,6 +2685,7 @@ def main() -> None:
     # loop), the MEN (the NPC loop), and everything between and after them --
     # houses, settling, the draw. This is a measurement, not a feature.
     _PH = {"v": 0.0, "m": 0.0, "n": 0.0, "f": 0, "t": time.time()}
+    _watched_last = None      # the man being watched, so a change can rebuild
 
     # ---- THE LANES: the world cut so more than one core can hold it -------
     #
@@ -4152,6 +4153,23 @@ def main() -> None:
             _watch = _wt is not None and getattr(_wt, "alive", False)
             _fx = _wt.x if _watch else player.x
             _fy = _wt.y if _watch else player.y
+            # WHEN THE WATCH CHANGES, BUILD THE GROUND UNDER HIM **NOW**.
+            #
+            # The worker streams chunks behind the camera and it keeps up with a
+            # man walking. It does NOT keep up with a camera that has just
+            # jumped a hundred thousand pixels to another village, so the view
+            # showed whatever happened to be built -- which is why watching
+            # somebody looked wrong at the edges and nothing like the quality
+            # around the player. This is exactly what refresh_around() is for
+            # ("build the ground under the player NOW, for loading a save"), and
+            # it bumps the ground's version so StaticLayer recomposes from the
+            # fresh chunks instead of the stale ones.
+            _wt = observer_.target
+            if _wt is not _watched_last:
+                _watched_last = _wt
+                if _wt is not None and getattr(_wt, "alive", False):
+                    ground.refresh_around(_wt.x, _wt.y, WIDTH, HEIGHT)
+
             cam_x += (_fx - vw / 2 - cam_x) * min(1.0, dt * 9.0)
             cam_y += (_fy - vh / 2 - cam_y) * min(1.0, dt * 9.0)
 
