@@ -84,6 +84,7 @@ pygame.display.flip = _count
 
 import village
 import economy
+E2_TOOL_WORN = 30
 import nemesis
 import main
 import menu
@@ -275,6 +276,47 @@ def reporter():
                          % (j, c, earned, earned / max(1, c), purse, med))
             line += ("       everyone else: %d trades below\n"
                      % max(0, len(rows) - 14))
+            # ---- TOOLS: DOES THE FORGE DRESS THE PEOPLE WHO WORK? -----------
+            # The question the whole night came down to. A farmer with no
+            # shovel cannot till; a tool is worth TOOL_USES = 90 swings; the
+            # smith replaces anything under TOOL_WORN = 30 -- IF he forges it,
+            # and IF it reaches the man. Count every link separately.
+            try:
+                import industry as _ind
+                fn = [n for n in people
+                      if getattr(n, "alive", False)
+                      and getattr(n, "farm_plot", None) is not None]
+                lg = [n for n in people if getattr(n, "alive", False)
+                      and getattr(n, "job", None) == "logger"]
+                mi = [n for n in people if getattr(n, "alive", False)
+                      and (getattr(n, "job", None) == "mine"
+                           or getattr(getattr(n, "workplace", None), "kind",
+                                      None) == "mine")]
+                def _n(held, who, t):
+                    return sum(1 for n in who if n.stock.get(t, 0) > 0)
+                shelf = {}
+                reg = getattr(getattr(wildcrop._WORLD, "ground", None),
+                              "villages_v", None)
+                if reg is not None:
+                    for v in reg.villages:
+                        for t in ("shovel", "axe", "pickaxe"):
+                            q = v.ledger_goods.get(t, 0)
+                            if q:
+                                shelf[t] = shelf.get(t, 0) + q
+                worn = sum(1 for n in people if getattr(n, "alive", False)
+                           and getattr(n, "tool_uses", 0)
+                           and getattr(n, "tool_uses", 0) <= E2_TOOL_WORN)
+                line += ("       TOOLS  farmers %3d with a shovel %3d"
+                         "   loggers %3d with an axe %3d"
+                         "   miners %3d with a pickaxe %3d\n"
+                         % (len(fn), _n("shovel", fn, "shovel"),
+                            len(lg), _n("axe", lg, "axe"),
+                            len(mi), _n("pickaxe", mi, "pickaxe")))
+                line += ("       WEAR   tools with 30 or fewer workings left %3d"
+                         "   on the town shelves: %s\n"
+                         % (worn, shelf if shelf else "NONE"))
+            except Exception as _e:
+                line += "       TOOLS  (unavailable: %r)\n" % (_e,)
         except Exception as _e:
             line += "       COIN   (unavailable: %r)\n" % (_e,)
         try:
