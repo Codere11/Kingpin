@@ -17,40 +17,67 @@ from __future__ import annotations
 
 import pygame
 
-EYE = (34, 27, 24)          # near-black, so it reads at one pixel
-MOUTH = (128, 82, 66)       # a shade darker than any skin tone
+WHITE = (243, 240, 234)     # the eye
+EYE = (38, 30, 26)          # the pupil, near-black so it reads at one pixel
+BROW = (96, 66, 46)         # a shade under the hair
+NOSE = (182, 144, 110)   # LIGHTER than the head's outline (150,112,82),
+                            # which it was the same colour as -- an invisible nose
+MOUTH = (128, 82, 66)
 
-# Where the features sit on the head, as a fraction of its radius.
-EYE_SIDE = 0.42             # half the distance between the eyes
-EYE_UP = 0.06               # eyes sit just above the middle
-EYE_LOOK = 0.30             # how far the pair shifts toward the facing
-MOUTH_DOWN = 0.46           # the mouth, below the eyes
+# Where the features sit, as a fraction of the head's radius.
+EYE_SIDE = 0.40             # half the distance between the eyes
+EYE_UP = 0.18               # the eye line, above the middle
+EYE_LOOK = 0.22             # how far the pair shifts toward the facing
+BROW_LIFT = 0.22
+MOUTH_DOWN = 0.46
+NOSE_DOWN = 0.16
 
 
-def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,
-         fy: float = 0.0) -> None:
+def draw(screen, hx, hy, r: int, fx: float = 0.0, fy: float = 0.0) -> None:
     """A face on a head of radius r centred at (hx, hy).
 
-    Never raises and never draws on a head too small to hold it: a
-    three-pixel skull with eyes on it is a smudge, not a person.
+    EYES WITH WHITES AND PUPILS, BROWS, A NOSE AND A MOUTH, all scaled from r
+    so the same call dresses a villager and the player. The PUPILS shift
+    toward the facing while the whites stay put, which is what makes a man
+    read as looking at something.
     """
     try:
         r = int(r)
-        if r < 3:
+        if r < 4:
             return
-        # the pair of eyes, shifted toward the facing
         ex = hx + fx * r * EYE_LOOK
         ey = hy - r * EYE_UP + fy * r * EYE_LOOK
-        sep = max(1, int(round(r * EYE_SIDE)))
-        er = 1 if r < 7 else max(1, int(round(r * 0.17)))
+        sep = max(2, int(round(r * EYE_SIDE)))
+        wr = max(2, int(round(r * 0.26)))          # eye-white radius
         ix, iy = int(round(ex)), int(round(ey))
-        pygame.draw.circle(screen, EYE, (ix - sep, iy), er)
-        pygame.draw.circle(screen, EYE, (ix + sep, iy), er)
-        # and the mouth
-        if r >= 4:
+        # the whites
+        pygame.draw.circle(screen, WHITE, (ix - sep, iy), wr)
+        pygame.draw.circle(screen, WHITE, (ix + sep, iy), wr)
+        pygame.draw.circle(screen, BROW, (ix - sep, iy), wr, 1)
+        pygame.draw.circle(screen, BROW, (ix + sep, iy), wr, 1)
+        # the pupils, looking where he is walking
+        pr = max(1, int(round(wr * 0.62)))
+        px = int(round(ex + fx * wr * 0.55))
+        py = int(round(ey + fy * wr * 0.55))
+        pygame.draw.circle(screen, EYE, (px - sep, py), pr)
+        pygame.draw.circle(screen, EYE, (px + sep, py), pr)
+        # brows
+        by = int(round(ey - wr - r * BROW_LIFT))
+        bw = max(1, int(round(r * 0.20)))
+        tw = max(1, r // 7)
+        pygame.draw.line(screen, BROW, (ix - sep - bw, by), (ix - sep + bw, by), tw)
+        pygame.draw.line(screen, BROW, (ix + sep - bw, by), (ix + sep + bw, by), tw)
+        # nose
+        if r >= 7:
+            ny0 = int(round(ey + wr * 0.7))
+            ny1 = int(round(hy + r * NOSE_DOWN))
+            pygame.draw.line(screen, NOSE, (ix, ny0), (ix, ny1), 1)
+        # mouth
+        if r >= 5:
             my = int(round(hy + r * MOUTH_DOWN))
-            half = max(1, int(round(r * 0.30)))
-            pygame.draw.line(screen, MOUTH, (ix - half, my), (ix + half, my), 1)
+            hw = max(1, int(round(r * 0.32)))
+            pygame.draw.line(screen, MOUTH, (ix - hw, my), (ix + hw, my),
+                             max(1, r // 8))
     except Exception:
         pass
 

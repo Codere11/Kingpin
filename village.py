@@ -1813,9 +1813,9 @@ class NPC:
         body = (242, 232, 232) if flash else self.clothing
         pygame.draw.circle(screen, body, (int(sx), int(sy)), 10)
         pygame.draw.circle(screen, (44, 40, 36), (int(sx), int(sy)), 10, 2)
-        pygame.draw.circle(screen, (216, 172, 132), (int(hx), int(hy)), 5)
-        pygame.draw.circle(screen, (150, 112, 82), (int(hx), int(hy)), 5, 1)
-        head_r = 5
+        pygame.draw.circle(screen, (216, 172, 132), (int(hx), int(hy)), 8)
+        pygame.draw.circle(screen, (150, 112, 82), (int(hx), int(hy)), 8, 1)
+        head_r = 8
 
         # ONE FACE FOR EVERYBODY, drawn to the head he happens to have.
         face.draw(screen, hx, hy, head_r, fx, fy)

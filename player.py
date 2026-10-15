@@ -228,10 +228,10 @@ class Player:
 
         # head last so it sits on top
         _hx, _hy = sx + fx * 2, sy + fy * 2 - 2
-        pygame.draw.circle(screen, (222, 178, 138), (_hx, _hy), 6)
-        pygame.draw.circle(screen, (150, 108, 78), (_hx, _hy), 6, 1)
+        pygame.draw.circle(screen, (222, 178, 138), (_hx, _hy), 9)
+        pygame.draw.circle(screen, (150, 108, 78), (_hx, _hy), 9, 1)
         # the same face as everybody else, on the bigger head
-        face.draw(screen, _hx, _hy, 6, fx, fy)
+        face.draw(screen, _hx, _hy, 9, fx, fy)
 
     @staticmethod
     def _draw_held(screen: pygame.Surface, item_id: str, sx: float, sy: float,
