@@ -75,9 +75,6 @@ class Observer:
         self.font = pygame.font.SysFont("dejavusans", 14, bold=True)
         self.small = pygame.font.SysFont("dejavusans", 12)
         self.goods = False            # show the WORLD INVENTORY instead
-        self._gtot: dict = {}         # item -> total, last sample
-        self._grate: dict = {}        # item -> per game day
-        self._gt = 0.0
 
     # -- what the world is holding -----------------------------------------
     def world_goods(self) -> dict:
@@ -107,25 +104,6 @@ class Observer:
                 except Exception:
                     pass
         return out
-
-    def sample_goods(self, now: float = 0.0) -> None:
-        """Once a SECOND of real time: the totals, and the rate each item moves.
-
-        Real time, not the game clock: the observer is drawn whether or not
-        anything is being watched, and the game clock is only handed to tick()
-        while watching. A rate measured against a clock that never advances is
-        a rate of zero, or worse.
-        """
-        t = time.time()
-        if self._gt and t - self._gt < 1.0:
-            return
-        cur = self.world_goods()
-        span = max(1e-6, t - self._gt) if self._gt else 1.0
-        for it, q in cur.items():
-            prev = self._gtot.get(it, q)
-            self._grate[it] = (q - prev) / span * 600.0    # per game day
-        self._gtot = cur
-        self._gt = t
 
     # -- the list ----------------------------------------------------------
     def everyone(self) -> list:
@@ -353,39 +331,36 @@ class Observer:
                     (panel.left + 12, panel.bottom - 20))
 
     def _draw_goods(self, screen, panel) -> None:
-        """EVERYTHING THE WORLD HOLDS, and which way it is going."""
-        self.sample_goods()
-        tot = self._gtot or self.world_goods()
+        """EVERYTHING THE WORLD HOLDS. Totals only -- no rate, no trend.
+
+        A rate was tried and printed numbers like +30000000000, which is
+        nonsense and was never asked for. What is wanted is simple: what is
+        there, and how much of it.
+        """
+        tot = self.world_goods()
         rows = sorted(tot.items(), key=lambda kv: -kv[1])
         y = panel.top + 52
-        head = "%-14s %10s %14s" % ("ITEM", "IN THE WORLD", "PER GAME DAY")
+        head = "%-16s %14s" % ("IN THE WORLD", "HOW MANY")
         screen.blit(self.small.render(head, True, (198, 176, 128)),
-                    (panel.left + 14, y - 18))
-        made = sum(1 for _i, q in rows if q > 0)
-        for it, q in rows[:26]:
-            r = self._grate.get(it, 0.0)
-            col = (150, 220, 150) if r > 0.5 else (
-                (230, 140, 140) if r < -0.5 else (222, 218, 208))
-            line = "%-14s %10d %+14.0f" % (it, q, r)
-            screen.blit(self.small.render(line, True, col),
-                        (panel.left + 14, y))
+                    (panel.left + 16, y - 18))
+        for it, q in rows[:28]:
+            line = "%-16s %14d" % (it, q)
+            screen.blit(self.small.render(line, True, (232, 228, 218)),
+                        (panel.left + 16, y))
             y += 15
-        note = ("%d kinds held.  GREEN rising, RED falling, plain steady."
-                % made)
-        screen.blit(self.small.render(note, True, (150, 146, 138)),
-                    (panel.left + 14, panel.bottom - 40))
-        dead = ""
+        kinds = len(rows)
+        units = sum(q for _i, q in rows)
+        screen.blit(self.small.render(
+            "%d kinds, %d in all.  G closes this." % (kinds, units),
+            True, (150, 146, 138)), (panel.left + 16, panel.bottom - 40))
         try:
             import deaths
-            t = deaths.tail(3)
-            if t:
-                dead = "last deaths: " + " | ".join(
-                    x.strip()[:52] for x in t if x.strip())
+            t = [x.strip() for x in deaths.tail(3) if x.strip()]
+            for k, line in enumerate(t):
+                screen.blit(self.small.render(line[:64], True, (206, 160, 120)),
+                            (panel.left + 16, panel.bottom - 22 + k * 13))
         except Exception:
             pass
-        if dead:
-            screen.blit(self.small.render(dead, True, (206, 160, 120)),
-                        (panel.left + 14, panel.bottom - 22))
 
     def _draw_target(self, screen, vw, vh) -> None:
         """The watched man's log, and a mark over his head."""
