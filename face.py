@@ -131,11 +131,16 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
 
     # AND THE TONGUE, OUT OF THE CORNER OF IT.
     if focusing:
-        tr = max(2, int(round(r * 0.24)))
-        tx = ix + hw + tr
-        pygame.draw.circle(screen, TONGUE, (tx, my + 1), tr)
-        pygame.draw.line(screen, (172, 78, 88), (tx, my + 1 - tr),
-                         (tx, my + 1 + tr), 1)
+        # A SIMPLE V, HANGING FROM THE MOUTH LINE DOWNWARD. It was a disc
+        # centred a pixel BELOW the mouth, which put its top edge a pixel
+        # ABOVE the mouth -- so the tongue looked like it grew out of the
+        # man's upper lip. The flat top of the V now sits exactly on the
+        # mouth line and only the point goes below it.
+        tw = max(1, int(round(r * 0.18)))      # half its width at the mouth
+        th = max(2, int(round(r * 0.50)))      # how far down it hangs
+        tx = ix + hw                           # at the corner of the mouth
+        pygame.draw.polygon(screen, TONGUE,
+                            ((tx - tw, my), (tx + tw, my), (tx, my + th)))
 
 
 def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,
