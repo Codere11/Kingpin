@@ -241,7 +241,7 @@ class Player:
         # the same face as everybody else, on the bigger head
         face.draw(screen, _hx, _hy, 9, fx, fy,
                   face.mood_of(self.hurt_flash, self.attack_flash,
-                               starved=self.hunger >= face.STARVED_HUNGER))
+                               starved=self.hunger <= face.STARVED_SATIETY))
 
     @staticmethod
     def _draw_held(screen: pygame.Surface, item_id: str, sx: float, sy: float,

@@ -55,6 +55,12 @@ VET_BROW = 0.25             # a QUARTER of the way up both combat skills and
                             # he keeps ONE brow cocked for the rest of his life
 VET_BEARD = 0.50            # half way: the beard
 VET_SCAR = 0.75             # past three quarters: the scar
+STARVED_SATIETY = 20.0      # THE SAME LINE, FROM THE OTHER END. A villager
+                            # carries `hunger`, which rises; the PLAYER carries
+                            # `hunger`, which is SATIETY and falls. Passing the
+                            # player's straight into STARVED_HUNGER gave him the
+                            # starved face at FULL BELLY (100 >= 80) and took it
+                            # off him as he starved.
 STARVED_HUNGER = 80.0       # ...and the one face that is a STATE, not an
                             # event: at this hunger he is starving, and that
                             # is the only thing about him worth drawing.
