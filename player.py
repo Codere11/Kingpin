@@ -85,6 +85,7 @@ class Player:
         self.skill_axe_cd = SWING_COOLDOWN
         self.mags = {k: v for k, v in guns.MAG.items()}   # rounds per weapon
         self.reloading = 0.0
+        self.reload_total = 0.0     # what it was set to, for the bar
         self.reload_kind = None
         self.reload_done = False
         self.gun_cd = 0.0
@@ -255,28 +256,44 @@ class Player:
         face.draw(screen, _hx, _hy, 9, fx, fy,
                   face.mood_of(self.hurt_flash, self.attack_flash,
                                starved=self.hunger <= face.STARVED_SATIETY))
-        # THE SWING BAR, just below him: how long until he can swing again.
+        # THE WAITING BAR, just below him -- the swing, or the reload.
         #
-        # ITS LENGTH IS THE WAIT ITSELF. skill_axe_cd comes from
-        # skills.axe_cooldown(), which is 2.0 s at no skill and 0.1 s mastered,
-        # so the bar is not merely drawn while the skill improves -- the better
-        # the axe, the sooner it fills, and a master's flickers.
-        if (held == "axe" and self.swing_cd > 0.0
+        # THE SAME BAR FOR BOTH, because they are the same thing to look at: a
+        # wait, and how much of it is left. The reload wins when there is one,
+        # since a man cannot be mid-swing and mid-reload at once.
+        if self.reloading > 0.0 and self.reload_total > 0.0:
+            self._draw_action_bar(screen, sx, sy,
+                                  1.0 - self.reloading / self.reload_total)
+        elif (held == "axe" and self.swing_cd > 0.0
                 and self.skill_axe_cd > 0.0):
-            prog = 1.0 - self.swing_cd / self.skill_axe_cd
-            bw, bh = 26, 4
-            bx = int(sx) - bw // 2
-            by = int(sy) + 19
-            pygame.draw.rect(screen, (16, 14, 12), (bx - 1, by - 1, bw + 2, bh + 2))
-            pygame.draw.rect(screen, (56, 54, 50), (bx, by, bw, bh))
-            fill = int(round(bw * max(0.0, min(1.0, prog))))
-            if fill > 0:
-                pygame.draw.rect(screen, (246, 246, 242), (bx, by, fill, bh))
+            # ITS LENGTH IS THE WAIT ITSELF. skill_axe_cd comes from
+            # skills.axe_cooldown(), which is 2.0 s at no skill and 0.1 s
+            # mastered, so the better the axe the sooner the bar fills.
+            self._draw_action_bar(screen, sx, sy,
+                                  1.0 - self.swing_cd / self.skill_axe_cd)
 
         # AND THE SHINE, OVER HIM, while the level-up lasts.
         if self.level_flash > 0.0:
             effects.draw_level_up(screen, sx, sy,
                                   1.0 - self.level_flash / self.LEVEL_FLASH)
+
+    @staticmethod
+    def _draw_action_bar(screen: pygame.Surface, sx: float, sy: float,
+                         prog: float) -> None:
+        """The white bar under him: how far through a wait he is.
+
+        Used for the axe's swing cooldown and for a rifle's reload, because to
+        look at they are the same thing. prog runs 0 (just started) to 1 (done).
+        """
+        prog = max(0.0, min(1.0, prog))
+        bw, bh = 26, 4
+        bx = int(sx) - bw // 2
+        by = int(sy) + 19
+        pygame.draw.rect(screen, (16, 14, 12), (bx - 1, by - 1, bw + 2, bh + 2))
+        pygame.draw.rect(screen, (56, 54, 50), (bx, by, bw, bh))
+        fill = int(round(bw * prog))
+        if fill > 0:
+            pygame.draw.rect(screen, (246, 246, 242), (bx, by, fill, bh))
 
     @staticmethod
     def _draw_held(screen: pygame.Surface, item_id: str, sx: float, sy: float,

@@ -3027,6 +3027,7 @@ def main() -> None:
                         and player.mags.get(kind, 0) < guns.MAG[kind]):
                     if inventory.count_of("ammo") > 0:
                         player.reloading = guns.reload_time(kind, skills.shooting)
+                        player.reload_total = player.reloading   # for the bar
                         player.reload_kind = kind
                         toast("Reloading\u2026")
                     else:
