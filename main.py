@@ -4736,9 +4736,6 @@ def main() -> None:
 
             draw_placing()
 
-            if not inventory_open:
-                draw_crosshair(screen, wmouse_x, wmouse_y)
-
             # ---- ...and back to the window ---------------------------------
             screen = real_screen
             if height_f > 1.001:
@@ -4771,6 +4768,13 @@ def main() -> None:
             else:
                 pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             vw, vh = scr_w, scr_h
+            # THE CROSSHAIR IS A SCREEN-SPACE THING. It was drawn into the big
+            # frame at FLAT-VIEW coordinates -- wrong surface AND wrong space --
+            # so above ground it got packed in with the terrain and slid away
+            # from the pointer. On the window, at the window's own mouse, the
+            # way the house and mine have always done it.
+            if not inventory_open:
+                draw_crosshair(screen, mouse_x, mouse_y)
             hotbar.draw(screen)
             # THE INSPECTOR IS DRAWN ABOVE GROUND TOO.
             #
