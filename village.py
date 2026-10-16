@@ -159,8 +159,18 @@ LAST_NAMES = [
     "Barlow", "Crowder", "Mercer", "Hollis", "Dalton", "Vance",
     "Whitaker", "Riggins", "Sparrow", "Beaumont", "Kincaid", "Mosley",
 ]
-ROLES = ["Farmer", "Trader", "Hand", "Gunsmith", "Vendor", "Preacher",
-         "Moonshiner", "Sheriff"]
+# THE FLAVOUR TITLES ARE GONE.
+#
+# There was a list of eight occupations here -- "Gunsmith", "Moonshiner",
+# "Sheriff", "Preacher" -- and every man was rolled one AT BIRTH, whether or
+# not he ever did it. A GUNSMITH WAS USUALLY A LOGGER AND A MOONSHINER USUALLY
+# FARMED. NOTHING IN THE GAME EVER READ IT: `grep -rn "\.role\b" *.py |
+# grep -v "\.role = "` returns nothing at all, so the field was write-only,
+# and the only thing it ever did was make a dump of the world LIE.
+#
+# The real trade has two honest sources and both already existed:
+# NPC.occupation() -- whose docstring says these titles "describe no work he
+# has ever done" -- and observer.job_of(). Use those.
 
 NATION_PREFIX = ["Red", "Black", "Iron", "Golden", "Salt", "Pine", "Crow",
                  "Ash", "Stone", "Raven", "Copper", "Willow", "Ember", "Frost"]
@@ -2525,7 +2535,7 @@ class Village:
                 full_name = f"{pool[idx % len(pool)]} {name_rng.choice(LAST_NAMES)}"
                 person = NPC(sx, sy, code ^ (idx * 83492791), name=full_name,
                              npc_id=f"npc_{gx}_{gy}_{idx}",
-                             role=name_rng.choice(ROLES), village=self)
+                             village=self)
                 person.home_house = house
                 person.home_door = door
                 person.wear = wear
@@ -3462,7 +3472,7 @@ class Village:
         name = "%s %s" % (first, self._name_rng.choice(LAST_NAMES))
         baby = NPC(x, y, self._rng.randrange(2 ** 31), name=name,
                    npc_id="npc_%d_%d_b%d" % (self.gx, self.gy, self._births),
-                   role=self._rng.choice(ROLES), village=self)
+                   village=self)
         baby.home_house = parent.home_house
         baby.home_door = parent.home_door
         baby.wear = self._wear
