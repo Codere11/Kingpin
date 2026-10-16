@@ -88,6 +88,7 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
     focusing = (mood == "focus")
 
     # THE EYES.
+    lid = max(1, int(round(wr * 1.1))) if focusing else 0
     for sgn in (-1, 1):
         cx = ix + sgn * sep
         pygame.draw.circle(screen, WHITE, (cx, iy), wr)
@@ -98,11 +99,13 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
             # other way round the slit was blank and the face went dead.
             # Sized to the EYE, not the head.
             pygame.draw.rect(screen, skin,
-                             (cx - wr, iy - wr, wr * 2 + 1,
-                              max(1, int(round(wr * 1.35)))))
+                             (cx - wr, iy - wr, wr * 2 + 1, lid))
+        # AND THE PUPIL SITS IN THE MIDDLE OF WHAT IS LEFT. Without the push
+        # down it landed on the lid, with the white underneath it, and the man
+        # looked like he was rolling his eyes upward at the ceiling.
         pygame.draw.circle(screen, EYE,
                            (cx + int(round(fx * wr * 0.45)),
-                            iy + int(round(fy * wr * 0.45))), pr)
+                            iy + lid // 2 + int(round(fy * wr * 0.45))), pr)
 
     # THE BROWS. Level, or pulled down and in for the working face.
     by = int(round(iy - wr - r * (0.10 if focusing else 0.20)))
