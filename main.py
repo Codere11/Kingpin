@@ -4683,13 +4683,42 @@ def main() -> None:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
         if _fly_k > 1.001:
-            # FROM UP HERE IT IS A MAP, and it is drawn as one: the same window
-            # over _fly_k times the ground, at a scale of 1/_fly_k. Only the
-            # ground -- a tree at its own size in a world squeezed to a
-            # fortieth would be forty times too big, and what stands on the
-            # ground is exactly what an overview does not need.
-            static_layer.draw(screen, cam_x, cam_y, vw, vh,
-                              scale=1.0 / _fly_k)
+            # HELICOPTER MODE DRAWS THE WHOLE WORLD AT ONE SCALE, AND HIM AT
+            # ANOTHER.
+            #
+            # Everything that is part of the world is drawn at 1/_fly_k --
+            # ground, trees, and everything else that stands on it -- from a
+            # camera that has the player at the CENTRE OF WHAT IS BEING SHOWN
+            # and not the centre of the window, which is not the same point
+            # once the window covers more ground than a screen. Getting that
+            # wrong put him off to one side and drew the world in the wrong
+            # place.
+            #
+            # AND HE IS DRAWN AT FULL SIZE ON TOP, because he is the one thing
+            # up here that has not shrunk -- he is the camera. Drawing him into
+            # the small picture as well is what left a trail of him behind.
+            _s = 1.0 / _fly_k
+            cam_x = player.x - (vw * _s) * 0.5
+            cam_y = player.y - (vh * _s) * 0.5
+            static_layer.draw(screen, cam_x, cam_y, vw, vh, scale=_s)
+            _stump = trees.stump()
+            # THE SPAN IS THE WINDOW DIVIDED BY THE SCALE, not multiplied by
+            # it: at twenty times out the window covers eleven thousand world
+            # pixels and not twenty-eight. Asking for the wrong one put no
+            # trees in the picture at all.
+            # AND ONLY THE NEAREST FEW HUNDRED OF THEM. At twenty times out the
+            # window holds eleven thousand world pixels and the whole wood is
+            # inside it -- forty-two thousand trees, at three pixels each, was
+            # fifty milliseconds of blitting invisible specks. The ones near
+            # enough to be seen are the ones drawn.
+            _vt = trees.visible(cam_x, cam_y, int(vw / _s) + 128,
+                                int(vh / _s) + 128)
+            if len(_vt) > 900:
+                _px, _py = player.x, player.y
+                _vt = sorted(_vt, key=lambda t: (t.x - _px) ** 2
+                             + (t.y - _py) ** 2)[:900]
+            for _t in _vt:
+                _t.draw_at(screen, (_t.x - cam_x) * _s, (_t.y - cam_y) * _s, _s, _stump)
         else:
             if _warp_on:
                 skip_standing[0] = True
@@ -4764,6 +4793,10 @@ def main() -> None:
         draw_night()
 
         selected = inventory.selected_stack()
+        # HE IS NOT DRAWN INTO THE WORLD WHILE FLYING: it is drawn small, and
+        # he is not.
+        if _fly_k > 1.001:
+            _fly_draw = True
         # HE IS DRAWN INTO THE FRAME AND AGAIN AFTER THE WARP, and the two
         # cannot disagree: the warp sends the CENTRE of the frame to the centre
         # of the picture whatever the scale, and he is standing dead centre --
@@ -4771,8 +4804,20 @@ def main() -> None:
         # him only after the warp meant that a single exception anywhere in
         # that block fell back to scaling the frame, WHICH NO LONGER HAD HIM IN
         # IT, and he vanished off the screen entirely.
-        player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
-        combat.draw(screen, cam_x, cam_y)
+        #
+        # FLYING, HE IS DRAWN ON THE FLAT CAMERA AND NOT THE OVERVIEW ONE. The
+        # world up there is drawn from a camera centred on what the window
+        # COVERS, which at twenty times out is ten window-widths from its left
+        # edge -- so drawing him on that camera put him a tenth of the way
+        # across a screen showing twenty times the ground. He is not part of
+        # the shrinking world: he is the camera, and he sits in the middle of
+        # the window at his own size.
+        if _fly_k > 1.001:
+            player.draw(screen, player.x - vw * 0.5, player.y - vh * 0.5,
+                        selected.defn.id if selected else None)
+        else:
+            player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
+            combat.draw(screen, cam_x, cam_y)
         draw_hunger_gray()
 
         if game_over:
