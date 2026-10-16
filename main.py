@@ -4647,11 +4647,17 @@ def main() -> None:
                 # ground under it is squeezed in toward him. THEN it is soft at
                 # the edges, because that is the part he can only see BECAUSE
                 # he climbed.
-                _flat = (max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM)))
-                _warped = effects.height_warp(view_surf, player.x, player.y,
-                                              player.z, _flat)
-                effects.radial_blur(_warped, height_f)
-                pygame.transform.scale(_warped, (scr_w, scr_h), screen)
+                # IF ANY OF THIS FAILS, THE WORLD STILL DRAWS. A height
+                # effect is not worth a dead game.
+                try:
+                    _flat = (max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM)))
+                    _warped = effects.height_warp(view_surf, player.x, player.y,
+                                                  player.z, _flat)
+                    # no explicit blur: the ground below him is drawn
+                    # SMALLER, and smaller IS the blur.
+                    pygame.transform.scale(_warped, (scr_w, scr_h), screen)
+                except Exception:
+                    pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             else:
                 pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             overlay.draw(screen, [
@@ -4690,11 +4696,16 @@ def main() -> None:
                 # ground under it is squeezed in toward him. THEN it is soft at
                 # the edges, because that is the part he can only see BECAUSE
                 # he climbed.
-                _flat = (max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM)))
-                _warped = effects.height_warp(view_surf, player.x, player.y,
-                                              player.z, _flat)
-                effects.radial_blur(_warped, height_f)
-                pygame.transform.scale(_warped, (scr_w, scr_h), screen)
+                # IF ANY OF THIS FAILS, THE WORLD STILL DRAWS. A height
+                # effect is not worth a dead game.
+                try:
+                    _flat = (max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM)))
+                    _warped = effects.height_warp(view_surf, player.x, player.y,
+                                                  player.z, _flat)
+                    effects.radial_blur(_warped, height_f)
+                    pygame.transform.scale(_warped, (scr_w, scr_h), screen)
+                except Exception:
+                    pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             else:
                 pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             vw, vh = scr_w, scr_h
