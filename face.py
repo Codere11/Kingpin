@@ -161,18 +161,23 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         # THE MOUTH IS OPEN. Not a line, not a grimace -- an ellipse, dark
         # inside, with two teeth at the top of it. It is the difference
         # between a man who is cross and a man who is coming for you.
-        mw = max(2, int(round(r * 0.30)))
-        mh = max(1, int(round(r * 0.16)))
-        pygame.draw.ellipse(screen, MAW,
-                            (ix - mw, my - mh, mw * 2 + 1, mh * 2 + 1))
+        # BIGGER, AND SQUARE RATHER THAN ROUND. An ellipse at this size reads
+        # as a little round hole; a wide rectangle with the corners barely
+        # taken off reads as a jaw that has come open. It sits one pixel lower
+        # than the other mouths so it does not grow into the nose.
+        mw = max(2, int(round(r * 0.38)))
+        mh = max(1, int(round(r * 0.22)))
+        top = my - mh + 1
+        pygame.draw.rect(screen, MAW, (ix - mw, top, mw * 2 + 1, mh * 2 + 1),
+                         border_radius=max(1, r // 8))
         if r >= 6:
             # TWO TEETH, EVENLY EITHER SIDE OF THE MIDDLE. The first cut put
             # one at the far left edge of the mouth and one just right of
             # centre, which is a snaggletooth, not a shout.
-            tw2 = max(1, mw // 2)
-            ty = my - mh + 1
-            pygame.draw.rect(screen, TOOTH, (ix - tw2, ty, tw2, 1))
-            pygame.draw.rect(screen, TOOTH, (ix + 1, ty, tw2, 1))
+            tw2 = max(1, mw - 1)
+            ty = top + 1
+            pygame.draw.rect(screen, TOOTH, (ix - 1 - tw2, ty, tw2, 1))
+            pygame.draw.rect(screen, TOOTH, (ix + 2, ty, tw2, 1))
         return
 
     # THE MOUTH.
