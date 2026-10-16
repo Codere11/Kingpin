@@ -269,9 +269,22 @@ class GroundRenderer:
         # paid for once.
         hz = terrain.height_array(X, Y)
         if hz.max() > 0.0:
-            col = col + (255.0 - col) * np.minimum(1.0, hz * 0.11)[..., None]
-            lip = terrain.height_array(X, Y - 3.0)
-            col[lip != hz] *= 0.52
+            # 0.11 was too quiet: at one metre that is eleven per cent of the
+            # way to white, which is a step you have to look for. At 0.13 the
+            # FIRST step already reads against the flat ground, which is the
+            # one that matters -- it is the one that tells you where it starts.
+            col = col + (255.0 - col) * np.minimum(1.0, hz * 0.13)[..., None]
+            # A WIDER LIP. Three pixels of world is seven on screen once the
+            # frame is blown up, which is a line -- but a staircase is read by
+            # its edges and there was not enough of one.
+            # BOTH WAYS, OR ONLY TWO SIDES OF EACH STEP GET A LINE. Sampling
+            # only Y - 5 catches the top and bottom edges of a square step and
+            # leaves the left and right ones bare -- so a line drawn across the
+            # staircase came out as a smooth brightening with no edges in it at
+            # all, which is exactly what a staircase must not look like.
+            lip = ((terrain.height_array(X, Y - 5.0) != hz)
+                   | (terrain.height_array(X - 5.0, Y) != hz))
+            col[lip] *= 0.52
 
         # Player-made soil edits: dug dirt, then watered (fertile) dirt. Each
         # tile paints a soft blob, and blobs merge naturally where they overlap.

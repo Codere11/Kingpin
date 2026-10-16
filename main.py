@@ -49,6 +49,7 @@ import observer
 # ImportError at the moment of a death -- and the except that guards the call
 # would swallow it, and every death would go unrecorded with no sign why.
 import deaths
+import effects
 import terrain
 import tournament
 import village as village_mod

@@ -21,8 +21,16 @@ from __future__ import annotations
 import numpy as np
 
 # THE STAIRCASE, just east of the spawn at (0, 0).
-MOUNT_X = 430.0          # its centre
-MOUNT_Y = -210.0
+# RIGHT IN FRONT OF HIM, and that is not cosmetic. The view is 568 by 320 world
+# pixels -- at ZOOM 2.25 the window only shows 568 by 320 of the world -- so a
+# mountain 479 px away on the diagonal is OFF SCREEN, which is where the first
+# one was: 430 px east and 210 north, with the view ending at 284 and 160. He
+# could not see it from the spawn and had to walk to find it.
+#
+# At x=400 the base edge lands at x=40 -- forty pixels to his right, on screen,
+# with the whole staircase climbing away to the east.
+MOUNT_X = 400.0          # its centre
+MOUNT_Y = 0.0
 MOUNT_TOP = 9            # how many metres up the middle is
 STEP = 40.0              # how much ground one metre of climb takes
 
