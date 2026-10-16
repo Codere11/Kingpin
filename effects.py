@@ -146,10 +146,67 @@ LEVEL_GOLD = (250, 216, 128)
 
 
 _BLUR_MASK_STEP = 4          # the mask is built one sample per 4x4 pixels
+# HOW FAR BELOW HIM THE GROUND HAS TO BE TO BE FULLY SOFT. The first cut put
+# the drop straight into the alpha at 110 a metre, so TWO AND A HALF METRES WAS
+# ALREADY THE WHOLE WAY -- and standing on the FIRST STEP, where the entire
+# world is one metre under his feet, laid a 43% haze over the whole screen with
+# one small sharp patch on it. That is what "the entire image blurs" was, and
+# what "the field of view shortens to where I am" was: the same bug from two
+# sides, because everything past his own step was equally soft and there was
+# nothing to see out there.
+#
+# Against the 1.5 power below, a metre under is 7% and barely there, two metres
+# is 19%, four is 55%, and six is the whole way. A gradient, not a fog.
+_BLUR_FULL_AT = 6.0
+
+
+def draw_level_up(screen: pygame.Surface, sx: float, sy: float,
+                  t: float) -> None:
+    """A SHINE ACROSS THE BODY. t runs 0 -> 1 over the life of the flash.
+
+    He lights up for a moment, three rings go out from him at their own pace,
+    and eight sparks come off the body and rise. Built into a pad-sized surface
+    and blitted, like the cigar and the bottle in village._draw_use_fx, because
+    it needs real alpha and pygame's draw calls do not blend on their own.
+    """
+    p = max(0.0, min(1.0, t))
+    # AN OVERALL FADE, or the sparks WRAP: their own clock runs 1.4x and is
+    # taken modulo 1, so at the very end they come round again and the man
+    # keeps twinkling for ever. Everything is multiplied by this.
+    fade = 1.0 - p
+    pad = 56
+    surf = pygame.Surface((pad * 2, pad * 2), pygame.SRCALPHA)
+    cx = cy = pad
+    # THE BODY ITSELF, for the first third of it.
+    if p < 0.35:
+        a = int(155 * (1.0 - p / 0.35) * fade)
+        pygame.draw.circle(surf, (255, 250, 224, a), (cx, cy), 13)
+    # THREE RINGS, each a little behind the last.
+    for i in range(3):
+        k = p * 1.25 + i * 0.28
+        if k >= 1.0:
+            continue
+        a = int(150 * (1.0 - k) * fade)
+        if a > 0:
+            pygame.draw.circle(surf, LEVEL_GOLD + (a,), (cx, cy),
+                               int(8 + k * 36), 2)
+    # AND EIGHT SPARKS, rising off him.
+    for i in range(8):
+        k = (p * 1.4 + i * 0.13) % 1.0
+        a = int(210 * (1.0 - k) * fade)
+        if a <= 0:
+            continue
+        ang = i * 0.7853981634
+        rr = 6.0 + k * 22.0
+        x = cx + int(math.cos(ang) * rr)
+        y = cy + int(math.sin(ang) * rr * 0.6) - int(k * 15.0)
+        pygame.draw.circle(surf, (255, 252, 232, a),
+                           (x, y), max(1, 2 - int(k * 2)))
+    screen.blit(surf, (int(sx) - pad, int(sy) - pad))
 
 
 def depth_blur(surface: pygame.Surface, cx: float, cy: float,
-               z: float, per_metre: float = 110.0) -> None:
+               z: float) -> None:
     """EVERYTHING LOWER THAN HE IS, OUT OF FOCUS.
 
     HEIGHT IS DEPTH. The ground a metre under his boots is further from his eye
@@ -202,7 +259,8 @@ def depth_blur(surface: pygame.Surface, cx: float, cy: float,
         (w, h)), (0, 0))
     mask = pygame.Surface((mw, mh), pygame.SRCALPHA)
     alpha = pygame.surfarray.pixels_alpha(mask)
-    alpha[:, :] = np.clip(drop.T * per_metre, 0.0, 255.0).astype(np.uint8)
+    alpha[:, :] = (255.0 * np.minimum(1.0, drop / _BLUR_FULL_AT)
+                   ** 1.5).astype(np.uint8).T
     del alpha                      # unlocks the surface
     if key != (w, h):
         mask = pygame.transform.smoothscale(mask, (w, h))
