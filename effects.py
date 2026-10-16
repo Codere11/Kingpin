@@ -175,39 +175,35 @@ def height_offset(X: float, Y: float, px: float, py: float, z: float,
 
 def height_warp(frame: pygame.Surface, px: float, py: float, z: float,
                 out_size, k: float = _WARP_K) -> pygame.Surface:
-    """THE GROUND BELOW HIM IS FURTHER AWAY, SO IT IS DRAWN SMALLER.
+    """ONLY THE LOWER GROUND IS PACKED. THE REST IS LEFT EXACTLY ALONE.
 
-    A view from a height is not flat. The ground at his OWN level is right under
-    the camera; the ground nine metres down is nine metres further off, and
-    something further off PROJECTS SMALLER. That is the whole of it.
+    THE PICTURE STARTS AS THE FLAT ONE. The middle of the frame, at its own
+    scale, copied across untouched -- so the ground he is standing on and
+    everything at his own level or above comes out PIXEL FOR PIXEL IDENTICAL to
+    what it would be on the flat. He cannot shrink, because nothing about him is
+    ever resampled.
 
-    SO THE SCALE IS NOT ONE NUMBER FOR THE FRAME, IT IS ONE NUMBER PER PIXEL,
-    and it depends on how far below him THAT PATCH of ground is:
+    THEN, AND ONLY THEN, the pixels whose ground is LOWER than him are written
+    over with the same ground read from further out:
 
         s = 1 / (1 + (z - h) * k)
 
-    which is 1 on his own level -- nothing there changes AT ALL -- 0.90 one
-    metre down, 0.69 at four, 0.50 at nine. The frame is drawn 1:1 and bigger
-    than the view, exactly as far out as the smallest scale needs, and this
-    reads each destination pixel back to where it should have come from: the
-    near ground sits in the frame's middle pixel for pixel, and the ground
-    below is squeezed in toward him.
+    so a patch one metre down occupies 0.90 of the space, four metres 0.69, nine
+    metres 0.50 -- packed in toward him, proportional to the drop and to nothing
+    else. Pixels at his level are never touched, so nothing at his level moves.
 
-    FOUND AT A QUARTER RESOLUTION, because the scale is a smooth function of
-    the terrain and the terrain does not change by a step more than once in
-    forty pixels. Searching per pixel cost 12.5 ms; per four pixels it is 0.8,
-    and the answer is the same picture.
-
-    And the frame is read as a VIEW, not copied -- array3d makes its own copy
-    of every pixel, which was 17.2 ms of the 43 this started at.
+    AND ONLY THOSE PIXELS ARE EVEN READ. The indices are taken from the mask
+    first and only the masked pixels are gathered and written, so this costs
+    what the lower ground costs and not what the screen costs.
     """
     fw, fh = frame.get_size()
     ow, oh = int(out_size[0]), int(out_size[1])
-    # ij, NOT the default: meshgrid hands back (len(y), len(x)) and a pygame
-    # surface is [x][y], so the default put every axis the wrong way round.
+    # 1. THE FLAT PICTURE, straight out of the middle of the frame, 1:1.
+    out = frame.subsurface(((fw - ow) // 2, (fh - oh) // 2, ow, oh)).copy()
     X, Y = np.meshgrid(np.arange(ow, dtype=np.float32) - ow * 0.5,
                        np.arange(oh, dtype=np.float32) - oh * 0.5, indexing="ij")
-    # -- the scale, at a quarter resolution, then blown back up --
+    # 2. THE SCALE, at a quarter resolution -- it is a smooth function of the
+    #    terrain, which does not change by a step more than once in forty px.
     q = 4
     qw, qh = max(2, ow // q), max(2, oh // q)
     qx = (np.arange(qw, dtype=np.float32) + 0.5) * (ow / float(qw)) - ow * 0.5
@@ -221,26 +217,33 @@ def height_warp(frame: pygame.Surface, px: float, py: float, z: float,
         qdy = QY / qs
         h = terrain.height_array(px + qdx, py + qdy)
         qs = 1.0 / (1.0 + np.maximum(0.0, z - h) * k)
-    # ENCODED AS 0..255 BEFORE pygame SEES IT. qs is a float in 0..1 and
-    # make_surface reads its input as COLOUR -- so 0.90 and 0.50 were both
-    # truncated to 0, the scale came back as 0, max(0.05, 0) clamped it, and
-    # dx = X / 0.05 = 20 * X. THE WHOLE IMAGE, READ BACK AT TWENTY TIMES THE
-    # OFFSET, which is a 20x zoom-out and 400x the area.
+    # make_surface reads its input as COLOUR, so 0..1 has to be encoded 0..255
+    # first -- decoding 0.90 and 0.50 as colours truncated both to 0.
     _enc = np.clip(qs * 255.0, 0.0, 255.0).astype(np.uint8)
-    s = pygame.transform.smoothscale(
+    _sm = pygame.transform.smoothscale(
         pygame.surfarray.make_surface(np.repeat(_enc[:, :, None], 3, 2)),
         (ow, oh))
-    s = pygame.surfarray.pixels_red(s).astype(np.float32) / 255.0
-    # -- and the read back, from the frame, at full resolution --
-    dx = X / np.maximum(0.05, s)
-    dy = Y / np.maximum(0.05, s)
-    del s
-    arr = pygame.surfarray.pixels3d(frame)          # a view, not a copy
+    sc = pygame.surfarray.pixels_red(_sm).astype(np.float32) / 255.0
+    del _sm
+    # 3. WHICH PIXELS ARE LOWER THAN HIM AT ALL.
+    idx = np.flatnonzero((sc < 0.999).ravel())
+    if idx.size == 0:
+        return out
+    dx = X.ravel()[idx] / np.maximum(0.05, sc.ravel()[idx])
+    dy = Y.ravel()[idx] / np.maximum(0.05, sc.ravel()[idx])
+    src = pygame.surfarray.pixels3d(frame)
     sx = np.clip((dx + fw * 0.5).astype(np.int32), 0, fw - 1)
     sy = np.clip((dy + fh * 0.5).astype(np.int32), 0, fh - 1)
-    out = arr[sx, sy].copy()
-    del arr                                          # unlock the frame
-    return pygame.surfarray.make_surface(out)
+    got = src[sx, sy]
+    del src
+    # 4. AND ONLY THOSE PIXELS ARE WRITTEN.
+    # INDEXED AS [x][y], NOT flattened: pixels3d gives a view and .reshape on
+    # it hands back a COPY, so writing through the flattened one wrote into
+    # nothing at all and the whole thing silently did nothing.
+    dst = pygame.surfarray.pixels3d(out)
+    dst[idx // oh, idx % oh] = got
+    del dst
+    return out
 
 
 def radial_blur(surface: pygame.Surface, zoom: float) -> None:
