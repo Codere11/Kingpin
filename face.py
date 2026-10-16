@@ -136,14 +136,15 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         # ABOVE the mouth -- so the tongue looked like it grew out of the
         # man's upper lip. The flat top of the V now sits exactly on the
         # mouth line and only the point goes below it.
-        tw = max(1, r // 10)                   # half its width at the mouth
-        th = max(2, r // 5)                    # how far down it hangs
-        # JUST OUTSIDE THE CORNER, NOT ON IT. Sitting on the corner it covered
-        # two thirds of the mouth and the mouth disappeared -- which is what
-        # made it read as a lizard's tongue rather than a man's.
-        tx = ix + hw + tw
+        # A NUB. A man concentrating shows the tip of his tongue, not a flap:
+        # three pixels wide at the mouth line, tapering to one, two deep.
+        # Wider than that and it stops reading as a man and starts reading as
+        # a lizard. It hangs from just outside the corner so the mouth, which
+        # is the same width, is still a mouth.
+        u = max(1, r // 8)
+        x0 = ix + hw
         pygame.draw.polygon(screen, TONGUE,
-                            ((tx - tw, my), (tx + tw, my), (tx, my + th)))
+                            ((x0, my), (x0 + 2 * u, my), (x0 + u, my + 2 * u)))
 
 
 def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,
