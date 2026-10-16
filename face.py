@@ -109,13 +109,19 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
     focusing = (mood == "focus")
     angry = (mood == "angry")
     hurt = (mood == "hurt")
+    sly = (mood == "sly")
     # THE WAR MOUTH AND THE WAR BROWS, AND ONLY THE EYES ARE DIFFERENT. A hurt
     # face is a war face whose eyes have shut against the pain -- he is still
     # shouting, he is just no longer looking at anything.
+    #
+    # THE SLY FACE WEARS THE WAR EYES AND THE WAR BROWS TOO, and swaps only the
+    # jaw: the same flat, narrowed look, bent into a smirk. Which is the whole
+    # joke -- he is looking at you exactly the way a man about to hit you
+    # looks, and smiling.
     war = angry or hurt
 
     # THE EYES, AND HOW FAR THE LID COMES DOWN.
-    if angry:
+    if angry or sly:
         lid = max(1, int(round(wr * 1.45)))     # the brow is pressing it shut
     elif focusing:
         lid = max(1, int(round(wr * 1.1)))
@@ -148,7 +154,7 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
                             iy + lid // 2 + int(round(fy * wr * 0.45))), pr)
 
     # THE BROWS.
-    if war:
+    if war or sly:
         # A HARD STEEP V, AND THICK. The inner end comes down almost level with
         # the eye and the outer end rides high; the stroke is two or three
         # pixels because at this size a hairline reads as a smudge, not a brow.
@@ -212,6 +218,16 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         pygame.draw.rect(screen, LIP, mouth, 1, border_radius=rad)
         return
 
+    if sly:
+        # A SLY SMILE: down at one corner, up at the other, and the line dips
+        # in the middle. A curve rather than a line, and lopsided rather than
+        # symmetrical -- straight across it is a leer, and symmetrical it is a
+        # grin, and neither of those is a man taking your money.
+        hw = max(2, int(round(r * 0.28)))
+        pygame.draw.line(screen, MOUTH, (ix - hw, my), (ix, my + 1), 1)
+        pygame.draw.line(screen, MOUTH, (ix, my + 1), (ix + hw, my - 1), 1)
+        return
+
     # THE MOUTH.
     hw = max(1, int(round(r * (0.16 if focusing else 0.26))))
     pygame.draw.line(screen, MOUTH, (ix - hw, my), (ix + hw, my), max(1, r // 8))
@@ -243,7 +259,7 @@ def mood_of(hurt_flash: float, attack_flash: float,
 
 
 def warm(radii=range(4, 13), dirs=DIRS,
-         moods=("normal", "focus", "angry", "hurt")) -> int:
+         moods=("normal", "focus", "angry", "hurt", "sly")) -> int:
     """Build every face the game can ask for BEFORE the first frame.
 
     A cache miss in the middle of a frame is twelve draw calls where the frame
