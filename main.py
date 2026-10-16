@@ -2758,21 +2758,24 @@ def main() -> None:
                 # at MOVE_NEED = 7,500,000 px would otherwise be about three
                 # hundred days of walking.
                 #
-                # A LEVEL IS A BAND, and the band is 0.125 for the three that
-                # run 0..1 and 1.0 for farming, which runs 0..8. Both are eight
-                # levels; the skill sets its own band, so this reads it rather
-                # than assuming one.
-                _lvl = random.choice(("movement", "axe", "shooting", "farming"))
-                if _lvl == "farming":
-                    skills.farming = min(8.0, float(int(skills.farming) + 1))
-                    _n = int(skills.farming)
-                else:
-                    _band = 0.125
-                    _v = getattr(skills, _lvl)
-                    setattr(skills, _lvl, min(1.0, (int(_v / _band) + 1) * _band))
-                    _n = int(getattr(skills, _lvl) / _band)
+                # A LEVEL IS A BAND, and each skill says how wide: 0.125 for
+                # the three that run 0..1, and 1.0 for farming, which runs 0..8.
+                # Both are eight levels, so this is ONE rule for all four.
+                #
+                # ALL FOUR, ON EVERY PRESS. A random one of four meant three
+                # presses in four left the skill you were watching exactly
+                # where it was, and a level-up you cannot see is not a test.
+                _done = []
+                for _name, _band, _cap in (("movement", 0.125, 1.0),
+                                           ("axe", 0.125, 1.0),
+                                           ("shooting", 0.125, 1.0),
+                                           ("farming", 1.0, 8.0)):
+                    _new = min(_cap,
+                               (int(getattr(skills, _name) / _band) + 1) * _band)
+                    setattr(skills, _name, _new)
+                    _done.append("%s %d" % (_name[:4].title(), int(_new / _band)))
                 player.level_flash = player.LEVEL_FLASH
-                toast("%s  ->  level %d" % (_lvl.title(), _n))
+                toast("LEVEL UP    " + "   ".join(_done))
             elif (test_mode and event.type == pygame.MOUSEBUTTONDOWN
                   and event.button == 1 and speed_button().collidepoint(event.pos)):
                 speed_i = (speed_i + 1) % len(SPEEDS)

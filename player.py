@@ -39,11 +39,19 @@ HOLD: dict[str, tuple[int, bool, float]] = {
 }
 
 SWING_COOLDOWN = 1.5
-LEVEL_FLASH = 1.6              # how long the shine lasts
 SWING_ANIM = 0.32
 
 
 class Player:
+    # A CLASS ATTRIBUTE, NOT A MODULE ONE. main() has a LOCAL called `player`
+    # -- the Player instance -- which SHADOWS the `player` module for the whole
+    # of main(). So `player.LEVEL_FLASH` reached the instance, and the module's
+    # constant was unreachable from the only place that wanted it:
+
+    #   AttributeError: 'Player' object has no attribute 'LEVEL_FLASH'
+
+    # A class attribute answers to both spellings and cannot be shadowed.
+    LEVEL_FLASH = 1.6              # how long the level-up shine lasts
     def __init__(self, x: float, y: float, speed: float = 240.0) -> None:
         self.x = x
         self.y = y
@@ -250,7 +258,7 @@ class Player:
         # AND THE SHINE, OVER HIM, while the level-up lasts.
         if self.level_flash > 0.0:
             effects.draw_level_up(screen, sx, sy,
-                                  1.0 - self.level_flash / LEVEL_FLASH)
+                                  1.0 - self.level_flash / self.LEVEL_FLASH)
 
     @staticmethod
     def _draw_held(screen: pygame.Surface, item_id: str, sx: float, sy: float,
