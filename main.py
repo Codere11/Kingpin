@@ -4671,10 +4671,14 @@ def main() -> None:
         draw_night()
 
         selected = inventory.selected_stack()
-        # HE IS NOT DRAWN INTO THE BIG FRAME AT ALL once the height is on: he
-        # would only be warped there and painted over afterwards.
-        if height_f <= 1.001:
-            player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
+        # HE IS DRAWN INTO THE FRAME AND AGAIN AFTER THE WARP, and the two
+        # cannot disagree: the warp sends the CENTRE of the frame to the centre
+        # of the picture whatever the scale, and he is standing dead centre --
+        # so the one in the frame was never warped in the first place. Drawing
+        # him only after the warp meant that a single exception anywhere in
+        # that block fell back to scaling the frame, WHICH NO LONGER HAD HIM IN
+        # IT, and he vanished off the screen entirely.
+        player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
         combat.draw(screen, cam_x, cam_y)
         draw_hunger_gray()
 
@@ -4711,9 +4715,16 @@ def main() -> None:
                     # metre he climbed, which is exactly what it looked like.
                     # Drawn again over his own warped ghost, which his full-size
                     # self covers completely.
-                    player.draw(_warped, player.x - _flat[0] * 0.5,
-                                player.y - _flat[1] * 0.5,
-                                selected.defn.id if selected else None)
+                    # AND IN PLAIN FLOATS, because pygame will not take a
+                    # numpy scalar as half of a point and says so with "points
+                    # must be number pairs" -- which is what was being thrown
+                    # here and swallowed by the except below.
+                    try:
+                        player.draw(_warped, float(player.x) - _flat[0] * 0.5,
+                                    float(player.y) - _flat[1] * 0.5,
+                                    selected.defn.id if selected else None)
+                    except Exception:
+                        pass
                     # no explicit blur: the ground below him is drawn
                     # SMALLER, and smaller IS the blur.
                     pygame.transform.scale(_warped, (scr_w, scr_h), screen)

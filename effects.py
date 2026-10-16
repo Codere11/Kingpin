@@ -199,7 +199,11 @@ def height_offset(X: float, Y: float, px: float, py: float, z: float,
         dy = Y / s
         h = terrain.height_array(px + dx, py + dy)
         s = _scale(z, h, k)
-    return dx, dy
+    # PLAIN FLOATS, NOT NUMPY SCALARS. This feeds the aim, the aim feeds
+    # player.facing, and pygame will not accept a numpy scalar as half of a
+    # point -- it raises "points must be number pairs" from deep inside a draw
+    # call, which is a long way from the numpy scalar that caused it.
+    return float(dx), float(dy)
 
 
 def height_warp(frame: pygame.Surface, px: float, py: float, z: float,
