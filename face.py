@@ -141,14 +141,12 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         # Wider than that and it stops reading as a man and starts reading as
         # a lizard. It hangs from just outside the corner so the mouth, which
         # is the same width, is still a mouth.
-        # TWO STROKES MEETING AT A POINT, not a filled polygon. pygame's
-        # polygon fill rounds its scanlines outward at this size and turned a
-        # three-by-two triangle into a seven-pixel slab.
-        u = max(1, r // 8)
+        # ONE PIXEL ACROSS, THREE DEEP. A thin line hanging off the corner of
+        # the mouth, and that is all it is -- barely there, which is the
+        # point. Scaled to the head so it grows with the man.
+        depth = max(3, r * 3 // 8)
         x0 = ix + hw
-        tip = (x0 + u, my + 2 * u)
-        pygame.draw.line(screen, TONGUE, (x0, my), tip, 1)
-        pygame.draw.line(screen, TONGUE, (x0 + 2 * u, my), tip, 1)
+        pygame.draw.line(screen, TONGUE, (x0, my), (x0, my + depth - 1), 1)
 
 
 def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,
