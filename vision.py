@@ -18,6 +18,15 @@ import pygame
 from physics import segment_rect_hit
 
 QUANT = 2.0                # vision eye bucket, in screen px
+
+# HEIGHT IS AN ADVANTAGE, and it is the whole reason to climb a mountain.
+# Higher ground sees further, and it sees OVER things that are in the way:
+# from a ridge you look down on the wood and pick out who is in it, while the
+# man in the wood is looking at a wall of trees.
+SIGHT_PER_M = 0.004        # each metre above sea level is this much more reach
+SIGHT_MAX = 3.0            # and it stops at three times the flat range
+SEE_OVER_M = 10.0          # this far above a man, the trees between you go away
+
 EDGE_VISIBILITY = 0.12
 OUTSIDE_FADE = 0.12
 SOFT_ALPHA = 60                      # dimming caused by leaves
@@ -298,14 +307,26 @@ class Vision:
     # -- point visibility ---------------------------------------------------
     def is_visible(self, eye_x: float, eye_y: float, facing: float,
                    tx: float, ty: float, edge: float = 0.9,
-                   occluders=None) -> bool:
+                   occluders=None, eye_z: float = None,
+                   target_z: float = None) -> bool:
+        # HOW MUCH HIGHER HE IS THAN WHAT HE IS LOOKING AT, which is the only
+        # thing height changes about seeing.
+        adv = 0.0
+        if eye_z is not None and target_z is not None:
+            adv = float(eye_z) - float(target_z)
+        reach = self.max_dist
+        if adv > 0.0:
+            reach *= 1.0 + min(SIGHT_MAX - 1.0, adv * SIGHT_PER_M)
         dx, dy = tx - eye_x, ty - eye_y
-        if math.hypot(dx, dy) > self.max_dist:
+        if math.hypot(dx, dy) > reach:
             return False
         delta = abs(((math.atan2(dy, dx) - facing + math.pi) % (2.0 * math.pi)) - math.pi)
         if delta > math.radians(self.cone_deg / 2.0) * edge:
             return False
-        if occluders:
+        # AND THE TREES STOP MATTERING once he is well above them. Standing on
+        # a ridge there is no canopy in the way at all -- there is nothing
+        # between him and the ground below but air.
+        if occluders and adv < SEE_OVER_M:
             for rect in occluders:
                 if segment_rect_hit(eye_x, eye_y, tx, ty, rect):
                     return False

@@ -51,6 +51,7 @@ import observer
 import deaths
 import effects
 import terrain
+import vision as vision_mod
 import water
 import tournament
 import village as village_mod
@@ -1674,6 +1675,29 @@ def main() -> None:
                 other.draw(surface, ex, ey)
         return surface
 
+    def draw_standing(surface, world_trees) -> None:
+        """Everything rooted in the ground, drawn ON the warped picture.
+
+        THE POINT OF IT. A tree is not a flat thing lying on the screen: it is
+        growing out of a piece of ground, and it should be as big as that
+        ground is drawn and no bigger. Letting the warp smear it pixel by pixel
+        meant the top of a tall tree -- which stands on higher ground than its
+        base -- was scaled by a different amount from the bottom, and it came
+        out stretched sideways.
+
+        So each one is placed where the ground under its feet ended up, and
+        scaled ONCE, by the height of the ground it is standing on.
+        """
+        cx = surface.get_width() * 0.5
+        cy = surface.get_height() * 0.5
+        stump = trees.stump()
+        for tree in world_trees:
+            dx, dy = effects.height_offset(tree.x - player.x, tree.y - player.y,
+                                           player.x, player.y, player.z)
+            sc = float(effects._scale(player.z,
+                                      float(terrain.height_at(tree.x, tree.y))))
+            tree.draw_at(surface, cx + dx, cy + dy, sc, stump)
+
     def enter_house(house) -> None:
         nonlocal inside_house, backdrop, door_cooldown, cam_x, cam_y
         interior = getattr(house, "interior", None)
@@ -1731,6 +1755,11 @@ def main() -> None:
         inside_house = None
         door_cooldown = 0.7
 
+    # WHEN THE GROUND IS BEING DRAWN AT DEPTH, THE THINGS STANDING ON IT
+    # MUST NOT BE. They are drawn afterwards, each sized by the ground
+    # under its own feet. See draw_standing.
+    skip_standing = [False]
+
     def draw_exterior(cx, cy, show_names: bool = False, target=None) -> None:
         target = target if target is not None else screen
         static_layer.draw(target, cx, cy, vw, vh)
@@ -1761,9 +1790,10 @@ def main() -> None:
             age = (stage + 0.4) * crop.GROW_SECONDS / 4.0
             items.append((y, lambda x=x, y=y, e=age, k=kind:
                           crop.draw_crop(target, x, y, k, e, cx, cy, None)))
-        for tree in world_trees:
-            items.append((tree.y, lambda t=tree, s=_stump:
-                          t.draw(target, cx, cy, s)))
+        if not skip_standing[0]:
+            for tree in world_trees:
+                items.append((tree.y, lambda t=tree, s=_stump:
+                              t.draw(target, cx, cy, s)))
         for chunk in ore_field.visible(cx, cy, vw, vh):
             if view.collidepoint(chunk.x, chunk.y):
                 items.append((chunk.y,
@@ -4611,7 +4641,10 @@ def main() -> None:
         else:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
+        if height_f > 1.001:
+            skip_standing[0] = True
         draw_exterior(cam_x, cam_y, True)
+        skip_standing[0] = False
         # AND THE WATER, on the ground and under everything that stands on it.
         # It is drawn every frame rather than baked into the ground because it
         # MOVES, and the ground is the one thing in this game that never does.
@@ -4671,8 +4704,17 @@ def main() -> None:
         _cone0 = vision.cone_deg
         if _watch:
             vision.cone_deg = 360.0
+        # AND HIGHER GROUND SEES FURTHER. It is the only thing height buys, and
+        # it is the reason to climb: from the top of the massif the wood below
+        # is not a wall of trees, it is ground with people on it.
+        _zsrc = float(getattr(_src, "z", 0.0) or 0.0)
+        # vision_mod, NOT vision: inside main() the name `vision` is the
+        # Vision INSTANCE, so the module's constants are not on it.
+        _sight = 1.0 + min(vision_mod.SIGHT_MAX - 1.0,
+                           max(0.0, _zsrc) * vision_mod.SIGHT_PER_M)
         mask = vision.build(vw, vh, eye_x, eye_y, _ang,
-                            screen_occluders, screen_soft, 1.0 - 0.25 * foliage)
+                            screen_occluders, screen_soft,
+                            (1.0 - 0.25 * foliage) * _sight)
         screen.blit(mask, (0, 0))
         if _watch:
             vision.cone_deg = _cone0
@@ -4728,6 +4770,10 @@ def main() -> None:
                     # must be number pairs" -- which is what was being thrown
                     # here and swallowed by the except below.
                     try:
+                        draw_standing(_warped, draw_trees)
+                    except Exception:
+                        pass
+                    try:
                         player.draw(_warped, float(player.x) - _flat[0] * 0.5,
                                     float(player.y) - _flat[1] * 0.5,
                                     selected.defn.id if selected else None)
@@ -4757,7 +4803,9 @@ def main() -> None:
                 if ex < -24 or ey < -24 or ex > vw + 24 or ey > vh + 24:
                     continue
                 if not vision.is_visible(eye_world_x, eye_world_y, player.facing_angle,
-                                         enemy.x, enemy.y, occluders=occluders):
+                                         enemy.x, enemy.y, occluders=occluders,
+                                         eye_z=float(player.z),
+                                         target_z=float(terrain.height_at(enemy.x, enemy.y))):
                     draw_alert(screen, ex, ey, now, enemy.phase)
 
             draw_placing()

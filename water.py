@@ -205,24 +205,41 @@ def draw(screen: pygame.Surface, cam_x: float, cam_y: float, vw: int, vh: int,
                 # disc rounds the joint -- a wide river's segments are shorter
                 # than it is wide, so the lines alone come out as a row of
                 # overlapping squares and the bank looks like a staircase.
-                thick = max(1, int(w))
+                # THE JOIN IS AS NARROW AS THE NARROWER OF THE TWO CELLS. A
+                # disc the size of THIS cell, dropped on a joint where the
+                # river is pinching, sticks out of the bank as a half-drawn
+                # circle. Taking the smaller of the two means the joint can
+                # only ever be inside the channel.
+                cy2, cx2 = int(cy_ + fy), int(cx_ + fx)
+                if 0 <= cy2 < REGION and 0 <= cx2 < REGION:
+                    w2 = float(reg["width"][cy2, cx2]) if reg["river"][cy2, cx2] else w
+                else:
+                    w2 = w
+                wj = w if w < w2 else w2
+                thick = max(1, int(wj))
                 half = max(1, thick // 2)
-                pygame.draw.line(screen, DEEP, (sx, sy), (ex, ey), thick + 2)
                 pygame.draw.circle(screen, DEEP, (int(sx), int(sy)), half + 1)
-                if thick > 3:
-                    pygame.draw.line(screen, BODY, (sx, sy), (ex, ey), thick - 2)
-                    pygame.draw.circle(screen, BODY, (int(sx), int(sy)), half - 1)
-                    r5 = max(1, thick // 5)
-                    pygame.draw.line(screen, EDGE, (sx, sy - thick * 0.45),
-                                     (ex, ey - thick * 0.45), r5)
-                # THE FOAM'S PLACE IS ITS DISTANCE DOWNSTREAM, measured along
-                # the flow. Cells further along the river are further through
-                # the run, so the blobs travel instead of blinking in place.
-                ph = (now * FOAM_SPEED + (sx * fx + sy * fy) / FOAM_LEN) % 1.0
-                t = ph * 0.9 + 0.05
-                px = sx + (ex - sx) * t
-                py = sy + (ey - sy) * t
-                pygame.draw.circle(screen, FOAM, (int(px), int(py)),
-                                   max(1, int(w * 0.20)))
-                pygame.draw.circle(screen, FOAM, (int(px - fx * 7), int(py - fy * 7)),
-                                   max(1, int(w * 0.12)))
+                pygame.draw.line(screen, DEEP, (sx, sy), (ex, ey), thick + 2)
+                if thick > 4:
+                    pygame.draw.circle(screen, BODY, (int(sx), int(sy)), half - 2)
+                    pygame.draw.line(screen, BODY, (sx, sy), (ex, ey), thick - 3)
+                    # the bright bank, along the upper side of the run
+                    pygame.draw.line(screen, EDGE, (sx, sy - thick * 0.42),
+                                     (ex, ey - thick * 0.42), max(1, thick // 6))
+                # AND THE BUBBLES, SMALL AND MANY. They are white flecks riding
+                # the current, not lily pads: a bubble is two to five pixels
+                # whatever the river is doing, because a bubble is a bubble.
+                # Their place is their DISTANCE DOWNSTREAM along the flow, so
+                # the ones further along are further through the run and the
+                # whole raft travels instead of blinking in place.
+                base = (sx * fx + sy * fy) / FOAM_LEN
+                for bi in range(3):
+                    ph = (now * FOAM_SPEED * (1.0 + bi * 0.23) + base
+                          + bi * 0.37) % 1.0
+                    px = sx + (ex - sx) * ph
+                    py = sy + (ey - sy) * ph
+                    # and each one sits a little off the centre line
+                    off = ((bi * 1.7 + sx * 0.013) % 1.0 - 0.5) * thick * 0.5
+                    bx = int(px - fy * off); by = int(py + fx * off)
+                    r = 2 + (bi % 2)
+                    pygame.draw.circle(screen, FOAM, (bx, by), r)
