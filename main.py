@@ -4409,13 +4409,7 @@ def main() -> None:
             draw_placing()
             # ...and back to the window for everything that is not the room.
             screen = real_screen
-            if player.z > 0.05:
-                # SMOOTH, SO THE WHOLE PICTURE IS OUT OF FOCUS -- the ground
-                # and the trees and the men together. Drawing a sharp world and
-                # a blurry map beside it is what made the trees disappear.
-                pygame.transform.smoothscale(view_surf, (scr_w, scr_h), screen)
-            else:
-                pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
+            pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             vw, vh = scr_w, scr_h
             draw_hunger_gray()
             if not inventory_open:
@@ -4542,10 +4536,6 @@ def main() -> None:
         # window at the blow-up below. Every line of the world -- ground, trees,
         # people, fences, the vision mask, blood -- reads vw and vh, so every
         # one of them climbs with him without being told about it.
-        if player.z > 0.05:
-            _hf = 1.0 + player.z * HEIGHT_ZOOM
-            vw = max(2, int(vw * _hf))
-            vh = max(2, int(vh * _hf))
         if view_surf is None or view_surf.get_size() != (vw, vh):
             view_surf = pygame.Surface((vw, vh))
         real_screen = screen
@@ -4566,6 +4556,10 @@ def main() -> None:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
         draw_exterior(cam_x, cam_y, True)
+        # ...and everything BELOW him goes soft, once the whole frame is on the
+        # surface -- ground, trees, people and all, because it is one picture.
+        if player.z > 0.05:
+            effects.depth_blur(screen, cam_x, cam_y, player.z)
         draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
         draw_villages = villages.visible(cam_x, cam_y, vw, vh)
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)

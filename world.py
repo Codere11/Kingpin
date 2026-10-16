@@ -34,6 +34,7 @@ import pygame
 from palette import rich, dim
 
 import biomes
+import terrain
 from noise import _hash, fbm, value_noise
 
 # --- world geometry ---------------------------------------------------------
@@ -256,6 +257,21 @@ class GroundRenderer:
         mixv = np.clip(0.44 + 0.56 * clump, 0.0, 1.0)[..., None]
         col = dark * (1.0 - mixv) + lite * mixv
         col = col * (0.90 + 0.18 * clump)[..., None]
+
+        # AND HOW HIGH IT IS. Without this a staircase seen from above is a
+        # flat square of colour and there is no telling one metre from the
+        # next -- the steps have to be IN THE GROUND, not painted over it, or
+        # they move about every time the view changes.
+        #
+        # Higher ground approaches white without ever reaching it, and every
+        # step DOWN gets a dark lip, which is the line your eye actually
+        # follows. Baked into the chunk like everything else here, so it is
+        # paid for once.
+        hz = terrain.height_array(X, Y)
+        if hz.max() > 0.0:
+            col = col + (255.0 - col) * np.minimum(1.0, hz * 0.11)[..., None]
+            lip = terrain.height_array(X, Y - 3.0)
+            col[lip != hz] *= 0.52
 
         # Player-made soil edits: dug dirt, then watered (fertile) dirt. Each
         # tile paints a soft blob, and blobs merge naturally where they overlap.

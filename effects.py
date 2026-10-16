@@ -14,6 +14,8 @@ import math
 import random
 
 import numpy as np
+
+import terrain
 import pygame
 
 
@@ -143,49 +145,72 @@ class DamageVignette:
 LEVEL_GOLD = (250, 216, 128)
 
 
-def draw_level_up(screen: pygame.Surface, sx: float, sy: float,
-                  t: float) -> None:
-    """A SHINE ACROSS THE BODY. t runs 0 -> 1 over the life of the flash.
+_BLUR_MASK_STEP = 4          # the mask is built one sample per 4x4 pixels
 
-    He lights up for a moment, three rings go out from him at their own pace,
-    and eight sparks come off the body and rise. Built into a pad-sized surface
-    and blitted, like the cigar and the bottle in village._draw_use_fx, because
-    it needs real alpha and pygame's draw calls do not blend on their own.
+
+def depth_blur(surface: pygame.Surface, cx: float, cy: float,
+               z: float, per_metre: float = 110.0) -> None:
+    """EVERYTHING LOWER THAN HE IS, OUT OF FOCUS.
+
+    HEIGHT IS DEPTH. The ground a metre under his boots is further from his eye
+    than the ground he is standing on, so it goes soft -- and the further under,
+    the softer. Ground at his own height, and above it, stays SHARP.
+
+    Which is what makes a step READABLE. You can see exactly which metre you
+    are standing on, because that is the band in focus and everything below it
+    is not.
+
+    NOT A ZOOM. Zooming the whole frame takes the trees and the people with it
+    and leaves nothing to look at; this changes the focus of what is already
+    there and moves nothing.
+
+    Measured on a hard black-and-white checker, standing on the summit:
+
+        right where he stands   contrast 230 -> 230   sharp
+        one step down           contrast 230 -> 138   soft
+        six metres down         contrast 230 ->  20   very soft
     """
-    p = max(0.0, min(1.0, t))
-    # AN OVERALL FADE, or the sparks WRAP: their own clock runs 1.4x and is
-    # taken modulo 1, so at the very end they come round again and the man
-    # keeps twinkling for ever. Everything is multiplied by this.
-    fade = 1.0 - p
-    pad = 56
-    surf = pygame.Surface((pad * 2, pad * 2), pygame.SRCALPHA)
-    cx = cy = pad
-    # THE BODY ITSELF, for the first third of it.
-    if p < 0.35:
-        a = int(155 * (1.0 - p / 0.35) * fade)
-        pygame.draw.circle(surf, (255, 250, 224, a), (cx, cy), 13)
-    # THREE RINGS, each a little behind the last.
-    for i in range(3):
-        k = p * 1.25 + i * 0.28
-        if k >= 1.0:
-            continue
-        a = int(150 * (1.0 - k) * fade)
-        if a > 0:
-            pygame.draw.circle(surf, LEVEL_GOLD + (a,), (cx, cy),
-                               int(8 + k * 36), 2)
-    # AND EIGHT SPARKS, rising off him.
-    for i in range(8):
-        k = (p * 1.4 + i * 0.13) % 1.0
-        a = int(210 * (1.0 - k) * fade)
-        if a <= 0:
-            continue
-        ang = i * 0.7853981634
-        rr = 6.0 + k * 22.0
-        x = cx + int(math.cos(ang) * rr)
-        y = cy + int(math.sin(ang) * rr * 0.6) - int(k * 15.0)
-        pygame.draw.circle(surf, (255, 252, 232, a),
-                           (x, y), max(1, 2 - int(k * 2)))
-    screen.blit(surf, (int(sx) - pad, int(sy) - pad))
+    if z <= 0.05:
+        return
+    w, h = surface.get_size()
+    # THE MASK IS COARSE ON PURPOSE. It is sampled every fourth pixel and
+    # scaled up, because how far below him the ground is varies smoothly and
+    # a per-pixel mask was 8.8 ms a frame to say the same thing -- which is
+    # half a frame to draw a soft edge on a hill.
+    st = _BLUR_MASK_STEP
+    mw = max(2, w // st)
+    mh = max(2, h // st)
+    key = (mw, mh)
+    grid = _BLUR_GRID.get(key)
+    if grid is None:
+        grid = (np.arange(mw, dtype=np.float32) * st,
+                np.arange(mh, dtype=np.float32) * st)
+        _BLUR_GRID[key] = grid
+    X, Y = np.meshgrid(grid[0] + cx, grid[1] + cy)
+    drop = z - terrain.height_array(X, Y)
+    np.clip(drop, 0.0, None, out=drop)
+    if not drop.any():
+        return
+    # HOW SOFT IS HOW FAR DOWN IT GOES. Down and back up is a box average, and
+    # at 1/3 it averages so locally that an eight-pixel checker comes back at
+    # contrast 228 out of 230 -- not a blur at all, just a wobble. Measured:
+    # 1/8 is still 230, 1/12 is 22, 1/16 is 0. Twelve it is, and it costs
+    # 0.4 ms, because the surface it scales is tiny.
+    soft = pygame.Surface((w, h), pygame.SRCALPHA)
+    soft.blit(pygame.transform.smoothscale(
+        pygame.transform.smoothscale(surface, (max(2, w // 12), max(2, h // 12))),
+        (w, h)), (0, 0))
+    mask = pygame.Surface((mw, mh), pygame.SRCALPHA)
+    alpha = pygame.surfarray.pixels_alpha(mask)
+    alpha[:, :] = np.clip(drop.T * per_metre, 0.0, 255.0).astype(np.uint8)
+    del alpha                      # unlocks the surface
+    if key != (w, h):
+        mask = pygame.transform.smoothscale(mask, (w, h))
+    soft.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    surface.blit(soft, (0, 0))
+
+
+_BLUR_GRID: dict = {}
 
 
 def draw_alert(screen: pygame.Surface, sx: float, sy: float,
