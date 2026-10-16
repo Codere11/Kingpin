@@ -30,6 +30,7 @@ NOSE = (182, 144, 110)   # LIGHTER than the head's outline (150,112,82),
 MOUTH = (128, 82, 66)
 TONGUE = (198, 104, 112)     # the working face's whole point
 MAW = (104, 42, 42)         # an open, shouting mouth -- the war face
+LIP = (176, 96, 92)         # one pixel of lip, all the way round it
 TOOTH = (238, 236, 228)     # two of them, at the top of it
 LID = None                  # filled with the skin at draw time
 
@@ -168,16 +169,23 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         mw = max(2, int(round(r * 0.38)))
         mh = max(1, int(round(r * 0.22)))
         top = my - mh + 1
-        pygame.draw.rect(screen, MAW, (ix - mw, top, mw * 2 + 1, mh * 2 + 1),
-                         border_radius=max(1, r // 8))
+        rad = max(1, r // 8)
+        mouth = (ix - mw, top, mw * 2 + 1, mh * 2 + 1)
+        pygame.draw.rect(screen, MAW, mouth, border_radius=rad)
         if r >= 6:
-            # TWO TEETH, EVENLY EITHER SIDE OF THE MIDDLE. The first cut put
-            # one at the far left edge of the mouth and one just right of
-            # centre, which is a snaggletooth, not a shout.
+            # TWO TEETH, EVENLY EITHER SIDE OF THE MIDDLE, AND INSIDE THE LIPS.
+            # They sit one pixel in from each end because the lip line is drawn
+            # over the outer ring afterwards, and a tooth on that ring would be
+            # painted out by it. (The very first cut had one tooth at the far
+            # left edge and one just right of centre -- a snaggletooth.)
             tw2 = max(1, mw - 1)
             ty = top + 1
-            pygame.draw.rect(screen, TOOTH, (ix - 1 - tw2, ty, tw2, 1))
-            pygame.draw.rect(screen, TOOTH, (ix + 2, ty, tw2, 1))
+            pygame.draw.rect(screen, TOOTH, (ix - tw2, ty, tw2, 1))
+            pygame.draw.rect(screen, TOOTH, (ix + 1, ty, tw2, 1))
+        # THE LIPS: ONE PIXEL OF THEM, RIGHT ROUND THE OPENING. Drawn last so
+        # it takes the outer ring of the jaw for itself -- a mouth with no
+        # edge to it is a hole, and a hole is not a war face.
+        pygame.draw.rect(screen, LIP, mouth, 1, border_radius=rad)
         return
 
     # THE MOUTH.
