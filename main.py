@@ -52,7 +52,6 @@ import deaths
 import effects
 import terrain
 import vision as vision_mod
-import water
 import tournament
 import village as village_mod
 import war
@@ -4653,13 +4652,6 @@ def main() -> None:
             skip_standing[0] = True
         draw_exterior(cam_x, cam_y, True)
         skip_standing[0] = False
-        # AND THE WATER, on the ground and under everything that stands on it.
-        # It is drawn every frame rather than baked into the ground because it
-        # MOVES, and the ground is the one thing in this game that never does.
-        try:
-            water.draw(screen, cam_x, cam_y, vw, vh, now)
-        except Exception:
-            pass
         draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
         draw_villages = villages.visible(cam_x, cam_y, vw, vh)
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
