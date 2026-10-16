@@ -4533,10 +4533,18 @@ def main() -> None:
         # belongs at the window's own size.
         scr_w, scr_h = vw, vh
         vw, vh = max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM))
-        # THE HEIGHT. The frame covers MORE WORLD and is squeezed back onto the
-        # window at the blow-up below. Every line of the world -- ground, trees,
-        # people, fences, the vision mask, blood -- reads vw and vh, so every
-        # one of them climbs with him without being told about it.
+        # THE HEIGHT, WHICH IS SEEING FURTHER. The frame covers this much MORE
+        # WORLD for every metre he climbs -- the same screen space over more
+        # blocks, which is the thing that was asked for -- and it is squeezed
+        # back onto the window at the blow-up below. THE SQUEEZE IS THE BLUR,
+        # and it is proportional to the height BY CONSTRUCTION, because it IS
+        # the scale. Every line of the world reads vw and vh, so the ground,
+        # the trees, the people, the fences and the blood all pull back with
+        # him without one of them being told about it.
+        height_f = 1.0 + max(0.0, player.z) * HEIGHT_ZOOM
+        if height_f > 1.001:
+            vw = max(2, int(vw * height_f))
+            vh = max(2, int(vh * height_f))
         if view_surf is None or view_surf.get_size() != (vw, vh):
             view_surf = pygame.Surface((vw, vh))
         real_screen = screen
@@ -4557,10 +4565,10 @@ def main() -> None:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
         draw_exterior(cam_x, cam_y, True)
-        # ...and everything BELOW him goes soft, once the whole frame is on the
-        # surface -- ground, trees, people and all, because it is one picture.
-        if player.z > 0.05:
-            effects.depth_blur(screen, cam_x, cam_y, player.z)
+        # ...and what he can only see BECAUSE he climbed goes soft, in a
+        # gradient out from the middle. What is under his feet stays sharp.
+        if height_f > 1.001:
+            effects.radial_blur(screen, height_f)
         draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
         draw_villages = villages.visible(cam_x, cam_y, vw, vh)
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
@@ -4634,10 +4642,9 @@ def main() -> None:
             # kept the last frame it had. That is what "it freezes instead of
             # showing a game over screen" was: a correct panel, drawn offscreen.
             screen = real_screen
-            if player.z > 0.05:
-                # SMOOTH, SO THE WHOLE PICTURE IS OUT OF FOCUS -- the ground
-                # and the trees and the men together. Drawing a sharp world and
-                # a blurry map beside it is what made the trees disappear.
+            if height_f > 1.001:
+                # SMOOTH, because the frame is bigger than the window and THE
+                # SQUEEZE IS WHERE THE SOFTNESS COMES FROM.
                 pygame.transform.smoothscale(view_surf, (scr_w, scr_h), screen)
             else:
                 pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
@@ -4668,10 +4675,9 @@ def main() -> None:
 
             # ---- ...and back to the window ---------------------------------
             screen = real_screen
-            if player.z > 0.05:
-                # SMOOTH, SO THE WHOLE PICTURE IS OUT OF FOCUS -- the ground
-                # and the trees and the men together. Drawing a sharp world and
-                # a blurry map beside it is what made the trees disappear.
+            if height_f > 1.001:
+                # SMOOTH, because the frame is bigger than the window and THE
+                # SQUEEZE IS WHERE THE SOFTNESS COMES FROM.
                 pygame.transform.smoothscale(view_surf, (scr_w, scr_h), screen)
             else:
                 pygame.transform.scale(view_surf, (scr_w, scr_h), screen)

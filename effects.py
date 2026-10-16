@@ -145,19 +145,61 @@ class DamageVignette:
 LEVEL_GOLD = (250, 216, 128)
 
 
-_BLUR_MASK_STEP = 4          # the mask is built one sample per 4x4 pixels
-# HOW FAR BELOW HIM THE GROUND HAS TO BE TO BE FULLY SOFT. The first cut put
-# the drop straight into the alpha at 110 a metre, so TWO AND A HALF METRES WAS
-# ALREADY THE WHOLE WAY -- and standing on the FIRST STEP, where the entire
-# world is one metre under his feet, laid a 43% haze over the whole screen with
-# one small sharp patch on it. That is what "the entire image blurs" was, and
-# what "the field of view shortens to where I am" was: the same bug from two
-# sides, because everything past his own step was equally soft and there was
-# nothing to see out there.
-#
-# Against the 1.5 power below, a metre under is 7% and barely there, two metres
-# is 19%, four is 55%, and six is the whole way. A gradient, not a fog.
-_BLUR_FULL_AT = 6.0
+# THE SOFT COPY IS MADE AT THIS FRACTION of the frame and scaled back up. How
+# far down it goes IS how soft it is -- see radial_blur.
+_BLUR_DOWN = 12
+
+
+def radial_blur(surface: pygame.Surface, zoom: float) -> None:
+    """THE FURTHER FROM HIM, THE SOFTER -- and how soft scales with the pull-back.
+
+    zoom is how much MORE WORLD the frame is covering than it would at ground
+    level: 1.0 on the flat, 1.99 at nine metres. Everything on screen has been
+    squeezed by that factor, so everything is a little softer than it was --
+    that IS the blur, and it comes for free from scaling the frame down.
+
+    What this adds is a GRADIENT, so it is not one flat wash. The middle of the
+    frame is the ground he would have seen from the ground -- 1/zoom of the
+    half-width -- and it stays SHARP. Beyond that is ground he can only see
+    because he climbed, and it goes soft, all the way to fully soft at the edge.
+
+        z=1   zoom 1.11   the middle 90% of the frame is sharp
+        z=4   zoom 1.44   the middle 69%
+        z=9   zoom 1.99   the middle 50%
+
+    So it reads as distance rather than as fog: what is under his feet is crisp
+    and what he is looking at from a hilltop is not.
+    """
+    if zoom <= 1.001:
+        return
+    w, h = surface.get_size()
+    st = 4                         # a coarse mask; it varies smoothly
+    mw = max(2, w // st)
+    mh = max(2, h // st)
+    xs = (np.arange(mw, dtype=np.float32) + 0.5) * st
+    ys = (np.arange(mh, dtype=np.float32) + 0.5) * st
+    # a SQUARE radius, so the sharp region is the shape of the frame and not a
+    # circle floating in the middle of it
+    px = np.abs(xs - w * 0.5) / (w * 0.5)
+    py = np.abs(ys - h * 0.5) / (h * 0.5)
+    p = np.maximum(px[None, :], py[:, None])
+    near = 1.0 / zoom
+    t = np.clip((p - near) / max(1e-3, 1.0 - near), 0.0, 1.0)
+    if not t.any():
+        return
+    soft = pygame.Surface((w, h), pygame.SRCALPHA)
+    soft.blit(pygame.transform.smoothscale(
+        pygame.transform.smoothscale(surface, (max(2, w // _BLUR_DOWN),
+                                               max(2, h // _BLUR_DOWN))),
+        (w, h)), (0, 0))
+    mask = pygame.Surface((mw, mh), pygame.SRCALPHA)
+    alpha = pygame.surfarray.pixels_alpha(mask)
+    alpha[:, :] = (255.0 * t ** 1.2).astype(np.uint8).T
+    del alpha
+    if (mw, mh) != (w, h):
+        mask = pygame.transform.smoothscale(mask, (w, h))
+    soft.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    surface.blit(soft, (0, 0))
 
 
 def draw_level_up(screen: pygame.Surface, sx: float, sy: float,
