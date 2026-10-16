@@ -4841,6 +4841,16 @@ def main() -> None:
                     # only, so in ordinary play he was drawn into the big frame
                     # and then warped with everything else -- SHRINKING A
                     # LITTLE MORE EVERY METRE HE CLIMBED.
+                    # AND THE THINGS STANDING ON IT. The trees are left out of
+                    # the frame whenever the warp is on, because a tree is
+                    # rooted in the ground and must be sized by ITS ground --
+                    # so if they are not drawn here they are not drawn at all.
+                    # They were being drawn in the game-over branch only, and
+                    # in ordinary play the woods had simply gone.
+                    try:
+                        draw_standing(_warped, draw_trees)
+                    except Exception:
+                        pass
                     player.draw(_warped, player.x - _flat[0] * 0.5,
                                 player.y - _flat[1] * 0.5,
                                 selected.defn.id if selected else None)
