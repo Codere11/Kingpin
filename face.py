@@ -34,6 +34,8 @@ LIP = (176, 96, 92)         # one pixel of lip, all the way round it
 SOCKET = (170, 124, 94)     # the hollow a starving man's eye sits down in
 SCAR = (172, 96, 84)        # a line of it across the face
 BEARD = (26, 20, 18)        # the bottom third of the face, black
+CROWN = (226, 184, 78)      # gold, and worn on top of everything
+CROWN_D = (146, 108, 30)    # the darker gold it is edged in
 TOOTH = (238, 236, 228)     # two of them, at the top of it
 LID = None                  # filled with the skin at draw time
 
@@ -411,6 +413,51 @@ def vet_tier(melee: float, ranged: float) -> int:
     if k >= VET_BROW:
         return 1
     return 0
+
+
+def crown(screen, hx: float, hy: float, r: int) -> None:
+    """A crown, ON THE HEAD, drawn by whoever draws the head.
+
+    NOT PART OF THE FACE, and that is the whole point of it being here rather
+    than in _render. The face is CLIPPED TO THE HEAD -- nothing it draws may
+    fall outside the circle -- so a crown built inside the face would have its
+    band and its points cut off, which is all of a crown there is.
+
+    And it is not a mood either. It is drawn OVER whatever face he is wearing
+    and it does not alter a pixel of it: a king who is attacking, being hit,
+    starving, working, smirking, or carrying every combat mark there is still
+    wears the same crown on the same head.
+    """
+    # int(), NOT int(round()) -- draw() blits the face at int(hx) - width//2,
+    # which puts the face's centre pixel on int(hx). Rounding here instead put
+    # the crown on int(round(hx)), and those are different numbers whenever the
+    # fraction is a half or more: walking on a diagonal, the crown slid a pixel
+    # off the head and took two pixels of the starving man's brow with it.
+    hx = int(hx)
+    hy = int(hy)
+    w = max(3, int(round(r * 0.62)))       # half its width: 5 at r=8, 11 across
+    bh = max(2, r // 4)
+    # THE BAND SITS ON THE HEAD'S TOP ROW, AND NO LOWER. It was a pixel lower
+    # at first, which was fine for every face except a starving one: the
+    # starved brows HANG, so their outer ends reach a row higher than the
+    # resting ones, and the crown took two pixels off them. Measured: every
+    # other mood and rank 0 covered, starving 2.
+    bottom = hy - r
+    top = bottom - bh
+    # the band
+    pygame.draw.rect(screen, CROWN, (hx - w, top, w * 2 + 1, bh))
+    # three points, the middle one taller
+    ph = max(2, r // 3)
+    for px in (-w + 1, 0, w - 1):
+        h = ph + (1 if px == 0 else 0)
+        pygame.draw.polygon(screen, CROWN,
+                            ((hx + px - max(1, r // 6), top),
+                             (hx + px + max(1, r // 6), top),
+                             (hx + px, top - h)))
+    # and a darker edge, so it does not melt into the man's hair
+    pygame.draw.line(screen, CROWN_D, (hx - w, bottom), (hx + w, bottom), 1)
+    pygame.draw.line(screen, CROWN_D, (hx - w, top), (hx - w, bottom), 1)
+    pygame.draw.line(screen, CROWN_D, (hx + w, top), (hx + w, bottom), 1)
 
 
 def mood_of(hurt_flash: float, attack_flash: float,

@@ -1893,6 +1893,13 @@ class NPC:
         vet = face.vet_tier(self.skills.axe, self.skills.shooting)
         face.draw(screen, hx, hy, head_r, fx, fy, mood, vet=vet)
 
+        # AND THE CROWN, IF THE THRONE IS HIS. Drawn after the face and touched
+        # by nothing else: it does not change his expression, his marks, or a
+        # single pixel of the face under it, and it stops the moment is_king
+        # goes false -- which the war code does when a capital falls.
+        if self.is_king:
+            face.crown(screen, hx, hy, head_r)
+
         # THE COMMANDER'S HAT IS GONE. It was an eight-pixel cap painted over
         # the head, so the one man guaranteed to be looked at was the one man
         # whose face could not be seen -- and the face is drawn BEFORE it, so
