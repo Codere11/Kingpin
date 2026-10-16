@@ -4753,6 +4753,15 @@ def main() -> None:
                     _flat = (max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM)))
                     _warped = effects.height_warp(view_surf, player.x, player.y,
                                                   player.z, _flat)
+                    # HE IS THE CAMERA'S SUBJECT AND IS NEVER PACKED. The warp
+                    # is for ground LOWER than him; he stands at the reference
+                    # height by definition. This was in the game-over branch
+                    # only, so in ordinary play he was drawn into the big frame
+                    # and then warped with everything else -- SHRINKING A
+                    # LITTLE MORE EVERY METRE HE CLIMBED.
+                    player.draw(_warped, player.x - _flat[0] * 0.5,
+                                player.y - _flat[1] * 0.5,
+                                selected.defn.id if selected else None)
                     pygame.transform.scale(_warped, (scr_w, scr_h), screen)
                 except Exception:
                     pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
