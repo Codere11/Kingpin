@@ -49,9 +49,6 @@ import observer
 # ImportError at the moment of a death -- and the except that guards the call
 # would swallow it, and every death would go unrecorded with no sign why.
 import deaths
-import effects
-import terrain
-import vision as vision_mod
 import tournament
 import village as village_mod
 import war
@@ -90,17 +87,6 @@ from world import TILE, GroundRenderer, Scatter, StaticLayer, World
 WIDTH, HEIGHT = 1280, 720
 FPS = 60
 ZOOM = 2.25                # the world is drawn at 4/9 size, then blown up
-# ONE MORE METRE UP SHOWS ONE MORE METRE OF GROUND EACH WAY, so the frame is
-# composed over an area this much bigger for every metre he climbs. It is
-# squeezed back onto the window afterwards, and THE SQUEEZE IS THE BLUR -- the
-# ground, the trees, the people and all of it at once.
-HEIGHT_ZOOM = 0.002          # one more metre of ground each way, in the words
-# THE FLAT VIEW, WHICH IS THE COORDINATE SYSTEM THE MOUSE LIVES IN. mouse/ZOOM
-# is a point in it, and it is what the aim is measured from -- NOT the camera of
-# whatever frame size the height has made, which only agreed with it at z=0.
-FLAT_W = max(2, int(WIDTH / ZOOM))
-FLAT_H = max(2, int(HEIGHT / ZOOM))
-                          # it was asked for: (568 px flat + 64 px a metre) / 568.
 WORLD_STEP = 1.0 / 20.0   # villagers/crops/villages tick 20x a second, not 60
 REACH = 104.0            # how far the player can work a tile
 
@@ -666,9 +652,6 @@ def main() -> None:
 
     ore_field = ore.OreField(world.seed)
     player = Player(0.0, 0.0)
-    # THE GROUND HAS A HEIGHT NOW, and he can ask it. Handed over as a plain
-    # function so Player never has to know what a World is.
-    player.elevation = terrain.height_at
     player.god = test_mode
     # THE TOWNS CAN NOW SEE HIM. One assignment, so a village can put the
     # player in an election or in a ring without every caller passing him down.
@@ -1093,16 +1076,7 @@ def main() -> None:
         muzzle_x = player.x + fx * 30.0 + px * 7.0
         muzzle_y = player.y + fy * 30.0 + py * 7.0
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
-        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM   # flat-view pixels
-        if player.z > 0.05:
-            # THE GROUND UNDER THE POINTER IS PACKED IN TOWARD HIM, so the
-            # plain sum aims short -- and the further below him it is, the
-            # worse. Read it back the way the frame was read back, around the
-            # FLAT centre, because that is the space the mouse is in.
-            _ox, _oy = effects.height_offset(
-                wmouse_x - FLAT_W * 0.5, wmouse_y - FLAT_H * 0.5,
-                player.x, player.y, player.z)
-            wmouse_x, wmouse_y = _ox + FLAT_W * 0.5, _oy + FLAT_H * 0.5
+        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM  # world space
         distance = math.hypot((cam_x + wmouse_x) - muzzle_x,
                               (cam_y + wmouse_y) - muzzle_y)
         spread = skills.shot_spread()
@@ -1381,16 +1355,7 @@ def main() -> None:
             return
 
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
-        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM   # flat-view pixels
-        if player.z > 0.05:
-            # THE GROUND UNDER THE POINTER IS PACKED IN TOWARD HIM, so the
-            # plain sum aims short -- and the further below him it is, the
-            # worse. Read it back the way the frame was read back, around the
-            # FLAT centre, because that is the space the mouse is in.
-            _ox, _oy = effects.height_offset(
-                wmouse_x - FLAT_W * 0.5, wmouse_y - FLAT_H * 0.5,
-                player.x, player.y, player.z)
-            wmouse_x, wmouse_y = _ox + FLAT_W * 0.5, _oy + FLAT_H * 0.5
+        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM  # world space
         wx, wy = cam_x + wmouse_x, cam_y + wmouse_y   # the world mouse
 
         # Clicking a villager while not wielding a weapon opens trade.
@@ -1674,29 +1639,6 @@ def main() -> None:
                 other.draw(surface, ex, ey)
         return surface
 
-    def draw_standing(surface, world_trees) -> None:
-        """Everything rooted in the ground, drawn ON the warped picture.
-
-        THE POINT OF IT. A tree is not a flat thing lying on the screen: it is
-        growing out of a piece of ground, and it should be as big as that
-        ground is drawn and no bigger. Letting the warp smear it pixel by pixel
-        meant the top of a tall tree -- which stands on higher ground than its
-        base -- was scaled by a different amount from the bottom, and it came
-        out stretched sideways.
-
-        So each one is placed where the ground under its feet ended up, and
-        scaled ONCE, by the height of the ground it is standing on.
-        """
-        cx = surface.get_width() * 0.5
-        cy = surface.get_height() * 0.5
-        stump = trees.stump()
-        for tree in world_trees:
-            dx, dy = effects.height_offset(tree.x - player.x, tree.y - player.y,
-                                           player.x, player.y, player.z)
-            sc = float(effects._scale(player.z,
-                                      float(terrain.height_at(tree.x, tree.y))))
-            tree.draw_at(surface, cx + dx, cy + dy, sc, stump)
-
     def enter_house(house) -> None:
         nonlocal inside_house, backdrop, door_cooldown, cam_x, cam_y
         interior = getattr(house, "interior", None)
@@ -1754,11 +1696,6 @@ def main() -> None:
         inside_house = None
         door_cooldown = 0.7
 
-    # WHEN THE GROUND IS BEING DRAWN AT DEPTH, THE THINGS STANDING ON IT
-    # MUST NOT BE. They are drawn afterwards, each sized by the ground
-    # under its own feet. See draw_standing.
-    skip_standing = [False]
-
     def draw_exterior(cx, cy, show_names: bool = False, target=None) -> None:
         target = target if target is not None else screen
         static_layer.draw(target, cx, cy, vw, vh)
@@ -1789,10 +1726,9 @@ def main() -> None:
             age = (stage + 0.4) * crop.GROW_SECONDS / 4.0
             items.append((y, lambda x=x, y=y, e=age, k=kind:
                           crop.draw_crop(target, x, y, k, e, cx, cy, None)))
-        if not skip_standing[0]:
-            for tree in world_trees:
-                items.append((tree.y, lambda t=tree, s=_stump:
-                              t.draw(target, cx, cy, s)))
+        for tree in world_trees:
+            items.append((tree.y, lambda t=tree, s=_stump:
+                          t.draw(target, cx, cy, s)))
         for chunk in ore_field.visible(cx, cy, vw, vh):
             if view.collidepoint(chunk.x, chunk.y):
                 items.append((chunk.y,
@@ -2788,31 +2724,13 @@ def main() -> None:
     _lane_timer = 0.0
     _lane_warned = False
     running = True
-    # BOUND BEFORE THE LOOP. height_f is assigned in the overworld's ZOOM
-    # block far below, and Python makes a name assigned ANYWHERE in a function
-    # local EVERYWHERE in it -- so the aim correction two hundred lines earlier
-    # died with UnboundLocalError before the world had even finished building.
-    # 1.0 means "no height", which is right everywhere the warp is not applied.
-    height_f = 1.0
-    _warp_on = False
-    _space_t = [-9.0]             # when space was last tapped
-
     while running:
         dt = min(clock.tick(FPS) / 1000.0, 0.05)
         _PH["f"] += 1
         dt = min(dt * time_scale, 0.5)          # test-mode speed-up
         vw, vh = screen.get_size()
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
-        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM   # flat-view pixels
-        if player.z > 0.05:
-            # THE GROUND UNDER THE POINTER IS PACKED IN TOWARD HIM, so the
-            # plain sum aims short -- and the further below him it is, the
-            # worse. Read it back the way the frame was read back, around the
-            # FLAT centre, because that is the space the mouse is in.
-            _ox, _oy = effects.height_offset(
-                wmouse_x - FLAT_W * 0.5, wmouse_y - FLAT_H * 0.5,
-                player.x, player.y, player.z)
-            wmouse_x, wmouse_y = _ox + FLAT_W * 0.5, _oy + FLAT_H * 0.5
+        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM  # world space
 
         for event in pygame.event.get():
             # ---- THE KEY LOG. A one-line record of every key this build's
@@ -3102,24 +3020,6 @@ def main() -> None:
                     compass_menu.open(compass_state.home is not None)
                     compass_open = True
                     pygame.mouse.set_visible(True)
-            elif (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
-                  and not placing and not inventory_open):
-                # TWO TAPS TO FLY. One tap jumps, as it always has; a second tap
-                # close behind it turns helicopter mode on or off instead of
-                # jumping again, so the ground controls are untouched and the
-                # flying is somewhere you deliberately go.
-                _t = now
-                if test_mode and (_t - _space_t[0]) < 0.35:
-                    player.fly = not player.fly
-                    _space_t[0] = -9.0
-                    if player.fly:
-                        player.airborne = True
-                        toast("HELICOPTER MODE  --  hold SPACE to climb, SHIFT to sink")
-                    else:
-                        toast("helicopter mode off")
-                else:
-                    _space_t[0] = _t
-                    player.jump()
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 stack = inventory.selected_stack()
                 kind = stack.defn.id if stack else None
@@ -3195,8 +3095,8 @@ def main() -> None:
             # mouse against a zoomed camera skews every look by the zoom --
             # pointing left of centre actually aimed right, and the whole room
             # could only be half looked at.
-            aim = (wmouse_x - FLAT_W * 0.5,
-                   wmouse_y - FLAT_H * 0.5)
+            aim = (wmouse_x - (player.x - cam_x),
+                   wmouse_y - (player.y - cam_y))
             player.skill_speed = skills.move_scale()
             award_levels()
             player.skill_stamina = skills.stamina_scale()
@@ -3278,8 +3178,8 @@ def main() -> None:
             keys = pygame.key.get_pressed()
             if board_open:                       # reading the board: stand still
                 keys = _NO_KEYS
-            aim = (wmouse_x - FLAT_W * 0.5,
-                   wmouse_y - FLAT_H * 0.5)   # the world mouse, not the window's
+            aim = (wmouse_x - (player.x - cam_x),
+                   wmouse_y - (player.y - cam_y))   # the world mouse, not the window's
             foliage = trees.foliage(player.x, player.y)
             player.skill_speed = skills.move_scale()
             award_levels()
@@ -4619,50 +4519,6 @@ def main() -> None:
         # belongs at the window's own size.
         scr_w, scr_h = vw, vh
         vw, vh = max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM))
-        # HELICOPTER MODE IS AN OVERVIEW, and it is nearly free: the frame just
-        # covers more world and is squeezed back onto the window at the blow-up
-        # below -- the same trick the height uses. The ground is composed into
-        # ONE cached surface, so the per-frame cost of a bigger window is a
-        # single larger blit.
-        # TEN TIMES THE GROUND FOR EVERY HUNDRED METRES. A hundred metres up
-        # you see ten times as far, two hundred forty times, and it keeps going
-        # -- the view is the SAME WINDOW over more ground, drawn at a
-        # correspondingly coarser scale, which is why the cost does not move.
-        _fly_k = 1.0
-        if player.fly and player.z > 10.0:
-            # CAPPED AT TWENTY-FOUR. Ten times for every hundred metres is
-            # what was asked for and it is measured cheap: 10x is 3.4 ms a
-            # frame and 20x is 6.0. Past about twenty-five the count of chunks
-            # in the window becomes the cost rather than the window -- 40x drew
-            # four and a half thousand of them at 24 ms -- so it stops where it
-            # is still free, and 100 m sees ten times and 200 m sees twenty.
-            _fly_k = min(24.0, player.z / 10.0)
-        # THE HEIGHT, WHICH IS SEEING FURTHER. The frame covers this much MORE
-        # WORLD for every metre he climbs -- the same screen space over more
-        # blocks, which is the thing that was asked for -- and it is squeezed
-        # back onto the window at the blow-up below. THE SQUEEZE IS THE BLUR,
-        # and it is proportional to the height BY CONSTRUCTION, because it IS
-        # the scale. Every line of the world reads vw and vh, so the ground,
-        # the trees, the people, the fences and the blood all pull back with
-        # him without one of them being told about it.
-        # THE FRAME HAS TO BE BIG ENOUGH TO HOLD THE FURTHEST GROUND THE
-        # SCALE CAN ASK FOR, and that is set by the FLOOR of the scale, not by
-        # how high he is: ground at the bottom of the world draws at 0.62, so
-        # the frame must reach 1/0.62 of the view. A constant, and a cheap one
-        # -- 1.61 each way is 2.6 times the pixels, where the old growth law
-        # wanted four. The magnification at the other end needs nothing: it
-        # reads from CLOSER in than the view already is.
-        # THE FRAME NO LONGER HAS TO GROW AT ALL. The old warp pushed every
-        # pixel away from the player by its own distance, so it had to reach
-        # 1/0.62 of the view to find the ground it was asking for. Blocks are
-        # drawn in place now and a block only ever reads from its own
-        # neighbourhood -- so the frame is the view, and the render stopped
-        # paying for four times the pixels the moment he climbed anything.
-        height_f = 1.0
-        _warp_on = player.z > 3.0
-        if _warp_on:
-            vw = max(2, int(vw * height_f))
-            vh = max(2, int(vh * height_f))
         if view_surf is None or view_surf.get_size() != (vw, vh):
             view_surf = pygame.Surface((vw, vh))
         real_screen = screen
@@ -4682,48 +4538,7 @@ def main() -> None:
         else:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
-        if _fly_k > 1.001:
-            # HELICOPTER MODE DRAWS THE WHOLE WORLD AT ONE SCALE, AND HIM AT
-            # ANOTHER.
-            #
-            # Everything that is part of the world is drawn at 1/_fly_k --
-            # ground, trees, and everything else that stands on it -- from a
-            # camera that has the player at the CENTRE OF WHAT IS BEING SHOWN
-            # and not the centre of the window, which is not the same point
-            # once the window covers more ground than a screen. Getting that
-            # wrong put him off to one side and drew the world in the wrong
-            # place.
-            #
-            # AND HE IS DRAWN AT FULL SIZE ON TOP, because he is the one thing
-            # up here that has not shrunk -- he is the camera. Drawing him into
-            # the small picture as well is what left a trail of him behind.
-            _s = 1.0 / _fly_k
-            cam_x = player.x - (vw * _s) * 0.5
-            cam_y = player.y - (vh * _s) * 0.5
-            static_layer.draw(screen, cam_x, cam_y, vw, vh, scale=_s)
-            _stump = trees.stump()
-            # THE SPAN IS THE WINDOW DIVIDED BY THE SCALE, not multiplied by
-            # it: at twenty times out the window covers eleven thousand world
-            # pixels and not twenty-eight. Asking for the wrong one put no
-            # trees in the picture at all.
-            # AND ONLY THE NEAREST FEW HUNDRED OF THEM. At twenty times out the
-            # window holds eleven thousand world pixels and the whole wood is
-            # inside it -- forty-two thousand trees, at three pixels each, was
-            # fifty milliseconds of blitting invisible specks. The ones near
-            # enough to be seen are the ones drawn.
-            _vt = trees.visible(cam_x, cam_y, int(vw / _s) + 128,
-                                int(vh / _s) + 128)
-            if len(_vt) > 900:
-                _px, _py = player.x, player.y
-                _vt = sorted(_vt, key=lambda t: (t.x - _px) ** 2
-                             + (t.y - _py) ** 2)[:900]
-            for _t in _vt:
-                _t.draw_at(screen, (_t.x - cam_x) * _s, (_t.y - cam_y) * _s, _s, _stump)
-        else:
-            if _warp_on:
-                skip_standing[0] = True
-            draw_exterior(cam_x, cam_y, True)
-            skip_standing[0] = False
+        draw_exterior(cam_x, cam_y, True)
         draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
         draw_villages = villages.visible(cam_x, cam_y, vw, vh)
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
@@ -4776,48 +4591,16 @@ def main() -> None:
         _cone0 = vision.cone_deg
         if _watch:
             vision.cone_deg = 360.0
-        # AND HIGHER GROUND SEES FURTHER. It is the only thing height buys, and
-        # it is the reason to climb: from the top of the massif the wood below
-        # is not a wall of trees, it is ground with people on it.
-        _zsrc = float(getattr(_src, "z", 0.0) or 0.0)
-        # vision_mod, NOT vision: inside main() the name `vision` is the
-        # Vision INSTANCE, so the module's constants are not on it.
-        _sight = 1.0 + min(vision_mod.SIGHT_MAX - 1.0,
-                           max(0.0, _zsrc) * vision_mod.SIGHT_PER_M)
         mask = vision.build(vw, vh, eye_x, eye_y, _ang,
-                            screen_occluders, screen_soft,
-                            (1.0 - 0.25 * foliage) * _sight)
+                            screen_occluders, screen_soft, 1.0 - 0.25 * foliage)
         screen.blit(mask, (0, 0))
         if _watch:
             vision.cone_deg = _cone0
         draw_night()
 
         selected = inventory.selected_stack()
-        # HE IS NOT DRAWN INTO THE WORLD WHILE FLYING: it is drawn small, and
-        # he is not.
-        if _fly_k > 1.001:
-            _fly_draw = True
-        # HE IS DRAWN INTO THE FRAME AND AGAIN AFTER THE WARP, and the two
-        # cannot disagree: the warp sends the CENTRE of the frame to the centre
-        # of the picture whatever the scale, and he is standing dead centre --
-        # so the one in the frame was never warped in the first place. Drawing
-        # him only after the warp meant that a single exception anywhere in
-        # that block fell back to scaling the frame, WHICH NO LONGER HAD HIM IN
-        # IT, and he vanished off the screen entirely.
-        #
-        # FLYING, HE IS DRAWN ON THE FLAT CAMERA AND NOT THE OVERVIEW ONE. The
-        # world up there is drawn from a camera centred on what the window
-        # COVERS, which at twenty times out is ten window-widths from its left
-        # edge -- so drawing him on that camera put him a tenth of the way
-        # across a screen showing twenty times the ground. He is not part of
-        # the shrinking world: he is the camera, and he sits in the middle of
-        # the window at his own size.
-        if _fly_k > 1.001:
-            player.draw(screen, player.x - vw * 0.5, player.y - vh * 0.5,
-                        selected.defn.id if selected else None)
-        else:
-            player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
-            combat.draw(screen, cam_x, cam_y)
+        player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
+        combat.draw(screen, cam_x, cam_y)
         draw_hunger_gray()
 
         if game_over:
@@ -4829,51 +4612,7 @@ def main() -> None:
             # kept the last frame it had. That is what "it freezes instead of
             # showing a game over screen" was: a correct panel, drawn offscreen.
             screen = real_screen
-            if _warp_on:
-                # THE GROUND BELOW HIM IS FURTHER OFF, SO IT IS DRAWN SMALLER
-                # -- per pixel, by how far below him that patch of ground is.
-                # The frame is drawn 1:1 and bigger than the view, and this
-                # reads every destination pixel back to where it came from: the
-                # ground he is standing on comes back pixel for pixel, and the
-                # ground under it is squeezed in toward him. THEN it is soft at
-                # the edges, because that is the part he can only see BECAUSE
-                # he climbed.
-                # IF ANY OF THIS FAILS, THE WORLD STILL DRAWS. A height
-                # effect is not worth a dead game.
-                try:
-                    _flat = (max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM)))
-                    _warped = effects.height_warp(view_surf, player.x, player.y,
-                                                  player.z, _flat)
-                    # AND HE IS PUT BACK, AT FULL SIZE.
-                    #
-                    # THE WARP IS FOR GROUND AT A LOWER LEVEL. He is the
-                    # camera's SUBJECT: he stands at the reference height by
-                    # definition, so there is no lower ground about him to pack
-                    # him into -- and warping him shrank him a little more every
-                    # metre he climbed, which is exactly what it looked like.
-                    # Drawn again over his own warped ghost, which his full-size
-                    # self covers completely.
-                    # AND IN PLAIN FLOATS, because pygame will not take a
-                    # numpy scalar as half of a point and says so with "points
-                    # must be number pairs" -- which is what was being thrown
-                    # here and swallowed by the except below.
-                    try:
-                        draw_standing(_warped, draw_trees)
-                    except Exception:
-                        pass
-                    try:
-                        player.draw(_warped, float(player.x) - _flat[0] * 0.5,
-                                    float(player.y) - _flat[1] * 0.5,
-                                    selected.defn.id if selected else None)
-                    except Exception:
-                        pass
-                    # no explicit blur: the ground below him is drawn
-                    # SMALLER, and smaller IS the blur.
-                    pygame.transform.scale(_warped, (scr_w, scr_h), screen)
-                except Exception:
-                    pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
-            else:
-                pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
+            pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             overlay.draw(screen, [
                 f"Kills: {kills}",
                 f"Tobacco: {inventory.count_of('tobacco')}",
@@ -4891,62 +4630,18 @@ def main() -> None:
                 if ex < -24 or ey < -24 or ex > vw + 24 or ey > vh + 24:
                     continue
                 if not vision.is_visible(eye_world_x, eye_world_y, player.facing_angle,
-                                         enemy.x, enemy.y, occluders=occluders,
-                                         eye_z=float(player.z),
-                                         target_z=float(terrain.height_at(enemy.x, enemy.y))):
+                                         enemy.x, enemy.y, occluders=occluders):
                     draw_alert(screen, ex, ey, now, enemy.phase)
 
             draw_placing()
 
+            if not inventory_open:
+                draw_crosshair(screen, wmouse_x, wmouse_y)
+
             # ---- ...and back to the window ---------------------------------
             screen = real_screen
-            if _warp_on:
-                # THE GROUND BELOW HIM IS FURTHER OFF, SO IT IS DRAWN SMALLER
-                # -- per pixel, by how far below him that patch of ground is.
-                # The frame is drawn 1:1 and bigger than the view, and this
-                # reads every destination pixel back to where it came from: the
-                # ground he is standing on comes back pixel for pixel, and the
-                # ground under it is squeezed in toward him. THEN it is soft at
-                # the edges, because that is the part he can only see BECAUSE
-                # he climbed.
-                # IF ANY OF THIS FAILS, THE WORLD STILL DRAWS. A height
-                # effect is not worth a dead game.
-                try:
-                    _flat = (max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM)))
-                    _warped = effects.height_warp(view_surf, player.x, player.y,
-                                                  player.z, _flat)
-                    # HE IS THE CAMERA'S SUBJECT AND IS NEVER PACKED. The warp
-                    # is for ground LOWER than him; he stands at the reference
-                    # height by definition. This was in the game-over branch
-                    # only, so in ordinary play he was drawn into the big frame
-                    # and then warped with everything else -- SHRINKING A
-                    # LITTLE MORE EVERY METRE HE CLIMBED.
-                    # AND THE THINGS STANDING ON IT. The trees are left out of
-                    # the frame whenever the warp is on, because a tree is
-                    # rooted in the ground and must be sized by ITS ground --
-                    # so if they are not drawn here they are not drawn at all.
-                    # They were being drawn in the game-over branch only, and
-                    # in ordinary play the woods had simply gone.
-                    try:
-                        draw_standing(_warped, draw_trees)
-                    except Exception:
-                        pass
-                    player.draw(_warped, player.x - _flat[0] * 0.5,
-                                player.y - _flat[1] * 0.5,
-                                selected.defn.id if selected else None)
-                    pygame.transform.scale(_warped, (scr_w, scr_h), screen)
-                except Exception:
-                    pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
-            else:
-                pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
+            pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             vw, vh = scr_w, scr_h
-            # THE CROSSHAIR IS A SCREEN-SPACE THING. It was drawn into the big
-            # frame at FLAT-VIEW coordinates -- wrong surface AND wrong space --
-            # so above ground it got packed in with the terrain and slid away
-            # from the pointer. On the window, at the window's own mouse, the
-            # way the house and mine have always done it.
-            if not inventory_open:
-                draw_crosshair(screen, mouse_x, mouse_y)
             hotbar.draw(screen)
             # THE INSPECTOR IS DRAWN ABOVE GROUND TOO.
             #

@@ -17,29 +17,6 @@ import random
 import numpy as np
 import pygame
 
-_SCALED: dict = {}
-
-
-def scaled_sprite(image: pygame.Surface, scale: float) -> pygame.Surface:
-    """One picture of one tree at one size, made once.
-
-    Sizing every tree every frame would be a transform per tree per frame; the
-    scale only ever takes a few hundred values and there are only a few dozen
-    tree pictures, so every result is worth keeping.
-    """
-    q = max(1, min(400, int(round(scale * 64))))
-    key = (id(image), q)
-    got = _SCALED.get(key)
-    if got is None:
-        got = pygame.transform.scale(
-            image, (max(1, int(image.get_width() * q / 64.0)),
-                    max(1, int(image.get_height() * q / 64.0))))
-        if len(_SCALED) > 800:
-            _SCALED.clear()
-        _SCALED[key] = got
-    return got
-
-
 import biomes
 import nations
 from noise import fbm
@@ -438,36 +415,15 @@ class Tree:
                                             self.canopy_r)
         return image, (self.x - sx, self.y - sy)
 
-    def sprite(self, stump=None):
-        """The picture of this tree and where its base sits in it."""
-        if self.felled and stump is not None:
-            return stump
-        return self._atlas.get(self.species, self.size_class, self.variant,
-                               self.flip, self.snowy, self.canopy_r)
-
     def draw(self, screen: pygame.Surface, cam_x: float, cam_y: float,
              stump=None) -> None:
-        image, sx, sy = self.sprite(stump)
+        if self.felled and stump is not None:
+            image, sx, sy = stump
+        else:
+            image, sx, sy = self._atlas.get(self.species, self.size_class,
+                                            self.variant, self.flip, self.snowy,
+                                            self.canopy_r)
         screen.blit(image, (self.x - cam_x - sx, self.y - cam_y - sy))
-
-    def draw_at(self, screen: pygame.Surface, px: float, py: float,
-                scale: float, stump=None) -> None:
-        """The tree at a given place, at a given size, its BASE at (px, py).
-
-        A tree is not a thing lying on the screen, it is a thing growing OUT of
-        a piece of ground -- so when the ground is drawn nearer or further the
-        tree must be sized by the ground IT stands on, ONCE, and not smeared by
-        wherever each of its pixels happens to land. Smeared is what it was
-        doing: the top of a tall tree stands on higher ground than its base, so
-        the two ends were scaled by different amounts and it came out stretched
-        sideways.
-        """
-        image, sx, sy = self.sprite(stump)
-        if scale < 0.98 or scale > 1.02:
-            image = scaled_sprite(image, scale)
-            sx *= scale
-            sy *= scale
-        screen.blit(image, (int(px - sx), int(py - sy)))
 
 
 class Trees:
