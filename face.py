@@ -31,6 +31,7 @@ MOUTH = (128, 82, 66)
 TONGUE = (198, 104, 112)     # the working face's whole point
 MAW = (104, 42, 42)         # an open, shouting mouth -- the war face
 LIP = (176, 96, 92)         # one pixel of lip, all the way round it
+SOCKET = (170, 124, 94)     # the hollow a starving man's eye sits down in
 TOOTH = (238, 236, 228)     # two of them, at the top of it
 LID = None                  # filled with the skin at draw time
 
@@ -42,6 +43,9 @@ BROW_LIFT = 0.34
 MOUTH_DOWN = 0.42
 NOSE_DOWN = 0.18
 WORK_SECONDS = 0.8          # how long a work action shows on the face
+STARVED_HUNGER = 80.0       # ...and the one face that is a STATE, not an
+                            # event: at this hunger he is starving, and that
+                            # is the only thing about him worth drawing.
 SLY_SECONDS = 1.5           # ...and how long a completed trade does. Long
                             # enough that a trader working a route keeps the
                             # smirk up between deals instead of blinking it.
@@ -113,14 +117,50 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
     angry = (mood == "angry")
     hurt = (mood == "hurt")
     sly = (mood == "sly")
-    # THE WAR MOUTH AND THE WAR BROWS, AND ONLY THE EYES ARE DIFFERENT. A hurt
-    # face is a war face whose eyes have shut against the pain -- he is still
-    # shouting, he is just no longer looking at anything.
-    #
-    # THE SLY FACE WEARS THE WAR EYES AND THE WAR BROWS TOO, and swaps only the
-    # jaw: the same flat, narrowed look, bent into a smirk. Which is the whole
-    # joke -- he is looking at you exactly the way a man about to hit you
-    # looks, and smiling.
+
+    if mood == "starved":
+        # THE STARVED FACE. The ONLY mood that is a state rather than an event,
+        # and it OVERRIDES EVERY OTHER ONE -- a man this hungry is not angry,
+        # or busy, or pleased with himself, whether he is swinging an axe or
+        # standing still.
+        #
+        # THE EYES DO NOT MOVE. The first cut shifted them down and painted a
+        # socket the size of the whole eye over them, which covered half the
+        # upper face -- a mask, or a pair of sunglasses. What reads is the
+        # HOLLOWS: a line of shadow under each eye where the fat used to be,
+        # brows hanging at the outer ends, and a mouth turned down.
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            pygame.draw.circle(screen, WHITE, (cx, iy), wr)
+            pygame.draw.circle(screen, EYE,
+                               (cx + int(round(fx * wr * 0.45)),
+                                iy + int(round(fy * wr * 0.45))), pr)
+        # THE HOLLOW: a short line of shadow under each eye. SHORT, because
+        # the nose runs down between them -- a long one on each side joined up
+        # with it and the three of them read as a moustache.
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            pygame.draw.line(screen, SOCKET, (cx - wr + 1, iy + wr + 1),
+                             (cx + wr - 1, iy + wr + 1), 1)
+        # THE BROWS HANG: outer end low, inner end up. The exact reverse of the
+        # war face, which is the same line read the other way.
+        by = int(round(iy - wr - r * 0.20))
+        bw = max(1, int(round(r * 0.20)))
+        tw = max(1, r // 6)
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            pygame.draw.line(screen, BROW, (cx + sgn * bw, by + tw),
+                             (cx - sgn * bw, by - tw), tw)
+        if r >= 6:
+            pygame.draw.line(screen, NOSE, (ix, iy + wr),
+                             (ix, int(round(hy + r * NOSE_DOWN))), 1)
+        # THE MOUTH TURNED DOWN, and wide -- the corners go below the middle.
+        m_y = int(round(hy + r * MOUTH_DOWN))
+        hw = max(1, int(round(r * 0.34)))
+        pygame.draw.line(screen, MOUTH, (ix - hw, m_y + 1), (ix, m_y), 1)
+        pygame.draw.line(screen, MOUTH, (ix, m_y), (ix + hw, m_y + 1), 1)
+        return
+
     war = angry or hurt
 
     # THE EYES, AND HOW FAR THE LID COMES DOWN.
@@ -264,7 +304,8 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
 
 
 def mood_of(hurt_flash: float, attack_flash: float,
-            work_flash: float = 0.0, sly_flash: float = 0.0) -> str:
+            work_flash: float = 0.0, sly_flash: float = 0.0,
+            starved: bool = False) -> str:
     """Which face a man is wearing, from the timers he is carrying.
 
     THE MOST RECENT EVENT WINS. Every one of these runs down at the same rate,
@@ -273,6 +314,10 @@ def mood_of(hurt_flash: float, attack_flash: float,
     lands a blow on top of a hit is snarling again. Equal goes to the hurt,
     because the blow that LANDED is the one he felt.
     """
+    if starved:
+        # FIRST, AND ABOVE EVERYTHING, because it is a state and not an
+        # event: a starving man does not stop being starving mid-swing.
+        return "starved"
     if hurt_flash > 0.0 and hurt_flash >= attack_flash:
         return "hurt"
     if attack_flash > 0.0:
@@ -287,7 +332,8 @@ def mood_of(hurt_flash: float, attack_flash: float,
 
 
 def warm(radii=range(4, 13), dirs=DIRS,
-         moods=("normal", "focus", "angry", "hurt", "sly")) -> int:
+         moods=("normal", "focus", "angry", "hurt", "sly",
+                  "starved")) -> int:
     """Build every face the game can ask for BEFORE the first frame.
 
     A cache miss in the middle of a frame is twelve draw calls where the frame
