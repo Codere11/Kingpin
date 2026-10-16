@@ -296,16 +296,6 @@ class Player:
              held: str | None = None) -> None:
         sx = self.x - cam_x
         sy = self.y - cam_y
-        # A SHADOW ON THE GROUND, and it is the only thing that says how high he
-        # is: the camera climbs with him, so without it a jump looks like
-        # nothing happening at all.
-        lift = max(0.0, self.z - float(self.ground_z))
-        if lift > 0.0:
-            k = 1.0 / (1.0 + lift * 0.35)
-            r = max(3, int(round(11 * k)))
-            shade = pygame.Surface((r * 2, r), pygame.SRCALPHA)
-            pygame.draw.ellipse(shade, (12, 16, 12, int(120 * k)), shade.get_rect())
-            screen.blit(shade, (int(sx) - r, int(sy) + 6))
         fx, fy = self.facing
 
         screen.blit(self._shadow, (sx - 15, sy - 4))
