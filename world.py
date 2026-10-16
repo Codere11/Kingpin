@@ -40,6 +40,7 @@ from noise import _hash, fbm, value_noise
 # --- world geometry ---------------------------------------------------------
 TILE = 32            # logical tile size, used by gameplay, not by the visuals
 CHUNK = 256          # ground chunk size in pixels
+CONTOUR_M = 12.0     # metres between height bands -- see _generate
 GEN = 32             # smooth colour fields are generated at GEN x GEN
 PAD = 1              # extra low-res samples so chunk borders interpolate cleanly
 GRAIN = 256          # full-res grain texture size (== CHUNK)
@@ -277,16 +278,28 @@ class GroundRenderer:
             # way to white, which is a step you have to look for. At 0.13 the
             # FIRST step already reads against the flat ground, which is the
             # one that matters -- it is the one that tells you where it starts.
-            # HIGHER GROUND APPROACHES WHITE, AND KEEPS APPROACHING. It used
-            # to be hz*0.13, which reaches white at eight metres -- fine when
-            # the only mountain in the world was nine metres tall, and useless
-            # on one that is six hundred: everything above the first few steps
-            # came out the same flat white and the massif had no shading on it
-            # at all. This ramp is nearly the same at one metre (0.115 against
-            # 0.13, so the first step still reads) and it is still climbing at
-            # five hundred, which is what gives the upper slopes their form.
-            _kk = hz * 0.13
-            col = col + (255.0 - col) * (_kk / (1.0 + _kk))[..., None]
+            # HEIGHT HAS TO BE READ IN THE VIEW, NOT ACROSS THE WORLD.
+            #
+            # A ramp from sea level to the summit is six hundred metres long,
+            # and a chunk is two hundred and fifty-six pixels: standing on the
+            # massif the ground under you climbs six metres and the whole thing
+            # brightens by one per cent, which is nothing at all. It saturated
+            # too -- 589 metres and 595 metres both came out at 0.987, so the
+            # ENTIRE upper mountain was one flat tone with no form in it.
+            #
+            # So the height is drawn in BANDS. The ground brightens across each
+            # twelve metres and then the band ENDS with a line, and it does that
+            # all the way up -- so within one screen you cross a whole band and
+            # can see the slope you are standing on. It is the same trick as a
+            # contour line on a map, which is what a map uses to say where up
+            # is, and it is the one thing a flat colour ramp cannot do.
+            _kk = hz * (0.35 / 600.0)
+            col = col + (255.0 - col) * _kk[..., None]
+            _band = np.mod(hz, CONTOUR_M) / CONTOUR_M
+            col = col + (255.0 - col) * (0.45 * _band)[..., None]
+            _nb = np.mod(terrain.height_array(X, Y - 5.0), CONTOUR_M)
+            _nbx = np.mod(terrain.height_array(X - 5.0, Y), CONTOUR_M)
+            col[(np.abs(_nb - _band) > 0.5) | (np.abs(_nbx - _band) > 0.5)] *= 0.58
             # A WIDER LIP. Three pixels of world is seven on screen once the
             # frame is blown up, which is a line -- but a staircase is read by
             # its edges and there was not enough of one.
