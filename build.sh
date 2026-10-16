@@ -17,9 +17,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-VENV="${KINGPIN_VENV:-/tmp/kingpin-venv}"
-WORK="${KINGPIN_BUILD:-/tmp/kingpin-build}"
-DIST="/tmp/kingpin-dist"
+VENV="${KINGPIN_VENV:-$HOME/.kingpin-buildenv}"
+WORK="${KINGPIN_BUILD:-$HOME/.kingpin-build}"
+DIST="$HOME/.kingpin-dist"
 PYTHON="${PYTHON:-python3}"
 
 if [ ! -x "$VENV/bin/python" ]; then
