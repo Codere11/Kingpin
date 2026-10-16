@@ -121,17 +121,30 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
     sly = (mood == "sly")
 
     if mood == "veteran":
-        # THE BEARD IS THE BOTTOM THIRD OF THE FACE, FILLED. That is all it is.
-        # Drawn FIRST, because everything else goes OVER it -- the mouth, the
-        # scar, the eye. It is clipped to the head's own circle so it sits on
-        # the face and not off the sides of it.
+        # THE ORDER IS THE WHOLE THING HERE, and it is FOUR LAYERS:
+        #
+        #   1  the beard   -- the bottom third of the face, filled
+        #   2  the scar    -- OVER the beard
+        #   3  the eyes    -- OVER the scar, so the scar does NOT split the eye
+        #   4  brows, nose, mouth
+        #
+        # The scar was drawn LAST for a while and it cut the eye in two down
+        # the middle, which is not a scar, it is a sliced eyeball.
         hc, vc = int(round(hx)), int(round(hy))
+
+        # 1. THE BEARD: the bottom third of the face, filled, and clipped to
+        #    the head's own circle so it sits ON the face and not off the sides.
         for dy in range(3, r + 1):
             y = vc + dy
             hw = int(math.sqrt(max(0.0, r * r - dy * dy)))
             pygame.draw.line(screen, BEARD, (hc - hw, y), (hc + hw, y), 1)
 
-        # THEN THE FACE, ON TOP OF IT.
+        # 2. THE SCAR, over the beard and under the eye.
+        cx = ix + sep
+        pygame.draw.line(screen, SCAR, (cx - max(1, r // 6), iy - wr - 1),
+                         (cx + max(1, r // 6), vc + r - 2), 1)
+
+        # 3. THE EYES, on top of it.
         for sgn in (-1, 1):
             cx = ix + sgn * sep
             pygame.draw.circle(screen, WHITE, (cx, iy), wr)
@@ -139,16 +152,18 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
                                (cx + int(round(fx * wr * 0.45)),
                                 iy + int(round(fy * wr * 0.45))), pr)
 
-        # ONE BROW DOWN AND ONE LEVEL. -1 is the war brow, taken straight from
-        # the war face so the two are literally the same mark on both faces.
+        # 4. AND ONE BROW DOWN, ONE LEVEL. The DOWN one is the war face's brow
+        #    EXACTLY -- same line, same ends, same thickness. It was mirrored
+        #    here for a while, which put the high end where the low one goes
+        #    and made it a different mark entirely.
         for sgn in (-1, 1):
             cx = ix + sgn * sep
             if sgn < 0:
                 by = int(round(iy - wr - r * 0.04))
                 bw = max(1, int(round(r * 0.26)))
                 tw = max(2, r // 5)
-                pygame.draw.line(screen, BROW, (cx + bw, by - tw),
-                                 (cx - bw, by + tw), tw)
+                pygame.draw.line(screen, BROW, (cx + sgn * bw, by - tw),
+                                 (cx - sgn * bw, by + tw), tw)
             else:
                 by = int(round(iy - wr - r * 0.20))
                 bw = max(1, int(round(r * 0.20)))
@@ -159,14 +174,10 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
             pygame.draw.line(screen, NOSE, (ix, iy + wr),
                              (ix, int(round(hy + r * NOSE_DOWN))), 1)
 
-        # THE MOUTH, AND THEN THE SCAR, BOTH OVER THE BEARD.
         m_y = int(round(hy + r * MOUTH_DOWN))
         hw = max(1, int(round(r * 0.26)))
         pygame.draw.line(screen, MOUTH, (ix - hw, m_y), (ix + hw, m_y),
                          max(1, r // 8))
-        cx = ix + sep
-        pygame.draw.line(screen, SCAR, (cx - max(1, r // 6), iy - wr - 1),
-                         (cx + max(1, r // 6), vc + r - 2), 1)
         return
 
     if mood == "starved":
