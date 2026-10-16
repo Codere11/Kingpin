@@ -4624,12 +4624,19 @@ def main() -> None:
         # below -- the same trick the height uses. The ground is composed into
         # ONE cached surface, so the per-frame cost of a bigger window is a
         # single larger blit.
+        # TEN TIMES THE GROUND FOR EVERY HUNDRED METRES. A hundred metres up
+        # you see ten times as far, two hundred forty times, and it keeps going
+        # -- the view is the SAME WINDOW over more ground, drawn at a
+        # correspondingly coarser scale, which is why the cost does not move.
         _fly_k = 1.0
-        if player.fly and player.z > 40.0:
-            _fly_k = min(8.0, 1.0 + (player.z - 40.0) * 0.008)
-        if _fly_k > 1.001:
-            vw = max(2, int(vw * _fly_k))
-            vh = max(2, int(vh * _fly_k))
+        if player.fly and player.z > 10.0:
+            # CAPPED AT TWENTY-FOUR. Ten times for every hundred metres is
+            # what was asked for and it is measured cheap: 10x is 3.4 ms a
+            # frame and 20x is 6.0. Past about twenty-five the count of chunks
+            # in the window becomes the cost rather than the window -- 40x drew
+            # four and a half thousand of them at 24 ms -- so it stops where it
+            # is still free, and 100 m sees ten times and 200 m sees twenty.
+            _fly_k = min(24.0, player.z / 10.0)
         # THE HEIGHT, WHICH IS SEEING FURTHER. The frame covers this much MORE
         # WORLD for every metre he climbs -- the same screen space over more
         # blocks, which is the thing that was asked for -- and it is squeezed
@@ -4676,11 +4683,13 @@ def main() -> None:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
         if _fly_k > 1.001:
-            # FROM UP HERE IT IS A MAP. Only the ground: a tree drawn at its own
-            # size in a world squeezed to an eighth would be eight times too
-            # big, and what stands on the ground is exactly what an overview
-            # does not need.
-            static_layer.draw(screen, cam_x, cam_y, vw, vh)
+            # FROM UP HERE IT IS A MAP, and it is drawn as one: the same window
+            # over _fly_k times the ground, at a scale of 1/_fly_k. Only the
+            # ground -- a tree at its own size in a world squeezed to a
+            # fortieth would be forty times too big, and what stands on the
+            # ground is exactly what an overview does not need.
+            static_layer.draw(screen, cam_x, cam_y, vw, vh,
+                              scale=1.0 / _fly_k)
         else:
             if _warp_on:
                 skip_standing[0] = True

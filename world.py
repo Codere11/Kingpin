@@ -518,16 +518,58 @@ class GroundRenderer:
         return len(gaps)
 
     def draw(self, screen: pygame.Surface, cam_x: float, cam_y: float,
-             vw: int, vh: int) -> None:
+             vw: int, vh: int, scale: float = 1.0) -> None:
+        """The ground over a window, at `scale` pixels per world pixel.
+
+        AT A SCALE BELOW ONE THIS IS A LEVEL OF DETAIL, and it is the whole
+        reason a man can look out from a mountain. Asking for a hundred times
+        the ground at full resolution is a window of fifty-six thousand pixels
+        square -- a billion and a half of them. Asking for the SAME WINDOW to
+        cover a hundred times the ground costs exactly what it always cost,
+        because the cost is the window and not the world.
+
+        Each chunk is drawn at a hundredth of its size instead of its size, and
+        the results are cached, so a chunk seen from far off is scaled once and
+        then blitted like any other.
+        """
+        far = abs(scale - 1.0) > 0.01
+        step = max(1, int(CHUNK * scale))
         for cx, cy in self.visible_chunks(cam_x, cam_y, vw, vh):
-            sx = int(round(cx * CHUNK - cam_x))
-            sy = int(round(cy * CHUNK - cam_y))
+            sx = int(round((cx * CHUNK - cam_x) * scale))
+            sy = int(round((cy * CHUNK - cam_y) * scale))
+            if sx + step < 0 or sy + step < 0 or sx > vw or sy > vh:
+                continue
             surf = self.get(cx, cy)
             if surf is None:
-                screen.fill(self._coarse_color(cx, cy), (sx, sy, CHUNK, CHUNK))
+                screen.fill(self._coarse_color(cx, cy), (sx, sy, max(1, step), max(1, step)))
                 self.request(cx, cy)
+            elif far:
+                screen.blit(_far_chunk(surf, cx, cy, scale), (sx, sy))
             else:
                 screen.blit(surf, (sx, sy))
+
+
+_FAR: dict = {}
+
+
+def _far_chunk(surf: pygame.Surface, cx: int, cy: int,
+               scale: float) -> pygame.Surface:
+    """One chunk picture at one far-off size, made once.
+
+    Scaled NEAREST and not smooth: at a sixteenth of the size a chunk is
+    sixteen pixels across and smoothing it would spend the whole of it on the
+    blend. Nearest keeps the ground reading as ground.
+    """
+    q = max(1, min(64, int(round(scale * 64))))
+    key = (cx, cy, q)
+    got = _FAR.get(key)
+    if got is None:
+        w = max(1, surf.get_width() * q // 64)
+        got = pygame.transform.scale(surf, (w, max(1, surf.get_height() * q // 64)))
+        if len(_FAR) > 3000:
+            _FAR.clear()
+        _FAR[key] = got
+    return got
 
 
 class StaticLayer:
@@ -548,21 +590,40 @@ class StaticLayer:
         self.version = None
 
     def draw(self, screen, cam_x, cam_y, vw, vh, statics_fn=None,
-             entity_band=None) -> None:
-        m_x = int(vw * self.margin)
-        m_y = int(vh * self.margin)
-        need = pygame.Rect(int(cam_x) - m_x, int(cam_y) - m_y,
-                           vw + 2 * m_x, vh + 2 * m_y)
+             entity_band=None, scale: float = 1.0) -> None:
+        # AT A SCALE BELOW ONE THE LAYER IS THE WINDOW, whatever it covers. The
+        # region is vw/scale of world and the surface is still vw pixels, so
+        # the cost of looking out from a mountain is the cost of looking at
+        # your feet. The scatter is left out of it: grass tufts at a twentieth
+        # of their size are a haze, not ground.
+        near = scale >= 0.999
+        if near:
+            m_x = int(vw * self.margin)
+            m_y = int(vh * self.margin)
+            need = pygame.Rect(int(cam_x) - m_x, int(cam_y) - m_y,
+                               vw + 2 * m_x, vh + 2 * m_y)
+        else:
+            need = pygame.Rect(int(cam_x), int(cam_y),
+                               max(1, int(vw / scale)), max(1, int(vh / scale)))
         ver = getattr(self.ground, "_version", 0)
-        if (self.rect is None or self.version != ver
-                or not self.rect.contains(pygame.Rect(int(cam_x), int(cam_y), vw, vh))):
-            if self.surf is None or self.surf.get_size() != (need.w, need.h):
-                self.surf = pygame.Surface((need.w, need.h))
+        key = (need.x, need.y, need.w, need.h, round(scale, 3))
+        if (self.rect is None or self.version != ver or self.surf is None
+                or getattr(self, "_key", None) != key
+                or not self.rect.contains(pygame.Rect(int(cam_x), int(cam_y),
+                                                       vw, vh))):
+            size = (need.w, need.h) if near else (vw, vh)
+            if self.surf is None or self.surf.get_size() != size:
+                self.surf = pygame.Surface(size)
             self.rect = need
             self.version = ver
-            self.ground.draw(self.surf, need.x, need.y, need.w, need.h)
-            self.scatter.draw(self.surf, need.x, need.y, need.w, need.h)
-        screen.blit(self.surf, (self.rect.x - cam_x, self.rect.y - cam_y))
+            self._key = key
+            self.ground.draw(self.surf, need.x, need.y, need.w, need.h, scale)
+            if near:
+                self.scatter.draw(self.surf, need.x, need.y, need.w, need.h)
+        if near:
+            screen.blit(self.surf, (self.rect.x - cam_x, self.rect.y - cam_y))
+        else:
+            screen.blit(self.surf, (0, 0))
 
 
 class Scatter:
