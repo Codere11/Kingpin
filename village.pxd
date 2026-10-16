@@ -56,6 +56,9 @@ cdef class NPC:
     # reason: it is read and written for EVERY man EVERY frame, and a dict
     # lookup on the hot path is exactly what this file exists to remove.
     cdef public double work_flash
+    # ...and the war face's, on the same terms. One blow raises it and
+    # anything can happen next, so it outlives the swing that set it.
+    cdef public double attack_flash
     cdef public double bleed
     cdef public double drip_timer
     cdef public double panic

@@ -42,6 +42,10 @@ BROW_LIFT = 0.34
 MOUTH_DOWN = 0.42
 NOSE_DOWN = 0.18
 WORK_SECONDS = 0.8          # how long a work action shows on the face
+WAR_SECONDS = 1.2           # ...and how long a blow does. Longer than the
+                            # slowest swing (a villager's, at 1.0s) so the war
+                            # face stays ON through a fight instead of strobing
+                            # between swings, and drops just after it ends.
 WHITE_R = 0.28              # the eye white, of r
 PUPIL_R = 0.15
 

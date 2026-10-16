@@ -66,6 +66,7 @@ class Player:
         self.exhausted = False
         self.sprinting = False
         self.swing_cd = 0.0
+        self.attack_flash = 0.0
         self.swing_anim = 0.0
         self.skill_speed = 1.0         # movement skill multiplier
         self.skill_stamina = 1.0       # stamina-duration multiplier
@@ -112,6 +113,7 @@ class Player:
     def start_swing(self) -> None:
         self.swing_cd = self.skill_axe_cd
         self.swing_anim = SWING_ANIM
+        self.attack_flash = face.WAR_SECONDS   # and he wears the war face
 
     @property
     def swing_progress(self) -> float:
@@ -135,6 +137,8 @@ class Player:
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if self.bleed > 0.0:
             self.bleed = max(0.0, self.bleed - dt)
+        if self.attack_flash > 0.0:
+            self.attack_flash = max(0.0, self.attack_flash - dt)
         if self.swing_cd > 0.0:
             self.swing_cd = max(0.0, self.swing_cd - dt)
         # A full belly mends a body: the player's hunger is satiety, so 80+ is well fed.
@@ -231,7 +235,8 @@ class Player:
         pygame.draw.circle(screen, (222, 178, 138), (_hx, _hy), 9)
         pygame.draw.circle(screen, (150, 108, 78), (_hx, _hy), 9, 1)
         # the same face as everybody else, on the bigger head
-        face.draw(screen, _hx, _hy, 9, fx, fy)
+        face.draw(screen, _hx, _hy, 9, fx, fy,
+                  "angry" if self.attack_flash > 0.0 else "normal")
 
     @staticmethod
     def _draw_held(screen: pygame.Surface, item_id: str, sx: float, sy: float,

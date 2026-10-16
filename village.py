@@ -272,6 +272,7 @@ _NPC_CDEF_STATE = (
     "max_health",
     "hit_flash",
     "work_flash",
+    "attack_flash",
     "bleed",
     "drip_timer",
     "panic",
@@ -421,6 +422,7 @@ class NPC:
         self.alive = True
         self.hit_flash = 0.0
         self.work_flash = 0.0
+        self.attack_flash = 0.0
         self.bleed = 0.0
         self.drip_timer = 0.0
         self.panic = 0.0
@@ -561,6 +563,11 @@ class NPC:
             self.work_flash -= dt
             if self.work_flash < 0.0:
                 self.work_flash = 0.0
+        # ...and the war face, on the same terms.
+        if self.attack_flash > 0.0:
+            self.attack_flash -= dt
+            if self.attack_flash < 0.0:
+                self.attack_flash = 0.0
         # THE EVENING IS HIS. The town says when the market is; who he spends
         # it with, and where they stand, he arranges himself -- along with
         # clearing up after it. These are the three fields the town used to
@@ -962,6 +969,14 @@ class NPC:
         swings once at dawn should show it once. The flag belongs to the act.
         """
         self.work_flash = face.WORK_SECONDS
+
+    def _did_attack(self) -> None:
+        """He has just thrown a blow. Raise the war face for a moment.
+
+        Longer than his own swing, so a fight keeps it lit and the peace takes
+        it away -- rather than it blinking on and off between swings.
+        """
+        self.attack_flash = face.WAR_SECONDS
 
     def _swing_tool(self, item: str = "shovel") -> bool:
         """Wear the tool in hand, taking a spare from the crate when it breaks.
@@ -1779,6 +1794,7 @@ class NPC:
                                         getattr(self, "_player", None), self.nation):
                     if self._round_ready():
                         self.attack_cd = random.uniform(0.5, 0.9)
+                        self._did_attack()
                         self._shoot(combat, mx, my, angle, distance + 120.0, 6, 12)
         else:
             # Axe work. Hold the range where the axe reaches and the teeth do
@@ -1810,6 +1826,7 @@ class NPC:
             self.attack_cd -= dt
             if distance <= 46.0 and self.attack_cd <= 0.0:
                 self.attack_cd = 1.0
+                self._did_attack()
                 if hasattr(target, "take_damage"):
                     self.skills.gain_axe()
                     # A MAN WITH AN AXE SWINGS AN AXE; A MAN WITHOUT ONE SWINGS
@@ -1852,7 +1869,9 @@ class NPC:
         # the WORKING face while the work is actually happening. The flag is
         # raised by the act and has already been run down by tick(), so the
         # tongue comes and goes with his hands.
-        mood = "focus" if self.work_flash > 0.0 else "normal"
+        # A BLOW BEATS A JOB: a man doing both is fighting.
+        mood = ("angry" if self.attack_flash > 0.0
+                else "focus" if self.work_flash > 0.0 else "normal")
         face.draw(screen, hx, hy, head_r, fx, fy, mood)
 
         # THE COMMANDER'S HAT IS GONE. It was an eight-pixel cap painted over

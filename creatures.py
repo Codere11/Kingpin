@@ -84,6 +84,10 @@ def wolf_tier(spawn, now: float):
 
 
 class Soldier(Enemy):
+    # The war face's timer. A CLASS default, because a soldier who has never
+    # swung a blow must not be missing the attribute the draw reads.
+    attack_flash: float = 0.0
+
     kind = "soldier"
 
     def __init__(self, x: float, y: float, nation, melee: bool = False,
@@ -151,6 +155,8 @@ class Soldier(Enemy):
     def update(self, dt, target, combat, occluders=None, speed_scale=1.0,
                view_scale=1.0, visible=True, colliders=None):
         self._colliders = colliders or []
+        if self.attack_flash > 0.0:                   # the war face runs down
+            self.attack_flash = max(0.0, self.attack_flash - dt)
         if self._last_xy is not None:                 # what did last frame cost?
             self._exert(math.hypot(self.x - self._last_xy[0],
                                    self.y - self._last_xy[1]), dt)
@@ -313,6 +319,7 @@ class Soldier(Enemy):
                 if self._round_ready():
                     self.fire_cd = random.uniform(0.55, 0.95) * (
                     1.8 if self.exhausted else 1.0)
+                    self.attack_flash = face.WAR_SECONDS
                     self._shoot(combat, mx, my, angle, dist + 160.0, 7, 12)
 
     def _fight(self, dt, target, combat, speed_scale, visible=True):
@@ -335,6 +342,7 @@ class Soldier(Enemy):
                 # blender.
                 self.fire_cd = max(0.35, self.skills.axe_cooldown()) * (
                     1.6 if self.exhausted else 1.0)
+                self.attack_flash = face.WAR_SECONDS
                 self.skills.gain_axe()
                 if hasattr(target, "take_damage"):
                     # An axeman swings an axe; anybody else swings a fist.
@@ -402,7 +410,8 @@ class Soldier(Enemy):
         _hx, _hy = sx + fx * 2, sy + fy * 2 - 2
         pygame.draw.circle(screen, (214, 172, 132), (int(_hx), int(_hy)), 8)
         pygame.draw.circle(screen, (140, 104, 76), (int(_hx), int(_hy)), 8, 1)
-        face.draw(screen, _hx, _hy, 8, fx, fy)
+        face.draw(screen, _hx, _hy, 8, fx, fy,
+                  "angry" if self.attack_flash > 0.0 else "normal")
         # Nation pennant, so the armies are never mistaken for each other.
         pygame.draw.line(screen, (44, 38, 30), (sx + 7, sy - 6), (sx + 7, sy - 30), 2)
         pygame.draw.polygon(screen, self.color,
