@@ -87,6 +87,31 @@ def sprite(r: int, dir_i: int, mood: str = "normal"):
     c = size // 2
     a = dir_i * (2.0 * math.pi / DIRS)
     _render(surf, float(c), float(c), r, math.cos(a), math.sin(a), mood)
+    # CLIPPED TO THE HEAD IT IS DRAWN ON.
+    #
+    # Nothing the face draws may fall outside the circle the caller draws under
+    # it, or a feature floats in the air beside a man's head. This was not a
+    # veteran bug and not a scar bug: the right BROW's outer tip sat at (19,5),
+    # which is 100 from a centre whose radius is eight -- on EVERY face, in
+    # every direction, because the eye line shifts toward the facing and takes
+    # the brows with it. The war face had eight such pixels, eye ones included.
+    #
+    # Only the pixels OUTSIDE the circle are touched, row by row, so this costs
+    # a few hundred set_at calls once per cached sprite and nothing per frame.
+    rr = r * r
+    for _y in range(size):
+        _dy = _y - c
+        _rem = rr - _dy * _dy
+        if _rem < 0:
+            _lo, _hi = 0, size - 1
+        else:
+            _w = math.sqrt(_rem)
+            _lo = int(math.ceil(c - _w))
+            _hi = int(math.floor(c + _w))
+        for _x in range(0, max(0, _lo)):
+            surf.set_at((_x, _y), (0, 0, 0, 0))
+        for _x in range(min(size, _hi + 1), size):
+            surf.set_at((_x, _y), (0, 0, 0, 0))
     _CACHE[key] = surf
     return surf
 
@@ -109,12 +134,19 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
     across, and a ring around a four-pixel white reads as a pair of GLASSES --
     which is what the first version looked like.
     """
-    ex = hx + fx * r * EYE_LOOK
-    ey = hy - r * EYE_UP + fy * r * EYE_LOOK
+    # THE EYE LINE BELONGS TO THE HEAD. ONLY THE PUPILS LOOK.
+    #
+    # Everything used to shift toward the facing -- whites, brows and all --
+    # which slid the whole face a pixel or two to one side of the skull it is
+    # painted on. Turning east pushed the outer end of the right brow clean off
+    # the side of the head, and clipping it back left a two-pixel stub where
+    # the left brow still had five. A face that changes shape when a man turns
+    # is a worse lie than a face that does not follow him quite so much, and
+    # the pupils moving inside the whites is what reads as looking anyway.
     sep = max(3, int(round(r * EYE_SIDE)))
     wr = max(2, int(round(r * WHITE_R)))
     pr = max(1, int(round(r * PUPIL_R)))
-    ix, iy = int(round(ex)), int(round(ey))
+    ix, iy = int(round(hx)), int(round(hy - r * EYE_UP))
     focusing = (mood == "focus")
     angry = (mood == "angry")
     hurt = (mood == "hurt")
@@ -139,18 +171,30 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
             hw = int(math.sqrt(max(0.0, r * r - dy * dy)))
             pygame.draw.line(screen, BEARD, (hc - hw, y), (hc + hw, y), 1)
 
-        # 2. THE SCAR, over the beard and under the eye.
+        # 2. THE SCAR, over the beard and under the eye -- and CLIPPED TO THE
+        #    FACE. Drawn as one line it ended at (18,17), which is 85 from the
+        #    centre of a head whose radius is 8 -- so the last three pixels of
+        #    it floated off the side of his face like a scratch on the screen.
+        #    Walked a row at a time instead, and only the rows that are inside
+        #    his head get drawn.
         cx = ix + sep
-        pygame.draw.line(screen, SCAR, (cx - max(1, r // 6), iy - wr - 1),
-                         (cx + max(1, r // 6), vc + r - 2), 1)
+        sx0, sx1 = cx - max(1, r // 6), cx + max(1, r // 6)
+        sy0, sy1 = iy - wr - 1, vc + r - 2
+        steps = max(1, abs(sy1 - sy0))
+        for _i in range(steps + 1):
+            _t = _i / float(steps)
+            _x = int(round(sx0 + (sx1 - sx0) * _t))
+            _y = int(round(sy0 + (sy1 - sy0) * _t))
+            if (_x - hc) ** 2 + (_y - vc) ** 2 <= r * r:
+                pygame.draw.line(screen, SCAR, (_x, _y), (_x, _y), 1)
 
         # 3. THE EYES, on top of it.
         for sgn in (-1, 1):
             cx = ix + sgn * sep
             pygame.draw.circle(screen, WHITE, (cx, iy), wr)
             pygame.draw.circle(screen, EYE,
-                               (cx + int(round(fx * wr * 0.45)),
-                                iy + int(round(fy * wr * 0.45))), pr)
+                               (cx + int(round(fx * wr * 0.55)),
+                                iy + int(round(fy * wr * 0.55))), pr)
 
         # 4. AND ONE BROW DOWN, ONE LEVEL. The DOWN one is the war face's brow
         #    EXACTLY -- same line, same ends, same thickness. It was mirrored
@@ -195,8 +239,8 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
             cx = ix + sgn * sep
             pygame.draw.circle(screen, WHITE, (cx, iy), wr)
             pygame.draw.circle(screen, EYE,
-                               (cx + int(round(fx * wr * 0.45)),
-                                iy + int(round(fy * wr * 0.45))), pr)
+                               (cx + int(round(fx * wr * 0.55)),
+                                iy + int(round(fy * wr * 0.55))), pr)
         # THE HOLLOW: a short line of shadow under each eye. SHORT, because
         # the nose runs down between them -- a long one on each side joined up
         # with it and the three of them read as a moustache.
