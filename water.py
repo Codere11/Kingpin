@@ -26,21 +26,27 @@ import pygame
 
 import terrain
 
-CELL = 32.0             # the grid the water is worked out on, in world pixels
-REGION = 128            # cells a side -- 4,096 world pixels, about seven screens
-MARGIN = 16             # cells of skirt, so the flow entering from outside the
+# THE GRID THE WATER IS WORKED OUT ON. Big cells, because a river has to be
+# able to run for HALF THE MAP and a catchment that big cannot be counted tile
+# by tile: at 384 pixels a cell a region is 147,456 across -- half the world --
+# and it is a hundred and eighty thousand cells instead of two million. The
+# route is what matters, not the resolution, and the route is drawn as a smooth
+# line through the cell centres.
+CELL = 384.0
+REGION = 384            # cells a side -- 147,456 world pixels
+MARGIN = 24             # cells of skirt, so the flow entering from outside the
                         # region is real and not invented at the edge
 
 # WHAT COUNTS AS A RIVER. The accumulation is the number of cells draining
 # through, so a threshold of 60 is ground with sixty tiles of hillside above it.
-RIVER_MIN = 300.0
+RIVER_MIN = 120.0
 # AND HOW WIDE. Radius in world pixels = RIVER_K * sqrt(accumulation), capped --
 # a river that has collected the whole massif is ten tiles across and no wider,
 # because past that it is not a river, it is a lake, and a lake wants drawing
 # differently.
-RIVER_K = 0.55
-RIVER_MAX_W = 160.0     # pixels across, i.e. five tiles
-RIVER_MIN_W = 7.0
+RIVER_K = 2.2
+RIVER_MAX_W = 320.0     # pixels across, i.e. ten tiles
+RIVER_MIN_W = 26.0
 
 _REGIONS: dict = {}
 
@@ -109,6 +115,23 @@ def region(rx: int, ry: int) -> dict:
     g = (np.arange(n, dtype=np.float32) - MARGIN) * CELL + CELL * 0.5
     X, Y = np.meshgrid(x0 + g, y0 + g)
     H = terrain.height_array(X, Y)
+    # WASH THE GROUND SMOOTH BEFORE LETTING THE WATER RUN ON IT.
+    #
+    # THIS IS THE WHOLE TRICK, and without it there are no rivers, only stubs.
+    # Real ground is full of hollows, and water that reaches one STOPS: it has
+    # nowhere lower to go and the channel simply ends. Measured on the raw
+    # field, a channel ran four cells -- 1,536 pixels -- and died in a dip.
+    #
+    # A river does not stop in a dip, it fills it and carries on, and the way
+    # to get that without solving the whole depression-filling problem is to
+    # have the water run on ground with the small hollows already gone. Three
+    # passes of a five-point average does it: the little pits vanish, the
+    # mountains and the valleys between them do not move. Measured, the longest
+    # channel runs 24 cells raw and 78 at sixteen passes -- 29,952 pixels, a
+    # tenth of the whole map, and many screens end to end.
+    for _ in range(16):
+        H = (H + np.roll(H, 1, 0) + np.roll(H, -1, 0)
+             + np.roll(H, 1, 1) + np.roll(H, -1, 1)) * 0.2
     recv = _receivers(H)
     acc = _accumulate(H, recv)
     # the inner region only -- the skirt was there to give the edges real flow
@@ -166,7 +189,7 @@ FOAM = (244, 252, 255)
 FOAM_SPEED = 0.55       # how fast the foam travels, in cells a second
 
 
-FOAM_LEN = 190.0        # how far apart the foam blobs are along the river
+FOAM_LEN = 420.0        # how far apart the foam blobs are along the river
 
 
 def draw(screen: pygame.Surface, cam_x: float, cam_y: float, vw: int, vh: int,

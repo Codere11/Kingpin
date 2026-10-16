@@ -237,13 +237,29 @@ def height_warp(frame: pygame.Surface, px: float, py: float, z: float,
                        np.arange(oh, dtype=np.float32) - oh * 0.5, indexing="ij")
     # 2. THE SCALE, at a quarter resolution -- it is a smooth function of the
     #    terrain, which does not change by a step more than once in forty px.
-    # THE SCALE MAP IS A SMOOTH FUNCTION OF THE GROUND and the ground is
-    # smooth over hundreds of pixels, so sixteen is plenty -- and it pays for
-    # itself three times over, once per round of the fixed-point search.
-    q = 16
-    qw, qh = max(2, ow // q), max(2, oh // q)
-    qx = (np.arange(qw, dtype=np.float32) + 0.5) * (ow / float(qw)) - ow * 0.5
-    qy = (np.arange(qh, dtype=np.float32) + 0.5) * (oh / float(qh)) - oh * 0.5
+    # ONE SCALE PER BLOCK, AND THE BLOCK IS THEN RIGID.
+    #
+    # The scale is worked out at the centre of each TILE and held for the whole
+    # of it, and the map is blown up with NEAREST rather than smooth -- so a
+    # block is drawn at one size, top to bottom and side to side, and never
+    # bent. Two neighbouring blocks at different heights are drawn at different
+    # sizes and there is a step between them, which is exactly what ground at
+    # two heights looks like from above.
+    #
+    # Smoothing this map was the thing making the world bend: a tree leaned,
+    # a wall curved, and the ground between them smeared. Height is not a
+    # gradient, it is a NUMBER PER BLOCK.
+    #
+    # AND THE BLOCKS ARE LINED UP WITH THE WORLD, not with the frame. Laid out
+    # from the frame's own corner they slide a little with every step the
+    # player takes and the whole landscape shimmers as he walks.
+    blk = 32.0
+    _bx = (px - fw * 0.5) % blk
+    _by = (py - fh * 0.5) % blk
+    qw = int(math.ceil((ow + blk) / blk)) + 1
+    qh = int(math.ceil((oh + blk) / blk)) + 1
+    qx = (np.arange(qw, dtype=np.float32) * blk) - _bx
+    qy = (np.arange(qh, dtype=np.float32) * blk) - _by
     QX, QY = np.meshgrid(qx, qy, indexing="ij")
     qdx = QX
     qdy = QY
@@ -262,7 +278,9 @@ def height_warp(frame: pygame.Surface, px: float, py: float, z: float,
     # times the offset.
     _enc = np.clip((qs - _WARP_MIN) / (_WARP_MAX - _WARP_MIN) * 255.0,
                    0.0, 255.0).astype(np.uint8)
-    _sm = pygame.transform.smoothscale(
+    # NEAREST, NOT SMOOTH. This is the line that decides whether blocks are
+    # blocks or a gradient.
+    _sm = pygame.transform.scale(
         pygame.surfarray.make_surface(np.repeat(_enc[:, :, None], 3, 2)),
         (ow, oh))
     sc = (pygame.surfarray.pixels_red(_sm).astype(np.float32) / 255.0
