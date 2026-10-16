@@ -153,6 +153,26 @@ _BLUR_DOWN = 12
 _WARP_K = 0.11               # the same 0.11 the frame is pulled back by
 
 
+def height_offset(X: float, Y: float, px: float, py: float, z: float,
+                  k: float = _WARP_K):
+    """THE WORLD UNDER A POINT ON THE SCREEN, at a height.
+
+    height_warp moves ground to where it APPEARS; this is the other way, and it
+    is what a cursor needs: the ground under the pointer is packed in toward
+    him, so the plain screen-to-world sum puts the world in the wrong place --
+    the further the ground is below him, the worse the error.
+    """
+    s = 1.0
+    dx = X
+    dy = Y
+    for _ in range(4):
+        dx = X / s
+        dy = Y / s
+        h = terrain.height_array(px + dx, py + dy)
+        s = 1.0 / (1.0 + max(0.0, z - float(h)) * k)
+    return dx, dy
+
+
 def height_warp(frame: pygame.Surface, px: float, py: float, z: float,
                 out_size, k: float = _WARP_K) -> pygame.Surface:
     """THE GROUND BELOW HIM IS FURTHER AWAY, SO IT IS DRAWN SMALLER.

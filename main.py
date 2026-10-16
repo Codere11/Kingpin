@@ -1087,7 +1087,16 @@ def main() -> None:
         muzzle_x = player.x + fx * 30.0 + px * 7.0
         muzzle_y = player.y + fy * 30.0 + py * 7.0
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
-        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM  # world space
+        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM
+        if height_f > 1.001:
+            # THE GROUND UNDER THE POINTER IS PACKED IN TOWARD HIM, so the
+            # plain screen-to-world sum aims short. Read it back the same way
+            # the frame was read back.
+            wmouse_x, wmouse_y = effects.height_offset(
+                wmouse_x - vw / 2.0, wmouse_y - vh / 2.0,
+                player.x, player.y, player.z)
+            wmouse_x += vw / 2.0
+            wmouse_y += vh / 2.0  # world space
         distance = math.hypot((cam_x + wmouse_x) - muzzle_x,
                               (cam_y + wmouse_y) - muzzle_y)
         spread = skills.shot_spread()
@@ -1366,7 +1375,16 @@ def main() -> None:
             return
 
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
-        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM  # world space
+        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM
+        if height_f > 1.001:
+            # THE GROUND UNDER THE POINTER IS PACKED IN TOWARD HIM, so the
+            # plain screen-to-world sum aims short. Read it back the same way
+            # the frame was read back.
+            wmouse_x, wmouse_y = effects.height_offset(
+                wmouse_x - vw / 2.0, wmouse_y - vh / 2.0,
+                player.x, player.y, player.z)
+            wmouse_x += vw / 2.0
+            wmouse_y += vh / 2.0  # world space
         wx, wy = cam_x + wmouse_x, cam_y + wmouse_y   # the world mouse
 
         # Clicking a villager while not wielding a weapon opens trade.
@@ -2741,7 +2759,16 @@ def main() -> None:
         dt = min(dt * time_scale, 0.5)          # test-mode speed-up
         vw, vh = screen.get_size()
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
-        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM  # world space
+        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM
+        if height_f > 1.001:
+            # THE GROUND UNDER THE POINTER IS PACKED IN TOWARD HIM, so the
+            # plain screen-to-world sum aims short. Read it back the same way
+            # the frame was read back.
+            wmouse_x, wmouse_y = effects.height_offset(
+                wmouse_x - vw / 2.0, wmouse_y - vh / 2.0,
+                player.x, player.y, player.z)
+            wmouse_x += vw / 2.0
+            wmouse_y += vh / 2.0  # world space
 
         for event in pygame.event.get():
             # ---- THE KEY LOG. A one-line record of every key this build's
