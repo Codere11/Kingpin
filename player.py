@@ -43,6 +43,7 @@ HOLD: dict[str, tuple[int, bool, float]] = {
 # A jump is a BOUNCE, not a parabola that stops dead at the bottom: he leaves
 # the ground hard, and the landing throws him up again a little, twice. That
 # is the whole of the "funny", and it is four numbers.
+FLY_SPEED = 420.0        # helicopter mode: metres a second, up or down
 JUMP_V = 12.0             # metres a second he leaves the ground at
 GRAVITY = 30.0            # metres a second, squared
 BOUNCE_KEEP = 0.42        # how much of the fall the landing gives back
@@ -64,6 +65,9 @@ class Player:
 
     # A class attribute answers to both spellings and cannot be shadowed.
     LEVEL_FLASH = 1.6              # how long the level-up shine lasts
+    fly = False                    # helicopter mode -- a CLASS default, so an
+                                   # unpickled save without the field still flies
+                                   # (it does not run __init__)
     def __init__(self, x: float, y: float, speed: float = 240.0) -> None:
         self.x = x
         self.y = y
@@ -87,6 +91,7 @@ class Player:
         self.stamina = 30.0
         self.exhausted = False
         self.sprinting = False
+        self.fly = False               # helicopter mode, test mode only
         self.swing_cd = 0.0
         self.attack_flash = 0.0
         self.hurt_flash = 0.0
@@ -259,7 +264,22 @@ class Player:
                 self.exhausted = False
 
         # -- THE THIRD AXIS -------------------------------------------------
-        if self.elevation is not None:
+        if self.fly and self.elevation is not None:
+            # HELICOPTER MODE. Hold SPACE to go up, SHIFT to come down, let go
+            # and he hangs there. Nothing here knows about walking: he is
+            # airborne for as long as it is on, so every step of the ground
+            # below is passable and the only thing that stops him is the floor.
+            up = 1.0 if keys[pygame.K_SPACE] else 0.0
+            down = 1.0 if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) else 0.0
+            self.z += (up - down) * FLY_SPEED * dt
+            floor = float(self.elevation(self.x, self.y))
+            if self.z < floor:
+                self.z = floor
+            self.ground_z = int(self.z)
+            self.airborne = True
+            self.jump_v = 0.0
+            self.bounces = 0
+        elif self.elevation is not None:
             under = float(self.elevation(self.x, self.y))
             self.ground_z = int(under)
             if not self.airborne:

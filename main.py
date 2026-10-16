@@ -2795,6 +2795,7 @@ def main() -> None:
     # 1.0 means "no height", which is right everywhere the warp is not applied.
     height_f = 1.0
     _warp_on = False
+    _space_t = [-9.0]             # when space was last tapped
 
     while running:
         dt = min(clock.tick(FPS) / 1000.0, 0.05)
@@ -3103,7 +3104,22 @@ def main() -> None:
                     pygame.mouse.set_visible(True)
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
                   and not placing and not inventory_open):
-                player.jump()
+                # TWO TAPS TO FLY. One tap jumps, as it always has; a second tap
+                # close behind it turns helicopter mode on or off instead of
+                # jumping again, so the ground controls are untouched and the
+                # flying is somewhere you deliberately go.
+                _t = now
+                if test_mode and (_t - _space_t[0]) < 0.35:
+                    player.fly = not player.fly
+                    _space_t[0] = -9.0
+                    if player.fly:
+                        player.airborne = True
+                        toast("HELICOPTER MODE  --  hold SPACE to climb, SHIFT to sink")
+                    else:
+                        toast("helicopter mode off")
+                else:
+                    _space_t[0] = _t
+                    player.jump()
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 stack = inventory.selected_stack()
                 kind = stack.defn.id if stack else None
@@ -4648,10 +4664,17 @@ def main() -> None:
         else:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
-        if _warp_on:
-            skip_standing[0] = True
-        draw_exterior(cam_x, cam_y, True)
-        skip_standing[0] = False
+        if _fly_k > 1.001:
+            # FROM UP HERE IT IS A MAP. Only the ground: a tree drawn at its own
+            # size in a world squeezed to an eighth would be eight times too
+            # big, and what stands on the ground is exactly what an overview
+            # does not need.
+            static_layer.draw(screen, cam_x, cam_y, vw, vh)
+        else:
+            if _warp_on:
+                skip_standing[0] = True
+            draw_exterior(cam_x, cam_y, True)
+            skip_standing[0] = False
         draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
         draw_villages = villages.visible(cam_x, cam_y, vw, vh)
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
