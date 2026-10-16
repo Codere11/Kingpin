@@ -268,49 +268,17 @@ class GroundRenderer:
         # step DOWN gets a dark lip, which is the line your eye actually
         # follows. Baked into the chunk like everything else here, so it is
         # paid for once.
-        # X AND Y ARE THE COARSE GRID -- thirty-four points at eight pixels,
-        # enlarged to the chunk afterwards -- so this is a thousand points and
-        # not sixty-five thousand, and the field is cheap here however many
-        # octaves it stacks.
+        # NOTHING IS PAINTED ON THE GROUND FOR HEIGHT. No shadow, no shading,
+        # no dark line: the whole language is that higher ground DRAWS BIGGER,
+        # which is done in the frame, per pixel, by its real height. Painting
+        # something here as well would be a second signal saying the same
+        # thing in a worse way -- and every dark line tried (a lip at each
+        # metre, a band every twelve) was read as dirt on the ground rather
+        # than as a slope.
+        #
+        # The field is still needed here: it is what tells the ground renderer
+        # the chunk has nothing to do.
         hz = terrain.height_array(X, Y)
-        if hz.max() > 0.0:
-            # 0.11 was too quiet: at one metre that is eleven per cent of the
-            # way to white, which is a step you have to look for. At 0.13 the
-            # FIRST step already reads against the flat ground, which is the
-            # one that matters -- it is the one that tells you where it starts.
-            # HEIGHT HAS TO BE READ IN THE VIEW, NOT ACROSS THE WORLD.
-            #
-            # A ramp from sea level to the summit is six hundred metres long,
-            # and a chunk is two hundred and fifty-six pixels: standing on the
-            # massif the ground under you climbs six metres and the whole thing
-            # brightens by one per cent, which is nothing at all. It saturated
-            # too -- 589 metres and 595 metres both came out at 0.987, so the
-            # ENTIRE upper mountain was one flat tone with no form in it.
-            #
-            # So the height is drawn in BANDS. The ground brightens across each
-            # twelve metres and then the band ENDS with a line, and it does that
-            # all the way up -- so within one screen you cross a whole band and
-            # can see the slope you are standing on. It is the same trick as a
-            # contour line on a map, which is what a map uses to say where up
-            # is, and it is the one thing a flat colour ramp cannot do.
-            _kk = hz * (0.35 / 600.0)
-            col = col + (255.0 - col) * _kk[..., None]
-            _band = np.mod(hz, CONTOUR_M) / CONTOUR_M
-            col = col + (255.0 - col) * (0.45 * _band)[..., None]
-            _nb = np.mod(terrain.height_array(X, Y - 5.0), CONTOUR_M)
-            _nbx = np.mod(terrain.height_array(X - 5.0, Y), CONTOUR_M)
-            col[(np.abs(_nb - _band) > 0.5) | (np.abs(_nbx - _band) > 0.5)] *= 0.58
-            # A WIDER LIP. Three pixels of world is seven on screen once the
-            # frame is blown up, which is a line -- but a staircase is read by
-            # its edges and there was not enough of one.
-            # BOTH WAYS, OR ONLY TWO SIDES OF EACH STEP GET A LINE. Sampling
-            # only Y - 5 catches the top and bottom edges of a square step and
-            # leaves the left and right ones bare -- so a line drawn across the
-            # staircase came out as a smooth brightening with no edges in it at
-            # all, which is exactly what a staircase must not look like.
-            lip = ((terrain.height_array(X, Y - 5.0) != hz)
-                   | (terrain.height_array(X - 5.0, Y) != hz))
-            col[lip] *= 0.52
 
         # Player-made soil edits: dug dirt, then watered (fertile) dirt. Each
         # tile paints a soft blob, and blobs merge naturally where they overlap.

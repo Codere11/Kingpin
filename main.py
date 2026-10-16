@@ -4580,13 +4580,14 @@ def main() -> None:
         # the scale. Every line of the world reads vw and vh, so the ground,
         # the trees, the people, the fences and the blood all pull back with
         # him without one of them being told about it.
-        # CAPPED. The frame grows by the same law the ground is packed by, so
-        # at six hundred metres it wants to be twice the size -- and a frame is
-        # QUADRATIC: twice each way is four times the pixels to draw. Two and a
-        # bit is the ceiling, which is what the old nine-metre hill already
-        # cost, and past it the extra height is spent on the PACKING instead.
-        # Nothing gets slower than it already was.
-        height_f = min(2.2, 1.0 + max(0.0, player.z) * HEIGHT_ZOOM)
+        # THE FRAME HAS TO BE BIG ENOUGH TO HOLD THE FURTHEST GROUND THE
+        # SCALE CAN ASK FOR, and that is set by the FLOOR of the scale, not by
+        # how high he is: ground at the bottom of the world draws at 0.62, so
+        # the frame must reach 1/0.62 of the view. A constant, and a cheap one
+        # -- 1.61 each way is 2.6 times the pixels, where the old growth law
+        # wanted four. The magnification at the other end needs nothing: it
+        # reads from CLOSER in than the view already is.
+        height_f = 1.0 if player.z <= 3.0 else 1.61
         if height_f > 1.001:
             vw = max(2, int(vw * height_f))
             vh = max(2, int(vh * height_f))

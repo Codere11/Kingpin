@@ -150,7 +150,36 @@ LEVEL_GOLD = (250, 216, 128)
 _BLUR_DOWN = 12
 
 
-_WARP_K = 0.002               # the same 0.11 the frame is pulled back by
+# HOW MUCH BIGGER THE GROUND GETS FOR BEING HIGHER UP. A fortieth of a metre
+# per metre: TEN METRES OF CLIMB DRAWS THE GROUND A QUARTER LARGER, forty metres
+# draws it double, and there it stops. At eight thousandths this was 1.00 to
+# 1.05 across a whole screen -- correct, and invisible, which is the same as not
+# having it.
+#
+# IT IS A SIZE, AND ONLY A SIZE. No shadow, no shading, no line -- the ground
+# you are walking on gets BIGGER as you climb and SMALLER as you drop into a
+# valley, and that is the whole language. It is the one cue that cannot be
+# misread: nothing else in the picture says which way is up as plainly as the
+# world being nearer the camera.
+_WARP_K = 0.025     # -> effects._scale
+_WARP_MIN = 0.62              # the far floor, and so how big the frame must be
+_WARP_MAX = 2.00              # the summit draws twice the size
+
+
+def _scale(z, h, k=_WARP_K):
+    """How big ground at height h draws, seen by a camera at height z.
+
+    ONE law, used by the warp and by the cursor, so the world the pointer is
+    over is the world the pointer is over.
+
+        s = 1 + (h - z) * k      clamped
+
+    Higher than him draws BIGGER (nearer the camera), lower draws smaller, and
+    his own level is one to one. Clamped at both ends: without a floor the far
+    valley would shrink to nothing, and without a ceiling the summit would run
+    away with the picture entirely.
+    """
+    return np.clip(1.0 + (np.asarray(h, np.float32) - z) * k, _WARP_MIN, _WARP_MAX)
 
 
 def height_offset(X: float, Y: float, px: float, py: float, z: float,
@@ -169,7 +198,7 @@ def height_offset(X: float, Y: float, px: float, py: float, z: float,
         dx = X / s
         dy = Y / s
         h = terrain.height_array(px + dx, py + dy)
-        s = 1.0 / (1.0 + max(0.0, z - float(h)) * k)
+        s = _scale(z, h, k)
     return dx, dy
 
 
@@ -183,18 +212,18 @@ def height_warp(frame: pygame.Surface, px: float, py: float, z: float,
     what it would be on the flat. He cannot shrink, because nothing about him is
     ever resampled.
 
-    THEN, AND ONLY THEN, the pixels whose ground is LOWER than him are written
-    over with the same ground read from further out:
+    THEN the ground at every other height is written over with the same ground
+    read from the right place:
 
-        s = 1 / (1 + (z - h) * k)
+        s = 1 + (h - z) * k      clamped to [0.62, 2.00]
 
-    so a patch one metre down occupies 0.90 of the space, four metres 0.69, nine
-    metres 0.50 -- packed in toward him, proportional to the drop and to nothing
-    else. Pixels at his level are never touched, so nothing at his level moves.
+    so ground higher than him draws BIGGER -- nearer the camera, the way a hill
+    nearer the camera is bigger -- and ground below him draws smaller. His own
+    level is one to one and is never touched, which is why he cannot shrink.
 
-    AND ONLY THOSE PIXELS ARE EVEN READ. The indices are taken from the mask
-    first and only the masked pixels are gathered and written, so this costs
-    what the lower ground costs and not what the screen costs.
+    THAT IS THE ENTIRE CUE. No shadow, no shading, no line on the ground: the
+    world gets bigger as you climb and smaller as you fall, and you can read
+    the slope you are standing on off the SIZE of the ground under your feet.
     """
     fw, fh = frame.get_size()
     ow, oh = int(out_size[0]), int(out_size[1])
@@ -219,21 +248,28 @@ def height_warp(frame: pygame.Surface, px: float, py: float, z: float,
         qdx = QX / qs
         qdy = QY / qs
         h = terrain.height_array(px + qdx, py + qdy)
-        qs = 1.0 / (1.0 + np.maximum(0.0, z - h) * k)
+        qs = _scale(z, h, k)
     # make_surface reads its input as COLOUR, so 0..1 has to be encoded 0..255
     # first -- decoding 0.90 and 0.50 as colours truncated both to 0.
-    _enc = np.clip(qs * 255.0, 0.0, 255.0).astype(np.uint8)
+    # TWO TO ONE IS THE RANGE OF THE SCALE, so sixteen bits of it are plenty
+    # -- and make_surface reads its input as COLOUR 0..255, which is why the
+    # scale is encoded here rather than handed over as a float: 0.90 and 0.50
+    # both truncated to zero as colours and the whole frame went out at twenty
+    # times the offset.
+    _enc = np.clip((qs - _WARP_MIN) / (_WARP_MAX - _WARP_MIN) * 255.0,
+                   0.0, 255.0).astype(np.uint8)
     _sm = pygame.transform.smoothscale(
         pygame.surfarray.make_surface(np.repeat(_enc[:, :, None], 3, 2)),
         (ow, oh))
-    sc = pygame.surfarray.pixels_red(_sm).astype(np.float32) / 255.0
+    sc = (pygame.surfarray.pixels_red(_sm).astype(np.float32) / 255.0
+          * (_WARP_MAX - _WARP_MIN) + _WARP_MIN)
     del _sm
-    # 3. WHICH PIXELS ARE LOWER THAN HIM AT ALL.
-    idx = np.flatnonzero((sc < 0.999).ravel())
+    # 3. WHICH PIXELS ARE AT ANY OTHER SCALE THAN HIS OWN.
+    idx = np.flatnonzero((np.abs(sc - 1.0) > 0.004).ravel())
     if idx.size == 0:
         return out
-    dx = X.ravel()[idx] / np.maximum(0.05, sc.ravel()[idx])
-    dy = Y.ravel()[idx] / np.maximum(0.05, sc.ravel()[idx])
+    dx = X.ravel()[idx] / sc.ravel()[idx]
+    dy = Y.ravel()[idx] / sc.ravel()[idx]
     src = pygame.surfarray.pixels3d(frame)
     sx = np.clip((dx + fw * 0.5).astype(np.int32), 0, fw - 1)
     sy = np.clip((dy + fh * 0.5).astype(np.int32), 0, fh - 1)
