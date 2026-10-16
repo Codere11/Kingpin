@@ -255,6 +255,24 @@ class Player:
         face.draw(screen, _hx, _hy, 9, fx, fy,
                   face.mood_of(self.hurt_flash, self.attack_flash,
                                starved=self.hunger <= face.STARVED_SATIETY))
+        # THE SWING BAR, just below him: how long until he can swing again.
+        #
+        # ITS LENGTH IS THE WAIT ITSELF. skill_axe_cd comes from
+        # skills.axe_cooldown(), which is 2.0 s at no skill and 0.1 s mastered,
+        # so the bar is not merely drawn while the skill improves -- the better
+        # the axe, the sooner it fills, and a master's flickers.
+        if (held == "axe" and self.swing_cd > 0.0
+                and self.skill_axe_cd > 0.0):
+            prog = 1.0 - self.swing_cd / self.skill_axe_cd
+            bw, bh = 26, 4
+            bx = int(sx) - bw // 2
+            by = int(sy) + 19
+            pygame.draw.rect(screen, (16, 14, 12), (bx - 1, by - 1, bw + 2, bh + 2))
+            pygame.draw.rect(screen, (56, 54, 50), (bx, by, bw, bh))
+            fill = int(round(bw * max(0.0, min(1.0, prog))))
+            if fill > 0:
+                pygame.draw.rect(screen, (246, 246, 242), (bx, by, fill, bh))
+
         # AND THE SHINE, OVER HIM, while the level-up lasts.
         if self.level_flash > 0.0:
             effects.draw_level_up(screen, sx, sy,

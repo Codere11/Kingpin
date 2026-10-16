@@ -63,6 +63,9 @@ class Skills:
     # that anything restored from an older world still works.
     luck = LUCK_OTHERS
     is_player = False
+    # A LEVEL WAS JUST CROSSED. Class default, for the same reason as the two
+    # above: an unpickled Skills object does not run __init__.
+    just_leveled = False
 
     def __init__(self, is_player: bool = False) -> None:
         self.farming = 0.0            # 0..8, grows with harvesting
@@ -71,6 +74,27 @@ class Skills:
         self.shooting = 0.0           # 0..1
         self.is_player = is_player    # the old road, except the axe and the feet
         self.luck = LUCK_OTHERS       # the nemesis is handed LUCK_NEMESIS
+
+    # -- WHEN A LEVEL IS CROSSED --------------------------------------------
+    def levels_total(self) -> int:
+        """All four skills together, counted in LEVELS.
+
+        A level is a band, and each skill says how wide: 0.125 for the three
+        that run 0..1, and 1.0 for farming, which runs 0..8. Eight each.
+        """
+        return (int(self.movement / 0.125) + int(self.axe / 0.125)
+                + int(self.shooting / 0.125) + int(self.farming))
+
+    def _note_levels(self, before: int) -> None:
+        """Raise the flag if this gain crossed a level.
+
+        THE PLAYER ONLY. This stands on gain_movement, which is called for
+        every walking villager on every frame -- a thousand men, sixty times a
+        second -- and four divisions apiece to notice something nobody is
+        watching. The shine is the player's, so the watching is the player's.
+        """
+        if before and self.levels_total() > before:
+            self.just_leveled = True
 
     # -- the one way anybody learns -----------------------------------------
     def _step(self, value: float, cap: float, band: float) -> float:
@@ -95,8 +119,10 @@ class Skills:
     FARM_SLOW = 0.5
 
     def gain_farming(self, amount: float = 0.12) -> None:
+        _b = self.levels_total() if self.is_player else 0
         if self.is_player:               # the player ploughs the OLD road
             self.farming = min(8.0, self.farming + amount * self.FARM_SLOW)
+            self._note_levels(_b)
             return
         self.farming = self._step(self.farming, 8.0, 1.0)
 
@@ -116,6 +142,7 @@ class Skills:
     def gain_movement(self, distance: float) -> None:
         if distance <= 0.0:
             return
+        _b = self.levels_total() if self.is_player else 0
         # NOT ONE ACTION BUT SIXTY A SECOND -- this is called for every moving
         # villager on every frame -- so it uses the module's random directly.
         # A local `import random as _r` here cost a dictionary lookup in
@@ -133,6 +160,7 @@ class Skills:
         if random.random() < self.luck * min(1.0, distance / 20.0):
             self.movement = min(1.0, max(self.movement,
                                          (lvl + 1) * 0.125))
+        self._note_levels(_b)
 
     def move_scale(self) -> float:
         """Walking/sprinting multiplier: 0.75 at start, 1.5 mastered."""
@@ -145,7 +173,9 @@ class Skills:
     # -- axe ----------------------------------------------------------------
     def gain_axe(self, amount: float = 1.0) -> None:
         # EVERYONE LEARNS THE AXE THE NEW WAY -- the player included.
+        _b = self.levels_total() if self.is_player else 0
         self.axe = self._step(self.axe, 1.0, 0.125)
+        self._note_levels(_b)
 
     def axe_cooldown(self) -> float:
         """Seconds between swings: 2.0 at start, 0.1 mastered."""
@@ -157,8 +187,10 @@ class Skills:
 
     # -- shooting -----------------------------------------------------------
     def gain_shooting(self, amount: float = 1.0) -> None:
+        _b = self.levels_total() if self.is_player else 0
         if self.is_player:               # the player shoots the OLD road
             self.shooting = min(1.0, self.shooting + amount / SHOOT_NEED)
+            self._note_levels(_b)
             return
         self.shooting = self._step(self.shooting, 1.0, 0.125)
 

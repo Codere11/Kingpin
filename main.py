@@ -851,6 +851,19 @@ def main() -> None:
     shade_cache: dict = {}
     active_chaos: list = []
 
+    def award_levels() -> None:
+        """A REAL level-up wears the shine.
+
+        skills.py raises the flag as the level is crossed -- see
+        Skills._note_levels -- and this is where it becomes something you can
+        see. Called once a frame from each of the three places the player is
+        stepped: the world above ground, the mine, and a house interior each
+        have their own, and a man levels up in all three.
+        """
+        if skills.just_leveled:
+            skills.just_leveled = False
+            player.level_flash = player.LEVEL_FLASH
+
     def toast(message: str) -> None:
         nonlocal toast_text, toast_time
         toast_text = message
@@ -3084,6 +3097,7 @@ def main() -> None:
             aim = (wmouse_x - (player.x - cam_x),
                    wmouse_y - (player.y - cam_y))
             player.skill_speed = skills.move_scale()
+            award_levels()
             player.skill_stamina = skills.stamina_scale()
             player.skill_axe_cd = skills.axe_cooldown()
             _px0, _py0 = player.x, player.y
@@ -3167,6 +3181,7 @@ def main() -> None:
                    wmouse_y - (player.y - cam_y))   # the world mouse, not the window's
             foliage = trees.foliage(player.x, player.y)
             player.skill_speed = skills.move_scale()
+            award_levels()
             player.skill_stamina = skills.stamina_scale()
             player.skill_axe_cd = skills.axe_cooldown()
             _px0, _py0 = player.x, player.y
@@ -4253,6 +4268,7 @@ def main() -> None:
                 continue
             _aim = (mouse_x - (player.x - cam_x), mouse_y - (player.y - cam_y))
             player.skill_speed = skills.move_scale()
+            award_levels()
             player.skill_stamina = skills.stamina_scale()
             player.update(dt, _keys, _aim, 1.0)
             player.x, player.y = _room.clamp(player.x, player.y)
