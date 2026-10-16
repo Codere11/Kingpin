@@ -2753,6 +2753,13 @@ def main() -> None:
     _lane_timer = 0.0
     _lane_warned = False
     running = True
+    # BOUND BEFORE THE LOOP. height_f is assigned in the overworld's ZOOM
+    # block far below, and Python makes a name assigned ANYWHERE in a function
+    # local EVERYWHERE in it -- so the aim correction two hundred lines earlier
+    # died with UnboundLocalError before the world had even finished building.
+    # 1.0 means "no height", which is right everywhere the warp is not applied.
+    height_f = 1.0
+
     while running:
         dt = min(clock.tick(FPS) / 1000.0, 0.05)
         _PH["f"] += 1
