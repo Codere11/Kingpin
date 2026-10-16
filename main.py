@@ -4565,10 +4565,6 @@ def main() -> None:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
         draw_exterior(cam_x, cam_y, True)
-        # ...and what he can only see BECAUSE he climbed goes soft, in a
-        # gradient out from the middle. What is under his feet stays sharp.
-        if height_f > 1.001:
-            effects.radial_blur(screen, height_f)
         draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
         draw_villages = villages.visible(cam_x, cam_y, vw, vh)
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
@@ -4643,9 +4639,19 @@ def main() -> None:
             # showing a game over screen" was: a correct panel, drawn offscreen.
             screen = real_screen
             if height_f > 1.001:
-                # SMOOTH, because the frame is bigger than the window and THE
-                # SQUEEZE IS WHERE THE SOFTNESS COMES FROM.
-                pygame.transform.smoothscale(view_surf, (scr_w, scr_h), screen)
+                # THE GROUND BELOW HIM IS FURTHER OFF, SO IT IS DRAWN SMALLER
+                # -- per pixel, by how far below him that patch of ground is.
+                # The frame is drawn 1:1 and bigger than the view, and this
+                # reads every destination pixel back to where it came from: the
+                # ground he is standing on comes back pixel for pixel, and the
+                # ground under it is squeezed in toward him. THEN it is soft at
+                # the edges, because that is the part he can only see BECAUSE
+                # he climbed.
+                _flat = (max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM)))
+                _warped = effects.height_warp(view_surf, player.x, player.y,
+                                              player.z, _flat)
+                effects.radial_blur(_warped, height_f)
+                pygame.transform.scale(_warped, (scr_w, scr_h), screen)
             else:
                 pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             overlay.draw(screen, [
@@ -4676,9 +4682,19 @@ def main() -> None:
             # ---- ...and back to the window ---------------------------------
             screen = real_screen
             if height_f > 1.001:
-                # SMOOTH, because the frame is bigger than the window and THE
-                # SQUEEZE IS WHERE THE SOFTNESS COMES FROM.
-                pygame.transform.smoothscale(view_surf, (scr_w, scr_h), screen)
+                # THE GROUND BELOW HIM IS FURTHER OFF, SO IT IS DRAWN SMALLER
+                # -- per pixel, by how far below him that patch of ground is.
+                # The frame is drawn 1:1 and bigger than the view, and this
+                # reads every destination pixel back to where it came from: the
+                # ground he is standing on comes back pixel for pixel, and the
+                # ground under it is squeezed in toward him. THEN it is soft at
+                # the edges, because that is the part he can only see BECAUSE
+                # he climbed.
+                _flat = (max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM)))
+                _warped = effects.height_warp(view_surf, player.x, player.y,
+                                              player.z, _flat)
+                effects.radial_blur(_warped, height_f)
+                pygame.transform.scale(_warped, (scr_w, scr_h), screen)
             else:
                 pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             vw, vh = scr_w, scr_h
