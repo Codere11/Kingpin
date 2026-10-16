@@ -60,6 +60,7 @@ cdef class NPC:
     # anything can happen next, so it outlives the swing that set it.
     cdef public double attack_flash
     cdef public double hurt_flash
+    cdef public double sly_flash
     cdef public double bleed
     cdef public double drip_timer
     cdef public double panic

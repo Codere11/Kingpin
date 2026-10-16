@@ -23,6 +23,7 @@ import random
 
 import quality
 import wildcrop
+import face
 
 
 _NOTE_PATH = None
@@ -968,6 +969,14 @@ def _settle(village, item, price, qty, seller, buyer) -> int:
         # little better -- +1 each way, capped. Buying off the village's own
         # ledger is not a trade with a person, so it warms nobody.
         grow_opinion(seller, buyer)
+    # AND THE DEAL SHOWS ON HIS FACE. Raised HERE, at the settlement, so it is
+    # the TRADE that does it and not the fact that he is a trader standing in
+    # a market. Both sides are checked, because a trader buying looks exactly
+    # as pleased with himself as a trader selling -- and a deal that fell
+    # through returns long before this line, so nothing shows on his face.
+    for _who in (seller, buyer):
+        if _who is not None and getattr(_who, "job", None) == "trader":
+            _who.sly_flash = face.SLY_SECONDS
     return qty
 
 

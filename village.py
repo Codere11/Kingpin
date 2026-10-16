@@ -274,6 +274,7 @@ _NPC_CDEF_STATE = (
     "work_flash",
     "attack_flash",
     "hurt_flash",
+    "sly_flash",
     "bleed",
     "drip_timer",
     "panic",
@@ -425,6 +426,7 @@ class NPC:
         self.work_flash = 0.0
         self.attack_flash = 0.0
         self.hurt_flash = 0.0
+        self.sly_flash = 0.0
         self.bleed = 0.0
         self.drip_timer = 0.0
         self.panic = 0.0
@@ -575,6 +577,10 @@ class NPC:
             self.hurt_flash -= dt
             if self.hurt_flash < 0.0:
                 self.hurt_flash = 0.0
+        if self.sly_flash > 0.0:
+            self.sly_flash -= dt
+            if self.sly_flash < 0.0:
+                self.sly_flash = 0.0
         # THE EVENING IS HIS. The town says when the market is; who he spends
         # it with, and where they stand, he arranges himself -- along with
         # clearing up after it. These are the three fields the town used to
@@ -1879,7 +1885,8 @@ class NPC:
         # WHICH FACE, FROM WHAT HAS JUST HAPPENED TO HIM. A blow he threw, a
         # blow he took, or a job he is doing -- most recent wins, and a blow
         # beats a job.
-        mood = face.mood_of(self.hurt_flash, self.attack_flash, self.work_flash)
+        mood = face.mood_of(self.hurt_flash, self.attack_flash,
+                            self.work_flash, self.sly_flash)
         face.draw(screen, hx, hy, head_r, fx, fy, mood)
 
         # THE COMMANDER'S HAT IS GONE. It was an eight-pixel cap painted over

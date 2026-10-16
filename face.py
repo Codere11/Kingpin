@@ -42,6 +42,9 @@ BROW_LIFT = 0.34
 MOUTH_DOWN = 0.42
 NOSE_DOWN = 0.18
 WORK_SECONDS = 0.8          # how long a work action shows on the face
+SLY_SECONDS = 1.5           # ...and how long a completed trade does. Long
+                            # enough that a trader working a route keeps the
+                            # smirk up between deals instead of blinking it.
 HURT_SECONDS = 1.2          # ...and how long a blow LANDING on him does.
                             # IT MUST EQUAL WAR_SECONDS: the two are compared
                             # to see which happened more recently, and that
@@ -261,7 +264,7 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
 
 
 def mood_of(hurt_flash: float, attack_flash: float,
-            work_flash: float = 0.0) -> str:
+            work_flash: float = 0.0, sly_flash: float = 0.0) -> str:
     """Which face a man is wearing, from the timers he is carrying.
 
     THE MOST RECENT EVENT WINS. Every one of these runs down at the same rate,
@@ -274,6 +277,10 @@ def mood_of(hurt_flash: float, attack_flash: float,
         return "hurt"
     if attack_flash > 0.0:
         return "angry"
+    # A DEAL BEATS A JOB -- but not a blow. Being shot at is more important
+    # than being pleased with yourself.
+    if sly_flash > 0.0:
+        return "sly"
     if work_flash > 0.0:
         return "focus"
     return "normal"

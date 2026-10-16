@@ -10,6 +10,7 @@ from __future__ import annotations
 import pygame
 
 import economy
+import face
 import items
 from quality import GRADES, SELL_VALUE, letter, sell_coins
 
@@ -224,6 +225,7 @@ class TradeMenu:
             self.npc.trade_demand = max(0, self.npc.trade_demand - sold)
             if self.npc.trade_demand <= 0:
                 self.npc.restock_timer = RESTOCK_SECONDS
+            self._smirk()          # he bought off you, and he knows it
             return True
         if kind == "sell_none":
             return False
@@ -235,7 +237,19 @@ class TradeMenu:
         self.npc.stock[item_id] = self.npc.stock.get(item_id, 0) - 1   # his stock
         self._wants.clear()
         self.npc.coins += cost
+        self._smirk()              # he sold you something, and he knows it
         return True
+
+    def _smirk(self) -> None:
+        """A trader who has just done a deal wears the sleazy face.
+
+        The menu moves the coin ITSELF rather than going through
+        economy._settle, so it has to raise this on its own -- otherwise the
+        one trader the player deals with by hand would be the only trader in
+        the world who never smiled at him.
+        """
+        if getattr(self.npc, "job", None) == "trader":
+            self.npc.sly_flash = face.SLY_SECONDS
 
     # -- drawing ------------------------------------------------------------
     def draw(self, screen: pygame.Surface) -> None:
