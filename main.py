@@ -93,7 +93,7 @@ ZOOM = 2.25                # the world is drawn at 4/9 size, then blown up
 # composed over an area this much bigger for every metre he climbs. It is
 # squeezed back onto the window afterwards, and THE SQUEEZE IS THE BLUR -- the
 # ground, the trees, the people and all of it at once.
-HEIGHT_ZOOM = 0.11          # one more metre of ground each way, in the words
+HEIGHT_ZOOM = 0.002          # one more metre of ground each way, in the words
 # THE FLAT VIEW, WHICH IS THE COORDINATE SYSTEM THE MOUSE LIVES IN. mouse/ZOOM
 # is a point in it, and it is what the aim is measured from -- NOT the camera of
 # whatever frame size the height has made, which only agreed with it at z=0.
@@ -4580,7 +4580,13 @@ def main() -> None:
         # the scale. Every line of the world reads vw and vh, so the ground,
         # the trees, the people, the fences and the blood all pull back with
         # him without one of them being told about it.
-        height_f = 1.0 + max(0.0, player.z) * HEIGHT_ZOOM
+        # CAPPED. The frame grows by the same law the ground is packed by, so
+        # at six hundred metres it wants to be twice the size -- and a frame is
+        # QUADRATIC: twice each way is four times the pixels to draw. Two and a
+        # bit is the ceiling, which is what the old nine-metre hill already
+        # cost, and past it the extra height is spent on the PACKING instead.
+        # Nothing gets slower than it already was.
+        height_f = min(2.2, 1.0 + max(0.0, player.z) * HEIGHT_ZOOM)
         if height_f > 1.001:
             vw = max(2, int(vw * height_f))
             vh = max(2, int(vh * height_f))

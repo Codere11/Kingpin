@@ -150,7 +150,7 @@ LEVEL_GOLD = (250, 216, 128)
 _BLUR_DOWN = 12
 
 
-_WARP_K = 0.11               # the same 0.11 the frame is pulled back by
+_WARP_K = 0.002               # the same 0.11 the frame is pulled back by
 
 
 def height_offset(X: float, Y: float, px: float, py: float, z: float,
@@ -204,7 +204,10 @@ def height_warp(frame: pygame.Surface, px: float, py: float, z: float,
                        np.arange(oh, dtype=np.float32) - oh * 0.5, indexing="ij")
     # 2. THE SCALE, at a quarter resolution -- it is a smooth function of the
     #    terrain, which does not change by a step more than once in forty px.
-    q = 4
+    # THE SCALE MAP IS A SMOOTH FUNCTION OF THE GROUND and the ground is
+    # smooth over hundreds of pixels, so sixteen is plenty -- and it pays for
+    # itself three times over, once per round of the fixed-point search.
+    q = 16
     qw, qh = max(2, ow // q), max(2, oh // q)
     qx = (np.arange(qw, dtype=np.float32) + 0.5) * (ow / float(qw)) - ow * 0.5
     qy = (np.arange(qh, dtype=np.float32) + 0.5) * (oh / float(qh)) - oh * 0.5

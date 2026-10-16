@@ -267,13 +267,26 @@ class GroundRenderer:
         # step DOWN gets a dark lip, which is the line your eye actually
         # follows. Baked into the chunk like everything else here, so it is
         # paid for once.
+        # X AND Y ARE THE COARSE GRID -- thirty-four points at eight pixels,
+        # enlarged to the chunk afterwards -- so this is a thousand points and
+        # not sixty-five thousand, and the field is cheap here however many
+        # octaves it stacks.
         hz = terrain.height_array(X, Y)
         if hz.max() > 0.0:
             # 0.11 was too quiet: at one metre that is eleven per cent of the
             # way to white, which is a step you have to look for. At 0.13 the
             # FIRST step already reads against the flat ground, which is the
             # one that matters -- it is the one that tells you where it starts.
-            col = col + (255.0 - col) * np.minimum(1.0, hz * 0.13)[..., None]
+            # HIGHER GROUND APPROACHES WHITE, AND KEEPS APPROACHING. It used
+            # to be hz*0.13, which reaches white at eight metres -- fine when
+            # the only mountain in the world was nine metres tall, and useless
+            # on one that is six hundred: everything above the first few steps
+            # came out the same flat white and the massif had no shading on it
+            # at all. This ramp is nearly the same at one metre (0.115 against
+            # 0.13, so the first step still reads) and it is still climbing at
+            # five hundred, which is what gives the upper slopes their form.
+            _kk = hz * 0.13
+            col = col + (255.0 - col) * (_kk / (1.0 + _kk))[..., None]
             # A WIDER LIP. Three pixels of world is seven on screen once the
             # frame is blown up, which is a line -- but a staircase is read by
             # its edges and there was not enough of one.
