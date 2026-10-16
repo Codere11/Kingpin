@@ -201,8 +201,14 @@ def height_warp(frame: pygame.Surface, px: float, py: float, z: float,
         qdy = QY / qs
         h = terrain.height_array(px + qdx, py + qdy)
         qs = 1.0 / (1.0 + np.maximum(0.0, z - h) * k)
+    # ENCODED AS 0..255 BEFORE pygame SEES IT. qs is a float in 0..1 and
+    # make_surface reads its input as COLOUR -- so 0.90 and 0.50 were both
+    # truncated to 0, the scale came back as 0, max(0.05, 0) clamped it, and
+    # dx = X / 0.05 = 20 * X. THE WHOLE IMAGE, READ BACK AT TWENTY TIMES THE
+    # OFFSET, which is a 20x zoom-out and 400x the area.
+    _enc = np.clip(qs * 255.0, 0.0, 255.0).astype(np.uint8)
     s = pygame.transform.smoothscale(
-        pygame.surfarray.make_surface(np.repeat(qs[:, :, None], 3, 2)),
+        pygame.surfarray.make_surface(np.repeat(_enc[:, :, None], 3, 2)),
         (ow, oh))
     s = pygame.surfarray.pixels_red(s).astype(np.float32) / 255.0
     # -- and the read back, from the frame, at full resolution --
