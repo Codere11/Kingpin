@@ -4441,7 +4441,12 @@ def main() -> None:
             for npc in getattr(inside_house, "occupants", ()):
                 if npc.alive and npc.in_interior:      # residents move about
                     npc.draw(screen, cam_x, cam_y, True)
-            player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
+            # HE IS NOT DRAWN INTO THE BIG FRAME AT ALL once the height is on: he
+        # would only be warped there and painted over afterwards, and a ghost of
+        # him at the wrong size is not something to leave lying about.
+        if height_f <= 1.001:
+            player.draw(screen, cam_x, cam_y,
+                        selected.defn.id if selected else None)
             # THE GHOST BELONGS TO THE ROOM. draw_placing() works in the room's
             # own coordinates (box.x - cam_x), so it has to be drawn before the
             # frame is blown up -- drawn afterwards it landed at a quarter of
