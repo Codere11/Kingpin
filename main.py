@@ -50,7 +50,6 @@ import observer
 # would swallow it, and every death would go unrecorded with no sign why.
 import deaths
 import terrain
-import skyview
 import tournament
 import village as village_mod
 import war
@@ -89,6 +88,12 @@ from world import TILE, GroundRenderer, Scatter, StaticLayer, World
 WIDTH, HEIGHT = 1280, 720
 FPS = 60
 ZOOM = 2.25                # the world is drawn at 4/9 size, then blown up
+# ONE MORE METRE UP SHOWS ONE MORE METRE OF GROUND EACH WAY, so the frame is
+# composed over an area this much bigger for every metre he climbs. It is
+# squeezed back onto the window afterwards, and THE SQUEEZE IS THE BLUR -- the
+# ground, the trees, the people and all of it at once.
+HEIGHT_ZOOM = 0.11          # one more metre of ground each way, in the words
+                          # it was asked for: (568 px flat + 64 px a metre) / 568.
 WORLD_STEP = 1.0 / 20.0   # villagers/crops/villages tick 20x a second, not 60
 REACH = 104.0            # how far the player can work a tile
 
@@ -657,7 +662,6 @@ def main() -> None:
     # THE GROUND HAS A HEIGHT NOW, and he can ask it. Handed over as a plain
     # function so Player never has to know what a World is.
     player.elevation = terrain.height_at
-    sky = skyview.SkyView(world)
     player.god = test_mode
     # THE TOWNS CAN NOW SEE HIM. One assignment, so a village can put the
     # player in an election or in a ring without every caller passing him down.
@@ -1704,17 +1708,6 @@ def main() -> None:
 
     def draw_exterior(cx, cy, show_names: bool = False, target=None) -> None:
         target = target if target is not None else screen
-        if player.z > 0.05:
-            # FROM UP HERE THE GROUND IS NOT WHERE IT WAS. It is drawn as a
-            # view from above instead of a floor -- the same fixed grid of
-            # samples over more and more world, which is the wider view and the
-            # blur in one. EVERYTHING ELSE IS STILL FLAT AND MOVES ASIDE: the
-            # trees and the villages and the fences are drawn at ground scale,
-            # so they are skipped here until they can be projected too. This is
-            # a first look at the height, not the finished thing.
-            target.blit(sky.render(cx + vw / 2.0, cy + vh / 2.0, player.z,
-                                   (vw, vh)), (0, 0))
-            return
         static_layer.draw(target, cx, cy, vw, vh)
         blood.draw(target, cx, cy, vw, vh)
         world_villages = villages.visible(cx, cy, vw, vh)
@@ -3039,11 +3032,7 @@ def main() -> None:
                     pygame.mouse.set_visible(True)
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
                   and not placing and not inventory_open):
-                if player.jump():
-                    # BAKE BEFORE HE LOOKS. The view is cached tiles, and a
-                    # placeholder square where the world should be is worse
-                    # than a slow frame at the one moment he is watching.
-                    sky.prebake(player.x, player.y, player.z)
+                player.jump()
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 stack = inventory.selected_stack()
                 kind = stack.defn.id if stack else None
@@ -4420,7 +4409,13 @@ def main() -> None:
             draw_placing()
             # ...and back to the window for everything that is not the room.
             screen = real_screen
-            pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
+            if player.z > 0.05:
+                # SMOOTH, SO THE WHOLE PICTURE IS OUT OF FOCUS -- the ground
+                # and the trees and the men together. Drawing a sharp world and
+                # a blurry map beside it is what made the trees disappear.
+                pygame.transform.smoothscale(view_surf, (scr_w, scr_h), screen)
+            else:
+                pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             vw, vh = scr_w, scr_h
             draw_hunger_gray()
             if not inventory_open:
@@ -4543,6 +4538,14 @@ def main() -> None:
         # belongs at the window's own size.
         scr_w, scr_h = vw, vh
         vw, vh = max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM))
+        # THE HEIGHT. The frame covers MORE WORLD and is squeezed back onto the
+        # window at the blow-up below. Every line of the world -- ground, trees,
+        # people, fences, the vision mask, blood -- reads vw and vh, so every
+        # one of them climbs with him without being told about it.
+        if player.z > 0.05:
+            _hf = 1.0 + player.z * HEIGHT_ZOOM
+            vw = max(2, int(vw * _hf))
+            vh = max(2, int(vh * _hf))
         if view_surf is None or view_surf.get_size() != (vw, vh):
             view_surf = pygame.Surface((vw, vh))
         real_screen = screen
@@ -4636,7 +4639,13 @@ def main() -> None:
             # kept the last frame it had. That is what "it freezes instead of
             # showing a game over screen" was: a correct panel, drawn offscreen.
             screen = real_screen
-            pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
+            if player.z > 0.05:
+                # SMOOTH, SO THE WHOLE PICTURE IS OUT OF FOCUS -- the ground
+                # and the trees and the men together. Drawing a sharp world and
+                # a blurry map beside it is what made the trees disappear.
+                pygame.transform.smoothscale(view_surf, (scr_w, scr_h), screen)
+            else:
+                pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             overlay.draw(screen, [
                 f"Kills: {kills}",
                 f"Tobacco: {inventory.count_of('tobacco')}",
@@ -4664,7 +4673,13 @@ def main() -> None:
 
             # ---- ...and back to the window ---------------------------------
             screen = real_screen
-            pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
+            if player.z > 0.05:
+                # SMOOTH, SO THE WHOLE PICTURE IS OUT OF FOCUS -- the ground
+                # and the trees and the men together. Drawing a sharp world and
+                # a blurry map beside it is what made the trees disappear.
+                pygame.transform.smoothscale(view_surf, (scr_w, scr_h), screen)
+            else:
+                pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
             vw, vh = scr_w, scr_h
             hotbar.draw(screen)
             # THE INSPECTOR IS DRAWN ABOVE GROUND TOO.
