@@ -104,6 +104,11 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
     ix, iy = int(round(ex)), int(round(ey))
     focusing = (mood == "focus")
     angry = (mood == "angry")
+    hurt = (mood == "hurt")
+    # THE WAR MOUTH AND THE WAR BROWS, AND ONLY THE EYES ARE DIFFERENT. A hurt
+    # face is a war face whose eyes have shut against the pain -- he is still
+    # shouting, he is just no longer looking at anything.
+    war = angry or hurt
 
     # THE EYES, AND HOW FAR THE LID COMES DOWN.
     if angry:
@@ -112,7 +117,18 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         lid = max(1, int(round(wr * 1.1)))
     else:
         lid = 0
-    for sgn in (-1, 1):
+    if hurt:
+        # CLENCHED SHUT: two strokes meeting at a point, and the point turns
+        # INWARD, so the pair reads as >< -- the face a man pulls when the blow
+        # lands. No white and no pupil: there is nothing to see with.
+        cw = max(1, int(round(r * 0.20)))
+        ch = max(1, int(round(r * 0.20)))
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            tip = (cx - sgn * cw, iy)
+            pygame.draw.line(screen, EYE, (cx + sgn * cw, iy - ch), tip, 1)
+            pygame.draw.line(screen, EYE, (cx + sgn * cw, iy + ch), tip, 1)
+    for sgn in (() if hurt else (-1, 1)):
         cx = ix + sgn * sep
         pygame.draw.circle(screen, WHITE, (cx, iy), wr)
         if lid:
@@ -128,7 +144,7 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
                             iy + lid // 2 + int(round(fy * wr * 0.45))), pr)
 
     # THE BROWS.
-    if angry:
+    if war:
         # A HARD STEEP V, AND THICK. The inner end comes down almost level with
         # the eye and the outer end rides high; the stroke is two or three
         # pixels because at this size a hairline reads as a smudge, not a brow.
@@ -162,7 +178,7 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
 
     my = int(round(hy + r * MOUTH_DOWN))
 
-    if angry:
+    if war:
         # THE MOUTH IS OPEN. Not a line, not a grimace -- an ellipse, dark
         # inside, with two teeth at the top of it. It is the difference
         # between a man who is cross and a man who is coming for you.
@@ -204,7 +220,7 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
 
 
 def warm(radii=range(4, 13), dirs=DIRS,
-         moods=("normal", "focus", "angry")) -> int:
+         moods=("normal", "focus", "angry", "hurt")) -> int:
     """Build every face the game can ask for BEFORE the first frame.
 
     A cache miss in the middle of a frame is twelve draw calls where the frame
