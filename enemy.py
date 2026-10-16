@@ -13,6 +13,8 @@ import random
 
 import pygame
 
+import face
+
 from physics import avoid_direction, segment_rect_hit
 import steering
 import guns
@@ -136,9 +138,15 @@ class Enemy:
             self.knows.discard(i)
         return bool(gone)
 
+    # The war face and the hurt face, as class defaults: a soldier who has
+    # neither struck nor been struck must not be missing what the draw reads.
+    hurt_flash: float = 0.0
+    attack_flash: float = 0.0
+
     def take_damage(self, amount: int) -> bool:
         self.health -= amount
         self.hit_flash = 0.15
+        self.hurt_flash = face.HURT_SECONDS
         self.bleed = 6.0
         self.aware = True                # being shot gets his attention
         self.aware_timer = AWARE_MEMORY

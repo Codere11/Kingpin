@@ -42,6 +42,10 @@ BROW_LIFT = 0.34
 MOUTH_DOWN = 0.42
 NOSE_DOWN = 0.18
 WORK_SECONDS = 0.8          # how long a work action shows on the face
+HURT_SECONDS = 1.2          # ...and how long a blow LANDING on him does.
+                            # IT MUST EQUAL WAR_SECONDS: the two are compared
+                            # to see which happened more recently, and that
+                            # comparison means nothing at unequal lengths.
 WAR_SECONDS = 1.2           # ...and how long a blow does. Longer than the
                             # slowest swing (a villager's, at 1.0s) so the war
                             # face stays ON through a fight instead of strobing
@@ -217,6 +221,25 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         depth = max(3, r * 3 // 8)
         x0 = ix + hw
         pygame.draw.line(screen, TONGUE, (x0, my), (x0, my + depth - 1), 1)
+
+
+def mood_of(hurt_flash: float, attack_flash: float,
+            work_flash: float = 0.0) -> str:
+    """Which face a man is wearing, from the timers he is carrying.
+
+    THE MOST RECENT EVENT WINS. Every one of these runs down at the same rate,
+    so the one with the most left is the one that happened last: a man who has
+    just been hit grimaces even though he swung a moment ago, and a man who
+    lands a blow on top of a hit is snarling again. Equal goes to the hurt,
+    because the blow that LANDED is the one he felt.
+    """
+    if hurt_flash > 0.0 and hurt_flash >= attack_flash:
+        return "hurt"
+    if attack_flash > 0.0:
+        return "angry"
+    if work_flash > 0.0:
+        return "focus"
+    return "normal"
 
 
 def warm(radii=range(4, 13), dirs=DIRS,

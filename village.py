@@ -273,6 +273,7 @@ _NPC_CDEF_STATE = (
     "hit_flash",
     "work_flash",
     "attack_flash",
+    "hurt_flash",
     "bleed",
     "drip_timer",
     "panic",
@@ -423,6 +424,7 @@ class NPC:
         self.hit_flash = 0.0
         self.work_flash = 0.0
         self.attack_flash = 0.0
+        self.hurt_flash = 0.0
         self.bleed = 0.0
         self.drip_timer = 0.0
         self.panic = 0.0
@@ -511,6 +513,7 @@ class NPC:
     def take_damage(self, amount: int) -> bool:
         self.health -= amount
         self.hit_flash = 0.15
+        self.hurt_flash = face.HURT_SECONDS   # and his face says so
         self.bleed = 5.0
         self.panic = 6.0
         self.attacked = True          # he will not trade with you now
@@ -568,6 +571,10 @@ class NPC:
             self.attack_flash -= dt
             if self.attack_flash < 0.0:
                 self.attack_flash = 0.0
+        if self.hurt_flash > 0.0:
+            self.hurt_flash -= dt
+            if self.hurt_flash < 0.0:
+                self.hurt_flash = 0.0
         # THE EVENING IS HIS. The town says when the market is; who he spends
         # it with, and where they stand, he arranges himself -- along with
         # clearing up after it. These are the three fields the town used to
@@ -1869,9 +1876,10 @@ class NPC:
         # the WORKING face while the work is actually happening. The flag is
         # raised by the act and has already been run down by tick(), so the
         # tongue comes and goes with his hands.
-        # A BLOW BEATS A JOB: a man doing both is fighting.
-        mood = ("angry" if self.attack_flash > 0.0
-                else "focus" if self.work_flash > 0.0 else "normal")
+        # WHICH FACE, FROM WHAT HAS JUST HAPPENED TO HIM. A blow he threw, a
+        # blow he took, or a job he is doing -- most recent wins, and a blow
+        # beats a job.
+        mood = face.mood_of(self.hurt_flash, self.attack_flash, self.work_flash)
         face.draw(screen, hx, hy, head_r, fx, fy, mood)
 
         # THE COMMANDER'S HAT IS GONE. It was an eight-pixel cap painted over
