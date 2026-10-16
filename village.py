@@ -1888,7 +1888,10 @@ class NPC:
         mood = face.mood_of(self.hurt_flash, self.attack_flash,
                             self.work_flash, self.sly_flash,
                             self.hunger >= face.STARVED_HUNGER)
-        face.draw(screen, hx, hy, head_r, fx, fy, mood)
+        # AND WHAT HE HAS EARNED WITH HIS HANDS, from the two combat skills
+        # together -- drawn UNDER the mood, so a veteran keeps his beard.
+        vet = face.vet_tier(self.skills.axe, self.skills.shooting)
+        face.draw(screen, hx, hy, head_r, fx, fy, mood, vet=vet)
 
         # THE COMMANDER'S HAT IS GONE. It was an eight-pixel cap painted over
         # the head, so the one man guaranteed to be looked at was the one man

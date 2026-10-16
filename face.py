@@ -45,6 +45,10 @@ BROW_LIFT = 0.34
 MOUTH_DOWN = 0.42
 NOSE_DOWN = 0.18
 WORK_SECONDS = 0.8          # how long a work action shows on the face
+VET_BROW = 0.25             # a QUARTER of the way up both combat skills and
+                            # he keeps ONE brow cocked for the rest of his life
+VET_BEARD = 0.50            # half way: the beard
+VET_SCAR = 0.75             # past three quarters: the scar
 STARVED_HUNGER = 80.0       # ...and the one face that is a STATE, not an
                             # event: at this hunger he is starving, and that
                             # is the only thing about him worth drawing.
@@ -75,9 +79,9 @@ _CACHE: dict = {}
 DIRS = 8
 
 
-def sprite(r: int, dir_i: int, mood: str = "normal"):
-    """The face for this head size, direction and mood, made once and kept."""
-    key = (r, dir_i, mood)
+def sprite(r: int, dir_i: int, mood: str = "normal", vet: int = 0):
+    """The face for this head size, direction, mood and rank, made once."""
+    key = (r, dir_i, mood, vet)
     got = _CACHE.get(key)
     if got is not None:
         return got
@@ -86,7 +90,7 @@ def sprite(r: int, dir_i: int, mood: str = "normal"):
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     c = size // 2
     a = dir_i * (2.0 * math.pi / DIRS)
-    _render(surf, float(c), float(c), r, math.cos(a), math.sin(a), mood)
+    _render(surf, float(c), float(c), r, math.cos(a), math.sin(a), mood, vet=vet)
     # CLIPPED TO THE HEAD IT IS DRAWN ON.
     #
     # Nothing the face draws may fall outside the circle the caller draws under
@@ -117,7 +121,8 @@ def sprite(r: int, dir_i: int, mood: str = "normal"):
 
 
 def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
-            mood: str = "normal", skin=(216, 172, 132)) -> None:
+            mood: str = "normal", skin=(216, 172, 132),
+            vet: int = 0) -> None:
     """The face itself, into any surface, centred on (hx, hy).
 
     THREE MOODS, ONE GEOMETRY.
@@ -152,33 +157,39 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
     hurt = (mood == "hurt")
     sly = (mood == "sly")
 
-    if mood == "veteran":
-        # THE ORDER IS THE WHOLE THING HERE, and it is FOUR LAYERS:
-        #
-        #   1  the beard   -- the bottom third of the face, filled
-        #   2  the scar    -- OVER the beard
-        #   3  the eyes    -- OVER the scar, so the scar does NOT split the eye
-        #   4  brows, nose, mouth
-        #
-        # The scar was drawn LAST for a while and it cut the eye in two down
-        # the middle, which is not a scar, it is a sliced eyeball.
+    # -- WHAT A FIGHTER EARNS, AND THE ORDER IT GOES ON IN -----------------
+    #
+    #   1  the beard   the bottom third of the face, filled
+    #   2  the scar    OVER the beard, and UNDER the eye
+    #   3  the face    so the scar never splits the eye it crosses
+    #
+    # NOT A MOOD. These are drawn on top of whatever he is doing -- angry,
+    # hurt, starving -- because they are what he has BECOME, and a veteran
+    # does not lose his beard when somebody hits him. Only the BROW is not
+    # here: it is part of the face, so it is drawn with the brows below.
+    if vet >= 2:
         hc, vc = int(round(hx)), int(round(hy))
-
-        # 1. THE BEARD: the bottom third of the face, filled, and clipped to
-        #    the head's own circle so it sits ON the face and not off the sides.
         for dy in range(3, r + 1):
             y = vc + dy
             hw = int(math.sqrt(max(0.0, r * r - dy * dy)))
             pygame.draw.line(screen, BEARD, (hc - hw, y), (hc + hw, y), 1)
 
-        # 2. THE SCAR, over the beard and under the eye -- and CLIPPED TO THE
-        #    FACE. Drawn as one line it ended at (18,17), which is 85 from the
-        #    centre of a head whose radius is 8 -- so the last three pixels of
-        #    it floated off the side of his face like a scratch on the screen.
-        #    Walked a row at a time instead, and only the rows that are inside
-        #    his head get drawn.
-        cx = ix + sep
-        sx0, sx1 = cx - max(1, r // 6), cx + max(1, r // 6)
+    # THE ONE BROW, COCKED DOWN, FOR THE REST OF HIS LIFE. Taken from the war
+    # face sign for sign, and used by every mood's brow block below.
+    def _war_brow(cx, sgn) -> None:
+        _bw = max(1, int(round(r * 0.26)))
+        _tw = max(2, r // 5)
+        _by = int(round(iy - wr - r * 0.04))
+        pygame.draw.line(screen, BROW, (cx + sgn * _bw, _by - _tw),
+                         (cx - sgn * _bw, _by + _tw), _tw)
+
+    if vet >= 3:
+        # Walked a row at a time and CLIPPED TO THE HEAD: drawn as one line it
+        # ended at (18,17), which is 85 from the centre of a head whose radius
+        # is 8, so its last three pixels floated off the side of his face.
+        hc, vc = int(round(hx)), int(round(hy))
+        _cx = ix + sep
+        sx0, sx1 = _cx - max(1, r // 6), _cx + max(1, r // 6)
         sy0, sy1 = iy - wr - 1, vc + r - 2
         steps = max(1, abs(sy1 - sy0))
         for _i in range(steps + 1):
@@ -187,42 +198,6 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
             _y = int(round(sy0 + (sy1 - sy0) * _t))
             if (_x - hc) ** 2 + (_y - vc) ** 2 <= r * r:
                 pygame.draw.line(screen, SCAR, (_x, _y), (_x, _y), 1)
-
-        # 3. THE EYES, on top of it.
-        for sgn in (-1, 1):
-            cx = ix + sgn * sep
-            pygame.draw.circle(screen, WHITE, (cx, iy), wr)
-            pygame.draw.circle(screen, EYE,
-                               (cx + int(round(fx * wr * 0.55)),
-                                iy + int(round(fy * wr * 0.55))), pr)
-
-        # 4. AND ONE BROW DOWN, ONE LEVEL. The DOWN one is the war face's brow
-        #    EXACTLY -- same line, same ends, same thickness. It was mirrored
-        #    here for a while, which put the high end where the low one goes
-        #    and made it a different mark entirely.
-        for sgn in (-1, 1):
-            cx = ix + sgn * sep
-            if sgn < 0:
-                by = int(round(iy - wr - r * 0.04))
-                bw = max(1, int(round(r * 0.26)))
-                tw = max(2, r // 5)
-                pygame.draw.line(screen, BROW, (cx + sgn * bw, by - tw),
-                                 (cx - sgn * bw, by + tw), tw)
-            else:
-                by = int(round(iy - wr - r * 0.20))
-                bw = max(1, int(round(r * 0.20)))
-                tw = max(1, r // 6)
-                pygame.draw.line(screen, BROW, (cx - bw, by), (cx + bw, by), tw)
-
-        if r >= 6:
-            pygame.draw.line(screen, NOSE, (ix, iy + wr),
-                             (ix, int(round(hy + r * NOSE_DOWN))), 1)
-
-        m_y = int(round(hy + r * MOUTH_DOWN))
-        hw = max(1, int(round(r * 0.26)))
-        pygame.draw.line(screen, MOUTH, (ix - hw, m_y), (ix + hw, m_y),
-                         max(1, r // 8))
-        return
 
     if mood == "starved":
         # THE STARVED FACE. The ONLY mood that is a state rather than an event,
@@ -255,8 +230,11 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         tw = max(1, r // 6)
         for sgn in (-1, 1):
             cx = ix + sgn * sep
-            pygame.draw.line(screen, BROW, (cx + sgn * bw, by + tw),
-                             (cx - sgn * bw, by - tw), tw)
+            if vet >= 1 and sgn < 0:
+                _war_brow(cx, sgn)          # the one he earned, even starving
+            else:
+                pygame.draw.line(screen, BROW, (cx + sgn * bw, by + tw),
+                                 (cx - sgn * bw, by - tw), tw)
         if r >= 6:
             pygame.draw.line(screen, NOSE, (ix, iy + wr),
                              (ix, int(round(hy + r * NOSE_DOWN))), 1)
@@ -302,32 +280,34 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
                            (cx + int(round(fx * wr * 0.45)),
                             iy + lid // 2 + int(round(fy * wr * 0.45))), pr)
 
-    # THE BROWS.
+    # THE BROWS. One style for the mood -- and ONE OF THEM IS THE WAR BROW'S
+    # if he has earned it, which is why this is a style and not four copies.
     if war or sly:
-        # A HARD STEEP V, AND THICK. The inner end comes down almost level with
-        # the eye and the outer end rides high; the stroke is two or three
-        # pixels because at this size a hairline reads as a smudge, not a brow.
-        by = int(round(iy - wr - r * 0.04))
-        bw = max(1, int(round(r * 0.26)))
-        tw = max(2, r // 5)
-        for sgn in (-1, 1):
-            cx = ix + sgn * sep
-            pygame.draw.line(screen, BROW, (cx + sgn * bw, by - tw),
-                             (cx - sgn * bw, by + tw), tw)
+        bstyle = "war"
     elif focusing:
-        by = int(round(iy - wr - r * 0.10))
-        bw = max(1, int(round(r * 0.20)))
-        tw = max(1, r // 6)
-        for sgn in (-1, 1):
-            cx = ix + sgn * sep
+        bstyle = "in"
+    else:
+        bstyle = "level"
+    for sgn in (-1, 1):
+        cx = ix + sgn * sep
+        if vet >= 1 and sgn < 0:
+            _war_brow(cx, sgn)
+            continue
+        if bstyle == "war":
+            # A HARD STEEP V, AND THICK. The inner end comes down almost level
+            # with the eye and the outer end rides high; the stroke is two or
+            # three pixels because at this size a hairline reads as a smudge.
+            _war_brow(cx, sgn)
+        elif bstyle == "in":
+            by = int(round(iy - wr - r * 0.10))
+            bw = max(1, int(round(r * 0.20)))
+            tw = max(1, r // 6)
             pygame.draw.line(screen, BROW, (cx + sgn * bw, by - tw),
                              (cx - sgn * bw, by + tw), tw)
-    else:
-        by = int(round(iy - wr - r * 0.20))
-        bw = max(1, int(round(r * 0.20)))
-        tw = max(1, r // 6)
-        for sgn in (-1, 1):
-            cx = ix + sgn * sep
+        else:
+            by = int(round(iy - wr - r * 0.20))
+            bw = max(1, int(round(r * 0.20)))
+            tw = max(1, r // 6)
             pygame.draw.line(screen, BROW, (cx - bw, by), (cx + bw, by), tw)
 
     # THE NOSE.
@@ -409,6 +389,30 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         pygame.draw.line(screen, TONGUE, (x0, my), (x0, my + depth - 1), 1)
 
 
+def vet_tier(melee: float, ranged: float) -> int:
+    """How far up the combat ladder he is, 0 to 3.
+
+    MELEE AND RANGED TOGETHER, averaged, so a man has to be good at BOTH to
+    reach the top rung. A one-eyed axeman stays at the eyebrow for ever.
+
+        0    nothing
+        1    a quarter        one brow, cocked down like the war face's
+        2    half             ...and the beard
+        3    past three       ...and the scar
+
+    The marks are permanent once earned: they are what he has BECOME, so they
+    are drawn UNDER whatever face he is wearing rather than being a mood.
+    """
+    k = (melee + ranged) * 0.5
+    if k >= VET_SCAR:
+        return 3
+    if k >= VET_BEARD:
+        return 2
+    if k >= VET_BROW:
+        return 1
+    return 0
+
+
 def mood_of(hurt_flash: float, attack_flash: float,
             work_flash: float = 0.0, sly_flash: float = 0.0,
             starved: bool = False) -> str:
@@ -437,27 +441,36 @@ def mood_of(hurt_flash: float, attack_flash: float,
     return "normal"
 
 
-def warm(radii=range(4, 13), dirs=DIRS,
+def warm(radii=(8, 9), dirs=DIRS,
          moods=("normal", "focus", "angry", "hurt", "sly",
-                  "starved", "veteran")) -> int:
+                  "starved")) -> int:
     """Build every face the game can ask for BEFORE the first frame.
 
     A cache miss in the middle of a frame is twelve draw calls where the frame
-    was expecting one blit. The heads in play are radius eight and nine, so
-    warming a small range costs a few milliseconds once at startup and means
-    the drawing path is a dict lookup and a blit and nothing else, ever.
+    was expecting one blit, so they are all built before the first frame: the
+    drawing path is a dict lookup and a blit and nothing else, ever.
+
+    ONLY THE HEADS IN PLAY. Every call in the game asks for radius 8 (a
+    villager, a soldier) or 9 (the player) -- see the three face.draw() sites.
+    Warming 4..12 was 1728 faces and 379 ms of startup for nine sizes nobody
+    ever asks for; two sizes and four rungs is 384 faces.
+
+    Anything else still works: it is built the first time it is asked for, and
+    costs one frame's worth of draw calls once.
     """
     n = 0
     for r in radii:
         for d in range(dirs):
             for m in moods:
-                sprite(r, d, m)
-                n += 1
+                for v in (0, 1, 2, 3):        # every rung of the ladder
+                    sprite(r, d, m, v)
+                    n += 1
     return n
 
 
 def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,
-         fy: float = 0.0, mood: str = "normal", skin=(216, 172, 132)) -> None:
+         fy: float = 0.0, mood: str = "normal", skin=(216, 172, 132),
+         vet: int = 0) -> None:
     """A face on a head of radius r centred at (hx, hy). One blit after the
     first time, and never raises: a face must not be able to stop a frame."""
     try:
@@ -468,7 +481,7 @@ def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,
             d = int(round(math.atan2(fy, fx) / (2.0 * math.pi / DIRS))) % DIRS
         else:
             d = 0
-        surf = sprite(r, d, mood)
+        surf = sprite(r, d, mood, vet)
         screen.blit(surf, (int(hx) - surf.get_width() // 2,
                            int(hy) - surf.get_height() // 2))
     except Exception:
