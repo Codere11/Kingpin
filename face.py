@@ -219,13 +219,34 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         return
 
     if sly:
-        # A SLY SMILE: down at one corner, up at the other, and the line dips
-        # in the middle. A curve rather than a line, and lopsided rather than
-        # symmetrical -- straight across it is a leer, and symmetrical it is a
-        # grin, and neither of those is a man taking your money.
-        hw = max(2, int(round(r * 0.28)))
-        pygame.draw.line(screen, MOUTH, (ix - hw, my), (ix, my + 1), 1)
-        pygame.draw.line(screen, MOUTH, (ix, my + 1), (ix + hw, my - 1), 1)
+        # A WIDE, OPEN, SLEAZY GRIN.
+        #
+        # The first cut was a thin curved line and it read as a man holding
+        # something in -- constipated, not sly. A grin is OPEN, and what makes
+        # it a SMILE rather than a shout is that the corners ride UP while the
+        # middle hangs DOWN.
+        #
+        # Built as tapering rows, one per line, because the shape IS the
+        # curve -- pygame's polygon fill rounds outward at this size, which is
+        # how the tongue came out three times the size I asked for.
+        w = max(4, int(round(r * 0.55)))       # 4 at r=8: nine pixels across
+        h = max(3, int(round(r * 0.38)))       # and three rows deep
+        for i in range(h):
+            t = i / float(h)
+            half = w - int(round(t * w * 0.8))
+            if half < 1:
+                half = 1
+            y = my + i
+            pygame.draw.line(screen, MAW, (ix - half, y), (ix + half, y), 1)
+        # ALL THE TEETH, in a row across the top of the opening -- set in one
+        # pixel from each end, so the corners stay dark and the grin reads as
+        # a mouth rather than a white bar.
+        for dx in range(-(w - 2), w - 1):
+            pygame.draw.line(screen, TOOTH, (ix + dx, my + 1),
+                             (ix + dx, my + 1), 1)
+        # AND ONE CORNER CURLED HIGHER THAN THE OTHER. A symmetrical grin is
+        # merely friendly; it is the lopsided one that is up to something.
+        pygame.draw.line(screen, MAW, (ix + w - 2, my - 1), (ix + w, my - 1), 1)
         return
 
     # THE MOUTH.
