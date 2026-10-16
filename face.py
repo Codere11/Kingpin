@@ -34,6 +34,10 @@ LIP = (176, 96, 92)         # one pixel of lip, all the way round it
 SOCKET = (170, 124, 94)     # the hollow a starving man's eye sits down in
 SCAR = (172, 96, 84)        # a line of it across the face
 BEARD = (26, 20, 18)        # the bottom third of the face, black
+LENS = (168, 132, 56)       # a monocle's brass rim -- darker than the
+                            # skin AND than the white it rings, or it
+                            # vanishes into one of them
+PAD = 3                     # the margin the face sprite leaves round a head
 CROWN = (226, 184, 78)      # gold, and worn on top of everything
 CROWN_D = (146, 108, 30)    # the darker gold it is edged in
 TOOTH = (238, 236, 228)     # two of them, at the top of it
@@ -87,8 +91,7 @@ def sprite(r: int, dir_i: int, mood: str = "normal", vet: int = 0):
     got = _CACHE.get(key)
     if got is not None:
         return got
-    pad = 3
-    size = 2 * r + 2 * pad + 1
+    size = 2 * r + 2 * PAD + 1
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     c = size // 2
     a = dir_i * (2.0 * math.pi / DIRS)
@@ -413,6 +416,50 @@ def vet_tier(melee: float, ranged: float) -> int:
     if k >= VET_BROW:
         return 1
     return 0
+
+
+def eye_of(hx: float, hy: float, r: int):
+    """WHERE THE FACE PUTS THE EYES, in screen coordinates.
+
+    Returned as (centre_x, eye_y, separation), so an accessory can sit on an
+    eye without re-deriving the arithmetic and drifting off it. draw() blits
+    the sprite at int(hx) - width//2, which puts its centre pixel on int(hx),
+    and the eyes are EYE_UP of the radius above that -- the same numbers
+    _render uses, in one place, so they cannot disagree.
+    """
+    c = (2 * r + 2 * PAD + 1) // 2                 # the sprite's centre == the head's
+    iy_local = int(round(c - r * EYE_UP))
+    return (int(hx), int(hy) + (iy_local - c),
+            max(3, int(round(r * EYE_SIDE))))
+
+
+def monocle(screen, hx: float, hy: float, r: int) -> None:
+    """A monocle, on ONE eye, drawn by whoever draws the head.
+
+    Same terms as the crown: an accessory, not a mood, and it does not alter
+    the face -- but where a crown sits on the skull, a monocle sits ON AN EYE,
+    so it is laid over the face rather than beside it, and its rim does cross
+    the brow above. That is what a monocle does.
+    """
+    ex, ey, sep = eye_of(hx, hy, r)
+    cx = ex + sep                                  # the eye on his right
+    rad = max(2, int(round(r * WHITE_R)) + 1)
+    # ONE RING, PLACED BY HAND. pygame's circle OUTLINE is not a ring at this
+    # size: at radius 3 it includes (cx+1, ey+1), which is exactly where the
+    # pupil sits when a man faces north-east -- so a brass pixel landed IN his
+    # eye. Sixteen points at a fixed distance is a ring, and stays one.
+    seen = set()
+    for _i in range(16):
+        _a = _i * math.pi / 8.0
+        _px = cx + int(round(math.cos(_a) * rad))
+        _py = ey + int(round(math.sin(_a) * rad))
+        if (_px, _py) not in seen:
+            seen.add((_px, _py))
+            pygame.draw.line(screen, LENS, (_px, _py), (_px, _py), 1)
+    # and the chain, off the lower outer edge of the rim, hanging toward the jaw
+    xs, ys = cx + rad - 1, ey + rad - 1
+    pygame.draw.line(screen, LENS, (xs, ys),
+                     (xs + max(1, r // 5), ys + max(2, int(round(r * 0.6)))), 1)
 
 
 def crown(screen, hx: float, hy: float, r: int) -> None:
