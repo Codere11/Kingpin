@@ -94,6 +94,11 @@ ZOOM = 2.25                # the world is drawn at 4/9 size, then blown up
 # squeezed back onto the window afterwards, and THE SQUEEZE IS THE BLUR -- the
 # ground, the trees, the people and all of it at once.
 HEIGHT_ZOOM = 0.11          # one more metre of ground each way, in the words
+# THE FLAT VIEW, WHICH IS THE COORDINATE SYSTEM THE MOUSE LIVES IN. mouse/ZOOM
+# is a point in it, and it is what the aim is measured from -- NOT the camera of
+# whatever frame size the height has made, which only agreed with it at z=0.
+FLAT_W = max(2, int(WIDTH / ZOOM))
+FLAT_H = max(2, int(HEIGHT / ZOOM))
                           # it was asked for: (568 px flat + 64 px a metre) / 568.
 WORLD_STEP = 1.0 / 20.0   # villagers/crops/villages tick 20x a second, not 60
 REACH = 104.0            # how far the player can work a tile
@@ -1087,16 +1092,16 @@ def main() -> None:
         muzzle_x = player.x + fx * 30.0 + px * 7.0
         muzzle_y = player.y + fy * 30.0 + py * 7.0
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
-        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM
-        if height_f > 1.001:
+        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM   # flat-view pixels
+        if player.z > 0.05:
             # THE GROUND UNDER THE POINTER IS PACKED IN TOWARD HIM, so the
-            # plain screen-to-world sum aims short. Read it back the same way
-            # the frame was read back.
-            wmouse_x, wmouse_y = effects.height_offset(
-                wmouse_x - vw / 2.0, wmouse_y - vh / 2.0,
+            # plain sum aims short -- and the further below him it is, the
+            # worse. Read it back the way the frame was read back, around the
+            # FLAT centre, because that is the space the mouse is in.
+            _ox, _oy = effects.height_offset(
+                wmouse_x - FLAT_W * 0.5, wmouse_y - FLAT_H * 0.5,
                 player.x, player.y, player.z)
-            wmouse_x += vw / 2.0
-            wmouse_y += vh / 2.0  # world space
+            wmouse_x, wmouse_y = _ox + FLAT_W * 0.5, _oy + FLAT_H * 0.5
         distance = math.hypot((cam_x + wmouse_x) - muzzle_x,
                               (cam_y + wmouse_y) - muzzle_y)
         spread = skills.shot_spread()
@@ -1375,16 +1380,16 @@ def main() -> None:
             return
 
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
-        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM
-        if height_f > 1.001:
+        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM   # flat-view pixels
+        if player.z > 0.05:
             # THE GROUND UNDER THE POINTER IS PACKED IN TOWARD HIM, so the
-            # plain screen-to-world sum aims short. Read it back the same way
-            # the frame was read back.
-            wmouse_x, wmouse_y = effects.height_offset(
-                wmouse_x - vw / 2.0, wmouse_y - vh / 2.0,
+            # plain sum aims short -- and the further below him it is, the
+            # worse. Read it back the way the frame was read back, around the
+            # FLAT centre, because that is the space the mouse is in.
+            _ox, _oy = effects.height_offset(
+                wmouse_x - FLAT_W * 0.5, wmouse_y - FLAT_H * 0.5,
                 player.x, player.y, player.z)
-            wmouse_x += vw / 2.0
-            wmouse_y += vh / 2.0  # world space
+            wmouse_x, wmouse_y = _ox + FLAT_W * 0.5, _oy + FLAT_H * 0.5
         wx, wy = cam_x + wmouse_x, cam_y + wmouse_y   # the world mouse
 
         # Clicking a villager while not wielding a weapon opens trade.
@@ -2766,16 +2771,16 @@ def main() -> None:
         dt = min(dt * time_scale, 0.5)          # test-mode speed-up
         vw, vh = screen.get_size()
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
-        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM
-        if height_f > 1.001:
+        wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM   # flat-view pixels
+        if player.z > 0.05:
             # THE GROUND UNDER THE POINTER IS PACKED IN TOWARD HIM, so the
-            # plain screen-to-world sum aims short. Read it back the same way
-            # the frame was read back.
-            wmouse_x, wmouse_y = effects.height_offset(
-                wmouse_x - vw / 2.0, wmouse_y - vh / 2.0,
+            # plain sum aims short -- and the further below him it is, the
+            # worse. Read it back the way the frame was read back, around the
+            # FLAT centre, because that is the space the mouse is in.
+            _ox, _oy = effects.height_offset(
+                wmouse_x - FLAT_W * 0.5, wmouse_y - FLAT_H * 0.5,
                 player.x, player.y, player.z)
-            wmouse_x += vw / 2.0
-            wmouse_y += vh / 2.0  # world space
+            wmouse_x, wmouse_y = _ox + FLAT_W * 0.5, _oy + FLAT_H * 0.5
 
         for event in pygame.event.get():
             # ---- THE KEY LOG. A one-line record of every key this build's
@@ -3143,8 +3148,8 @@ def main() -> None:
             # mouse against a zoomed camera skews every look by the zoom --
             # pointing left of centre actually aimed right, and the whole room
             # could only be half looked at.
-            aim = (wmouse_x - (player.x - cam_x),
-                   wmouse_y - (player.y - cam_y))
+            aim = (wmouse_x - FLAT_W * 0.5,
+                   wmouse_y - FLAT_H * 0.5)
             player.skill_speed = skills.move_scale()
             award_levels()
             player.skill_stamina = skills.stamina_scale()
@@ -3226,8 +3231,8 @@ def main() -> None:
             keys = pygame.key.get_pressed()
             if board_open:                       # reading the board: stand still
                 keys = _NO_KEYS
-            aim = (wmouse_x - (player.x - cam_x),
-                   wmouse_y - (player.y - cam_y))   # the world mouse, not the window's
+            aim = (wmouse_x - FLAT_W * 0.5,
+                   wmouse_y - FLAT_H * 0.5)   # the world mouse, not the window's
             foliage = trees.foliage(player.x, player.y)
             player.skill_speed = skills.move_scale()
             award_levels()
@@ -4687,6 +4692,18 @@ def main() -> None:
                     _flat = (max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM)))
                     _warped = effects.height_warp(view_surf, player.x, player.y,
                                                   player.z, _flat)
+                    # AND HE IS PUT BACK, AT FULL SIZE.
+                    #
+                    # THE WARP IS FOR GROUND AT A LOWER LEVEL. He is the
+                    # camera's SUBJECT: he stands at the reference height by
+                    # definition, so there is no lower ground about him to pack
+                    # him into -- and warping him shrank him a little more every
+                    # metre he climbed, which is exactly what it looked like.
+                    # Drawn again over his own warped ghost, which his full-size
+                    # self covers completely.
+                    player.draw(_warped, player.x - _flat[0] * 0.5,
+                                player.y - _flat[1] * 0.5,
+                                selected.defn.id if selected else None)
                     # no explicit blur: the ground below him is drawn
                     # SMALLER, and smaller IS the blur.
                     pygame.transform.scale(_warped, (scr_w, scr_h), screen)
