@@ -413,7 +413,9 @@ class Soldier(Enemy):
         pygame.draw.circle(screen, (214, 172, 132), (int(_hx), int(_hy)), 8)
         pygame.draw.circle(screen, (140, 104, 76), (int(_hx), int(_hy)), 8, 1)
         face.draw(screen, _hx, _hy, 8, fx, fy,
-                  face.mood_of(self.hurt_flash, self.attack_flash))
+                  face.mood_of(self.hurt_flash, self.attack_flash,
+                               starved=getattr(self, "hunger", 0.0)
+                               >= face.STARVED_HUNGER))
         # Nation pennant, so the armies are never mistaken for each other.
         pygame.draw.line(screen, (44, 38, 30), (sx + 7, sy - 6), (sx + 7, sy - 30), 2)
         pygame.draw.polygon(screen, self.color,

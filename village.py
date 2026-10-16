@@ -1886,7 +1886,8 @@ class NPC:
         # blow he took, or a job he is doing -- most recent wins, and a blow
         # beats a job.
         mood = face.mood_of(self.hurt_flash, self.attack_flash,
-                            self.work_flash, self.sly_flash)
+                            self.work_flash, self.sly_flash,
+                            self.hunger >= face.STARVED_HUNGER)
         face.draw(screen, hx, hy, head_r, fx, fy, mood)
 
         # THE COMMANDER'S HAT IS GONE. It was an eight-pixel cap painted over

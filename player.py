@@ -240,7 +240,8 @@ class Player:
         pygame.draw.circle(screen, (150, 108, 78), (_hx, _hy), 9, 1)
         # the same face as everybody else, on the bigger head
         face.draw(screen, _hx, _hy, 9, fx, fy,
-                  face.mood_of(self.hurt_flash, self.attack_flash))
+                  face.mood_of(self.hurt_flash, self.attack_flash,
+                               starved=self.hunger >= face.STARVED_HUNGER))
 
     @staticmethod
     def _draw_held(screen: pygame.Surface, item_id: str, sx: float, sy: float,
