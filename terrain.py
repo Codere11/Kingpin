@@ -49,8 +49,17 @@ MAX_M = 620.0
 # chain runs for tens of thousands of pixels -- several days' walk -- and the
 # towns, which sit 55,000 apart, each get their own piece of one.
 RANGE_SCALE = 0.0000160
-MASK_LO = 0.58            # below this it is lowland, and flat
+MASK_LO = 0.80            # below this it is lowland, and flat
 MASK_HI = 0.74            # above this it is mountain, and as tall as it gets
+
+# HOW STEEP THE SIDE OF A RANGE IS, and it varies: the band over which the
+# ground climbs from lowland to mountain is between these, chosen by its own
+# slow field. 0.035 is a cliff -- six hundred metres in about two thousand
+# pixels, a twenty-eight per cent grade, which is a wall you look down. 0.175
+# is the long shoulder you walk up.
+MASK_BAND_MIN = 0.035
+MASK_BAND_MAX = 0.175
+CLIFF_SCALE = 0.0000210   # which ranges are cliffs, and on which side
 # Chosen against the real field, over 120 km square: 12.6% of the world is
 # above 100 m, 6.3% above 300, 1.5% above 450. A third of the world above
 # 300 m was the first attempt, and a world that is a third mountain is not a
@@ -59,7 +68,7 @@ MASK_HI = 0.74            # above this it is mountain, and as tall as it gets
 # HOW THE MASSIF IS BUILT. The widest octave is 20,000 px from crest to crest
 # and the narrowest 625, which is twenty tiles -- big enough to see the grain of
 # a slope, small enough that it is not noise on the screen.
-BASE_LAM = 20000.0
+BASE_LAM = 8000.0
 OCTAVES = 6
 GAIN = 0.62               # each octave this much weaker than the one before
 LACUNARITY = 0.5          # ...and half the wavelength
@@ -82,11 +91,22 @@ OY = 37500.0
 
 
 def _mask(X, Y):
-    """How much mountain there is here: 0 in the lowlands, 1 on the ranges."""
+    """How much mountain there is here: 0 in the lowlands, 1 on the ranges.
+
+    AND IT IS NOT THE SAME STEEPNESS EVERYWHERE. How wide the band is over
+    which a range rises is set by another slow field, so in one place the
+    ground lifts away over a kilometre and in the next the same range comes up
+    as a WALL: a cliff face on one side and a long walkable shoulder on the
+    other. That is what a real range looks like, and it is also the only shape
+    that gives the thing worth having -- a man on top of it looking straight
+    down at the ground he would have to walk a kilometre to reach.
+    """
     m = fbm((X + OX) * RANGE_SCALE, (Y + OY) * RANGE_SCALE, SEED + 7, octaves=2)
-    e = (m - MASK_LO) / (MASK_HI - MASK_LO)
+    band = fbm((X + OX) * CLIFF_SCALE, (Y + OY) * CLIFF_SCALE, SEED + 91, octaves=2)
+    band = MASK_BAND_MIN + (MASK_BAND_MAX - MASK_BAND_MIN) * band
+    e = (m - MASK_LO) / band
     e = np.clip(e, 0.0, 1.0)
-    return e * e * (3.0 - 2.0 * e)        # smoothstep: foothills, not a cliff
+    return e * e * (3.0 - 2.0 * e)        # smoothstep: foothills, or a cliff
 
 
 def _shape(X, Y):
@@ -132,7 +152,10 @@ def height_at(x: float, y: float) -> int:
     x = np.float32(x)
     y = np.float32(y)
     m = fbm((x + OX) * RANGE_SCALE, (y + OY) * RANGE_SCALE, SEED + 7, octaves=2)
-    e = (float(m) - MASK_LO) / (MASK_HI - MASK_LO)
+    b = float(fbm((x + OX) * CLIFF_SCALE, (y + OY) * CLIFF_SCALE, SEED + 91,
+                  octaves=2))
+    e = (float(m) - MASK_LO) / (MASK_BAND_MIN
+                                + (MASK_BAND_MAX - MASK_BAND_MIN) * b)
     e = 0.0 if e < 0.0 else (1.0 if e > 1.0 else e)
     e = e * e * (3.0 - 2.0 * e)
     if e <= 0.0:
@@ -160,14 +183,38 @@ def slope_at(x: float, y: float) -> int:
     return height_at(x, y)
 
 
-def step_ok(z: int, x: float, y: float, airborne: bool) -> bool:
-    """May he move to (x, y) from height z?
+# AS HIGH AS HE MAY STEP IN ONE MOVE. It was one metre, and one metre is
+# wrong, because a MOVE is not a metre: walking covers four pixels a frame and
+# sprinting covers seven, and on ground that climbs a metre every two pixels
+# that is two or three metres of climb inside a single step -- so he would be
+# stopped dead on a slope he could plainly walk up. Measured, on the massif, it
+# was happening.
+#
+# Three metres, and the number is not arbitrary: HE CAN JUMP TWO AND A HALF. A
+# man who can jump onto a ledge can walk onto it, and the rule is now the one
+# he would expect -- if it is walkable, it is jumpable, and if it is jumpable,
+# it is walkable.
+STEP_UP_M = 2.5          # the knee: what he can get over with no run at all
+SLOPE_MAX = 0.75         # and the grade he can keep his feet on, metre per metre
 
-    ONE METRE UP, OR JUMP IT. Everything else is legal: any drop, any distance
-    along a level, and one step at a time -- but a two-metre wall is a wall
-    until his feet leave the ground.
+
+def step_ok(z: int, x: float, y: float, airborne: bool,
+            dist: float = 0.0) -> bool:
+    """May he move to (x, y) from height z, having come `dist` pixels?
+
+    A WALL IS A WALL AND A SLOPE IS NOT, and the difference is DISTANCE. A
+    fixed allowance cannot tell them apart: walking covers four pixels a frame
+    and sprinting covers seven, so on ground that climbs a metre every two
+    pixels a sprint crosses three metres in one step where a walk crosses one
+    -- and the sprinter was stopped dead on a slope the walker strolled up.
+
+    So the allowance is the grade he can stand on, times how far he moved, plus
+    the knee he can get over from a standstill. Sprinting SIXTY PER CENT FASTER
+    now buys sixty per cent more climb in the same step, which is the whole
+    point of sprinting, and a two-metre ledge is still a wall because no
+    distance of walking along the ground gets you up it.
     """
     h = height_at(x, y)
-    if h <= z + 1:
+    if h <= z + STEP_UP_M + SLOPE_MAX * dist:
         return True
     return airborne

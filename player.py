@@ -236,14 +236,15 @@ class Player:
             # ONE METRE UP, OR JUMP IT. Everything else is legal: any drop, any
             # distance along the level, one step at a time.
             if self.elevation is None or terrain.step_ok(self.ground_z, nx, ny,
-                                                         self.airborne):
+                                                         self.airborne,
+                                                         length):
                 self.x, self.y = nx, ny
             else:
                 # A WALL IS NOT A CORNER. Try each axis on its own, so he
                 # slides along the face of it instead of sticking to it.
-                if terrain.step_ok(self.ground_z, nx, self.y, self.airborne):
+                if terrain.step_ok(self.ground_z, nx, self.y, self.airborne, length):
                     self.x = nx
-                elif terrain.step_ok(self.ground_z, self.x, ny, self.airborne):
+                elif terrain.step_ok(self.ground_z, self.x, ny, self.airborne, length):
                     self.y = ny
 
         # 30 s of sprinting empties stamina; 20 s of rest refills it. Once
