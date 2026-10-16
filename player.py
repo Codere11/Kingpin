@@ -9,6 +9,7 @@ import math
 import pygame
 import face
 import effects
+import terrain
 
 import items
 import guns
@@ -37,6 +38,17 @@ HOLD: dict[str, tuple[int, bool, float]] = {
     "bread": (30, False, 10.0),
     "wheat_seed": (30, False, 10.0),
 }
+
+# -- THE THIRD AXIS ---------------------------------------------------------
+# A jump is a BOUNCE, not a parabola that stops dead at the bottom: he leaves
+# the ground hard, and the landing throws him up again a little, twice. That
+# is the whole of the "funny", and it is four numbers.
+JUMP_V = 12.0             # metres a second he leaves the ground at
+GRAVITY = 30.0            # metres a second, squared
+BOUNCE_KEEP = 0.42        # how much of the fall the landing gives back
+BOUNCE_FROM = 4.0         # ...but only off a fall faster than this
+BOUNCE_MAX = 3            # and it dies out after three of them
+STEP_GRACE = 0.35         # metres of a ledge he will still catch on the way up
 
 SWING_COOLDOWN = 1.5
 SWING_ANIM = 0.32
@@ -79,6 +91,14 @@ class Player:
         self.attack_flash = 0.0
         self.hurt_flash = 0.0
         self.level_flash = 0.0
+        # -- THE THIRD AXIS -------------------------------------------------
+        self.z = 0.0                   # how high his feet are, in metres
+        self.ground_z = 0              # the height of the ground beneath them
+        self.jump_v = 0.0              # upward speed while he is off it
+        self.airborne = False
+        self.bounces = 0
+        self.squash = 0.0              # landing squash, 1 -> 0
+        self.elevation = None          # terrain.height_at, handed over by main
         self.swing_anim = 0.0
         self.skill_speed = 1.0         # movement skill multiplier
         self.skill_stamina = 1.0       # stamina-duration multiplier
@@ -119,6 +139,15 @@ class Player:
         self.bleed = 0.0
         self.hit_flash = 0.0
         self.hunger = max(self.hunger, 60.0)
+
+    def jump(self) -> bool:
+        """Off the ground, if he is on it."""
+        if self.airborne or self.dead:
+            return False
+        self.jump_v = JUMP_V
+        self.airborne = True
+        self.bounces = 0
+        return True
 
     def can_swing(self) -> bool:
         return self.swing_cd <= 0.0
@@ -201,8 +230,21 @@ class Player:
                 speed = self.speed * 10.0 * speed_scale
             else:
                 speed = (self.sprint_speed if sprinting else self.speed) * speed_scale
-            self.x += dx * speed * dt
-            self.y += dy * speed * dt
+            length = speed * dt
+            nx = self.x + dx * length
+            ny = self.y + dy * length
+            # ONE METRE UP, OR JUMP IT. Everything else is legal: any drop, any
+            # distance along the level, one step at a time.
+            if self.elevation is None or terrain.step_ok(self.ground_z, nx, ny,
+                                                         self.airborne):
+                self.x, self.y = nx, ny
+            else:
+                # A WALL IS NOT A CORNER. Try each axis on its own, so he
+                # slides along the face of it instead of sticking to it.
+                if terrain.step_ok(self.ground_z, nx, self.y, self.airborne):
+                    self.x = nx
+                elif terrain.step_ok(self.ground_z, self.x, ny, self.airborne):
+                    self.y = ny
 
         # 30 s of sprinting empties stamina; 20 s of rest refills it. Once
         # emptied, he is winded until it is completely full again.
@@ -214,6 +256,30 @@ class Player:
             self.stamina = min(self.max_stamina, self.stamina + dt * 1.5)
             if self.exhausted and self.stamina >= self.max_stamina:
                 self.exhausted = False
+
+        # -- THE THIRD AXIS -------------------------------------------------
+        if self.elevation is not None:
+            under = float(self.elevation(self.x, self.y))
+            self.ground_z = int(under)
+            if not self.airborne:
+                self.z = under                    # his feet are on it
+            else:
+                # HE LANDS ON WHAT IS UNDER HIM WHEN HE GETS THERE, so a jump
+                # onto a two-metre ledge works by walking over it in the air.
+                self.z += self.jump_v * dt
+                self.jump_v -= GRAVITY * dt
+                if self.z <= under:
+                    self.z = under
+                    if self.jump_v < -BOUNCE_FROM and self.bounces < BOUNCE_MAX:
+                        self.jump_v = -self.jump_v * BOUNCE_KEEP
+                        self.bounces += 1
+                    else:
+                        self.jump_v = 0.0
+                        self.airborne = False
+                        self.bounces = 0
+                    self.squash = 1.0             # and he squashes on landing
+        if self.squash > 0.0:
+            self.squash = max(0.0, self.squash - dt * 4.5)
 
         # The mouse fully controls which way he is facing (his POV/orientation),
         # independently of which way he is walking.
@@ -230,6 +296,16 @@ class Player:
              held: str | None = None) -> None:
         sx = self.x - cam_x
         sy = self.y - cam_y
+        # A SHADOW ON THE GROUND, and it is the only thing that says how high he
+        # is: the camera climbs with him, so without it a jump looks like
+        # nothing happening at all.
+        lift = max(0.0, self.z - float(self.ground_z))
+        if lift > 0.0:
+            k = 1.0 / (1.0 + lift * 0.35)
+            r = max(3, int(round(11 * k)))
+            shade = pygame.Surface((r * 2, r), pygame.SRCALPHA)
+            pygame.draw.ellipse(shade, (12, 16, 12, int(120 * k)), shade.get_rect())
+            screen.blit(shade, (int(sx) - r, int(sy) + 6))
         fx, fy = self.facing
 
         screen.blit(self._shadow, (sx - 15, sy - 4))
@@ -240,10 +316,27 @@ class Player:
         right = (sx + fy * 4, sy - fx * 4)
         pygame.draw.polygon(screen, (34, 30, 26), (tip, left, right))
 
-        # torso
-        body = (238, 228, 228) if self.hit_flash > 0.0 else (54, 74, 122)
-        pygame.draw.circle(screen, body, (sx, sy), 11)
-        pygame.draw.circle(screen, (30, 44, 74), (sx, sy), 11, 2)
+        # SQUASH AND STRETCH, which is most of what makes a jump look funny.
+        # He is long on the way up and down and flat for a moment on landing,
+        # and the flat part is the one that reads: `squash` is 1.0 the instant
+        # his feet touch and runs down to 0 over a fifth of a second.
+        stretch = 0.0
+        if self.airborne:
+            stretch = max(-0.32, min(0.32, self.jump_v * 0.030))
+        stretch -= self.squash * 0.38
+        if stretch:
+            rw = int(round(11 * (1.0 - stretch * 0.55)))
+            rh = int(round(11 * (1.0 + stretch * 0.55)))
+            # torso
+            body = (238, 228, 228) if self.hit_flash > 0.0 else (54, 74, 122)
+            rect = pygame.Rect(int(sx) - rw, int(sy) - rh, rw * 2, rh * 2)
+            pygame.draw.ellipse(screen, body, rect)
+            pygame.draw.ellipse(screen, (30, 44, 74), rect, 2)
+        else:
+            # torso
+            body = (238, 228, 228) if self.hit_flash > 0.0 else (54, 74, 122)
+            pygame.draw.circle(screen, body, (sx, sy), 11)
+            pygame.draw.circle(screen, (30, 44, 74), (sx, sy), 11, 2)
 
         if held is not None:
             self._draw_held(screen, held, sx, sy, fx, fy, self.swing_progress)

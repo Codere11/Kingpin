@@ -49,6 +49,8 @@ import observer
 # ImportError at the moment of a death -- and the except that guards the call
 # would swallow it, and every death would go unrecorded with no sign why.
 import deaths
+import terrain
+import skyview
 import tournament
 import village as village_mod
 import war
@@ -652,6 +654,10 @@ def main() -> None:
 
     ore_field = ore.OreField(world.seed)
     player = Player(0.0, 0.0)
+    # THE GROUND HAS A HEIGHT NOW, and he can ask it. Handed over as a plain
+    # function so Player never has to know what a World is.
+    player.elevation = terrain.height_at
+    sky = skyview.SkyView(world)
     player.god = test_mode
     # THE TOWNS CAN NOW SEE HIM. One assignment, so a village can put the
     # player in an election or in a ring without every caller passing him down.
@@ -1698,6 +1704,17 @@ def main() -> None:
 
     def draw_exterior(cx, cy, show_names: bool = False, target=None) -> None:
         target = target if target is not None else screen
+        if player.z > 0.05:
+            # FROM UP HERE THE GROUND IS NOT WHERE IT WAS. It is drawn as a
+            # view from above instead of a floor -- the same fixed grid of
+            # samples over more and more world, which is the wider view and the
+            # blur in one. EVERYTHING ELSE IS STILL FLAT AND MOVES ASIDE: the
+            # trees and the villages and the fences are drawn at ground scale,
+            # so they are skipped here until they can be projected too. This is
+            # a first look at the height, not the finished thing.
+            target.blit(sky.render(cx + vw / 2.0, cy + vh / 2.0, player.z,
+                                   (vw, vh)), (0, 0))
+            return
         static_layer.draw(target, cx, cy, vw, vh)
         blood.draw(target, cx, cy, vw, vh)
         world_villages = villages.visible(cx, cy, vw, vh)
@@ -3020,6 +3037,13 @@ def main() -> None:
                     compass_menu.open(compass_state.home is not None)
                     compass_open = True
                     pygame.mouse.set_visible(True)
+            elif (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
+                  and not placing and not inventory_open):
+                if player.jump():
+                    # BAKE BEFORE HE LOOKS. The view is cached tiles, and a
+                    # placeholder square where the world should be is worse
+                    # than a slow frame at the one moment he is watching.
+                    sky.prebake(player.x, player.y, player.z)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 stack = inventory.selected_stack()
                 kind = stack.defn.id if stack else None
