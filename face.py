@@ -32,6 +32,8 @@ TONGUE = (198, 104, 112)     # the working face's whole point
 MAW = (104, 42, 42)         # an open, shouting mouth -- the war face
 LIP = (176, 96, 92)         # one pixel of lip, all the way round it
 SOCKET = (170, 124, 94)     # the hollow a starving man's eye sits down in
+SCAR = (172, 96, 84)        # a line of it across the face
+BEARD = (64, 44, 34)        # dark, and most of the lower face
 TOOTH = (238, 236, 228)     # two of them, at the top of it
 LID = None                  # filled with the skin at draw time
 
@@ -117,6 +119,68 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
     angry = (mood == "angry")
     hurt = (mood == "hurt")
     sly = (mood == "sly")
+
+    if mood == "veteran":
+        # THE OLD SOLDIER. Not an event and not a state but a HISTORY: the face
+        # of a man who has maxed every way there is of hurting somebody. Three
+        # things and nothing else -- ONE eyebrow cocked hard down the way the
+        # war face wears it and the other left level, a scar across the eye
+        # under the level one, and a dark beard over most of the lower face.
+        #
+        # He is otherwise RESTING. Round eyes, a flat mouth. The whole point is
+        # that he is not doing anything at all and still looks like that.
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            pygame.draw.circle(screen, WHITE, (cx, iy), wr)
+            pygame.draw.circle(screen, EYE,
+                               (cx + int(round(fx * wr * 0.45)),
+                                iy + int(round(fy * wr * 0.45))), pr)
+
+        # ONE BROW DOWN AND ONE LEVEL. -1 is the war brow, taken straight from
+        # the war face so the two are the same mark; +1 is the resting one.
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            if sgn < 0:
+                by = int(round(iy - wr - r * 0.04))
+                bw = max(1, int(round(r * 0.26)))
+                tw = max(2, r // 5)
+                pygame.draw.line(screen, BROW, (cx + bw, by - tw),
+                                 (cx - bw, by + tw), tw)
+            else:
+                by = int(round(iy - wr - r * 0.20))
+                bw = max(1, int(round(r * 0.20)))
+                tw = max(1, r // 6)
+                pygame.draw.line(screen, BROW, (cx - bw, by), (cx + bw, by), tw)
+
+        if r >= 6:
+            pygame.draw.line(screen, NOSE, (ix, iy + wr),
+                             (ix, int(round(hy + r * NOSE_DOWN))), 1)
+
+        # THE BEARD, AND IT FOLLOWS THE JAW. Rows down from the lip line, each
+        # one as wide as the HEAD still is at that depth -- computed from the
+        # circle rather than guessed, so it sits on the face instead of
+        # hanging off the sides of it.
+        hc, vc = int(round(hx)), int(round(hy))
+        m_y = int(round(hy + r * MOUTH_DOWN))
+        for dy in range(4, r + 1):
+            y = vc + dy
+            hw = int(math.sqrt(max(0.0, r * r - dy * dy))) - 1
+            if hw < 1:
+                continue
+            pygame.draw.line(screen, BEARD, (hc - hw, y), (hc + hw, y), 1)
+        # ...and a moustache over the lip, so the mouth has something to sit in
+        pygame.draw.line(screen, BEARD, (hc - max(2, r // 3), m_y - 1),
+                         (hc + max(2, r // 3), m_y - 1), 1)
+        # THE MOUTH, ON TOP OF THE BEARD, or it would vanish into it.
+        hw = max(1, int(round(r * 0.26)))
+        pygame.draw.line(screen, MOUTH, (ix - hw, m_y), (ix + hw, m_y),
+                         max(1, r // 8))
+        # AND THE SCAR, ACROSS THE EYE UNDER THE LEVEL BROW -- last, so it
+        # crosses the white and the pupil rather than being hidden by them.
+        cx = ix + sep
+        pygame.draw.line(screen, SCAR, (cx - max(1, r // 6), iy - wr - 1),
+                         (cx + max(1, r // 6), iy + wr + 2), 1)
+        return
 
     if mood == "starved":
         # THE STARVED FACE. The ONLY mood that is a state rather than an event,
@@ -333,7 +397,7 @@ def mood_of(hurt_flash: float, attack_flash: float,
 
 def warm(radii=range(4, 13), dirs=DIRS,
          moods=("normal", "focus", "angry", "hurt", "sly",
-                  "starved")) -> int:
+                  "starved", "veteran")) -> int:
     """Build every face the game can ask for BEFORE the first frame.
 
     A cache miss in the middle of a frame is twelve draw calls where the frame
