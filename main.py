@@ -2795,6 +2795,7 @@ def main() -> None:
     # died with UnboundLocalError before the world had even finished building.
     # 1.0 means "no height", which is right everywhere the warp is not applied.
     height_f = 1.0
+    _warp_on = False
 
     while running:
         dt = min(clock.tick(FPS) / 1000.0, 0.05)
@@ -4618,8 +4619,15 @@ def main() -> None:
         # -- 1.61 each way is 2.6 times the pixels, where the old growth law
         # wanted four. The magnification at the other end needs nothing: it
         # reads from CLOSER in than the view already is.
-        height_f = 1.0 if player.z <= 3.0 else 1.61
-        if height_f > 1.001:
+        # THE FRAME NO LONGER HAS TO GROW AT ALL. The old warp pushed every
+        # pixel away from the player by its own distance, so it had to reach
+        # 1/0.62 of the view to find the ground it was asking for. Blocks are
+        # drawn in place now and a block only ever reads from its own
+        # neighbourhood -- so the frame is the view, and the render stopped
+        # paying for four times the pixels the moment he climbed anything.
+        height_f = 1.0
+        _warp_on = player.z > 3.0
+        if _warp_on:
             vw = max(2, int(vw * height_f))
             vh = max(2, int(vh * height_f))
         if view_surf is None or view_surf.get_size() != (vw, vh):
@@ -4641,7 +4649,7 @@ def main() -> None:
         else:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
-        if height_f > 1.001:
+        if _warp_on:
             skip_standing[0] = True
         draw_exterior(cam_x, cam_y, True)
         skip_standing[0] = False
@@ -4741,7 +4749,7 @@ def main() -> None:
             # kept the last frame it had. That is what "it freezes instead of
             # showing a game over screen" was: a correct panel, drawn offscreen.
             screen = real_screen
-            if height_f > 1.001:
+            if _warp_on:
                 # THE GROUND BELOW HIM IS FURTHER OFF, SO IT IS DRAWN SMALLER
                 # -- per pixel, by how far below him that patch of ground is.
                 # The frame is drawn 1:1 and bigger than the view, and this
@@ -4812,7 +4820,7 @@ def main() -> None:
 
             # ---- ...and back to the window ---------------------------------
             screen = real_screen
-            if height_f > 1.001:
+            if _warp_on:
                 # THE GROUND BELOW HIM IS FURTHER OFF, SO IT IS DRAWN SMALLER
                 # -- per pixel, by how far below him that patch of ground is.
                 # The frame is drawn 1:1 and bigger than the view, and this

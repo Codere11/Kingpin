@@ -206,103 +206,68 @@ def height_offset(X: float, Y: float, px: float, py: float, z: float,
     return float(dx), float(dy)
 
 
+BLOCK = 32.0        # the world's block, the same one the tiles and the ground use
+
+
 def height_warp(frame: pygame.Surface, px: float, py: float, z: float,
                 out_size, k: float = _WARP_K) -> pygame.Surface:
-    """ONLY THE LOWER GROUND IS PACKED. THE REST IS LEFT EXACTLY ALONE.
+    """EVERY BLOCK DRAWN AT ITS OWN SIZE, IN ITS OWN PLACE.
 
-    THE PICTURE STARTS AS THE FLAT ONE. The middle of the frame, at its own
-    scale, copied across untouched -- so the ground he is standing on and
-    everything at his own level or above comes out PIXEL FOR PIXEL IDENTICAL to
-    what it would be on the flat. He cannot shrink, because nothing about him is
-    ever resampled.
+    THE WORLD IS ALREADY DIVIDED INTO BLOCKS, so this does not need to move
+    anything about: a block stays exactly where it is, in its own cell, and
+    only the ground INSIDE it is drawn bigger or smaller, about the block's
+    own centre.
 
-    THEN the ground at every other height is written over with the same ground
-    read from the right place:
+        source = block_centre + (pixel - block_centre) / s
 
-        s = 1 + (h - z) * k      clamped to [0.62, 2.00]
+    Nothing moves sideways, nothing tears, and neighbouring blocks still meet
+    edge to edge -- because each one fills its own cell whatever size its
+    contents are.
 
-    so ground higher than him draws BIGGER -- nearer the camera, the way a hill
-    nearer the camera is bigger -- and ground below him draws smaller. His own
-    level is one to one and is never touched, which is why he cannot shrink.
+    WHAT WENT WRONG BEFORE. The same scale was applied RADIALLY, about the
+    player: every pixel was pushed toward or away from him by its own distance,
+    so a block near the middle of the screen and a block at the edge of it
+    moved by different amounts and the grid came apart at the seams. Bent, and
+    then broken. The scale was never the problem -- it was being applied from
+    the player instead of from the block.
 
-    THAT IS THE ENTIRE CUE. No shadow, no shading, no line on the ground: the
-    world gets bigger as you climb and smaller as you fall, and you can read
-    the slope you are standing on off the SIZE of the ground under your feet.
+    A block higher than the camera draws its ground bigger, a block lower draws
+    it smaller, and a block at his own level is untouched.
     """
     fw, fh = frame.get_size()
     ow, oh = int(out_size[0]), int(out_size[1])
-    # 1. THE FLAT PICTURE, straight out of the middle of the frame, 1:1.
     out = frame.subsurface(((fw - ow) // 2, (fh - oh) // 2, ow, oh)).copy()
     X, Y = np.meshgrid(np.arange(ow, dtype=np.float32) - ow * 0.5,
                        np.arange(oh, dtype=np.float32) - oh * 0.5, indexing="ij")
-    # 2. THE SCALE, at a quarter resolution -- it is a smooth function of the
-    #    terrain, which does not change by a step more than once in forty px.
-    # ONE SCALE PER BLOCK, AND THE BLOCK IS THEN RIGID.
-    #
-    # The scale is worked out at the centre of each TILE and held for the whole
-    # of it, and the map is blown up with NEAREST rather than smooth -- so a
-    # block is drawn at one size, top to bottom and side to side, and never
-    # bent. Two neighbouring blocks at different heights are drawn at different
-    # sizes and there is a step between them, which is exactly what ground at
-    # two heights looks like from above.
-    #
-    # Smoothing this map was the thing making the world bend: a tree leaned,
-    # a wall curved, and the ground between them smeared. Height is not a
-    # gradient, it is a NUMBER PER BLOCK.
-    #
-    # AND THE BLOCKS ARE LINED UP WITH THE WORLD, not with the frame. Laid out
-    # from the frame's own corner they slide a little with every step the
-    # player takes and the whole landscape shimmers as he walks.
-    blk = 32.0
-    _bx = (px - fw * 0.5) % blk
-    _by = (py - fh * 0.5) % blk
-    qw = int(math.ceil((ow + blk) / blk)) + 1
-    qh = int(math.ceil((oh + blk) / blk)) + 1
-    qx = (np.arange(qw, dtype=np.float32) * blk) - _bx
-    qy = (np.arange(qh, dtype=np.float32) * blk) - _by
-    QX, QY = np.meshgrid(qx, qy, indexing="ij")
-    qdx = QX
-    qdy = QY
-    qs = np.ones_like(QX)
-    for _ in range(3):
-        qdx = QX / qs
-        qdy = QY / qs
-        h = terrain.height_array(px + qdx, py + qdy)
-        qs = _scale(z, h, k)
-    # make_surface reads its input as COLOUR, so 0..1 has to be encoded 0..255
-    # first -- decoding 0.90 and 0.50 as colours truncated both to 0.
-    # TWO TO ONE IS THE RANGE OF THE SCALE, so sixteen bits of it are plenty
-    # -- and make_surface reads its input as COLOUR 0..255, which is why the
-    # scale is encoded here rather than handed over as a float: 0.90 and 0.50
-    # both truncated to zero as colours and the whole frame went out at twenty
-    # times the offset.
-    _enc = np.clip((qs - _WARP_MIN) / (_WARP_MAX - _WARP_MIN) * 255.0,
-                   0.0, 255.0).astype(np.uint8)
-    # NEAREST, NOT SMOOTH. This is the line that decides whether blocks are
-    # blocks or a gradient.
-    _sm = pygame.transform.scale(
-        pygame.surfarray.make_surface(np.repeat(_enc[:, :, None], 3, 2)),
-        (ow, oh))
-    sc = (pygame.surfarray.pixels_red(_sm).astype(np.float32) / 255.0
-          * (_WARP_MAX - _WARP_MIN) + _WARP_MIN)
-    del _sm
-    # 3. WHICH PIXELS ARE AT ANY OTHER SCALE THAN HIS OWN.
-    idx = np.flatnonzero((np.abs(sc - 1.0) > 0.004).ravel())
-    if idx.size == 0:
+    # WHICH BLOCK IS EACH PIXEL IN, and where is that block's centre on screen
+    bx = np.floor((px + X) / BLOCK).astype(np.int32)
+    by = np.floor((py + Y) / BLOCK).astype(np.int32)
+    bcx = bx.astype(np.float32) * BLOCK + BLOCK * 0.5 - px
+    bcy = by.astype(np.float32) * BLOCK + BLOCK * 0.5 - py
+    # THE HEIGHT IS ASKED ONCE PER BLOCK, NOT ONCE PER PIXEL. There are a
+    # hundred and eighty blocks in view and a hundred and eighty thousand
+    # pixels, and the field costs the same either way.
+    bx0 = int(bx.min()); by0 = int(by.min())
+    nbx = int(bx.max()) - bx0 + 1
+    nby = int(by.max()) - by0 + 1
+    gx = (np.arange(nbx, dtype=np.float32) + bx0 + 0.5) * BLOCK - px
+    gy = (np.arange(nby, dtype=np.float32) + by0 + 0.5) * BLOCK - py
+    GX, GY = np.meshgrid(gx, gy, indexing="ij")
+    sc = _scale(z, terrain.height_array(px + GX, py + GY), k)
+    sc = sc[bx - bx0, by - by0]
+    # AND THE BLOCK'S CONTENTS SCALE ABOUT THE BLOCK'S OWN CENTRE.
+    dx = bcx + (X - bcx) / sc
+    dy = bcy + (Y - bcy) / sc
+    flat = np.flatnonzero((np.abs(sc - 1.0) > 0.004).ravel())
+    if flat.size == 0:
         return out
-    dx = X.ravel()[idx] / sc.ravel()[idx]
-    dy = Y.ravel()[idx] / sc.ravel()[idx]
     src = pygame.surfarray.pixels3d(frame)
-    sx = np.clip((dx + fw * 0.5).astype(np.int32), 0, fw - 1)
-    sy = np.clip((dy + fh * 0.5).astype(np.int32), 0, fh - 1)
+    sx = np.clip((dx.ravel()[flat] + fw * 0.5).astype(np.int32), 0, fw - 1)
+    sy = np.clip((dy.ravel()[flat] + fh * 0.5).astype(np.int32), 0, fh - 1)
     got = src[sx, sy]
     del src
-    # 4. AND ONLY THOSE PIXELS ARE WRITTEN.
-    # INDEXED AS [x][y], NOT flattened: pixels3d gives a view and .reshape on
-    # it hands back a COPY, so writing through the flattened one wrote into
-    # nothing at all and the whole thing silently did nothing.
     dst = pygame.surfarray.pixels3d(out)
-    dst[idx // oh, idx % oh] = got
+    dst[flat // oh, flat % oh] = got
     del dst
     return out
 
