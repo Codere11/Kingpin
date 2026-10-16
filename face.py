@@ -29,6 +29,8 @@ NOSE = (182, 144, 110)   # LIGHTER than the head's outline (150,112,82),
                             # which it was the same colour as -- an invisible nose
 MOUTH = (128, 82, 66)
 TONGUE = (198, 104, 112)     # the working face's whole point
+MAW = (104, 42, 42)         # an open, shouting mouth -- the war face
+TOOTH = (238, 236, 228)     # two of them, at the top of it
 LID = None                  # filled with the skin at draw time
 
 # Where the features sit, as a fraction of the head's radius.
@@ -75,10 +77,19 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
             mood: str = "normal", skin=(216, 172, 132)) -> None:
     """The face itself, into any surface, centred on (hx, hy).
 
+    THREE MOODS, ONE GEOMETRY.
+
+      normal   level brows, round eyes, a flat mouth
+      focus    brows pulled down and IN, eyes narrowed to a slit with the
+               pupil still in it, a small pressed mouth, the tongue out --
+               a man trying to be precise
+      angry    brows driven down STEEPLY and drawn thick, the eye pressed to a
+               harder slit, and the mouth actually OPEN, because a flat line
+               is a scowl and a mouth that has come open is a man shouting
+
     KEPT DELIBERATELY BOLD. At a head of radius eight an eye is four pixels
     across, and a ring around a four-pixel white reads as a pair of GLASSES --
-    which is what the first version looked like. So: a white disc, a dark
-    pupil in it, and nothing else around it.
+    which is what the first version looked like.
     """
     ex = hx + fx * r * EYE_LOOK
     ey = hy - r * EYE_UP + fy * r * EYE_LOOK
@@ -87,37 +98,56 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
     pr = max(1, int(round(r * PUPIL_R)))
     ix, iy = int(round(ex)), int(round(ey))
     focusing = (mood == "focus")
+    angry = (mood == "angry")
 
-    # THE EYES.
-    lid = max(1, int(round(wr * 1.1))) if focusing else 0
+    # THE EYES, AND HOW FAR THE LID COMES DOWN.
+    if angry:
+        lid = max(1, int(round(wr * 1.45)))     # the brow is pressing it shut
+    elif focusing:
+        lid = max(1, int(round(wr * 1.1)))
+    else:
+        lid = 0
     for sgn in (-1, 1):
         cx = ix + sgn * sep
         pygame.draw.circle(screen, WHITE, (cx, iy), wr)
-        if focusing:
+        if lid:
             # A SLIT, AND THEN THE PUPIL ON TOP OF IT. The lid comes FIRST so
             # that it cuts the white down to a band, and the pupil is drawn
             # after so the man is still looking at something -- drawn the
             # other way round the slit was blank and the face went dead.
             # Sized to the EYE, not the head.
-            pygame.draw.rect(screen, skin,
-                             (cx - wr, iy - wr, wr * 2 + 1, lid))
-        # AND THE PUPIL SITS IN THE MIDDLE OF WHAT IS LEFT. Without the push
-        # down it landed on the lid, with the white underneath it, and the man
-        # looked like he was rolling his eyes upward at the ceiling.
+            pygame.draw.rect(screen, skin, (cx - wr, iy - wr, wr * 2 + 1, lid))
+        # AND THE PUPIL SITS IN THE MIDDLE OF WHAT IS LEFT.
         pygame.draw.circle(screen, EYE,
                            (cx + int(round(fx * wr * 0.45)),
                             iy + lid // 2 + int(round(fy * wr * 0.45))), pr)
 
-    # THE BROWS. Level, or pulled down and in for the working face.
-    by = int(round(iy - wr - r * (0.10 if focusing else 0.20)))
-    bw = max(1, int(round(r * 0.20)))
-    tw = max(1, r // 6)
-    for sgn in (-1, 1):
-        cx = ix + sgn * sep
-        if focusing:
+    # THE BROWS.
+    if angry:
+        # A HARD STEEP V, AND THICK. The inner end comes down almost level with
+        # the eye and the outer end rides high; the stroke is two or three
+        # pixels because at this size a hairline reads as a smudge, not a brow.
+        by = int(round(iy - wr - r * 0.04))
+        bw = max(1, int(round(r * 0.26)))
+        tw = max(2, r // 5)
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
             pygame.draw.line(screen, BROW, (cx + sgn * bw, by - tw),
                              (cx - sgn * bw, by + tw), tw)
-        else:
+    elif focusing:
+        by = int(round(iy - wr - r * 0.10))
+        bw = max(1, int(round(r * 0.20)))
+        tw = max(1, r // 6)
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            pygame.draw.line(screen, BROW, (cx + sgn * bw, by - tw),
+                             (cx - sgn * bw, by + tw), tw)
+    else:
+        by = int(round(iy - wr - r * 0.20))
+        bw = max(1, int(round(r * 0.20)))
+        tw = max(1, r // 6)
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
             pygame.draw.line(screen, BROW, (cx - bw, by), (cx + bw, by), tw)
 
     # THE NOSE.
@@ -125,32 +155,39 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         pygame.draw.line(screen, NOSE, (ix, iy + wr),
                          (ix, int(round(hy + r * NOSE_DOWN))), 1)
 
-    # THE MOUTH.
     my = int(round(hy + r * MOUTH_DOWN))
+
+    if angry:
+        # THE MOUTH IS OPEN. Not a line, not a grimace -- an ellipse, dark
+        # inside, with two teeth at the top of it. It is the difference
+        # between a man who is cross and a man who is coming for you.
+        mw = max(2, int(round(r * 0.30)))
+        mh = max(1, int(round(r * 0.16)))
+        pygame.draw.ellipse(screen, MAW,
+                            (ix - mw, my - mh, mw * 2 + 1, mh * 2 + 1))
+        if r >= 6:
+            # TWO TEETH, EVENLY EITHER SIDE OF THE MIDDLE. The first cut put
+            # one at the far left edge of the mouth and one just right of
+            # centre, which is a snaggletooth, not a shout.
+            tw2 = max(1, mw // 2)
+            ty = my - mh + 1
+            pygame.draw.rect(screen, TOOTH, (ix - tw2, ty, tw2, 1))
+            pygame.draw.rect(screen, TOOTH, (ix + 1, ty, tw2, 1))
+        return
+
+    # THE MOUTH.
     hw = max(1, int(round(r * (0.16 if focusing else 0.26))))
     pygame.draw.line(screen, MOUTH, (ix - hw, my), (ix + hw, my), max(1, r // 8))
 
-    # AND THE TONGUE, OUT OF THE CORNER OF IT.
+    # AND THE TONGUE, OUT OF THE CORNER OF IT -- one pixel across, three deep.
     if focusing:
-        # A SIMPLE V, HANGING FROM THE MOUTH LINE DOWNWARD. It was a disc
-        # centred a pixel BELOW the mouth, which put its top edge a pixel
-        # ABOVE the mouth -- so the tongue looked like it grew out of the
-        # man's upper lip. The flat top of the V now sits exactly on the
-        # mouth line and only the point goes below it.
-        # A NUB. A man concentrating shows the tip of his tongue, not a flap:
-        # three pixels wide at the mouth line, tapering to one, two deep.
-        # Wider than that and it stops reading as a man and starts reading as
-        # a lizard. It hangs from just outside the corner so the mouth, which
-        # is the same width, is still a mouth.
-        # ONE PIXEL ACROSS, THREE DEEP. A thin line hanging off the corner of
-        # the mouth, and that is all it is -- barely there, which is the
-        # point. Scaled to the head so it grows with the man.
         depth = max(3, r * 3 // 8)
         x0 = ix + hw
         pygame.draw.line(screen, TONGUE, (x0, my), (x0, my + depth - 1), 1)
 
 
-def warm(radii=range(4, 13), dirs=DIRS, moods=("normal", "focus")) -> int:
+def warm(radii=range(4, 13), dirs=DIRS,
+         moods=("normal", "focus", "angry")) -> int:
     """Build every face the game can ask for BEFORE the first frame.
 
     A cache miss in the middle of a frame is twelve draw calls where the frame
