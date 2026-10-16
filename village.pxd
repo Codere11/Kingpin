@@ -52,6 +52,10 @@ cdef class NPC:
     cdef public double health
     cdef public double max_health
     cdef public double hit_flash
+    # The working face's timer. Same shape as hit_flash and for the same
+    # reason: it is read and written for EVERY man EVERY frame, and a dict
+    # lookup on the hot path is exactly what this file exists to remove.
+    cdef public double work_flash
     cdef public double bleed
     cdef public double drip_timer
     cdef public double panic

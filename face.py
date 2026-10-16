@@ -150,6 +150,23 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         pygame.draw.line(screen, TONGUE, (x0, my), (x0, my + depth - 1), 1)
 
 
+def warm(radii=range(4, 13), dirs=DIRS, moods=("normal", "focus")) -> int:
+    """Build every face the game can ask for BEFORE the first frame.
+
+    A cache miss in the middle of a frame is twelve draw calls where the frame
+    was expecting one blit. The heads in play are radius eight and nine, so
+    warming a small range costs a few milliseconds once at startup and means
+    the drawing path is a dict lookup and a blit and nothing else, ever.
+    """
+    n = 0
+    for r in radii:
+        for d in range(dirs):
+            for m in moods:
+                sprite(r, d, m)
+                n += 1
+    return n
+
+
 def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,
          fy: float = 0.0, mood: str = "normal", skin=(216, 172, 132)) -> None:
     """A face on a head of radius r centred at (hx, hy). One blit after the
@@ -175,3 +192,8 @@ if __name__ == "__main__":
         for dd in range(DIRS):
             sprite(rr, dd)
     print("   surfaces:", len(_CACHE))
+
+
+# EVERY FACE THE GAME CAN ASK FOR, MADE NOW. Deleting this line only means the
+# first man to face a new way pays for his own face once.
+WARMED = warm()

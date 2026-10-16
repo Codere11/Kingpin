@@ -271,6 +271,7 @@ _NPC_CDEF_STATE = (
     "health",
     "max_health",
     "hit_flash",
+    "work_flash",
     "bleed",
     "drip_timer",
     "panic",
@@ -324,10 +325,11 @@ class NPC:
     wants_drink: Any = ""
     use_fx: Any = None
     _last_phase: Any = None
-    # THE WORKING FACE, RUNNING DOWN. Raised by the ACTION -- a swing, a seed,
-    # a hammer -- and decayed once a frame in tick(). Zero is the resting
-    # face, and every man has it until he does something.
-    work_flash: Any = 0.0
+    # work_flash is NOT here on purpose. It is a `cdef public double` in
+    # village.pxd -- a C struct member, because it is read and written for
+    # every man every frame and a dict lookup is what that file exists to
+    # kill. A double and this class both default it to 0.0, so nothing
+    # changes, and hit_flash (its twin) is declared exactly the same way.
     # THE CARRY FOR A ROUNDED-UP TAX. economy.take_fifth() keeps the
     # fraction of a taxed unit it could not take yet, so one cigar still
     # pays its fifth eventually. It was never given a starting value, so
@@ -418,6 +420,7 @@ class NPC:
         self.health = 40
         self.alive = True
         self.hit_flash = 0.0
+        self.work_flash = 0.0
         self.bleed = 0.0
         self.drip_timer = 0.0
         self.panic = 0.0
