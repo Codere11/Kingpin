@@ -140,6 +140,54 @@ class DamageVignette:
                                  max(1, int(thickness * 0.5)))
 
 
+LEVEL_GOLD = (250, 216, 128)
+
+
+def draw_level_up(screen: pygame.Surface, sx: float, sy: float,
+                  t: float) -> None:
+    """A SHINE ACROSS THE BODY. t runs 0 -> 1 over the life of the flash.
+
+    He lights up for a moment, three rings go out from him at their own pace,
+    and eight sparks come off the body and rise. Built into a pad-sized surface
+    and blitted, like the cigar and the bottle in village._draw_use_fx, because
+    it needs real alpha and pygame's draw calls do not blend on their own.
+    """
+    p = max(0.0, min(1.0, t))
+    # AN OVERALL FADE, or the sparks WRAP: their own clock runs 1.4x and is
+    # taken modulo 1, so at the very end they come round again and the man
+    # keeps twinkling for ever. Everything is multiplied by this.
+    fade = 1.0 - p
+    pad = 56
+    surf = pygame.Surface((pad * 2, pad * 2), pygame.SRCALPHA)
+    cx = cy = pad
+    # THE BODY ITSELF, for the first third of it.
+    if p < 0.35:
+        a = int(155 * (1.0 - p / 0.35) * fade)
+        pygame.draw.circle(surf, (255, 250, 224, a), (cx, cy), 13)
+    # THREE RINGS, each a little behind the last.
+    for i in range(3):
+        k = p * 1.25 + i * 0.28
+        if k >= 1.0:
+            continue
+        a = int(150 * (1.0 - k) * fade)
+        if a > 0:
+            pygame.draw.circle(surf, LEVEL_GOLD + (a,), (cx, cy),
+                               int(8 + k * 36), 2)
+    # AND EIGHT SPARKS, rising off him.
+    for i in range(8):
+        k = (p * 1.4 + i * 0.13) % 1.0
+        a = int(210 * (1.0 - k) * fade)
+        if a <= 0:
+            continue
+        ang = i * 0.7853981634
+        rr = 6.0 + k * 22.0
+        x = cx + int(math.cos(ang) * rr)
+        y = cy + int(math.sin(ang) * rr * 0.6) - int(k * 15.0)
+        pygame.draw.circle(surf, (255, 252, 232, a),
+                           (x, y), max(1, 2 - int(k * 2)))
+    screen.blit(surf, (int(sx) - pad, int(sy) - pad))
+
+
 def draw_alert(screen: pygame.Surface, sx: float, sy: float,
                now: float, phase: float) -> None:
     """A small, hand-drawn looking '!' over someone the player cannot see."""

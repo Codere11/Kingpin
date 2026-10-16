@@ -8,6 +8,7 @@ import math
 
 import pygame
 import face
+import effects
 
 import items
 import guns
@@ -38,6 +39,7 @@ HOLD: dict[str, tuple[int, bool, float]] = {
 }
 
 SWING_COOLDOWN = 1.5
+LEVEL_FLASH = 1.6              # how long the shine lasts
 SWING_ANIM = 0.32
 
 
@@ -68,6 +70,7 @@ class Player:
         self.swing_cd = 0.0
         self.attack_flash = 0.0
         self.hurt_flash = 0.0
+        self.level_flash = 0.0
         self.swing_anim = 0.0
         self.skill_speed = 1.0         # movement skill multiplier
         self.skill_stamina = 1.0       # stamina-duration multiplier
@@ -150,6 +153,8 @@ class Player:
             self.health = min(self.max_health, self.health + self.heal_rate * dt)
         if self.swing_anim > 0.0:
             self.swing_anim = max(0.0, self.swing_anim - dt)
+        if self.level_flash > 0.0:
+            self.level_flash = max(0.0, self.level_flash - dt)
         if self.gun_cd > 0.0:
             self.gun_cd = max(0.0, self.gun_cd - dt)
         if self.reloading > 0.0:
@@ -242,6 +247,10 @@ class Player:
         face.draw(screen, _hx, _hy, 9, fx, fy,
                   face.mood_of(self.hurt_flash, self.attack_flash,
                                starved=self.hunger <= face.STARVED_SATIETY))
+        # AND THE SHINE, OVER HIM, while the level-up lasts.
+        if self.level_flash > 0.0:
+            effects.draw_level_up(screen, sx, sy,
+                                  1.0 - self.level_flash / LEVEL_FLASH)
 
     @staticmethod
     def _draw_held(screen: pygame.Surface, item_id: str, sx: float, sy: float,

@@ -2751,6 +2751,28 @@ def main() -> None:
                 # keyboard. The inspector is how the world is looked at, and
                 # the world does not stop for a menu.
                 pass
+            elif (test_mode and event.type == pygame.KEYDOWN
+                  and event.key == pygame.K_l):
+                # TEST MODE ONLY. L puts ONE LEVEL on a random skill, so the
+                # level-up shine can be looked at without earning it -- which
+                # at MOVE_NEED = 7,500,000 px would otherwise be about three
+                # hundred days of walking.
+                #
+                # A LEVEL IS A BAND, and the band is 0.125 for the three that
+                # run 0..1 and 1.0 for farming, which runs 0..8. Both are eight
+                # levels; the skill sets its own band, so this reads it rather
+                # than assuming one.
+                _lvl = random.choice(("movement", "axe", "shooting", "farming"))
+                if _lvl == "farming":
+                    skills.farming = min(8.0, float(int(skills.farming) + 1))
+                    _n = int(skills.farming)
+                else:
+                    _band = 0.125
+                    _v = getattr(skills, _lvl)
+                    setattr(skills, _lvl, min(1.0, (int(_v / _band) + 1) * _band))
+                    _n = int(getattr(skills, _lvl) / _band)
+                player.level_flash = player.LEVEL_FLASH
+                toast("%s  ->  level %d" % (_lvl.title(), _n))
             elif (test_mode and event.type == pygame.MOUSEBUTTONDOWN
                   and event.button == 1 and speed_button().collidepoint(event.pos)):
                 speed_i = (speed_i + 1) % len(SPEEDS)
