@@ -38,6 +38,7 @@ EYE_LOOK = 0.22             # how far the pair shifts toward the facing
 BROW_LIFT = 0.34
 MOUTH_DOWN = 0.42
 NOSE_DOWN = 0.18
+WORK_SECONDS = 0.8          # how long a work action shows on the face
 WHITE_R = 0.28              # the eye white, of r
 PUPIL_R = 0.15
 

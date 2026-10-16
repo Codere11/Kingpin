@@ -324,6 +324,10 @@ class NPC:
     wants_drink: Any = ""
     use_fx: Any = None
     _last_phase: Any = None
+    # THE WORKING FACE, RUNNING DOWN. Raised by the ACTION -- a swing, a seed,
+    # a hammer -- and decayed once a frame in tick(). Zero is the resting
+    # face, and every man has it until he does something.
+    work_flash: Any = 0.0
     # THE CARRY FOR A ROUNDED-UP TAX. economy.take_fifth() keeps the
     # fraction of a taxed unit it could not take yet, so one cigar still
     # pays its fifth eventually. It was never given a starting value, so
@@ -546,6 +550,14 @@ class NPC:
         """
         if not self.alive:
             return False
+        # THE WORKING FACE RUNS DOWN HERE. It is raised by a work action and
+        # not by the working day, so a man wears it while his hands are busy
+        # and loses it the moment they stop -- which is what makes it a
+        # transition rather than a uniform.
+        if self.work_flash > 0.0:
+            self.work_flash -= dt
+            if self.work_flash < 0.0:
+                self.work_flash = 0.0
         # THE EVENING IS HIS. The town says when the market is; who he spends
         # it with, and where they stand, he arranges himself -- along with
         # clearing up after it. These are the three fields the town used to
@@ -934,8 +946,19 @@ class NPC:
             # farmers doing it hundreds of times a second it was the whole
             # frame. The worker thread does it instead.
             ground.invalidate_tile(ttx, tty, immediate=False)
+        self._did_work()           # planted, watered, reaped or broke ground
         self.pause = 0.12          # a quick pair of hands
         return True
+
+    def _did_work(self) -> None:
+        """He has just DONE a piece of work. Raise the working face for a
+        moment; tick() runs it down again.
+
+        Deliberately not `if it is the working day`: a man standing idle in a
+        field at eleven in the morning is not concentrating, and a man who
+        swings once at dawn should show it once. The flag belongs to the act.
+        """
+        self.work_flash = face.WORK_SECONDS
 
     def _swing_tool(self, item: str = "shovel") -> bool:
         """Wear the tool in hand, taking a spare from the crate when it breaks.
@@ -1033,6 +1056,11 @@ class NPC:
                 _FOREST.fell(target, now)
             economy.cut_wood(self.village, self,
                              self.rng.randint(FELL_LOGS_MIN, FELL_LOGS_MAX))
+            # A TREE DOWN IS THE ACT, not the swing that happened to land on
+            # this frame. Raising the face in _swing_tool pinned it on: the
+            # pit swings once per FRAME, so a miner would have worn the
+            # tongue every frame of the day instead of at each piece of work.
+            self._did_work()
             # FELLING TEACHES THE AXE. It never did. gain_axe was called on a
             # soldier's swing, the player's swing and a villager's fight -- and
             # nowhere else -- so a man who spent his whole life in the woods
@@ -1817,8 +1845,12 @@ class NPC:
         pygame.draw.circle(screen, (150, 112, 82), (int(hx), int(hy)), 8, 1)
         head_r = 8
 
-        # ONE FACE FOR EVERYBODY, drawn to the head he happens to have.
-        face.draw(screen, hx, hy, head_r, fx, fy)
+        # ONE FACE FOR EVERYBODY, drawn to the head he happens to have -- and
+        # the WORKING face while the work is actually happening. The flag is
+        # raised by the act and has already been run down by tick(), so the
+        # tongue comes and goes with his hands.
+        mood = "focus" if self.work_flash > 0.0 else "normal"
+        face.draw(screen, hx, hy, head_r, fx, fy, mood)
 
         # THE COMMANDER'S HAT IS GONE. It was an eight-pixel cap painted over
         # the head, so the one man guaranteed to be looked at was the one man

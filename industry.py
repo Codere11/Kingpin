@@ -337,6 +337,7 @@ def smith_shift(npc, dt: float, now: float) -> None:
         # ever, the forge reads it again the next tick, and it hammers the same
         # pickaxe until the iron runs out.
         economy.fill_orders(v, npc, kind)
+        npc._did_work()                    # a hammer beat at the anvil
         npc.skills.gain_farming(0.02)      # the forge hones the smith too
         if made > 500:                     # a guard, not a policy
             return
@@ -362,6 +363,7 @@ def produce(npc, dt: float, now: float) -> None:
                 held = npc.stock.get(out, 0)
                 npc.grade[out] = quality.merge(npc.grade.get(out, g), held, g, count)
                 npc.stock[out] = held + economy.take_fifth(npc.village, npc, out, count)
+                npc._did_work()                # a barrel broached
                 npc.skills.gain_farming(0.02 * min(count, 10))
         # 2. The table: mash what is on hand into wort, fifty at a time.
         if getattr(npc, "brew", None) is None:
@@ -376,6 +378,7 @@ def produce(npc, dt: float, now: float) -> None:
                 npc.grade[wort] = quality.merge(npc.grade.get(wort, 3), held,
                                                 npc.grade.get(src, 3), batch)
                 npc.stock[wort] = held + batch
+                npc._did_work()                # a mash turned over
                 npc.skills.gain_farming(0.02 * min(batch, 10))
                 break
         # 3. Load the barrel and start the clock -- five minutes of waiting.
@@ -387,6 +390,7 @@ def produce(npc, dt: float, now: float) -> None:
                 batch = min(have, economy.WORT_BATCH)
                 npc.stock[wort] -= batch
                 npc.brew = (wort, batch, now + economy.BREW_SECONDS)
+                npc._did_work()                # the barrel loaded
                 break
         return
     if workplace.kind == "lab":
@@ -410,6 +414,7 @@ def produce(npc, dt: float, now: float) -> None:
             npc.grade[out] = quality.merge(npc.grade.get(out, g), held, g, 1)
             npc.stock[out] = held + economy.take_fifth(npc.village, npc, out, 1)
             made += 1
+            npc._did_work()                    # a cigar rolled
             npc.skills.gain_farming(0.02)      # a slow trade, like the others
         if made:
             npc.produce_acc = min(npc.produce_acc, 2.0)
@@ -446,6 +451,7 @@ def produce(npc, dt: float, now: float) -> None:
             # -- near enough the twenty a mayor is floored at, for a day's
             # digging -- and leaves the iron, all of it, with the village that
             # owns the pit. That is the difference between a mine and a trade.
+            npc._did_work()                    # rock broken at the face
             economy.store_add(v2, "iron", made, economy.grade_of(npc, "iron"))
             npc.wage_acc = getattr(npc, "wage_acc", 0.0) + made * MINER_PAY
             whole = int(npc.wage_acc)
