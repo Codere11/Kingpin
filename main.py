@@ -4619,6 +4619,17 @@ def main() -> None:
         # belongs at the window's own size.
         scr_w, scr_h = vw, vh
         vw, vh = max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM))
+        # HELICOPTER MODE IS AN OVERVIEW, and it is nearly free: the frame just
+        # covers more world and is squeezed back onto the window at the blow-up
+        # below -- the same trick the height uses. The ground is composed into
+        # ONE cached surface, so the per-frame cost of a bigger window is a
+        # single larger blit.
+        _fly_k = 1.0
+        if player.fly and player.z > 40.0:
+            _fly_k = min(8.0, 1.0 + (player.z - 40.0) * 0.008)
+        if _fly_k > 1.001:
+            vw = max(2, int(vw * _fly_k))
+            vh = max(2, int(vh * _fly_k))
         # THE HEIGHT, WHICH IS SEEING FURTHER. The frame covers this much MORE
         # WORLD for every metre he climbs -- the same screen space over more
         # blocks, which is the thing that was asked for -- and it is squeezed
