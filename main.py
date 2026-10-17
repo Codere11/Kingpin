@@ -694,6 +694,13 @@ def main() -> None:
         if _spot is not None:
             _hx, _hy = _spot.x, _spot.y + 64.0
     player = Player(_hx, _hy)
+    # A NAME, AND A LETTER WAITING FOR HIM. The name is drawn the same way the
+    # towns draw theirs, so he is a man out of this world and not a visitor to
+    # it; the letter is the only thing in the game that will ever explain
+    # anything, and it says who he is, what he owes, and how his trade pays.
+    _rng = random.Random((int(_save.get("seed", 20240501)) ^ 0x5EED) & 0xFFFFFFFF)
+    player.name = "%s %s" % (_rng.choice(village_mod.FIRST_NAMES),
+                             _rng.choice(village_mod.LAST_NAMES))
     player.god = test_mode
     # THE TOWNS CAN NOW SEE HIM. One assignment, so a village can put the
     # player in an election or in a ring without every caller passing him down.
@@ -2782,6 +2789,13 @@ def main() -> None:
     _lane_warned = False
     running = True
     print("DEBUG before the loop: (%0.0f, %0.0f)" % (player.x, player.y))
+    # THE LETTER, before a single frame of the world. By now the town is known,
+    # so it can name it.
+    try:
+        menu.show_letter(screen, clock, player.name, origin,
+                             _home.name if _home is not None else "the world")
+    except Exception:
+        pass
     # PUT HIM DOWN LAST. The spawn is decided when he is created, but a dozen
     # things between there and the first frame -- the village register, the
     # patrols, the world bounds -- can move him, and one of them was putting

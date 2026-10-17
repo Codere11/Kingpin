@@ -302,3 +302,140 @@ def choose_origin(screen, clock):
                                  True, HINT)
         screen.blit(hint, (w // 2 - hint.get_width() // 2, h - hint.get_height() - 12))
         pygame.display.flip()
+
+
+# -- the letter --------------------------------------------------------------
+#
+# THE FIRST THING ANY MAN READS. Not a tutorial and not a wall of controls: a
+# letter from the ledger saying who he is, what he owes, why, and what happens
+# if it is not paid -- and then, in three short lines, how his trade earns the
+# money for it. Everything else in the game he is meant to find out by walking
+# into it.
+LETTERS = {
+    "trader": (
+        "borrowed four hundred coin against a wagon of leaf you had already sold "
+        "once, and the man who lent it has gone to the ledger about it",
+        ("You arrive with stock: ten leaf, three beers and two cigars.",
+         "Sell them to whoever needs them -- E to talk, then trade.",
+         "Carry the coin to the notice board in the square, press E, and pay.")),
+    "smith": (
+        "took on the forge of a man who died owing the town, and found the bench "
+        "came with his debts attached to it",
+        ("Stand at the forge and press E to see the orders; choose what to make.",
+         "Sell the rifles, tools and iron to the town.",
+         "Carry the coin to the notice board in the square, press E, and pay.")),
+    "soldier": (
+        "signed for a regiment that was disbanded before it ever marched, and the "
+        "pay never came -- but the quartermaster's account did",
+        ("You still have your rifle, forty rounds and a first-aid kit.",
+         "Take paid work: a posted bounty, a guard's wage, or a wolf worth skinning.",
+         "Carry the coin to the notice board in the square, press E, and pay.")),
+    "artisan": (
+        "bought a bale of leaf on credit in a season that failed, and the merchant "
+        "wrote your name in the book the day the rains did not come",
+        ("Your bench is here. Press E at it to roll leaf into cigars.",
+         "Sell them -- good leaf and a steady hand fetch real money.",
+         "Carry the coin to the notice board in the square, press E, and pay.")),
+    "brewer": (
+        "sold barrels that had not been brewed yet, and then the batch soured "
+        "before the buyer came to collect them",
+        ("Take your grain to the brewhouse and press E to start a batch.",
+         "Sell the beer when it is ready -- it is worth more than the grain by far.",
+         "Carry the coin to the notice board in the square, press E, and pay.")),
+    "farmer": (
+        "took seed on credit and the flood took the field, and the seed was the "
+        "town's and not the flood's",
+        ("You have a plot, seed, a shovel and a can. Plant it and keep it watered.",
+         "Sell what you grow to the townsfolk.",
+         "Carry the coin to the notice board in the square, press E, and pay.")),
+    "logger": (
+        "bought a fine axe on account the same week the mill closed, and an axe "
+        "is not worth much to a man with no work",
+        ("You have an axe and nothing else.",
+         "Cut wood in the woodlot and sell it to the town.",
+         "Carry the coin to the notice board in the square, press E, and pay.")),
+    "idle": (
+        "arrived with nothing, and were given a bed and a hot meal against your "
+        "name, because that is what this town does for a stranger",
+        ("You have nothing but your hands.",
+         "Take whatever work the town will pay for -- and there is always some.",
+         "Carry the coin to the notice board in the square, press E, and pay.")),
+}
+
+
+def _wrap(font, text: str, width: int) -> list:
+    words = text.split()
+    lines, line = [], ""
+    for word in words:
+        trial = (line + " " + word).strip()
+        if font.size(trial)[0] <= width or not line:
+            line = trial
+        else:
+            lines.append(line)
+            line = word
+    if line:
+        lines.append(line)
+    return lines
+
+
+def show_letter(screen, clock, name: str, origin: str, town: str) -> None:
+    """The letter he finds waiting. Enter or Esc dismisses it."""
+    w, h = screen.get_size()
+    head_font = pygame.font.SysFont("dejavusansmono", max(13, h // 26), bold=True)
+    body_font = pygame.font.SysFont("dejavusansmono", max(11, h // 38))
+    step_font = pygame.font.SysFont("dejavusansmono", max(11, h // 40), bold=True)
+    small = pygame.font.SysFont("dejavusansmono", max(10, h // 48))
+    why, steps = LETTERS.get(origin, LETTERS["idle"])
+    trade = dict((k, n) for k, n, _b in ORIGINS).get(origin, "IDLE").title()
+
+    text_w = int(w * 0.62)
+    x = (w - text_w) // 2
+    para1 = ("You are %s, and you have just started as a %s in %s."
+             % (name, trade.lower(), town))
+    para1b = ("You owe the ledger because you %s. Pay it, or you will be declared "
+              "a criminal and hunted down." % why)
+    para1c = ("The world is harsh, but the limits to your rise depend solely on you.")
+    para1d = ("Be careful. You may not be the only ambitious man in this world.")
+
+    lines = []
+    for chunk in (para1, "", para1b, "", para1c, "", para1d):
+        if chunk == "":
+            lines.append(None)
+        else:
+            for ln in _wrap(body_font, chunk, text_w):
+                lines.append((ln, body_font, BTN_TEXT))
+    lines.append(None)
+    step_head = ("How a %s pays his debt:" % trade.lower())
+    for ln in _wrap(step_font, step_head, text_w):
+        lines.append((ln, step_font, TITLE))
+    for i, s_line in enumerate(steps, 1):
+        for k, ln in enumerate(_wrap(step_font, "%d.  %s" % (i, s_line), text_w)):
+            lines.append((ln, step_font, BTN_TEXT if k == 0 else DIM))
+
+    while True:
+        clock.tick(60)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return
+            if event.type == pygame.KEYDOWN:
+                return
+        screen.fill(BG)
+        # a sheet of paper, a shade lighter than the night behind it
+        pad = int(h * 0.06)
+        top = int(h * 0.07)
+        sheet = pygame.Rect(x - pad, top - pad // 2, text_w + pad * 2, h - top * 2 + pad)
+        pygame.draw.rect(screen, (30, 26, 22), sheet)
+        pygame.draw.rect(screen, BTN_BORDER, sheet, 1)
+        head = head_font.render("A LETTER FROM THE LEDGER", True, TITLE)
+        screen.blit(head, (w // 2 - head.get_width() // 2, top))
+        y = top + head.get_height() + int(h * 0.03)
+        for item in lines:
+            if item is None:
+                y += int(h * 0.018)
+                continue
+            ln, font, colour = item
+            screen.blit(font.render(ln, True, colour), (x, y))
+            y += font.get_height() + 2
+        hint = small.render("press any key to begin", True, HINT)
+        screen.blit(hint, (w // 2 - hint.get_width() // 2, h - hint.get_height() - 10))
+        pygame.display.flip()
