@@ -78,7 +78,16 @@ class TradeMenu:
         to sell it.
         """
         if item not in self._wants:
-            self._wants[item] = int(economy.wants(self.npc, item))
+            # THE MENU MUST NEVER BE THE THING THAT KILLS THE GAME. `wants()`
+            # reads a villager's larder, habit, thirst, house and a coin flip
+            # from his own generator; a SOLDIER has a rifle and a wage and none
+            # of the rest, and asking him threw AttributeError from inside the
+            # economy while the trade menu was being DRAWN. A man the economy
+            # cannot describe simply wants nothing.
+            try:
+                self._wants[item] = int(economy.wants(self.npc, item))
+            except Exception:
+                self._wants[item] = 0
         return self._wants[item]
 
     def _leaf_count(self) -> int:

@@ -1079,6 +1079,10 @@ def main() -> None:
             npc.yearning = 0.85              # a man with pay, off duty
         if not hasattr(npc, "quality_pref"):
             npc.quality_pref = 0
+        if not hasattr(npc, "rng"):
+            # `wants()` rolls a die on the man's own generator. A soldier never
+            # had one because he was never asked anything before.
+            npc.rng = random.Random(int(abs(hash((npc.x, npc.y)))) & 0xFFFFFFFF)
         if getattr(npc, "trade_demand", 0) <= 0:
             npc.trade_demand = 4
         if not getattr(npc, "name", None):
@@ -2923,12 +2927,17 @@ def main() -> None:
     # ran AFTER the backstory had already posted him to a trade. The board
     # then said "no trade, no post, no wage" and refused to let him sell, and
     # both of those looked like two separate bugs.
-    if origin in _JOB and _origin_town is not None:
-        player.job = _JOB[origin]
+    # HE LIVES SOMEWHERE WHATEVER HIS TRADE. The town used to be set only for
+    # the seven trades, so IDLE -- the man who owns nothing -- had no village
+    # at all: he spawned in open country, and the notice board had nobody to
+    # sell to and no ledger to owe. He has no POST; he still has a town.
+    if _origin_town is not None:
         player.settled_at = _origin_town
         player.village = _origin_town
         if getattr(_origin_town, "nation", None) is not None:
             player.nation = _origin_town.nation
+        if origin in _JOB:
+            player.job = _JOB[origin]
     while running:
         _boot_t0 = pygame.time.get_ticks()
         # THE FLAG COMES DOWN WHEN A FRAME WAS QUICK. Measure the PREVIOUS one:
