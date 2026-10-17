@@ -2781,6 +2781,12 @@ def main() -> None:
     _lane_timer = 0.0
     _lane_warned = False
     running = True
+    print("DEBUG before the loop: (%0.0f, %0.0f)" % (player.x, player.y))
+    # PUT HIM DOWN LAST. The spawn is decided when he is created, but a dozen
+    # things between there and the first frame -- the village register, the
+    # patrols, the world bounds -- can move him, and one of them was putting
+    # every backstory back at the origin. Set here, nothing after it can.
+    player.x, player.y = _hx, _hy
     while running:
         dt = min(clock.tick(FPS) / 1000.0, 0.05)
         _PH["f"] += 1
