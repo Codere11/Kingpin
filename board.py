@@ -278,7 +278,10 @@ class BoardPanel:
             y += 44
             rows = self._sellable()
             trade = getattr(self.player, "job", None)
-            if trade:
+            if True:
+                # NOT GATED ON HAVING A TRADE. It was, and a man whose post was
+                # missing simply had no way to sell anything at all -- two bugs
+                # stacked into one dead end.
                 if rows:
                     share = sum(q * u for _i, _it, q, u in rows)
                     txt = ("%d goods in your pack -- the ledger pays %d coin for them"

@@ -713,12 +713,6 @@ def main() -> None:
     player.origin = origin
     player.debt = _DEBT.get(origin, 300)
     player.debt_paid = 0
-    if origin in _JOB and _home is not None:
-        player.job = _JOB[origin]
-        player.settled_at = _home
-        player.village = _home
-        if getattr(_home, "nation", None) is not None:
-            player.nation = _home.nation
     player.god = test_mode
     # THE TOWNS CAN NOW SEE HIM. One assignment, so a village can put the
     # player in an election or in a ring without every caller passing him down.
@@ -2909,16 +2903,35 @@ def main() -> None:
 
     _boot_title = "WELCOME TO %s" % (_home.name.upper() if _home is not None else "THE WORLD")
     _boot_left = [10]
+    _boot_slow = [True]
     # PUT HIM DOWN LAST. The spawn is decided when he is created, but a dozen
     # things between there and the first frame -- the village register, the
     # patrols, the world bounds -- can move him, and one of them was putting
     # every backstory back at the origin. Set here, nothing after it can.
     player.x, player.y = _hx, _hy
+    # AND HIS TRADE LAST OF ALL. There is a reset a few hundred lines above
+    # that clears `player.job` and `player.settled_at` before the save is
+    # read -- correct for a fresh start and fatal for a backstory, because it
+    # ran AFTER the backstory had already posted him to a trade. The board
+    # then said "no trade, no post, no wage" and refused to let him sell, and
+    # both of those looked like two separate bugs.
+    if origin in _JOB and _home is not None:
+        player.job = _JOB[origin]
+        player.settled_at = _home
+        player.village = _home
+        if getattr(_home, "nation", None) is not None:
+            player.nation = _home.nation
     while running:
-        if _boot_left[0] > 0:
-            draw_boot(pygame.display.get_surface(),
-                      _boot_title, 1.0 - _boot_left[0] / 10.0)
-            _boot_left[0] -= 1
+        _boot_t0 = pygame.time.get_ticks()
+        if _boot_left[0] > 0 or _boot_slow[0]:
+            # AND IT STAYS UP UNTIL THE FRAMES STOP BEING SLOW. Ten frames was
+            # a guess, and the heaviest work does not happen in the first ten:
+            # the screen came down and then the window froze behind it. The
+            # bar now comes down when the loop can keep up, not on a count.
+            draw_boot(pygame.display.get_surface(), _boot_title,
+                      min(0.97, (10 - min(10, _boot_left[0])) / 10.0 + 0.05))
+            if _boot_left[0] > 0:
+                _boot_left[0] -= 1
         dt = min(clock.tick(FPS) / 1000.0, 0.05)
         _PH["f"] += 1
         dt = min(dt * time_scale, 0.5)          # test-mode speed-up
