@@ -1901,15 +1901,13 @@ class NPC:
         # AND WHAT HE HAS EARNED WITH HIS HANDS, from the two combat skills
         # together -- drawn UNDER the mood, so a veteran keeps his beard.
         vet = face.vet_tier(self.skills.axe, self.skills.shooting)
-        # THE MONOCLE GOES ON FIRST, UNDER THE FACE. Over the face its ring --
-        # which sits at 2.83 from the eye's centre -- landed on the eye's own
-        # (2,2) corner: a brass pixel in the pupil of every man looking
-        # north-east, and straight through the outer corners of a HURT face's
-        # clenched eye. Under the face the eye covers the ring instead, which
-        # is also what a monocle looks like: a ring round an eye, eye intact.
-        if self.is_mayor:
-            face.monocle(screen, hx, hy, head_r)
         face.draw(screen, hx, hy, head_r, fx, fy, mood, vet=vet)
+        # AND THE TOP HAT, IF HE IS THE MAYOR. It goes ON, not under: the
+        # monocle had to go underneath because its rim cut across an eye, but a
+        # hat is above the head and covers nothing but the head's own top row,
+        # so there is nothing under it to lose.
+        if self.is_mayor:
+            face.tophat(screen, hx, hy, head_r)
 
         # AND THE CROWN, IF THE THRONE IS HIS. Drawn after the face and touched
         # by nothing else: it does not change his expression, his marks, or a

@@ -439,33 +439,60 @@ def eye_of(hx: float, hy: float, r: int):
             max(3, int(round(r * EYE_SIDE))))
 
 
-def monocle(screen, hx: float, hy: float, r: int) -> None:
-    """A monocle, on ONE eye, drawn by whoever draws the head.
+# -- the top hat ------------------------------------------------------------
+# A FELT BLACK with a little colour in it, so it reads against the ground
+# rather than as a hole in it, and a band, which is the only thing that says
+# "hat" rather than "tall rectangle".
+HAT_BRIM = (22, 18, 20)
+HAT_BODY = (40, 34, 36)
+HAT_TOP = (58, 50, 54)         # the crown catches a little light
+HAT_BAND = (150, 40, 44)
+HAT_GLINT = (86, 76, 80)       # one bright column down the left of the crown
 
-    Same terms as the crown: an accessory, not a mood, and it does not alter
-    the face -- but where a crown sits on the skull, a monocle sits ON AN EYE,
-    so it is laid over the face rather than beside it, and its rim does cross
-    the brow above. That is what a monocle does.
+
+def tophat(screen, hx: float, hy: float, r: int) -> None:
+    """A TOP HAT, worn by the mayor.
+
+    It replaces the monocle, and it goes ON rather than UNDER. The monocle was
+    under the face because its rim would otherwise cut across an eye; a hat is
+    above the head and covers nothing but the head's own top row, so there is
+    nothing underneath it to lose.
+
+    Same terms as the crown: an accessory, not a mood. It is drawn AFTER
+    whatever face he is wearing and does not alter a pixel of it -- a mayor who
+    is attacking, being hit, starving, working or smirking wears the same hat.
+
+    AND IT SITS ON THE HEAD, WHICH MEANS THE HEAD'S TOP IS `hy - r`. The brim
+    overlaps that row by one pixel, because a hat resting a full pixel above
+    the skull looks like it is floating, and at seventeen pixels across
+    everything has to be argued for.
     """
-    ex, ey, sep = eye_of(hx, hy, r)
-    cx = ex + sep                                  # the eye on his right
-    rad = max(2, int(round(r * WHITE_R)) + 1)
-    # ONE RING, PLACED BY HAND. pygame's circle OUTLINE is not a ring at this
-    # size: at radius 3 it includes (cx+1, ey+1), which is exactly where the
-    # pupil sits when a man faces north-east -- so a brass pixel landed IN his
-    # eye. Sixteen points at a fixed distance is a ring, and stays one.
-    seen = set()
-    for _i in range(16):
-        _a = _i * math.pi / 8.0
-        _px = cx + int(round(math.cos(_a) * rad))
-        _py = ey + int(round(math.sin(_a) * rad))
-        if (_px, _py) not in seen:
-            seen.add((_px, _py))
-            pygame.draw.line(screen, LENS, (_px, _py), (_px, _py), 1)
-    # and the chain, off the lower outer edge of the rim, hanging toward the jaw
-    xs, ys = cx + rad - 1, ey + rad - 1
-    pygame.draw.line(screen, LENS, (xs, ys),
-                     (xs + max(1, r // 5), ys + max(2, int(round(r * 0.6)))), 1)
+    # int(), NOT int(round()) -- draw() blits the face at int(hx) - width // 2,
+    # so int(hx) is the column the face's centre pixel lands on. Rounding put
+    # the crown a pixel off the head; the same rule applies here.
+    hx = int(hx)
+    hy = int(hy)
+    bottom = hy - r                         # the head's top row
+    brim_half = max(3, int(round(r * 0.95)) + 2)
+    body_half = max(2, int(round(r * 0.60)))
+    body_h = max(3, int(round(r * 1.15)))
+    brim_y = bottom - 1                     # one pixel down, over the skull
+    body_y = brim_y - body_h
+    # THE CROWN OF THE HAT
+    pygame.draw.rect(screen, HAT_BODY, (hx - body_half, body_y,
+                                        body_half * 2 + 1, body_h + 1))
+    pygame.draw.line(screen, HAT_TOP, (hx - body_half, body_y),
+                     (hx + body_half, body_y), 1)
+    # one bright column down the left, which is what gives it a direction
+    pygame.draw.line(screen, HAT_GLINT, (hx - body_half + 1, body_y + 1),
+                     (hx - body_half + 1, body_y + body_h - 2), 1)
+    # THE BAND, two rows above the brim
+    band_y = brim_y - max(1, body_h // 5)
+    pygame.draw.line(screen, HAT_BAND, (hx - body_half, band_y),
+                     (hx + body_half, band_y), max(1, body_h // 6))
+    # AND THE BRIM, wider than the head is, two rows and over its top
+    pygame.draw.rect(screen, HAT_BRIM, (hx - brim_half, brim_y,
+                                        brim_half * 2 + 1, 2))
 
 
 def crown(screen, hx: float, hy: float, r: int) -> None:
