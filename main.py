@@ -1049,6 +1049,28 @@ def main() -> None:
             npc.stock = {}
         if not getattr(npc, "sly_flash", None):
             npc.sly_flash = 0.0
+        # AND EVERYTHING `wants()` READS. A villager is built with a larder, a
+        # habit, a thirst and a house; a soldier is built with a rifle. Asking
+        # a soldier what he wants without these threw AttributeError from
+        # inside the economy, which is a long way from the click that caused
+        # it -- and it took the whole game down while the trade menu was being
+        # drawn.
+        if getattr(npc, "stock", None) is None:
+            npc.stock = {}
+        if getattr(npc, "job", None) is None:
+            npc.job = "soldier"
+        if getattr(npc, "home_house", "missing") == "missing":
+            npc.home_house = None
+        if not hasattr(npc, "wants_product"):
+            npc.wants_product = "cigar"      # what he spends his pay on
+        if not hasattr(npc, "wants_drink"):
+            npc.wants_drink = "beer"
+        if not hasattr(npc, "yearning"):
+            npc.yearning = 0.85              # a man with pay, off duty
+        if not hasattr(npc, "quality_pref"):
+            npc.quality_pref = 0
+        if getattr(npc, "trade_demand", 0) <= 0:
+            npc.trade_demand = 4
         if not getattr(npc, "name", None):
             npc.name = "a soldier"
         if not hasattr(npc, "occupation"):
@@ -1057,7 +1079,11 @@ def main() -> None:
 
     def open_trade(npc) -> None:
         nonlocal trade_open, trade_menu
-        npc = make_tradeable(npc)
+        try:
+            npc = make_tradeable(npc)
+        except Exception:
+            toast("He wants nothing to do with you")
+            return
         if getattr(npc, "is_witness", lambda _n: False)(village_mod.PLAYER_ID):
             # UNDER NO CIRCUMSTANCES. He knows exactly what you are, and no
             # amount of time or coin changes it.
