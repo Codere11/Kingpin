@@ -1032,8 +1032,32 @@ def main() -> None:
         for s in army.soldiers[:8]:             # and the news goes with the trade
             war.tell(trader, s, now)
 
+    def make_tradeable(npc):
+        """GIVE A MAN A PURSE IF HE HAS NEVER NEEDED ONE.
+
+        A villager is built for trade -- he has coins, a stock, a patience for
+        how much leaf he wants and a face that reacts to a good deal. A SOLDIER
+        is not: he has a rifle, a nation and a wage that is not modelled. But a
+        soldier is a man with pay in his pocket and he buys what the town
+        cannot sell him, so he gets the same purse the first time he is asked.
+        """
+        if getattr(npc, "coins", None) is None:
+            npc.coins = 30 + (abs(hash((getattr(npc, "x", 0.0),
+                                        getattr(npc, "y", 0.0)))) % 45)
+            npc.trade_demand = 4
+            npc.restock_timer = 0.0
+            npc.stock = {}
+        if not getattr(npc, "sly_flash", None):
+            npc.sly_flash = 0.0
+        if not getattr(npc, "name", None):
+            npc.name = "a soldier"
+        if not hasattr(npc, "occupation"):
+            npc.occupation = lambda: "soldier"
+        return npc
+
     def open_trade(npc) -> None:
         nonlocal trade_open, trade_menu
+        npc = make_tradeable(npc)
         if getattr(npc, "is_witness", lambda _n: False)(village_mod.PLAYER_ID):
             # UNDER NO CIRCUMSTANCES. He knows exactly what you are, and no
             # amount of time or coin changes it.
@@ -1443,9 +1467,14 @@ def main() -> None:
 
         # Clicking a villager while not wielding a weapon opens trade.
         if math.hypot(wx - player.x, wy - player.y) <= REACH + 24.0:
-            for village in visible_villages:
-                for npc in village.npcs:
-                    if npc.alive and math.hypot(npc.x - wx, npc.y - wy) < 22.0:
+            _folk = [n for v in visible_villages for n in v.npcs]
+            # AND THE SOLDIERS. They are not in a village's list -- they are
+            # the nation's, and they march -- so they were the one kind of man
+            # in the world you could not do business with.
+            _folk += [e for e in enemies
+                      if getattr(e, "alive", True) and not getattr(e, "attacked", False)]
+            for npc in _folk:
+                    if getattr(npc, "alive", True) and math.hypot(npc.x - wx, npc.y - wy) < 22.0:
                         if (getattr(npc, "is_commander", False)
                                 and not getattr(npc, "attacked", False)):
                             confirm.pending = npc
