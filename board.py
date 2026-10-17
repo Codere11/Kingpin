@@ -83,6 +83,19 @@ class BoardPanel:
     LEDGER_BUYS = 0.34        # a third of the market price
     LEDGER_MIN = 1            # and never less than a coin apiece
 
+    def _town(self):
+        """His village, if the thing he is pointing at really is one.
+
+        `settled_at` is meant to be a Village, and a Village has a ledger and a
+        price list. It has been a tuple at least once, and every use of it here
+        is guarded rather than trusted -- a notice board that throws while it
+        draws is worse than a notice board that says nothing.
+        """
+        town = getattr(self.player, "settled_at", None)
+        if town is None or not hasattr(town, "ledger_coins"):
+            return None
+        return town
+
     def _sellable(self) -> list:
         """The stacks in his pack the ledger will take, and their price."""
         if self.inv is None:
@@ -94,7 +107,7 @@ class BoardPanel:
             item = stack.defn.id
             if item == "coin" or item not in economy.LUXURY:
                 continue                     # the town buys FINISHED goods
-            village = getattr(self.player, "settled_at", None)
+            village = self._town()
             base = (economy.value(village, item) if village is not None
                     else economy.ITEM_VALUE.get(item, 4))
             unit = max(self.LEDGER_MIN, int(round(base * self.LEDGER_BUYS)))
@@ -124,7 +137,7 @@ class BoardPanel:
                 and self.sell_button is not None
                 and self.sell_button.collidepoint(event.pos)
                 and self.inv is not None and self.player is not None):
-            village = getattr(self.player, "settled_at", None)
+            village = self._town()
             if village is None:
                 self.notice, self.notice_t = "You have no village to sell to", 2.5
             else:
@@ -247,7 +260,7 @@ class BoardPanel:
             pygame.draw.rect(screen, (154, 110, 62), box, 1, border_radius=6)
             nm = getattr(self.player, "name", None) or "A stranger"
             trade = getattr(self.player, "job", None)
-            town = getattr(self.player, "settled_at", None)
+            town = self._town()
             if trade:
                 where = (" in %s" % town.name) if town is not None else ""
                 line = "%s   --   %s%s" % (nm, TRADE_NAMES.get(trade, trade).lower(), where)

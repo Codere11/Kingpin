@@ -2882,7 +2882,7 @@ def main() -> None:
     # so it can name it.
     try:
         menu.show_letter(screen, clock, player.name, origin,
-                             _home.name if _home is not None else "the world")
+                             _origin_town.name if _origin_town is not None else "the world")
     except Exception:
         pass
     # THE WINDOW IS NEVER A FROZEN PICTURE WITH NOTHING ON IT. The first
@@ -2908,7 +2908,7 @@ def main() -> None:
         surface.blit(note, (w // 2 - note.get_width() // 2, bar.bottom + 10))
         pygame.display.flip()
 
-    _boot_title = "WELCOME TO %s" % (_home.name.upper() if _home is not None else "THE WORLD")
+    _boot_title = "WELCOME TO %s" % (_origin_town.name.upper() if _origin_town is not None else "THE WORLD")
     _boot_left = [10]
     _boot_slow = [True]
     _boot_prev = [None]
