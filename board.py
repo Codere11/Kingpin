@@ -34,6 +34,7 @@ class BoardPanel:
         self.paid_day = -1
         self.tax_button = None
         self.debt_button = None
+        self.sell_button = None
         self.notice = ""
         self.notice_t = 0.0
         self.job_rows: list = []       # (rect, village, trade) for the mouse
@@ -73,6 +74,33 @@ class BoardPanel:
             return 0
         return int(economy.tax_due(self._holdings_value()))
 
+    # THE LEDGER BUYS FROM ITS OWN PEOPLE, AT A FRACTION. It has to buy below
+    # the market price -- it is the thing that resells, and it pays the wages
+    # out of the difference -- so a working man gets a third of what the goods
+    # are worth over the counter. That is the deal: the town takes a cut and
+    # in exchange it buys ALL of it, today, without walking the street looking
+    # for a man who happens to want a cigar.
+    LEDGER_BUYS = 0.34        # a third of the market price
+    LEDGER_MIN = 1            # and never less than a coin apiece
+
+    def _sellable(self) -> list:
+        """The stacks in his pack the ledger will take, and their price."""
+        if self.inv is None:
+            return []
+        out = []
+        for i, stack in enumerate(self.inv.slots):
+            if stack is None:
+                continue
+            item = stack.defn.id
+            if item == "coin" or item not in economy.LUXURY:
+                continue                     # the town buys FINISHED goods
+            village = getattr(self.player, "settled_at", None)
+            base = (economy.value(village, item) if village is not None
+                    else economy.ITEM_VALUE.get(item, 4))
+            unit = max(self.LEDGER_MIN, int(round(base * self.LEDGER_BUYS)))
+            out.append((i, item, int(stack.count), unit))
+        return out
+
     def handle_event(self, event) -> bool:
         """Returns True if the panel should close."""
         if event.type == pygame.KEYDOWN and event.key in (pygame.K_e, pygame.K_ESCAPE):
@@ -92,6 +120,41 @@ class BoardPanel:
                 else:
                     self.notice, self.notice_t = "That post is gone", 2.5
                 return False
+        if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                and self.sell_button is not None
+                and self.sell_button.collidepoint(event.pos)
+                and self.inv is not None and self.player is not None):
+            village = getattr(self.player, "settled_at", None)
+            if village is None:
+                self.notice, self.notice_t = "You have no village to sell to", 2.5
+            else:
+                units = 0
+                coin = 0
+                for i, item, qty, unit in self._sellable():
+                    space = max(0, int(village.ledger_coins))
+                    if space <= 0:
+                        break
+                    can = min(qty, space // max(1, unit))
+                    if can <= 0:
+                        continue
+                    grade = 3
+                    try:
+                        grade = int(self.inv.slots[i].grade)
+                    except Exception:
+                        pass
+                    self.inv.consume(item, can)
+                    economy.store_add(village, item, can, grade)
+                    village.ledger_coins -= can * unit
+                    coin += can * unit
+                    units += can
+                if units:
+                    self.inv.add("coin", coin)
+                    self.notice, self.notice_t = (
+                        "Sold %d to the ledger   +%d coin" % (units, coin)), 3.0
+                else:
+                    self.notice, self.notice_t = ("The ledger is empty -- "
+                                                  "nothing to buy with"), 3.0
+            return False
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
                 and self.debt_button is not None
                 and self.debt_button.collidepoint(event.pos)
@@ -211,7 +274,31 @@ class BoardPanel:
                 screen.blit(self.font_small.render(
                     "The ledger is clear. Nothing is owed.", True,
                     (150, 190, 140)), (lx + 12, y + 34))
-            y += 78
+            # ---- AND THE LEDGER BUYS --------------------------------
+            y += 44
+            rows = self._sellable()
+            trade = getattr(self.player, "job", None)
+            if trade:
+                if rows:
+                    share = sum(q * u for _i, _it, q, u in rows)
+                    txt = ("%d goods in your pack -- the ledger pays %d coin for them"
+                           % (sum(q for _i, _it, q, _u in rows), share))
+                    col = (206, 200, 180)
+                else:
+                    txt = "Nothing the ledger buys. Bring it finished goods."
+                    col = (176, 164, 146)
+                screen.blit(self.font_small.render(txt, True, col), (lx + 12, y))
+                self.sell_button = pygame.Rect(box.right - 138, y - 4, 126, 22)
+                hot = self.sell_button.collidepoint(pygame.mouse.get_pos())
+                pygame.draw.rect(screen, (58, 84, 52) if hot else (38, 56, 36),
+                                 self.sell_button, border_radius=5)
+                pygame.draw.rect(screen, (140, 190, 120), self.sell_button, 1,
+                                 border_radius=5)
+                lbl = self.font_small.render("SELL TO THE LEDGER", True,
+                                             (234, 244, 226))
+                screen.blit(lbl, (self.sell_button.centerx - lbl.get_width() // 2,
+                                  self.sell_button.centery - lbl.get_height() // 2))
+            y += 26
 
         screen.blit(self.font.render("WORK GOING", True, (238, 224, 190)), (lx, y))
         y += 28
