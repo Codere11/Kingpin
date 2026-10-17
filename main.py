@@ -566,6 +566,11 @@ def main() -> None:
         pygame.quit()
         return
     slot, test_mode = chosen
+    # AND WHO HE WAS BEFORE THE FIRST FRAME. Asked here, once, before a single
+    # village is built, because it decides which one he wakes up in.
+    origin = menu.choose_origin(screen, clock)
+    if origin is None:
+        return
     try:
         deaths.banner("game slot %s%s" % (slot, "  TEST MODE" if test_mode else ""))
     except Exception:
@@ -651,7 +656,44 @@ def main() -> None:
         pass
 
     ore_field = ore.OreField(world.seed)
-    player = Player(0.0, 0.0)
+    # THE TOWN THAT HAS WORK FOR HIM, nearest to the origin first. A man does
+    # not arrive in a village that has no forge and call himself a smith.
+    def origin_village(kind):
+        wants = {"smith": "smith", "artisan": "lab", "brewer": "brewery"}.get(kind)
+        if kind == "soldier":
+            # THE ARMY IS AT THE CAPITAL. A soldier is the one trade that is
+            # not in the town it works in: it is in the biggest town its nation
+            # has, drawn up in the square.
+            for v in sorted(villages.villages, key=lambda v: v.x * v.x + v.y * v.y):
+                if getattr(v, "is_capital", False):
+                    return v
+            return None
+        for v in sorted(villages.villages, key=lambda v: v.x * v.x + v.y * v.y):
+            if kind == "farmer":
+                if v.farm_plots:
+                    return v
+            elif wants is None:
+                return v
+            elif any(wp.kind == wants for wp in v.workplaces):
+                return v
+        return None
+
+    _home = origin_village(origin)
+    _hx = _home.x if _home is not None else 0.0
+    _hy = _home.y if _home is not None else 0.0
+    if _home is not None:
+        # AND NOT IN THE ROAD: he starts a few paces off the door of the place
+        # he is going to work, so the first thing he sees is his own trade.
+        _wants = {"smith": "smith", "artisan": "lab", "brewer": "brewery"}.get(origin)
+        _spot = None
+        if _wants is not None:
+            _spot = next((wp for wp in _home.workplaces if wp.kind == _wants), None)
+        elif origin == "farmer" and _home.farm_plots:
+            _tx, _ty, _k = _home.farm_plots[0]
+            _spot = type("P", (), {"x": _tx * 32 + 16, "y": _ty * 32 + 16})()
+        if _spot is not None:
+            _hx, _hy = _spot.x, _spot.y + 64.0
+    player = Player(_hx, _hy)
     player.god = test_mode
     # THE TOWNS CAN NOW SEE HIM. One assignment, so a village can put the
     # player in an election or in a ring without every caller passing him down.
@@ -661,7 +703,22 @@ def main() -> None:
     cam_y = player.y - HEIGHT / 2
 
     inventory = Inventory(capacity=32)
-    inventory.add("axe")
+    # WHAT THE TRADE COMES WITH. A trader arrives with stock to sell, a smith
+    # with iron at the anvil, and the logger with an axe and nothing else in
+    # the world -- which is the hardest start and is meant to be.
+    KITS = {
+        "trader":  (("tobacco", 10), ("beer", 3), ("cigar", 2)),
+        "smith":   (("iron", 24),),
+        "soldier": (("rifle", 1), ("ammo", 40), ("first_aid", 1)),
+        "artisan": (("tobacco", 24),),
+        "brewer":  (("wheat", 12), ("wheat_seed", 6)),
+        "farmer":  (("wheat_seed", 12), ("seed_bag", 4), ("shovel", 1),
+                    ("watering_can", 1)),
+        "logger":  (("axe", 1),),
+        "idle":    (),
+    }
+    for _item, _qty in KITS.get(origin, ()):
+        inventory.add(_item, _qty)
     hotbar = Hotbar(inventory, visible=8)
     panel = InventoryPanel(inventory)
     board_panel = board.BoardPanel()

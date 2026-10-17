@@ -216,3 +216,71 @@ def run(screen, clock):
                 return (act, menu.test)
         menu.draw(screen)
         pygame.display.flip()
+
+
+# -- the backstory -----------------------------------------------------------
+#
+# WHO HE WAS BEFORE THE FIRST FRAME. Not a class and not a stat block: an
+# occupation, a place in a town that has work for it, and the kit that goes
+# with the trade. Seven of them, hardest last, because the whole point of an
+# open world is that the man who starts with nothing is not playing a worse
+# game -- he is playing a longer one.
+ORIGINS = (
+    ("trader", "TRADER", "Ten leaf, and five finished goods to sell. Easiest start: you arrive with stock."),
+    ("smith", "SMITH", "An armful of iron and the run of the forge. 'E' at the anvil shows the orders."),
+    ("soldier", "SOLDIER", "A rifle, forty rounds and a kit. You start in a capital, where the army is."),
+    ("artisan", "ARTISAN", "A bale of leaf and a bench to roll it on."),
+    ("brewer", "BREWER", "One batch's worth of grain, ready to start."),
+    ("farmer", "FARMER", "A plot of your own, seed, a shovel and a can."),
+    ("logger", "LOGGER", "An axe. The woods are the woods."),
+    ("idle", "IDLE", "Nothing at all. Some men arrive with nothing; some of them end up kings."),
+)
+
+
+def choose_origin(screen, clock):
+    """Pick a backstory. Returns the origin key, or None to go back."""
+    lw, lh = 320, 180
+    low = pygame.Surface((lw, lh))
+    title_font = pygame.font.SysFont("dejavusansmono", 15, bold=True)
+    item_font = pygame.font.SysFont("dejavusansmono", 10, bold=True)
+    small_font = pygame.font.SysFont("dejavusansmono", 8, bold=True)
+    pick = 0
+    while True:
+        clock.tick(60)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return None
+            if event.type != pygame.KEYDOWN:
+                continue
+            if event.key in (pygame.K_DOWN, pygame.K_s):
+                pick = (pick + 1) % len(ORIGINS)
+            elif event.key in (pygame.K_UP, pygame.K_w):
+                pick = (pick - 1) % len(ORIGINS)
+            elif pygame.K_1 <= event.key <= pygame.K_9:
+                return ORIGINS[event.key - pygame.K_1][0]
+            elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                return ORIGINS[pick][0]
+            elif event.key == pygame.K_ESCAPE:
+                return None
+        low.fill(BG)
+        head = title_font.render("WHERE ARE YOU FROM?", True, TITLE)
+        low.blit(head, (lw // 2 - head.get_width() // 2, 10))
+        sub = small_font.render("every trade starts in a town that needs it", True, HINT)
+        low.blit(sub, (lw // 2 - sub.get_width() // 2, 28))
+        top = 44
+        for i, (key, name, blurb) in enumerate(ORIGINS):
+            y = top + i * 17
+            on = (i == pick)
+            rect = pygame.Rect(14, y, lw - 28, 15)
+            pygame.draw.rect(low, BTN_BG_HOVER if on else SLOT, rect)
+            pygame.draw.rect(low, BTN_BORDER_HOVER if on else BTN_BORDER, rect, 1)
+            num = small_font.render(str(i + 1), True, HINT if not on else TITLE)
+            low.blit(num, (rect.x + 4, rect.y + 4))
+            nm = item_font.render(name, True, BTN_TEXT if on else DIM)
+            low.blit(nm, (rect.x + 16, rect.y + 3))
+            bl = small_font.render(blurb, True, DIM if on else HINT)
+            low.blit(bl, (rect.x + 70, rect.y + 4))
+        hint = small_font.render("up/down, 1-7, enter -- esc goes back", True, HINT)
+        low.blit(hint, (lw // 2 - hint.get_width() // 2, lh - 12))
+        pygame.transform.scale(low, screen.get_size(), screen)
+        pygame.display.flip()
