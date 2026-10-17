@@ -755,6 +755,7 @@ def main() -> None:
     player.nation = None
     player.squad = []
     spawn_timer = 0.0
+    _lane_seen = None
     grid = None
     grid_timer = 0.0
     nav = None
@@ -2788,7 +2789,6 @@ def main() -> None:
     _lane_timer = 0.0
     _lane_warned = False
     running = True
-    print("DEBUG before the loop: (%0.0f, %0.0f)" % (player.x, player.y))
     # THE LETTER, before a single frame of the world. By now the town is known,
     # so it can name it.
     try:
@@ -2796,12 +2796,41 @@ def main() -> None:
                              _home.name if _home is not None else "the world")
     except Exception:
         pass
+    # THE WINDOW IS NEVER A FROZEN PICTURE WITH NOTHING ON IT. The first
+    # second of the world does its one-time work INSIDE the loop -- indexing
+    # every wall and trunk in view, standing the town up, cutting the lanes --
+    # and that is by far the heaviest thing the game ever does. The bar is
+    # drawn at the TOP of the frame, so it is what is on screen while that
+    # work happens rather than a still image and no explanation.
+    def draw_boot(surface, title: str, prog: float) -> None:
+        w, h = surface.get_size()
+        surface.fill((14, 12, 16))
+        f_big = pygame.font.SysFont("dejavusansmono", max(14, h // 22), bold=True)
+        f_small = pygame.font.SysFont("dejavusansmono", max(10, h // 44))
+        head = f_big.render(title, True, (226, 188, 98))
+        surface.blit(head, (w // 2 - head.get_width() // 2, int(h * 0.38)))
+        bar = pygame.Rect(int(w * 0.22), int(h * 0.52), int(w * 0.56), max(6, h // 40))
+        pygame.draw.rect(surface, (34, 30, 26), bar)
+        fill = bar.copy()
+        fill.w = max(2, int(bar.w * max(0.02, min(1.0, prog))))
+        pygame.draw.rect(surface, (226, 188, 98), fill)
+        pygame.draw.rect(surface, (110, 90, 54), bar, 1)
+        note = f_small.render("settling in", True, (122, 110, 98))
+        surface.blit(note, (w // 2 - note.get_width() // 2, bar.bottom + 10))
+        pygame.display.flip()
+
+    _boot_title = "WELCOME TO %s" % (_home.name.upper() if _home is not None else "THE WORLD")
+    _boot_left = [10]
     # PUT HIM DOWN LAST. The spawn is decided when he is created, but a dozen
     # things between there and the first frame -- the village register, the
     # patrols, the world bounds -- can move him, and one of them was putting
     # every backstory back at the origin. Set here, nothing after it can.
     player.x, player.y = _hx, _hy
     while running:
+        if _boot_left[0] > 0:
+            draw_boot(pygame.display.get_surface(),
+                      _boot_title, 1.0 - _boot_left[0] / 10.0)
+            _boot_left[0] -= 1
         dt = min(clock.tick(FPS) / 1000.0, 0.05)
         _PH["f"] += 1
         dt = min(dt * time_scale, 0.5)          # test-mode speed-up
@@ -3274,9 +3303,18 @@ def main() -> None:
             # The towns in front of the player must be stepped where he is, so
             # the cut follows him. Remaking it is cheap (it is a walk over the
             # towns and the register) but not free, so it is not per-frame.
+            # RE-CUT ONLY WHEN THE VIEW ACTUALLY CHANGED. This was once a
+            # second, every second, for the whole life of the game -- and
+            # re-cutting walks every town and every soul. Measured on a
+            # startup, the first re-cut inside the loop took NINETY SECONDS
+            # of a frozen window. Nothing about the partition depends on the
+            # clock: it depends on WHICH towns are in front of him, so it is
+            # cut when that set changes and at no other time.
+            _lane_ids = tuple(sorted(id(v) for v in visible_villages))
             _lane_timer -= dt
-            if _lane_timer <= 0.0:
-                _lane_timer = 1.0
+            if _lane_timer <= 0.0 and _lane_ids != _lane_seen:
+                _lane_seen = _lane_ids
+                _lane_timer = 4.0
                 _all_t = list(villages.villages)
                 _LANES.recut(_all_t, main_towns=visible_villages)
                 if _LANES.ok(_all_t, village_mod.TRAVELLERS,
@@ -3284,15 +3322,28 @@ def main() -> None:
                     _LANE_TOWNS = _LANES.towns_for(0)
                     _LANE_PEOPLE = _LANES.people_for(0)
                 else:
-                    # A LANE LOST A MAN. Step the whole world instead --
-                    # correct and slow beats fast and quietly smaller.
-                    _LANE_TOWNS = _all_t
-                    _LANE_PEOPLE = list(village_mod.PEOPLE)
+                    # A LANE LOST A MAN, and this used to answer by stepping
+                    # THE WHOLE WORLD instead: every town and every soul, from
+                    # scratch, once a second. MEASURED, it is what froze the
+                    # game for eighty-five seconds after the first frame and
+                    # never stopped freezing.
+                    #
+                    # The cut is a partition of ownership and it is nearly
+                    # right -- a handful of men fall outside it and the old
+                    # answer was to throw the whole partition away for their
+                    # sake. The repair is to HAND THE MISSING MEN BACK to the
+                    # lane rather than to abandon it: same set in, a set
+                    # difference out, and nobody is dropped.
+                    _LANE_TOWNS = _LANES.towns_for(0)
+                    _LANE_PEOPLE = _LANES.people_for(0)
+                    _seen = set(map(id, _LANE_PEOPLE))
+                    _missing = [m for m in village_mod.PEOPLE if id(m) not in _seen]
+                    if _missing:
+                        _LANE_PEOPLE = list(_LANE_PEOPLE) + _missing
                     if not _lane_warned:
                         _lane_warned = True
-                        print("LANES: audit failed -- stepping the whole world",
-                              _LANES.audit(_all_t, village_mod.TRAVELLERS,
-                                           village_mod.PEOPLE))
+                        print("LANES: cut lost %d men -- handed back, not "
+                              "re-cutting the world" % len(_missing))
             view_trees = trees.visible(cam_x, cam_y, vw, vh)
             view_ore = ore_field.visible(cam_x, cam_y, vw, vh)
             for village in visible_villages:        # 5 border guards per village
