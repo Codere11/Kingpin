@@ -2904,6 +2904,7 @@ def main() -> None:
     _boot_title = "WELCOME TO %s" % (_home.name.upper() if _home is not None else "THE WORLD")
     _boot_left = [10]
     _boot_slow = [True]
+    _boot_prev = [None]
     # PUT HIM DOWN LAST. The spawn is decided when he is created, but a dozen
     # things between there and the first frame -- the village register, the
     # patrols, the world bounds -- can move him, and one of them was putting
@@ -2923,6 +2924,11 @@ def main() -> None:
             player.nation = _home.nation
     while running:
         _boot_t0 = pygame.time.get_ticks()
+        # THE FLAG COMES DOWN WHEN A FRAME WAS QUICK. Measure the PREVIOUS one:
+        # at the top of a frame you cannot know how long this one will take.
+        if _boot_prev[0] is not None and _boot_t0 - _boot_prev[0] < 45:
+            _boot_slow[0] = False
+        _boot_prev[0] = _boot_t0
         if _boot_left[0] > 0 or _boot_slow[0]:
             # AND IT STAYS UP UNTIL THE FRAMES STOP BEING SLOW. Ten frames was
             # a guess, and the heaviest work does not happen in the first ten:
