@@ -679,6 +679,11 @@ def main() -> None:
         return None
 
     _home = origin_village(origin)
+    # HIS TOWN, UNDER A NAME NOTHING ELSE USES. `_home` is re-bound inside the
+    # loop -- to a candidate, to a tuple of coordinates, to None -- and any
+    # code that read it later was reading whatever the loop last left there.
+    # That is what crashed on the first wolf spawn: `.x` off a tuple.
+    _origin_town = _home
     _hx = _home.x if _home is not None else 0.0
     _hy = _home.y if _home is not None else 0.0
     if _home is not None:
@@ -857,8 +862,10 @@ def main() -> None:
             if village_mod.village_clearance(x, y, world.seed) < 0.0:
                 continue
             # AND NOT IN HIS OWN TOWN, whatever the clearance says.
-            if _home is not None and (math.hypot(x - _home.x, y - _home.y)
-                                      < village_mod.SPACING * 0.12):
+            _ot = _origin_town
+            if _ot is not None and (math.hypot(x - getattr(_ot, "x", x),
+                                               y - getattr(_ot, "y", y))
+                                    < village_mod.SPACING * 0.12):
                 continue
             enemies.append(Wolf(x, y, biomes.predator_kind(
                 float(world.temperature(x, y)), float(world.humidity(x, y)))))
@@ -2916,12 +2923,12 @@ def main() -> None:
     # ran AFTER the backstory had already posted him to a trade. The board
     # then said "no trade, no post, no wage" and refused to let him sell, and
     # both of those looked like two separate bugs.
-    if origin in _JOB and _home is not None:
+    if origin in _JOB and _origin_town is not None:
         player.job = _JOB[origin]
-        player.settled_at = _home
-        player.village = _home
-        if getattr(_home, "nation", None) is not None:
-            player.nation = _home.nation
+        player.settled_at = _origin_town
+        player.village = _origin_town
+        if getattr(_origin_town, "nation", None) is not None:
+            player.nation = _origin_town.nation
     while running:
         _boot_t0 = pygame.time.get_ticks()
         # THE FLAG COMES DOWN WHEN A FRAME WAS QUICK. Measure the PREVIOUS one:
