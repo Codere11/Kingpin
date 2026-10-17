@@ -849,13 +849,22 @@ def main() -> None:
     def spawn_wolf() -> None:
         for _ in range(24):
             angle = random.uniform(0.0, 2.0 * math.pi)
-            dist = random.uniform(800.0, 1900.0)
+            # FURTHER OUT THAN THEY USED TO BE. The ring was 800 to 1,900
+            # pixels and it was measured from the PLAYER -- which was fine when
+            # he spawned in an empty field and is not fine now, because he
+            # spawns inside a TOWN and a town is bigger than that ring. Wolves
+            # arrived in the gardens on the first frame.
+            dist = random.uniform(2600.0, 5200.0)
             x = player.x + math.cos(angle) * dist
             y = player.y + math.sin(angle) * dist
             # Never inside a village's cleared SQUARE. The old circle test let
             # wolves spawn in the fence corners, which is why they turned up
             # standing in people's gardens.
             if village_mod.village_clearance(x, y, world.seed) < 0.0:
+                continue
+            # AND NOT IN HIS OWN TOWN, whatever the clearance says.
+            if _home is not None and (math.hypot(x - _home.x, y - _home.y)
+                                      < village_mod.SPACING * 0.12):
                 continue
             enemies.append(Wolf(x, y, biomes.predator_kind(
                 float(world.temperature(x, y)), float(world.humidity(x, y)))))
@@ -1497,8 +1506,14 @@ def main() -> None:
             # AND THE SOLDIERS. They are not in a village's list -- they are
             # the nation's, and they march -- so they were the one kind of man
             # in the world you could not do business with.
+            # THE SOLDIERS, NOT THE WOLVES. An enemy list holds both, and a
+            # wolf was being offered a trade menu: clicking one went into the
+            # economy asking what a wolf WANTS and threw AttributeError, taking
+            # the game down. Only a man with a purse is a customer.
             _folk += [e for e in enemies
-                      if getattr(e, "alive", True) and not getattr(e, "attacked", False)]
+                      if getattr(e, "kind", "") == "soldier"
+                      and getattr(e, "alive", True)
+                      and not getattr(e, "attacked", False)]
             for npc in _folk:
                     if getattr(npc, "alive", True) and math.hypot(npc.x - wx, npc.y - wy) < 22.0:
                         if (getattr(npc, "is_commander", False)
