@@ -238,12 +238,24 @@ ORIGINS = (
 
 
 def choose_origin(screen, clock):
-    """Pick a backstory. Returns the origin key, or None to go back."""
-    lw, lh = 320, 180
-    low = pygame.Surface((lw, lh))
-    title_font = pygame.font.SysFont("dejavusansmono", 15, bold=True)
-    item_font = pygame.font.SysFont("dejavusansmono", 10, bold=True)
-    small_font = pygame.font.SysFont("dejavusansmono", 8, bold=True)
+    """Pick a backstory. Returns the origin key, or None to go back.
+
+    DRAWN AT THE SCREEN'S OWN RESOLUTION. The rest of the menus compose at a
+    third of the window and blow the result up, which is right for a screen of
+    two buttons -- but this one carries eight trades and a line about each, and
+    at three hundred and twenty pixels wide that line was four pixels tall and
+    unreadable. Legibility first: the type is sized from the window.
+    """
+    w, h = screen.get_size()
+    title_font = pygame.font.SysFont("dejavusansmono", max(16, h // 15), bold=True)
+    sub_font = pygame.font.SysFont("dejavusansmono", max(10, h // 46))
+    num_font = pygame.font.SysFont("dejavusansmono", max(11, h // 34), bold=True)
+    name_font = pygame.font.SysFont("dejavusansmono", max(12, h // 30), bold=True)
+    blurb_font = pygame.font.SysFont("dejavusansmono", max(10, h // 44))
+    row_h = max(26, int(h * 0.082))
+    list_top = int(h * 0.20)
+    list_w = int(w * 0.86)
+    list_x = (w - list_w) // 2
     pick = 0
     while True:
         clock.tick(60)
@@ -257,30 +269,36 @@ def choose_origin(screen, clock):
             elif event.key in (pygame.K_UP, pygame.K_w):
                 pick = (pick - 1) % len(ORIGINS)
             elif pygame.K_1 <= event.key <= pygame.K_9:
-                return ORIGINS[event.key - pygame.K_1][0]
+                idx = event.key - pygame.K_1
+                if idx < len(ORIGINS):
+                    return ORIGINS[idx][0]
             elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                 return ORIGINS[pick][0]
             elif event.key == pygame.K_ESCAPE:
                 return None
-        low.fill(BG)
+        screen.fill(BG)
         head = title_font.render("WHERE ARE YOU FROM?", True, TITLE)
-        low.blit(head, (lw // 2 - head.get_width() // 2, 10))
-        sub = small_font.render("every trade starts in a town that needs it", True, HINT)
-        low.blit(sub, (lw // 2 - sub.get_width() // 2, 28))
-        top = 44
+        screen.blit(head, (w // 2 - head.get_width() // 2, int(h * 0.075)))
+        sub = sub_font.render("every trade starts in a town that has work for it",
+                              True, HINT)
+        screen.blit(sub, (w // 2 - sub.get_width() // 2, int(h * 0.075) + head.get_height() + 4))
         for i, (key, name, blurb) in enumerate(ORIGINS):
-            y = top + i * 17
+            y = list_top + i * row_h
             on = (i == pick)
-            rect = pygame.Rect(14, y, lw - 28, 15)
-            pygame.draw.rect(low, BTN_BG_HOVER if on else SLOT, rect)
-            pygame.draw.rect(low, BTN_BORDER_HOVER if on else BTN_BORDER, rect, 1)
-            num = small_font.render(str(i + 1), True, HINT if not on else TITLE)
-            low.blit(num, (rect.x + 4, rect.y + 4))
-            nm = item_font.render(name, True, BTN_TEXT if on else DIM)
-            low.blit(nm, (rect.x + 16, rect.y + 3))
-            bl = small_font.render(blurb, True, DIM if on else HINT)
-            low.blit(bl, (rect.x + 70, rect.y + 4))
-        hint = small_font.render("up/down, 1-7, enter -- esc goes back", True, HINT)
-        low.blit(hint, (lw // 2 - hint.get_width() // 2, lh - 12))
-        pygame.transform.scale(low, screen.get_size(), screen)
+            rect = pygame.Rect(list_x, y, list_w, row_h - 4)
+            pygame.draw.rect(screen, BTN_BG_HOVER if on else SLOT, rect)
+            pygame.draw.rect(screen, BTN_BORDER_HOVER if on else BTN_BORDER, rect, 1)
+            # the number, in its own small column
+            num = num_font.render(str(i + 1), True, TITLE if on else HINT)
+            screen.blit(num, (rect.x + 10, rect.centery - num.get_height() // 2))
+            # the trade, in a fixed column so all eight line up
+            nm = name_font.render(name, True, BTN_TEXT if on else DIM)
+            screen.blit(nm, (rect.x + 34, rect.centery - nm.get_height() // 2))
+            # and what it means, from a column of its own
+            bl = blurb_font.render(blurb, True, BTN_TEXT if on else DIM)
+            screen.blit(bl, (rect.x + 34 + int(list_w * 0.20),
+                             rect.centery - bl.get_height() // 2))
+        hint = blurb_font.render("up / down   or   1-8        enter to begin        esc to go back",
+                                 True, HINT)
+        screen.blit(hint, (w // 2 - hint.get_width() // 2, h - hint.get_height() - 12))
         pygame.display.flip()
