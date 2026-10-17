@@ -52,6 +52,11 @@ class Player:
 
     # A class attribute answers to both spellings and cannot be shadowed.
     LEVEL_FLASH = 1.6              # how long the level-up shine lasts
+    # WHO HE IS AND WHAT HE OWES. Class defaults as well as instance fields:
+    # an unpickled save written before they existed never runs __init__.
+    origin = "idle"
+    debt = 0
+    debt_paid = 0
     def __init__(self, x: float, y: float, speed: float = 240.0) -> None:
         self.x = x
         self.y = y

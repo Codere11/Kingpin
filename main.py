@@ -701,6 +701,24 @@ def main() -> None:
     _rng = random.Random((int(_save.get("seed", 20240501)) ^ 0x5EED) & 0xFFFFFFFF)
     player.name = "%s %s" % (_rng.choice(village_mod.FIRST_NAMES),
                              _rng.choice(village_mod.LAST_NAMES))
+    # HE IS ALREADY IN THE BOOK, AND ALREADY IN WORK. The letter says he has
+    # just started as a smith; the board has to agree with the letter, so the
+    # trade is his from the first frame and the debt is what the letter is
+    # about. Idle owes the least and has no post, which is the trade-off.
+    _JOB = {"smith": "smith", "artisan": "lab", "brewer": "brewery",
+            "farmer": "farm", "logger": "logger", "trader": "trader",
+            "soldier": "defender"}
+    _DEBT = {"trader": 500, "smith": 450, "soldier": 430, "artisan": 400,
+             "brewer": 370, "farmer": 340, "logger": 310, "idle": 300}
+    player.origin = origin
+    player.debt = _DEBT.get(origin, 300)
+    player.debt_paid = 0
+    if origin in _JOB and _home is not None:
+        player.job = _JOB[origin]
+        player.settled_at = _home
+        player.village = _home
+        if getattr(_home, "nation", None) is not None:
+            player.nation = _home.nation
     player.god = test_mode
     # THE TOWNS CAN NOW SEE HIM. One assignment, so a village can put the
     # player in an election or in a ring without every caller passing him down.

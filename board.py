@@ -33,6 +33,7 @@ class BoardPanel:
         self.tax_day = -1
         self.paid_day = -1
         self.tax_button = None
+        self.debt_button = None
         self.notice = ""
         self.notice_t = 0.0
         self.job_rows: list = []       # (rect, village, trade) for the mouse
@@ -92,6 +93,27 @@ class BoardPanel:
                     self.notice, self.notice_t = "That post is gone", 2.5
                 return False
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                and self.debt_button is not None
+                and self.debt_button.collidepoint(event.pos)
+                and self.inv is not None and self.player is not None):
+            # THE DEBT IS PAID DOWN AS FAR AS THE COIN GOES, not all at once --
+            # a man who is three hundred short should be able to hand over what
+            # he has instead of being told to come back richer.
+            owed = max(0, int(getattr(self.player, "debt", 0)))
+            purse = self.inv.count_of("coin")
+            if owed <= 0:
+                self.notice, self.notice_t = "The ledger is clear", 2.5
+            elif purse <= 0:
+                self.notice, self.notice_t = "You have no coin at all", 2.5
+            else:
+                give = min(purse, owed)
+                self.inv.consume("coin", give)
+                self.player.debt = owed - give
+                self.player.debt_paid = getattr(self.player, "debt_paid", 0) + give
+                self.notice, self.notice_t = ("Paid %d toward the debt -- %d left"
+                                              % (give, self.player.debt)), 3.0
+            return False
+        if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
                 and self.tax_button is not None
                 and self.tax_button.collidepoint(event.pos)
                 and self.inv is not None):
@@ -150,6 +172,47 @@ class BoardPanel:
         lx = panel.left + 30
         rx = panel.right - 30
         y = panel.top + 54
+
+        # ---- YOUR ACCOUNT -------------------------------------------------
+        # WHO THE BOARD THINKS HE IS. The letter told him what he does and what
+        # he owes, and this is the same two sentences in the same place every
+        # day, next to the button that does something about it.
+        self.debt_button = None
+        if self.player is not None:
+            box = pygame.Rect(lx, y, panel.width - 60, 66)
+            pygame.draw.rect(screen, (40, 34, 26), box, border_radius=6)
+            pygame.draw.rect(screen, (154, 110, 62), box, 1, border_radius=6)
+            nm = getattr(self.player, "name", None) or "A stranger"
+            trade = getattr(self.player, "job", None)
+            town = getattr(self.player, "settled_at", None)
+            if trade:
+                where = (" in %s" % town.name) if town is not None else ""
+                line = "%s   --   %s%s" % (nm, TRADE_NAMES.get(trade, trade).lower(), where)
+                col = (216, 210, 190)
+            else:
+                line = "%s   --   no trade, no post, no wage" % nm
+                col = (196, 172, 140)
+            screen.blit(self.font.render(line[:68], True, col), (lx + 12, y + 10))
+            owed = max(0, int(getattr(self.player, "debt", 0)))
+            if owed > 0:
+                screen.blit(self.font_small.render(
+                    "The ledger holds your name for %d coin" % owed, True,
+                    (214, 150, 130)), (lx + 12, y + 34))
+                self.debt_button = pygame.Rect(box.right - 138, y + 30, 126, 24)
+                hot = self.debt_button.collidepoint(pygame.mouse.get_pos())
+                pygame.draw.rect(screen, (128, 74, 40) if hot else (86, 52, 30),
+                                 self.debt_button, border_radius=5)
+                pygame.draw.rect(screen, (200, 150, 96), self.debt_button, 1,
+                                 border_radius=5)
+                lbl = self.font_small.render("PAY WHAT YOU CAN", True, (246, 236, 214))
+                screen.blit(lbl, (self.debt_button.centerx - lbl.get_width() // 2,
+                                  self.debt_button.centery - lbl.get_height() // 2))
+            else:
+                screen.blit(self.font_small.render(
+                    "The ledger is clear. Nothing is owed.", True,
+                    (150, 190, 140)), (lx + 12, y + 34))
+            y += 78
+
         screen.blit(self.font.render("WORK GOING", True, (238, 224, 190)), (lx, y))
         y += 28
 
