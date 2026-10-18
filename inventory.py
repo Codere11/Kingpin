@@ -40,6 +40,13 @@ class Inventory:
                 return count
         if defn.quality and quality is None:
             quality = 0
+        # A GRADE IS PART OF WHAT A THING IS. Two lots of tobacco of different
+        # quality are two different lots and must be two different stacks --
+        # they used to be merged into one and the merged stack was given the
+        # AVERAGE of the grades, so a D and an F became a single E and nobody
+        # would buy it. The good leaf was not lost; it was diluted, and there
+        # was no row to sell it on because there was no stack to sell from.
+        q_here = clamp(quality) if defn.quality else None
         remaining = count
         first = None
 
@@ -48,6 +55,8 @@ class Inventory:
                 if remaining <= 0:
                     break
                 if stack is not None and stack.defn.id == item_id:
+                    if defn.quality and stack.quality != q_here:
+                        continue             # a different grade: its own stack
                     room = defn.max_stack - stack.count
                     if room > 0:
                         take = min(room, remaining)
@@ -63,8 +72,7 @@ class Inventory:
                 if slot is None:
                     break
                 take = min(defn.max_stack, remaining)
-                self.slots[slot] = ItemStack(defn, take,
-                                             clamp(quality) if defn.quality else None)
+                self.slots[slot] = ItemStack(defn, take, q_here)
                 remaining -= take
                 if first is None:
                     first = slot
