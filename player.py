@@ -57,6 +57,7 @@ class Player:
     origin = "idle"
     debt = 0
     debt_paid = 0
+    farm_plot = None        # his OWN field, by index into his town's list
     def __init__(self, x: float, y: float, speed: float = 240.0) -> None:
         self.x = x
         self.y = y
