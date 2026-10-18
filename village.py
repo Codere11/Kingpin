@@ -3222,6 +3222,29 @@ class Village:
         player.job = kind
         player.settled_at = self
         player.village = self
+        # AND A FARMER IS GIVEN A FIELD, WHETHER HE ARRIVED WITH THE TRADE OR
+        # TOOK IT OFF THIS BOARD. The backstory used to be the only place a
+        # plot was handed out, so a man who was hired as a farmer later worked
+        # somebody else's field -- and harvesting a village plot that is not
+        # yours is a CRIME, so his first harvest got the town up in arms.
+        if kind == "farm" and self.farm_plots:
+            taken = {getattr(n, "farm_plot", None) for n in self.npcs}
+            mine = next((i for i in range(len(self.farm_plots))
+                         if i not in taken), None)
+            if mine is None:
+                mine = 0
+            player.farm_plot = mine
+            for n in self.npcs:
+                if getattr(n, "farm_plot", None) == mine:
+                    free = next((i for i in range(len(self.farm_plots))
+                                 if i not in taken and i != mine), None)
+                    if free is not None:
+                        n.farm_plot = free
+                    else:
+                        n.farm_plot = None
+                        n.job = "hand"
+        else:
+            player.farm_plot = None
         if getattr(self, "nation", None) is not None:
             player.nation = self.nation
         player.wage = economy.WAGE          # a day's pay for a day's work
