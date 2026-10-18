@@ -1168,7 +1168,21 @@ def main() -> None:
     def tile_is_mine(tx: int, ty: int) -> bool:
         """True for land inside the player's own fenced homestead: a closed
         rectangle of his fences with one of his houses inside. Farming there
-        is not trespass -- unless he is already being hunted."""
+        is not trespass -- unless he is already being hunted.
+
+        AND HIS OWN FIELD FIRST, before any of that: the one the town gave him
+        with his backstory. Without it a farmer's very first harvest was a
+        crime and the whole town turned on him.
+        """
+        _p = getattr(player, "farm_plot", None)
+        _town = getattr(player, "settled_at", None)
+        if _p is not None and _town is not None:
+            try:
+                _ctx, _cty, _k = _town.farm_plots[_p]
+                if (_ctx, _cty) == (tx, ty):
+                    return True
+            except Exception:
+                pass
         if not built_houses or not built_fences:
             return False
         if player_hunted():
