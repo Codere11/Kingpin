@@ -1,4 +1,12 @@
-"""The three nations of the world.
+"""ONE state, three capitals.
+
+There is no longer any such thing as a rival nation. One government rules the
+whole map: `nation_index()` answers 0 everywhere, `count()` is 1, and the only
+political facts left are WHERE the state keeps its seats -- a Main Capital and
+two Regional Capitals -- and how far a man is from them.
+
+The three capital SITES are kept deliberately. They are three real places on the
+map, they are the biggest towns, and they are the three things worth taking.
 
 Villages are no longer their own nation: every village belongs to one of a
 handful of nations, decided by a *warped* Voronoi partition of the map, so the
@@ -15,8 +23,14 @@ import numpy as np
 
 from noise import value_noise
 
-NAMES = ["Crowlands", "Ashmark", "Redreach"]
-COLORS = [(176, 60, 54), (58, 92, 178), (96, 142, 76)]
+# ONE NAME AND ONE COLOUR. The colours were three flags; there is one flag now,
+# and it is the colour of the thing that took the map.
+NAMES = ["Ashmark"]
+COLORS = [(142, 46, 40)]
+
+# WHICH CAPITAL IS THE SEAT. The other two are regional: real capitals, real
+# governors, no throne.
+MAIN_CAPITAL = 0
 
 # THE CORNERS, NOT THE MIDDLE. Three capitals sat in a triangle around the
 # centre of a world that runs from -100,000 to +100,000, so every kingdom's
@@ -36,7 +50,8 @@ WEIGHTS = [1.2, 1.2, 0.75]         # bigger weight => bigger territory.
 
 
 def count() -> int:
-    return len(CAPITALS)
+    """One government."""
+    return 1
 
 
 def name(index: int) -> str:
@@ -99,23 +114,19 @@ def _warp(x, y):
 
 
 def nation_index(x: float, y: float) -> int:
-    wx, wy = _warp(float(x), float(y))
-    best, best_d = 0, 1e18
-    for i, (cx, cy) in enumerate(CAPITALS):
-        d = ((float(wx) - cx) ** 2 + (float(wy) - cy) ** 2) / (WEIGHTS[i] ** 2)
-        if d < best_d:
-            best_d, best = d, i
-    return best
+    """The one state owns everything. Kept as a function because a hundred
+    callers ask who owns a man, and the answer is the same everywhere."""
+    return 0
+
+
+def is_main_capital(x: float, y: float) -> bool:
+    """The seat. There is one throne, and this is where it is."""
+    cx, cy = CAPITALS[MAIN_CAPITAL]
+    return math.hypot(float(x) - cx, float(y) - cy) < 4000.0
 
 
 def overlay(xgrid: np.ndarray, ygrid: np.ndarray) -> np.ndarray:
-    """Per-pixel nation index for the whole grid (for map tinting)."""
-    wx, wy = _warp(xgrid, ygrid)
+    """One colour over the whole map. There are no borders left to paint."""
     best = np.zeros(xgrid.shape, dtype=np.int8)
     best_d = np.full(xgrid.shape, 1e18, dtype=np.float32)
-    for i, (cx, cy) in enumerate(CAPITALS):
-        d = ((wx - cx) ** 2 + (wy - cy) ** 2) / (WEIGHTS[i] ** 2)
-        closer = d < best_d
-        best_d = np.where(closer, d, best_d)
-        best = np.where(closer, np.int8(i), best)
     return best

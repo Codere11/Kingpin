@@ -2597,14 +2597,20 @@ class Village:
         # on the nation's payroll.
         self.mayor = None
         self._capital = None
-        if self.is_capital and len(self.npcs) > 1:
+        # ONE THRONE, IN ONE PLACE. Every capital used to crown a king, which
+        # was right when there were three kingdoms and wrong now that there is
+        # one state: two of the three capitals are REGIONAL, and a region is
+        # administered, not ruled. They get a Governor -- the same office as a
+        # mayor, with the top hat and none of the crown.
+        _seat = nations.is_main_capital(self.x, self.y)
+        if self.is_capital and _seat and len(self.npcs) > 1:
             self.king = self.npcs[-1]
-            self.king.role = "King"
+            self.king.role = "Dictator"
             self.king.is_king = True
             self.king.job = "king"
-        if not self.is_capital and len(self.npcs) > 2:
+        if (not _seat) and len(self.npcs) > 2:
             self.mayor = self.npcs[-2]
-            self.mayor.role = "Mayor"
+            self.mayor.role = "Governor" if self.is_capital else "Mayor"
             self.mayor.is_mayor = True
             self.mayor.job = "mayor"
             self.mayor.plaza = (self.x, self.y)
