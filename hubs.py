@@ -33,6 +33,10 @@ import random
 import pygame
 
 import biomes
+import crop
+import fence
+import industry
+import world as world_mod
 import economy
 import items
 import village as village_mod
@@ -89,35 +93,82 @@ class Hub:
         self.carry_t = self.rng.uniform(10.0, CARRY_MIN)
         self.npcs: list = []
 
-        # A YARD, LAID OUT. The crop grows in one corner, the house stands at
-        # the back, the bench is under the eaves, and the gate is the only way
-        # in. Everything used to be inside a two-hundred-pixel box with the
-        # house hanging off the top of it.
-        half = YARD * 0.5
-        self.fence = pygame.Rect(int(self.x - half), int(self.y - half),
-                                 int(YARD), int(YARD))
-        self.gate = pygame.Rect(int(self.x - 22), self.fence.bottom - 6, 44, 12)
-        self.house = pygame.Rect(int(self.x - 52), int(self.y - half + 26), 104, 74)
-        self.bench = pygame.Rect(int(self.x + half - 70), int(self.y - 20), 48, 30)
-        # the 5x5 block of crop, in the lower left of the yard
-        cx = int(math.floor((self.x - half * 0.42) / 32.0))
-        cy = int(math.floor((self.y + half * 0.34) / 32.0))
+        # THE SAME CODE A TOWN IS BUILT WITH. The fence and its gates come from
+        # `fence.install`, the house is a real `village.House`, the bench is a
+        # real `industry.Workplace`, and the crop is planted in the WORLD's own
+        # plot map so it grows, ripens and is drawn by the crop renderer. A hub
+        # is not a special effect; it is a small settlement that the state does
+        # not admit exists.
+        self.radius = 150.0
+        self.gx, self.gy = 0, 0
+        self.npcs = []
+        self.houses = []
+        self.workplaces = []
+        self.ledger_coins = self.coins
+        self.ledger_goods = self.stock
+        self.farm_plots = []
+        self.provoked = False
+        self.scale = village_mod.VILLAGE_SCALE
+        try:
+            fence.install(self, self.rng)
+        except Exception:
+            self.fence_rect = pygame.Rect(int(self.x - 210), int(self.y - 210),
+                                          420, 420)
+            self.fence_walls = []
+            self.gate_side = 2
+            self.gate_side2 = 0
+            self.gate_off = 0.0
+            self.gate_off2 = 0.0
+        fr = self.fence_rect
+        self.gate = pygame.Rect(0, 0, 44, 12)
+        self.gate.center = (int(self.x), fr.bottom - 6)
+        # THE HOUSE -- a real one, with a roof and a door and a facing
+        try:
+            hx = self.x - 60.0
+            hy = fr.top + 60.0
+            # `roof` is a COLOUR, not a shape name. A string there throws
+            # inside __init__ and the whole house is lost to the except.
+            house = village_mod.House(hx, hy, 104, 74, (118, 62, 50),
+                                      (0.0, 1.0), self.seed + 11,
+                                      government=False)
+            house.village = self
+            house.occupants = []
+            self.houses.append(house)
+            self.house = house.rect if hasattr(house, "rect") else \
+                pygame.Rect(int(hx - 52), int(hy - 37), 104, 74)
+        except Exception:
+            self.house = pygame.Rect(int(self.x - 60), int(fr.top + 60), 104, 74)
+        # THE BENCH -- a real workplace, so 'E' at it does what a bench does
+        try:
+            wp = industry.Workplace(self.brew_kind, self.x + 130.0,
+                                    fr.top + 96.0, self.seed + 23)
+            self.workplaces.append(wp)
+            self.bench = wp.rect
+        except Exception:
+            self.bench = pygame.Rect(int(self.x + 100), int(fr.top + 80), 48, 30)
+        # THE CROP -- five by five in the world's own plot map
+        cx = int(math.floor((self.x - 110.0) / 32.0))
+        cy = int(math.floor((fr.bottom - 200.0) / 32.0))
         self.plots = []
+        self.plot_tiles = []
         for j in range(PLOT):
             for i in range(PLOT):
-                kind = "food" if j == 0 else "leaf"
-                self.plots.append((cx + i - PLOT // 2, cy + j - PLOT // 2, kind))
-        self.plot_rect = pygame.Rect(int((cx - PLOT // 2) * 32),
-                                     int((cy - PLOT // 2) * 32),
-                                     PLOT * 32, PLOT * 32)
-        # where each of them belongs when there is nothing else to do
+                tx, ty = cx + i, cy + j
+                kind = "wheat" if j == 0 else "plant"
+                self.plots.append((tx, ty, "food" if j == 0 else "leaf"))
+                self.plot_tiles.append((tx, ty, kind))
+                if world is not None:
+                    try:
+                        world.plots[(tx, ty)] = world_mod.Plot(kind, 0.0)
+                    except Exception:
+                        pass
+        self.plot_rect = pygame.Rect(cx * 32, cy * 32, PLOT * 32, PLOT * 32)
         self.posts = {
             "soldier": (self.gate.centerx, self.gate.centery + 16.0),
             "farm": (self.plot_rect.centerx, self.plot_rect.centery),
-            "trader": (self.bench.centerx - 74.0, self.bench.centery + 6.0),
+            "trader": (self.x - 20.0, self.gate.centery - 40.0),
         }
-        self.posts[self.brew_kind] = (self.bench.centerx, self.bench.centery + 22.0)
-
+        self.posts[self.brew_kind] = (self.bench.centerx, self.bench.centery + 26.0)
         self._people()
 
     # -- the four ---------------------------------------------------------
@@ -373,18 +424,32 @@ class Hub:
 
     # -- the picture ------------------------------------------------------
     def draw(self, screen, cam_x: float, cam_y: float) -> None:
+        """Drawn by the same code that draws a town: the fence, the house, and
+        the crops are all the real renderers."""
         ox, oy = -cam_x, -cam_y
-        for cx, cy, kind in self.plots:
-            px = int(cx * 32 + ox)
-            py = int(cy * 32 + oy)
-            pygame.draw.rect(screen, FOOD_SOIL if kind == "food" else LEAF_SOIL,
-                             (px, py, 32, 32))
-        pygame.draw.rect(screen, FENCE_DARK, self.fence.move(ox, oy), 3)
-        pygame.draw.rect(screen, GATE, self.gate.move(ox, oy))
-        pygame.draw.rect(screen, HOUSE_WALL, self.house.move(ox, oy))
-        pygame.draw.rect(screen, HOUSE_ROOF,
-                         self.house.move(ox, oy).inflate(-10, -28).move(0, -6))
-        pygame.draw.rect(screen, BENCH, self.bench.move(ox, oy))
+        try:
+            crop.draw_crop(screen, 0, 0, "", 0.0, cam_x, cam_y)   # no-op warm
+        except Exception:
+            pass
+        view = pygame.Rect(int(cam_x) - 260, int(cam_y) - 260, 900, 900)
+        for tx, ty, kind in self.plot_tiles:
+            try:
+                crop.draw_crop(screen, tx * 32 + 16, ty * 32 + 16, kind,
+                               70.0, cam_x, cam_y, None)
+            except Exception:
+                pygame.draw.rect(screen, (56, 78, 40),
+                                 (tx * 32 + ox, ty * 32 + oy, 32, 32))
+        fence.draw(screen, cam_x, cam_y, self, view)
+        for house in self.houses:
+            try:
+                house.draw(screen, cam_x, cam_y)
+            except Exception:
+                pass
+        for wp in self.workplaces:
+            try:
+                pygame.draw.rect(screen, BENCH, wp.rect.move(ox, oy))
+            except Exception:
+                pass
         for npc in self.npcs:
             if npc.alive:
                 npc.draw(screen, cam_x, cam_y, False)
