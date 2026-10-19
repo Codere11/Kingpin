@@ -258,6 +258,13 @@ class Hub:
             trader.y += dy / d * step
             return
         if self._stage == "out":
+            # the town can see him once he is at its gate
+            try:
+                if trader not in town._hub_folk:
+                    town._hub_folk = getattr(town, "_hub_folk", [])
+                    town._hub_folk.append(trader)
+            except Exception:
+                pass
             # AT THE GATE. The guard's roll, the same one the player faces.
             units = sum(self._cargo.values())
             skill = max(0.0, min(10.0, float(getattr(trader, "smuggling", 0.0))))
@@ -266,8 +273,30 @@ class Hub:
                 town.provoked = True
                 trader.wanted = True
                 self._cargo = {}
-                _note("HUB SEARCH  %s caught at %s with %d"
-                      % (trader.name, town.name, units))
+                # AND THE GUARD SHOOTS. The mark alone was a label nobody acted
+                # on; a man caught at a gate with contraband is shot at where he
+                # stands, and carries the wound home if he lives.
+                trader.health = getattr(trader, "health", 100.0) - 45.0
+                _note("HUB SEARCH  %s caught at %s with %d  -- shot, health %.0f"
+                      % (trader.name, town.name, units, trader.health))
+                if trader.health <= 0:
+                    trader.wanted = False
+                    _note("SKIRMISH  %s killed at the gate of %s"
+                          % (trader.name, town.name))
+                    try:
+                        trader.die()
+                    except Exception:
+                        pass
+                    # ALIVE IS SET HERE, NOT BY die(). A hub man has no village,
+                    # so his own settling-up path skipped the line that takes
+                    # him off the world -- he was "killed", cleaned off the
+                    # wanted list, and carried on trading.
+                    trader.alive = False
+                    trader.health = 0.0
+                    self._carrier = None
+                    self._cargo = {}
+                    self._stage = "home"
+                    return
             else:
                 for item, take in self._cargo.items():
                     economy.store_add(town, item, take, 2)

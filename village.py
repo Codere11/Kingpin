@@ -3000,71 +3000,34 @@ class Village:
                 n.searched_at = now
                 n.searched_village = self
                 self.search_now, self.search_t = None, 0.0
-        # and nobody walks in unsearched
-        r = self.fence_rect
-        for n in self.npcs:
-            if not n.alive:
+        # AND A WANTED MAN NEAR A GUARD IS SHOT AT. `wanted` is set when a
+        # search finds something and NOTHING READ IT: `provoked` is a village-
+        # wide mood that only ever reached the player, so a carrier could be
+        # caught, marked, and stroll out again with the guards looking through
+        # him.
+        # (The gate guards are SOLDIERS and live in the main loop's own list,
+        # not in `self.npcs` -- so looking for them here found nobody and no
+        # one ever fired. The town is armed; a wanted man inside its ground is
+        # shot at, and who is holding the rifle is not this method's business.)
+        _armed = getattr(self, "guards", None) or True
+        for n in list(self.npcs) + list(getattr(self, "_hub_folk", ())):
+            if not n.alive or not getattr(n, "wanted", False):
                 continue
-            if getattr(n, "searched_village", None) is self:
+            if math.hypot(self.x - n.x, self.y - n.y) > self.radius + 200.0:
                 continue
-            if r.collidepoint(n.x, n.y):
-                g = fence.nearest_gate(self, n.x, n.y)
-                n.x = g[1] + (0.0 if g[0] in (0, 2) else 34.0)
-                n.y = g[2] + (34.0 if g[0] == 0 else -34.0)
-                n.target = (n.x, n.y)
-                if n not in self.search_queue and n is not self.search_now:
-                    self.search_queue.append(n)
+            n.shot_t = getattr(n, "shot_t", 0.0) + dt
+            if n.shot_t >= 1.2:
+                n.shot_t = 0.0
+                n.health = getattr(n, "health", 100.0) - 22.0
+                if n.health <= 0:
+                    n.wanted = False
+                    _note("SKIRMISH  %s shot at the gate of %s"
+                          % (getattr(n, "name", "?"), self.name))
+                    try:
+                        n.die()
+                    except Exception:
+                        n.alive = False
 
-    SEARCH_SECONDS = 10.0
-    SEARCH_CATCH = 0.55         # a carrier with 20 items is caught this often
-
-    def gate_tick(self, dt: float, now: float) -> None:
-        """THE GATE IS THE ONLY WAY IN, AND IT IS A QUEUE.
-
-        One man is searched at a time and it takes ten seconds, so people stand
-        in a line to get into a town. Nobody is exempt: a man who has not been
-        searched is put back outside the fence and made to wait his turn, which
-        is what a queue IS when the alternative is walking through a wall.
-        """
-        if not hasattr(self, "search_queue"):
-            self.search_queue = []
-            self.search_now = None
-            self.search_t = 0.0
-        # the man at the head of the line
-        if self.search_now is not None and not self.search_now.alive:
-            self.search_now, self.search_t = None, 0.0
-        if self.search_now is None and self.search_queue:
-            self.search_now = self.search_queue.pop(0)
-            self.search_t = 0.0
-        if self.search_now is not None:
-            n = self.search_now
-            self.search_t += dt
-            if self.search_t >= self.SEARCH_SECONDS:
-                units = sum(int(n.stock.get(k, 0)) for k in
-                            ("tobacco", "cigar", "beer", "liqueur", "mezcal",
-                             "dried_mushroom", "red_mushroom", "agave"))
-                if units > 0:
-                    skill = max(0.0, min(10.0, float(getattr(n, "smuggling", 0.0))))
-                    found = min(1.0, units / 100.0) * self.SEARCH_CATCH * (1.0 - 0.09 * skill)
-                    if n.rng.random() < found:
-                        # CAUGHT. He loses it, and the town learns his face.
-                        for k in ("tobacco", "cigar", "beer", "liqueur", "mezcal",
-                                  "dried_mushroom", "red_mushroom", "agave"):
-                            n.stock[k] = 0
-                        n.wanted = True
-                        self.provoked = True
-                        _note("SEARCH  %-16s caught with %d in %s"
-                              % (n.name, units, self.name))
-                    else:
-                        n.smuggling = min(10.0, skill + 0.06 + units * 0.001)
-                        n.social = min(getattr(n, "social_cap", 3.0),
-                                       getattr(n, "social", 0.0) + 0.05)
-                else:
-                    n.social = min(getattr(n, "social_cap", 3.0),
-                                   getattr(n, "social", 0.0) + 0.02)
-                n.searched_at = now
-                n.searched_village = self
-                self.search_now, self.search_t = None, 0.0
         # and nobody walks in unsearched
         r = self.fence_rect
         for n in self.npcs:
