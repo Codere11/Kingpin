@@ -580,11 +580,10 @@ def main() -> None:
         pygame.quit()
         return
     slot, test_mode = chosen
-    # AND WHO HE WAS BEFORE THE FIRST FRAME. Asked here, once, before a single
-    # village is built, because it decides which one he wakes up in.
-    origin = menu.choose_origin(screen, clock)
-    if origin is None:
-        return
+    # NO BACKSTORY. No trade, no town, no debt, nothing owed to anybody. He
+    # starts in the middle of the country with an axe and that is all -- the
+    # picker and the letter are still in menu.py, unused, if that changes.
+    origin = "idle"
     try:
         deaths.banner("game slot %s%s" % (slot, "  TEST MODE" if test_mode else ""))
     except Exception:
@@ -696,14 +695,14 @@ def main() -> None:
                 return v
         return None
 
-    _home = origin_village(origin)
+    _home = None
     # HIS TOWN, UNDER A NAME NOTHING ELSE USES. `_home` is re-bound inside the
     # loop -- to a candidate, to a tuple of coordinates, to None -- and any
     # code that read it later was reading whatever the loop last left there.
     # That is what crashed on the first wolf spawn: `.x` off a tuple.
     _origin_town = _home
-    _hx = _home.x if _home is not None else 0.0
-    _hy = _home.y if _home is not None else 0.0
+    _hx = 0.0                       # the middle of the world
+    _hy = 0.0
     if _home is not None:
         # AND NOT IN THE ROAD: he starts a few paces off the door of the place
         # he is going to work, so the first thing he sees is his own trade.
@@ -734,7 +733,7 @@ def main() -> None:
     _DEBT = {"trader": 500, "smith": 450, "soldier": 430, "artisan": 400,
              "brewer": 370, "farmer": 340, "logger": 310, "idle": 300}
     player.origin = origin
-    player.debt = _DEBT.get(origin, 300)
+    player.debt = 0                 # he owes nobody anything
     player.debt_paid = 0
     player.god = test_mode
     # THE TOWNS CAN NOW SEE HIM. One assignment, so a village can put the
@@ -748,7 +747,7 @@ def main() -> None:
     # WHAT THE TRADE COMES WITH. A trader arrives with stock to sell, a smith
     # with iron at the anvil, and the logger with an axe and nothing else in
     # the world -- which is the hardest start and is meant to be.
-    KITS = {
+    KITS = {"idle": (("axe", 1),),
         "trader":  (("tobacco", 10), ("beer", 3), ("cigar", 2)),
         "smith":   (("iron", 24),),
         "soldier": (("rifle", 1), ("ammo", 40), ("first_aid", 1)),
