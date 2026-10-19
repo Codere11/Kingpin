@@ -322,6 +322,12 @@ class NPC:
     # road twice a week has a great deal. It is what a guard's search rolls
     # against, and the player's is the same number by the same law.
     smuggling: Any = 0.0
+    # HOW MUCH OF A MAN YOU CAN READ. Everybody has it and nobody starts with
+    # it. THE CAP IS THE INTERESTING PART: a villager can get to somewhere
+    # between 3 and 8 and no further, and only one in ten of them to the top of
+    # that -- a whole town of people who are hard to read and harder to fool.
+    social: Any = 0.0
+    social_cap: Any = 3.0
     is_mayor: Any = False
     levied: Any = False
     refuge: Any = None
@@ -407,6 +413,10 @@ class NPC:
         # A NUMBER FOR EVERYONE. Traders learn it on the road, hub folk learn
         # it by necessity, and a man with a fixed post mostly never needs it.
         self.smuggling = 0.0
+        self.social = 0.0
+        # ONE IN TEN gets to be as good at this as a villager can be.
+        self.social_cap = (8.0 if self.rng.random() < 0.10
+                           else self.rng.uniform(3.0, 7.4))
         self.village = village
         self.home = (x, y)
         self.x = x
@@ -739,6 +749,10 @@ class NPC:
     def update(self, dt: float, threat=None, colliders=None, combat=None,
                night: bool = False, world=None, now: float = 0.0,
                phase: str = "home") -> None:
+        try:
+            self.gate_tick(dt, now)
+        except Exception:
+            pass
         # THE TEST OF STRENGTHS OUTRANKS EVERYTHING. A man in the ring at the
         # capital is not running a caravan, not moseying round a square and
         # not going home at night: the tournament is fighting him (see
@@ -2936,6 +2950,136 @@ class Village:
                 g.aware = True
                 g.aware_timer = 30.0
 
+    SEARCH_SECONDS = 10.0
+    SEARCH_CATCH = 0.55         # a carrier with 20 items is caught this often
+
+    def gate_tick(self, dt: float, now: float) -> None:
+        """THE GATE IS THE ONLY WAY IN, AND IT IS A QUEUE.
+
+        One man is searched at a time and it takes ten seconds, so people stand
+        in a line to get into a town. Nobody is exempt: a man who has not been
+        searched is put back outside the fence and made to wait his turn, which
+        is what a queue IS when the alternative is walking through a wall.
+        """
+        if not hasattr(self, "search_queue"):
+            self.search_queue = []
+            self.search_now = None
+            self.search_t = 0.0
+        # the man at the head of the line
+        if self.search_now is not None and not self.search_now.alive:
+            self.search_now, self.search_t = None, 0.0
+        if self.search_now is None and self.search_queue:
+            self.search_now = self.search_queue.pop(0)
+            self.search_t = 0.0
+        if self.search_now is not None:
+            n = self.search_now
+            self.search_t += dt
+            if self.search_t >= self.SEARCH_SECONDS:
+                units = sum(int(n.stock.get(k, 0)) for k in
+                            ("tobacco", "cigar", "beer", "liqueur", "mezcal",
+                             "dried_mushroom", "red_mushroom", "agave"))
+                if units > 0:
+                    skill = max(0.0, min(10.0, float(getattr(n, "smuggling", 0.0))))
+                    found = min(1.0, units / 100.0) * self.SEARCH_CATCH * (1.0 - 0.09 * skill)
+                    if n.rng.random() < found:
+                        # CAUGHT. He loses it, and the town learns his face.
+                        for k in ("tobacco", "cigar", "beer", "liqueur", "mezcal",
+                                  "dried_mushroom", "red_mushroom", "agave"):
+                            n.stock[k] = 0
+                        n.wanted = True
+                        self.provoked = True
+                        _note("SEARCH  %-16s caught with %d in %s"
+                              % (n.name, units, self.name))
+                    else:
+                        n.smuggling = min(10.0, skill + 0.06 + units * 0.001)
+                        n.social = min(getattr(n, "social_cap", 3.0),
+                                       getattr(n, "social", 0.0) + 0.05)
+                else:
+                    n.social = min(getattr(n, "social_cap", 3.0),
+                                   getattr(n, "social", 0.0) + 0.02)
+                n.searched_at = now
+                n.searched_village = self
+                self.search_now, self.search_t = None, 0.0
+        # and nobody walks in unsearched
+        r = self.fence_rect
+        for n in self.npcs:
+            if not n.alive:
+                continue
+            if getattr(n, "searched_village", None) is self:
+                continue
+            if r.collidepoint(n.x, n.y):
+                g = fence.nearest_gate(self, n.x, n.y)
+                n.x = g[1] + (0.0 if g[0] in (0, 2) else 34.0)
+                n.y = g[2] + (34.0 if g[0] == 0 else -34.0)
+                n.target = (n.x, n.y)
+                if n not in self.search_queue and n is not self.search_now:
+                    self.search_queue.append(n)
+
+    SEARCH_SECONDS = 10.0
+    SEARCH_CATCH = 0.55         # a carrier with 20 items is caught this often
+
+    def gate_tick(self, dt: float, now: float) -> None:
+        """THE GATE IS THE ONLY WAY IN, AND IT IS A QUEUE.
+
+        One man is searched at a time and it takes ten seconds, so people stand
+        in a line to get into a town. Nobody is exempt: a man who has not been
+        searched is put back outside the fence and made to wait his turn, which
+        is what a queue IS when the alternative is walking through a wall.
+        """
+        if not hasattr(self, "search_queue"):
+            self.search_queue = []
+            self.search_now = None
+            self.search_t = 0.0
+        # the man at the head of the line
+        if self.search_now is not None and not self.search_now.alive:
+            self.search_now, self.search_t = None, 0.0
+        if self.search_now is None and self.search_queue:
+            self.search_now = self.search_queue.pop(0)
+            self.search_t = 0.0
+        if self.search_now is not None:
+            n = self.search_now
+            self.search_t += dt
+            if self.search_t >= self.SEARCH_SECONDS:
+                units = sum(int(n.stock.get(k, 0)) for k in
+                            ("tobacco", "cigar", "beer", "liqueur", "mezcal",
+                             "dried_mushroom", "red_mushroom", "agave"))
+                if units > 0:
+                    skill = max(0.0, min(10.0, float(getattr(n, "smuggling", 0.0))))
+                    found = min(1.0, units / 100.0) * self.SEARCH_CATCH * (1.0 - 0.09 * skill)
+                    if n.rng.random() < found:
+                        # CAUGHT. He loses it, and the town learns his face.
+                        for k in ("tobacco", "cigar", "beer", "liqueur", "mezcal",
+                                  "dried_mushroom", "red_mushroom", "agave"):
+                            n.stock[k] = 0
+                        n.wanted = True
+                        self.provoked = True
+                        _note("SEARCH  %-16s caught with %d in %s"
+                              % (n.name, units, self.name))
+                    else:
+                        n.smuggling = min(10.0, skill + 0.06 + units * 0.001)
+                        n.social = min(getattr(n, "social_cap", 3.0),
+                                       getattr(n, "social", 0.0) + 0.05)
+                else:
+                    n.social = min(getattr(n, "social_cap", 3.0),
+                                   getattr(n, "social", 0.0) + 0.02)
+                n.searched_at = now
+                n.searched_village = self
+                self.search_now, self.search_t = None, 0.0
+        # and nobody walks in unsearched
+        r = self.fence_rect
+        for n in self.npcs:
+            if not n.alive:
+                continue
+            if getattr(n, "searched_village", None) is self:
+                continue
+            if r.collidepoint(n.x, n.y):
+                g = fence.nearest_gate(self, n.x, n.y)
+                n.x = g[1] + (0.0 if g[0] in (0, 2) else 34.0)
+                n.y = g[2] + (34.0 if g[0] == 0 else -34.0)
+                n.target = (n.x, n.y)
+                if n not in self.search_queue and n is not self.search_now:
+                    self.search_queue.append(n)
+
     def update(self, dt: float, world=None, now: float = 0.0,
                phase: str = "home") -> None:
         """THE TOWN'S OWN BUSINESS: its books, its trade, its roster.
@@ -2945,6 +3089,7 @@ class Village:
         NPC.tick() -- and he registers himself in village.PEOPLE, so the world
         walks the people once instead of sixty-four towns walking their own.
         """
+        self.gate_tick(dt, now)
         self.forget_killers(now)
         day = int(now / economy.DAY_LENGTH)
         self._day = now / economy.DAY_LENGTH

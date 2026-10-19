@@ -27,6 +27,7 @@ THE FOUR:
 from __future__ import annotations
 
 import math
+import os
 import random
 
 import pygame
@@ -39,6 +40,14 @@ import village as village_mod
 # THE FACTION. Index 1 in the state's own registry of who-is-who, though the
 # state does not acknowledge that the index exists.
 NATION = 1
+
+
+def _note(message: str) -> None:
+    try:
+        with open(os.path.expanduser("~/.kingpin_saves/village.log"), "a") as fh:
+            fh.write(message + "\n")
+    except Exception:
+        pass
 
 HUB_COUNT = 25              # 25 hubs x 4 people = 100, about a tenth of the world
 MIN_FROM_VILLAGE = 6200.0   # out of sight of any fence
@@ -174,6 +183,7 @@ class Hub:
                             for n in live:
                                 n.stock[item] = n.stock.get(item, 0) + per
                             self.stock[item] = int(qty) - per * len(live)
+        self._carry_step(dt)
         self.timer += dt
         while self.timer >= 60.0:                   # a minute of growing
             self.timer -= 60.0
@@ -194,22 +204,82 @@ class Hub:
             self._sell_out(villages)
 
     def _sell_out(self, villages) -> None:
-        """Whatever is finished goes to the nearest town's store, for coin."""
+        """SEND THE TRADER, DO NOT TELEPORT THE GOODS.
+
+        This used to put the cigars into the nearest town's store and take the
+        coin out of its ledger from where it stood -- no gate, no guard, no
+        search, no risk. Twenty-five hubs minted money by not existing as far
+        as the border was concerned, which made the whole apparatus of the
+        state decorative.
+
+        Now he LOADS UP and WALKS. He crosses the town's fence at the gate,
+        stands in the queue with everybody else, and the guard decides whether
+        he is a trader or a criminal. If he is caught the cargo is gone and the
+        town is provoked. Whatever gets through teaches him the trade.
+        """
+        towns = getattr(villages, "villages", villages)
+        if not towns or getattr(self, "_carrier", None) is not None:
+            return
         goods = [k for k in ("cigar", "beer", "liqueur", "mezcal",
                              "dried_mushroom") if self.stock.get(k, 0) > 0]
-        towns = getattr(villages, "villages", villages)     # a registry or a list
-        if not goods or not towns:
+        if not goods:
             return
-        near = min(towns, key=lambda v: (v.x - self.x) ** 2 + (v.y - self.y) ** 2)
+        trader = next((n for n in self.npcs
+                       if n.alive and n.job == "trader"), None)
+        if trader is None:
+            return
+        cargo = {}
         for item in goods:
             take = min(int(self.stock[item]), CARRY_MAX)
-            if take <= 0:
-                continue
-            self.stock[item] -= take
-            economy.store_add(near, item, take, 2)
-            unit = max(1, int(round(economy.value(near, item) * 0.5)))
-            self.coins += take * unit
-            near.ledger_coins = max(0, int(near.ledger_coins) - take * unit)
+            if take > 0:
+                self.stock[item] -= take
+                cargo[item] = take
+        if not cargo:
+            return
+        near = min(towns, key=lambda v: (v.x - self.x) ** 2 + (v.y - self.y) ** 2)
+        self._carrier = trader
+        self._cargo = cargo
+        self._goal = near
+        self._stage = "out"
+
+    def _carry_step(self, dt: float) -> None:
+        """He walks there, is searched at the gate, and walks back."""
+        trader = getattr(self, "_carrier", None)
+        if trader is None or not trader.alive:
+            self._carrier = None
+            self._cargo = {}
+            return
+        town = self._goal
+        if (town.x - trader.x) ** 2 + (town.y - trader.y) ** 2 > 120.0 ** 2:
+            dx, dy = town.x - trader.x, town.y - trader.y
+            d = math.hypot(dx, dy) or 1.0
+            step = min(d, 70.0 * dt)
+            trader.x += dx / d * step
+            trader.y += dy / d * step
+            return
+        if self._stage == "out":
+            # AT THE GATE. The guard's roll, the same one the player faces.
+            units = sum(self._cargo.values())
+            skill = max(0.0, min(10.0, float(getattr(trader, "smuggling", 0.0))))
+            found = min(1.0, units / 100.0) * 0.55 * (1.0 - 0.09 * skill)
+            if trader.rng.random() < found:
+                town.provoked = True
+                trader.wanted = True
+                self._cargo = {}
+                _note("HUB SEARCH  %s caught at %s with %d"
+                      % (trader.name, town.name, units))
+            else:
+                for item, take in self._cargo.items():
+                    economy.store_add(town, item, take, 2)
+                    unit = max(1, int(round(economy.value(town, item) * 0.5)))
+                    self.coins += take * unit
+                    town.ledger_coins = max(0, int(town.ledger_coins) - take * unit)
+                trader.smuggling = min(10.0, skill + 0.06 + units * 0.001)
+                self._cargo = {}
+            self._stage = "home"
+            return
+        self._carrier = None
+        self._cargo = {}
 
     @staticmethod
     def _is_night(now: float) -> bool:
@@ -274,7 +344,7 @@ class Hubs:
         """
         towns = list(getattr(self._villages, "villages", ()) or ())
         for hub in self.hubs:
-            need = [r for r in ("soldier", "farm", self.brew_kind, "trader")
+            need = [r for r in ("soldier", "farm", hub.brew_kind, "trader")
                     if not any(n.alive and getattr(n, "job", None) == r
                                for n in hub.npcs)]
             if not need or not towns:

@@ -1147,7 +1147,7 @@ def main() -> None:
             # amount of time or coin changes it.
             toast("%s wants nothing to do with you" % npc.name)
             return
-        trade_menu = TradeMenu(inventory, npc)
+        trade_menu = TradeMenu(inventory, npc, player)
         trade_open = True
         pygame.mouse.set_visible(True)
 
@@ -4849,6 +4849,19 @@ def main() -> None:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
         draw_exterior(cam_x, cam_y, True)
+        # AND NOBODY WALKS INTO A TOWN WITHOUT BEING SEARCHED, HIM INCLUDED.
+        # Through the gate and past the guard, or the whole street turns.
+        try:
+            for _v in draw_villages:
+                if (getattr(player, "searched_village", None) is not _v
+                        and getattr(_v, "fence_rect", None) is not None
+                        and _v.fence_rect.collidepoint(player.x, player.y)):
+                    player.searched_village = _v
+                    toast("You walk past the guard. The whole street turns.")
+                    commit_crime()
+                    break
+        except Exception:
+            pass
         try:
             hub_world.draw(screen, cam_x, cam_y, vw, vh)
         except Exception:

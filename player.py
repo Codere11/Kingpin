@@ -58,7 +58,8 @@ class Player:
     debt = 0
     debt_paid = 0
     farm_plot = None        # his OWN field, by index into his town's list
-    smuggling = 0.0         # 0 to 10. What the state does not find is what
+    smuggling = 0.0
+    social = 0.0            # his ceiling is 10 -- the only man who can reach it         # 0 to 10. What the state does not find is what
                             # teaches a man how to carry it.
     def __init__(self, x: float, y: float, speed: float = 240.0) -> None:
         self.x = x

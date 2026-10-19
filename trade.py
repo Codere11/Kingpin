@@ -36,8 +36,9 @@ BUY = [
 
 
 class TradeMenu:
-    def __init__(self, player_inv, npc) -> None:
+    def __init__(self, player_inv, npc, player=None) -> None:
         self.inv = player_inv
+        self.player = player
         self.npc = npc
         self.hover = -1
         self.scroll = 0
@@ -230,6 +231,12 @@ class TradeMenu:
                 self.inv.slots[index] = None
             self._wants.pop(stack.defn.id, None)      # his want has changed
             self.inv.add("coin", coins)
+            # EVERY DEAL TEACHES BOTH OF THEM SOMETHING ABOUT THE OTHER.
+            _cap = getattr(self.npc, "social_cap", 3.0)
+            self.npc.social = min(_cap, getattr(self.npc, "social", 0.0) + 0.05)
+            _pl = getattr(self, "player", None)
+            if _pl is not None:
+                _pl.social = min(10.0, getattr(_pl, "social", 0.0) + 0.08)
             self.npc.coins = max(0, self.npc.coins - coins)
             self.npc.trade_demand = max(0, self.npc.trade_demand - sold)
             if self.npc.trade_demand <= 0:
