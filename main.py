@@ -38,6 +38,7 @@ import quality
 import farm
 import fence
 import guns
+import map as mapmod
 import hubs
 import ore
 import persist
@@ -3319,13 +3320,12 @@ def main() -> None:
                     else:
                         toast("No ammo to reload with")
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_m
-                  and test_mode):
-                if world_map is None:
-                    world_map = worldmap.WorldMap(world.seed)
-                else:
-                    world_map.start_build()      # no-op if already charted
-                world_map.reset(player.x, player.y)
-                map_open = True
+                  and not inventory_open and not trade_open and not board_open):
+                # FOR EVERYBODY. The chart was test-mode only, which meant the
+                # one thing a man on a road needs -- where am I and where is the
+                # nearest town -- was a debug tool.
+                map_open = not map_open
+                pygame.mouse.set_visible(map_open)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 pause_open = True
                 pygame.mouse.set_visible(True)
@@ -4813,9 +4813,13 @@ def main() -> None:
                 screen.blit(hint, (vw // 2 - hint.get_width() // 2, int(vh * 0.80)))
             if pause_open:
                 pause_menu.draw(screen)
-            if map_open and world_map is not None:
-                world_map.draw(screen, villages, player,
-                               armies if test_mode else None)
+            if map_open:
+                try:
+                    mapmod.draw(screen, world, player,
+                                getattr(player, "settled_at", None),
+                                hub_world.hubs)
+                except Exception:
+                    import traceback as _tb; _tb.print_exc()
             pygame.display.flip()
             continue
 
@@ -5070,9 +5074,13 @@ def main() -> None:
             compass_menu.draw(screen)
         if pause_open:
             pause_menu.draw(screen)
-        if map_open and world_map is not None:
-            world_map.draw(screen, villages, player,
-                           armies if test_mode else None)
+        if map_open:
+            try:
+                mapmod.draw(screen, world, player,
+                            getattr(player, "settled_at", None),
+                            hub_world.hubs)
+            except Exception:
+                pass
 
         pygame.display.flip()
 

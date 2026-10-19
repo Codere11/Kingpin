@@ -277,6 +277,7 @@ class Hub:
                 # on; a man caught at a gate with contraband is shot at where he
                 # stands, and carries the wound home if he lives.
                 trader.health = getattr(trader, "health", 100.0) - 45.0
+                cargo_now = dict(self._cargo)
                 _note("HUB SEARCH  %s caught at %s with %d  -- shot, health %.0f"
                       % (trader.name, town.name, units, trader.health))
                 if trader.health <= 0:
@@ -293,6 +294,30 @@ class Hub:
                     # wanted list, and carried on trading.
                     trader.alive = False
                     trader.health = 0.0
+                    # A MAN SHOT AT A GATE IS STILL A MAN WITH POCKETS. The
+                    # guards take three tenths of what he was carrying --
+                    # the oldest tax there is -- and the rest of his coin
+                    # goes in the town's book, so the town is paid for the
+                    # trouble of having shot him.
+                    purse = int(getattr(trader, "coins", 0))
+                    graft = int(purse * 0.30)
+                    town.ledger_coins = int(town.ledger_coins) + (purse - graft)
+                    trader.coins = 0
+                    # AND THE GOODS DO NOT GO IN THE BOOK. Three tenths are
+                    # kept -- off the record, into a pocket -- and SEVEN TENTHS
+                    # ARE BURNED. The state does not profit from contraband; it
+                    # destroys what it finds and lines its own pockets with
+                    # what it can get away with.
+                    kept, burned = 0, 0
+                    for item, qty in cargo_now.items():
+                        k = int(round(qty * 0.30))
+                        kept += k
+                        burned += int(qty) - k
+                    self._cargo = {}
+                    _note("GATE         %s shot at %s: %d coin (%d graft, %d to "
+                          "the ledger), %d contraband (%d kept, %d burned)"
+                          % (trader.name, town.name, purse, graft,
+                             purse - graft, kept + burned, kept, burned))
                     self._carrier = None
                     self._cargo = {}
                     self._stage = "home"
