@@ -1017,7 +1017,12 @@ class NPC:
             self.stock[item] -= 1
             g = economy.grade_of(self, item)
             self.tool_uses = max(1, int(economy.TOOL_USES * economy.tool_dur_mult(g)))
-        self.tool_uses -= 1
+        # INDESTRUCTIBLE TOOLS, FOR THE HUB FOLK. The criminal nation works
+        # outside the town economy entirely -- no smith to buy an axe from, no
+        # wage to buy one with -- so their tools do not wear out while we watch
+        # what they do. Remove the guard and they are like everybody else.
+        if getattr(self, "nation", None) != 1:
+            self.tool_uses -= 1
         return True
 
     def _find_tree(self, home, forest=None):

@@ -96,6 +96,15 @@ class Hub:
         self._people()
 
     # -- the four ---------------------------------------------------------
+    def _food(self) -> str:
+        """The food of the country this hub stands in."""
+        try:
+            t = float(biomes.temperature(self.x, self.y, 20240501))
+            h = float(biomes.humidity(self.x, self.y, 20240501))
+            return biomes.crop_kinds(t, h)[0]
+        except Exception:
+            return "wheat"
+
     def _people(self) -> None:
         names = village_mod.FIRST_NAMES
         lasts = village_mod.LAST_NAMES
@@ -109,6 +118,9 @@ class Hub:
                                   self.seed + k * 131, who,
                                   "%08x%02x" % (self.seed, k), "Criminal", None)
             npc.job = job
+            # TEN OF THE LOCAL FOOD EACH, IN HIS OWN PACK. They live off it,
+            # and whatever they do not eat they put on the shared shelf.
+            npc.stock[self._food()] = 10
             npc.nation = NATION
             npc.team = ("nation", NATION)
             npc.hub = self
@@ -125,6 +137,20 @@ class Hub:
 
     # -- the work ---------------------------------------------------------
     def update(self, dt: float, now: float, villages) -> None:
+        # NOBODY HERE KEEPS A TOWN'S HOURS. No church, no market, no shift, no
+        # day off: they work while it is light and they sleep while it is dark,
+        # and the SOLDIER DOES NOT SLEEP AT ALL -- he stands at the gate because
+        # a gate nobody watches is a door.
+        night = self._is_night(now)
+        for npc in self.npcs:
+            if npc.job == "soldier":
+                npc.asleep = False
+                npc.x, npc.y = self.gate.centerx, self.gate.centery + 14.0
+                continue
+            npc.asleep = night
+            if night:
+                npc.x, npc.y = self.house.centerx + (npc.rng.random() - 0.5) * 30.0, \
+                    self.house.centery + 20.0
         self.timer += dt
         while self.timer >= 60.0:                   # a minute of growing
             self.timer -= 60.0
@@ -148,9 +174,10 @@ class Hub:
         """Whatever is finished goes to the nearest town's store, for coin."""
         goods = [k for k in ("cigar", "beer", "liqueur", "mezcal",
                              "dried_mushroom") if self.stock.get(k, 0) > 0]
-        if not goods or not villages:
+        towns = getattr(villages, "villages", villages)     # a registry or a list
+        if not goods or not towns:
             return
-        near = min(villages, key=lambda v: (v.x - self.x) ** 2 + (v.y - self.y) ** 2)
+        near = min(towns, key=lambda v: (v.x - self.x) ** 2 + (v.y - self.y) ** 2)
         for item in goods:
             take = min(int(self.stock[item]), CARRY_MAX)
             if take <= 0:
@@ -160,6 +187,11 @@ class Hub:
             unit = max(1, int(round(economy.value(near, item) * 0.5)))
             self.coins += take * unit
             near.ledger_coins = max(0, int(near.ledger_coins) - take * unit)
+
+    @staticmethod
+    def _is_night(now: float) -> bool:
+        """Half the ten-minute day is dark."""
+        return (float(now) % 600.0) >= 300.0
 
     # -- the picture ------------------------------------------------------
     def draw(self, screen, cam_x: float, cam_y: float) -> None:
