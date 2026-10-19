@@ -4082,12 +4082,13 @@ def main() -> None:
                     food, leaf = biomes.crop_kinds(_vt, _vh)
                     for house in village.houses:
                         for tx, ty in house.garden:
-                            # Backyards are an even mix of the local crops,
-                            # chosen deterministically from the tile position.
-                            code = ((tx * 73856093) ^ (ty * 19349663)
-                                    ^ (world.seed * 2654435761)) & 0xFFFFFFFF
-                            code = ((code ^ (code >> 13)) * 1274126177) & 0xFFFFFFFF
-                            kind = food if (code >> 16) & 1 else leaf
+                            # FOOD AND NOTHING ELSE. A backyard used to be an
+                            # even mix of the local crops -- half of every
+                            # garden in the world was tobacco, and every
+                            # household was quietly a supplier. Inside a
+                            # settlement the state permits what feeds people.
+                            # Leaf is grown where the state is not.
+                            kind = food
                             world.set_plot(tx, ty, kind, -1000.0)
                             ground.invalidate_tile(tx, ty)
                             village_plots.add((tx, ty))
