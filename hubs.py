@@ -118,6 +118,11 @@ class Hub:
                                   self.seed + k * 131, who,
                                   "%08x%02x" % (self.seed, k), "Criminal", None)
             npc.job = job
+            # A HUB MAN LIVES ON IT. The trader who runs the road is the best
+            # of them at it; the farmer and the bench hand are learned but not
+            # practised; the soldier never carries anything.
+            npc.smuggling = {"trader": 8.0, "lab": 5.0, "brewery": 5.0,
+                             "farm": 3.0}.get(job, 0.0)
             # TEN OF THE LOCAL FOOD EACH, IN HIS OWN PACK. They live off it,
             # and whatever they do not eat they put on the shared shelf.
             npc.stock[self._food()] = 10

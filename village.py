@@ -317,6 +317,11 @@ class NPC:
     # getattr(x, name, D). Every site agrees on D, so the default
     # says the same thing -- and the read can be a direct one.
     is_king: Any = False
+    # HOW GOOD HE IS AT CARRYING WHAT THE STATE FORBIDS. Everyone has it: a
+    # farmer who has never been searched has 0, a caravan trader who runs the
+    # road twice a week has a great deal. It is what a guard's search rolls
+    # against, and the player's is the same number by the same law.
+    smuggling: Any = 0.0
     is_mayor: Any = False
     levied: Any = False
     refuge: Any = None
@@ -399,6 +404,9 @@ class NPC:
         self.id = npc_id
         PEOPLE.append(self)          # he exists, so he is in the register
         self.role = role
+        # A NUMBER FOR EVERYONE. Traders learn it on the road, hub folk learn
+        # it by necessity, and a man with a fixed post mostly never needs it.
+        self.smuggling = 0.0
         self.village = village
         self.home = (x, y)
         self.x = x
@@ -2771,6 +2779,7 @@ class Village:
                 worker.grade["axe"] = 0
                 worker.tool_uses = economy.TOOL_USES
             elif job == "trader":
+                worker.smuggling = min(10.0, 3.0 + rng.random() * 5.0)
                 worker.job = "trader"
 
         # A village is not born starving: everyone has a little in the larder
