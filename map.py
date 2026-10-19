@@ -123,7 +123,7 @@ def draw(screen, world, player, home, hub_list, half: float = 100000.0) -> None:
     px, py = at(player.x, player.y)
     pygame.draw.rect(screen, EDGE, (px - 6, py - 6, 13, 13))
     pygame.draw.rect(screen, YOU, (px - 4, py - 4, 9, 9))
-    pygame.draw.rect(screen, (30, 30, 36), (px - 1, py - 1, 3, 3)))
+    pygame.draw.rect(screen, (30, 30, 36), (px - 1, py - 1, 3, 3))
 
     font = pygame.font.SysFont("dejavusansmono", max(11, vh // 46), bold=True)
     small = pygame.font.SysFont("dejavusansmono", max(9, vh // 60))
