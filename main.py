@@ -38,6 +38,7 @@ import quality
 import farm
 import fence
 import guns
+import hubs
 import ore
 import persist
 import steering
@@ -620,6 +621,10 @@ def main() -> None:
         save_cached_world(villages, world.seed)
         village_mod.rebuild_people(villages)
         village_mod.rebuild_houses(villages)
+
+    # ---- THE HUBS IN THE WILD -- not villages; no war can be declared
+    # on one, because no one admits it exists.
+    hub_world = hubs.Hubs(world, villages)
 
     # ---- A THOUSAND PEOPLE, AND A THOUSAND CAP, ALWAYS ------------------
     #
@@ -4074,6 +4079,7 @@ def main() -> None:
                     if _dests:
                         war.rout(village, _dests, now)
                 village.update(world_dt, world, now, day_phase())
+                hub_world.update(world_dt, now)
                 key = (village.gx, village.gy)
                 if key not in seeded_villages:       # plant their back gardens
                     seeded_villages.add(key)
@@ -4805,6 +4811,10 @@ def main() -> None:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
         draw_exterior(cam_x, cam_y, True)
+        try:
+            hub_world.draw(screen, cam_x, cam_y, vw, vh)
+        except Exception:
+            pass
         draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
         draw_villages = villages.visible(cam_x, cam_y, vw, vh)
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
