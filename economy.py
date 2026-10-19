@@ -263,7 +263,11 @@ MAX_CARAVANS = 2           # caravans a village will have out at once
 # -- the local leaf ----------------------------------------------------------
 ADDICTED_SHARE = 0.5
 YEARING_RATE = 1.0 / DAY_LENGTH
-YEARING_BUY = 0.60
+# HOW MANY PEOPLE WANT A DRINK OR A CIGAR. This was six in ten; the state
+# forbids both, which is exactly what makes them worth wanting, and a large part
+# of the world is now willing to get its hands on anything there is. Lower is
+# more buyers -- this is a THRESHOLD on a man's craving, not a probability.
+YEARING_BUY = 0.28
 YEARING_ACT = 1.00
 USE_FX_SECONDS = 3.0     # how long a villager savours a luxury
 

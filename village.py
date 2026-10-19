@@ -2422,18 +2422,15 @@ class Village:
         _mult = 2 if self.is_capital else 1
         _kinds = [("mine", rng.randint(industry.MINES_MIN, industry.MINES_MAX) * _mult),
                   ("smith", 1 * _mult)]
-        # A laboratory works tobacco and mushrooms. The desert grows agave,
-        # which no laboratory can use -- so the desert gets none, and its
-        # craving goes unsatisfied. (self.local_leaf is not set until later,
-        # so ask the biome directly.)
-        _leaf_here = biomes.crop_kinds(
-            float(biomes.temperature(self.x, self.y, seed)),
-            float(biomes.humidity(self.x, self.y, seed)))[1]
-        if _leaf_here != "agave":
-            _kinds.append(("lab", 1 * _mult))
-        # Every village gets a brewery: wheat and berries here, and agave out
-        # in the desert -- which is the only industry that country will ever have.
-        _kinds.append(("brewery", 1 * _mult))
+        # NO BENCH AND NO BREWHOUSE, ANYWHERE, BY LAW. A laboratory works
+        # tobacco and a brewery works mash, and neither thing may be grown,
+        # dried, mashed or bottled inside a settlement -- so neither building
+        # exists in one. The trade did not disappear with the buildings: it
+        # moved to the hubs in the wild, and the cravings that paid for it did
+        # not shrink by a single man.
+        #
+        # The professions go with the benches, because every job slot in a
+        # village is derived from a workplace: no bench, no post.
         for _kind, _many in _kinds:
             for _n in range(_many):
                 for _try in range(400):
