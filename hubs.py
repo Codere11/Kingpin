@@ -118,11 +118,9 @@ class Hub:
                                   self.seed + k * 131, who,
                                   "%08x%02x" % (self.seed, k), "Criminal", None)
             npc.job = job
-            # A HUB MAN LIVES ON IT. The trader who runs the road is the best
-            # of them at it; the farmer and the bench hand are learned but not
-            # practised; the soldier never carries anything.
-            npc.smuggling = {"trader": 8.0, "lab": 5.0, "brewery": 5.0,
-                             "farm": 3.0}.get(job, 0.0)
+            # AND NOBODY IS BORN GOOD AT IT. Four people start at nothing, the
+            # same as the player and the same as every villager -- whatever
+            # they become they become by doing it.
             # TEN OF THE LOCAL FOOD EACH, IN HIS OWN PACK. They live off it,
             # and whatever they do not eat they put on the shared shelf.
             npc.stock[self._food()] = 10
@@ -264,6 +262,67 @@ class Hubs:
     def update(self, dt: float, now: float) -> None:
         for hub in self.hubs:
             hub.update(dt, now, self._villages)
+        self._refill(dt, now)
+
+    def _refill(self, dt: float, now: float) -> None:
+        """A HUB THAT LOSES A MAN TAKES ANOTHER ONE FROM THE TOWNS.
+
+        The trade does not shrink because a carrier was shot; it recruits. Some
+        idle man in a city -- no post, no plot, nothing to inherit -- walks out
+        of the gate, and by the time he reaches the fence he is a Criminal. He
+        does it himself: no one sends for him.
+        """
+        towns = list(getattr(self._villages, "villages", ()) or ())
+        for hub in self.hubs:
+            need = [r for r in ("soldier", "farm", self.brew_kind, "trader")
+                    if not any(n.alive and getattr(n, "job", None) == r
+                               for n in hub.npcs)]
+            if not need or not towns:
+                continue
+            walker = getattr(hub, "_walker", None)
+            if walker is not None and walker.alive:
+                dx = hub.x - walker.x
+                dy = hub.y - walker.y
+                d = math.hypot(dx, dy)
+                if d < 90.0:
+                    walker.x, walker.y = hub.x + 18.0, hub.y + 26.0
+                    walker.home = (walker.x, walker.y)
+                    walker.hub = hub
+                    hub.npcs.append(walker)
+                    hub._walker = None
+                else:
+                    step = min(d, 60.0 * dt)
+                    walker.x += dx / d * step
+                    walker.y += dy / d * step
+                continue
+            # find a man with nothing to lose
+            pick = None
+            for town in towns:
+                for n in town.npcs:
+                    if (n.alive and not getattr(n, "job", None)
+                            and getattr(n, "farm_plot", None) is None
+                            and not getattr(n, "defender", False)
+                            and not getattr(n, "is_commander", False)
+                            and not getattr(n, "is_king", False)
+                            and not getattr(n, "is_mayor", False)
+                            and not getattr(n, "is_soldier", False)):
+                        pick = (town, n)
+                        break
+                if pick:
+                    break
+            if pick is None:
+                continue
+            town, man = pick
+            if man in town.npcs:
+                town.npcs.remove(man)
+            man.nation = NATION
+            man.team = ("nation", NATION)
+            man.job = need[0]
+            man.role = "Criminal"
+            man.village = None
+            if man in village_mod.PEOPLE:
+                village_mod.PEOPLE.remove(man)
+            hub._walker = man
 
     def draw(self, screen, cam_x: float, cam_y: float, vw: int, vh: int) -> None:
         view = pygame.Rect(int(cam_x) - 200, int(cam_y) - 200, vw + 400, vh + 400)

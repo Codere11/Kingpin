@@ -2779,7 +2779,7 @@ class Village:
                 worker.grade["axe"] = 0
                 worker.tool_uses = economy.TOOL_USES
             elif job == "trader":
-                worker.smuggling = min(10.0, 3.0 + rng.random() * 5.0)
+                pass          # skills are EARNED. Everyone starts at nothing.
                 worker.job = "trader"
 
         # A village is not born starving: everyone has a little in the larder
