@@ -2939,13 +2939,6 @@ def main() -> None:
     _lane_timer = 0.0
     _lane_warned = False
     running = True
-    # THE LETTER, before a single frame of the world. By now the town is known,
-    # so it can name it.
-    try:
-        menu.show_letter(screen, clock, player.name, origin,
-                             _origin_town.name if _origin_town is not None else "the world")
-    except Exception:
-        pass
     # THE WINDOW IS NEVER A FROZEN PICTURE WITH NOTHING ON IT. The first
     # second of the world does its one-time work INSIDE the loop -- indexing
     # every wall and trunk in view, standing the town up, cutting the lanes --
