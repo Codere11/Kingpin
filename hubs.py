@@ -151,6 +151,26 @@ class Hub:
             if night:
                 npc.x, npc.y = self.house.centerx + (npc.rng.random() - 0.5) * 30.0, \
                     self.house.centery + 20.0
+        # EVERYTHING IS SHARED, SO EVERYTHING IS SHARED OUT. The purse is not
+        # the hut's and the food is not the shelf's: what the hub has, its four
+        # people have, equally, and then they go and earn some more. Every few
+        # minutes the till is split and the shelf is emptied into their packs.
+        self.split_t = getattr(self, "split_t", 180.0) - dt
+        if self.split_t <= 0.0:
+            self.split_t = 180.0
+            live = [n for n in self.npcs if n.alive]
+            if live:
+                share = int(self.coins) // len(live)
+                for n in live:
+                    n.coins += share
+                self.coins -= share * len(live)
+                for item, qty in list(self.stock.items()):
+                    if item in ("bread", "berries", "cactus_fruit", "wheat") and qty > 0:
+                        per = int(qty) // len(live)
+                        if per:
+                            for n in live:
+                                n.stock[item] = n.stock.get(item, 0) + per
+                            self.stock[item] = int(qty) - per * len(live)
         self.timer += dt
         while self.timer >= 60.0:                   # a minute of growing
             self.timer -= 60.0

@@ -796,37 +796,35 @@ def main() -> None:
     nav_timer = 0.0
 
     def make_village_patrol(village):
-        """Three soldiers who walk the village's whole political border -- the
-        midpoint towards its neighbours -- watching the frontier."""
-        best = 1e18
-        for ox in (-2, -1, 0, 1, 2):
-            for oy in (-2, -1, 0, 1, 2):
-                if ox == 0 and oy == 0:
-                    continue
-                vx, vy = village_center(village.gx + ox, village.gy + oy,
-                                        world.seed)
-                best = min(best, math.hypot(vx - village.x, vy - village.y))
-        r = max(village.radius + 500.0, best * 0.5)
+        """TWO GUARDS, ONE AT EACH GATE, WHO DO NOT WALK AWAY.
+
+        They used to walk the village's whole political border -- a ring a
+        kilometre out -- which meant the one thing a wall is for, WHO COMES
+        THROUGH THE GATE, was watched by nobody. The wall cannot be cut now and
+        the gate is the only way in, so the gate is where the state stands.
+
+        One gate is the way IN and the other the way OUT, and the guard on the
+        way in SEARCHES. That is the whole border.
+        """
         squad = []
-        # The same patrol a village gets, and twice as many of them on a
-        # capital -- the count comes off the village's own scale, which is the
-        # same number its ground, its houses and its guards are read from.
-        many = 3 * int(round(village.scale / VILLAGE_SCALE))
-        for i in range(many):
-            phase = i / float(many)
-            a = phase * 2.0 * math.pi
-            s = Soldier(village.x + math.cos(a) * r,
-                        village.y + math.sin(a) * r,
-                        village.nation, melee=False,
+        try:
+            gates = fence.gate_list(village)
+        except Exception:
+            gates = []
+        for gi, (_side, gx, gy) in enumerate(gates[:2]):
+            s = Soldier(gx, gy + 26.0, village.nation, melee=False,
                         seed=random.randint(0, 2 ** 31),
                         color=nation_color(village.nation))
+            s.gate_village = village
+            s.gate_index = gi            # 0 is the way in, 1 the way out
+            s.gate_post = (gx, gy + 26.0)
             s.patrol_center = (village.x, village.y)
-            s.patrol_r = r
-            s.patrol_phase = phase
+            s.patrol_r = 0.0             # he does not walk
+            s.patrol_phase = 0.0
             s.patrol_village = village
             s.hostile = getattr(village, "provoked", False)
-            s.fire_cd = random.uniform(0.05, 0.30)   # quick on first contact
-            s.home = (s.x, s.y)
+            s.fire_cd = random.uniform(0.05, 0.30)
+            s.home = s.gate_post
             squad.append(s)
         return squad
 
@@ -1107,6 +1105,35 @@ def main() -> None:
         if not hasattr(npc, "occupation"):
             npc.occupation = lambda: "soldier"
         return npc
+
+    def guard_search(npc) -> None:
+        """THE SEARCH AT THE GATE.
+
+        A guard does not look in your pack, he decides whether to. The state's
+        chance of finding contraband is the amount of it against the man
+        carrying it:
+
+            found = min(1, units / 100) * (1 - 0.09 * smuggling)
+
+        A hundred items at nothing is a certainty; a hundred at ten is one in
+        ten. Whatever gets through teaches the trade a little, and selling it
+        teaches more -- the skill is bought with the risk and paid in coin.
+        """
+        contraband = ("tobacco", "cigar", "beer", "liqueur", "mezcal",
+                      "dried_mushroom", "red_mushroom", "agave", "wheat_wort",
+                      "berry_wort", "agave_wort")
+        units = sum(inventory.count_of(i) for i in contraband)
+        if units <= 0:
+            toast("%s looks you over and waves you through" % npc.name)
+            return
+        skill = max(0.0, min(10.0, float(getattr(player, "smuggling", 0.0))))
+        found = min(1.0, units / 100.0) * (1.0 - 0.09 * skill)
+        if random.random() < found:
+            toast("%s finds it. %d against the wall." % (npc.name, units))
+            commit_crime()
+            return
+        player.smuggling = min(10.0, skill + 0.06 + units * 0.001)
+        toast("Searched clean   (smuggling %.1f)" % player.smuggling)
 
     def open_trade(npc) -> None:
         nonlocal trade_open, trade_menu
@@ -1396,15 +1423,10 @@ def main() -> None:
                 mark_dirty()
                 return
 
-        # Chop a gap in a village fence (no blood; it is a fence).
-        for village in visible_villages:
-            if fence.chop(village, player.x, player.y, AXE_REACH + 30.0):
-                combat.spawn_impact(player.x + player.facing[0] * 28.0,
-                                    player.y + player.facing[1] * 28.0,
-                                    (140, 100, 56))
-                toast("Chopped a gap in the fence")
-                commit_crime()          # if a nation sees it, that nation aggros
-                return
+        # A SETTLEMENT'S FENCE IS NOT WOOD, IT IS LAW. It cannot be cut, by an
+        # axe or anything else: the wall is not what keeps people out, the
+        # SEARCH at the gate is, and a wall you can hack a hole in would make
+        # the gate decorative. The player's own fences are still his to cut.
 
         # Break a villager's door open with the axe.
         for village in visible_villages:
@@ -1566,6 +1588,10 @@ def main() -> None:
                             return
                         if getattr(npc, "attacked", False):
                             toast(f"{npc.name} won't trade with you")
+                            return
+                        # A GUARD AT A GATE SEARCHES; HE DOES NOT TRADE.
+                        if getattr(npc, "gate_index", None) is not None:
+                            guard_search(npc)
                             return
                         open_trade(npc)
                         return

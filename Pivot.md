@@ -187,3 +187,113 @@ three forward.
 
 **Written down, not built:** §2 food-only plots, §3 rarer wild plants, §4 the
 hubs, §5 the roads, §6 the service.
+
+---
+
+# The Border, the Lie, and the Question
+
+Written down before it is built, because this is the part that decides whether
+the world feels like a state or a set dressing.
+
+## 1. A settlement's fence cannot be cut
+
+Not by an axe, not by anything. **The wall is not what keeps people out — the
+search at the gate is.** A wall you can hack a hole in makes the gate
+decorative, and the gate is the entire apparatus of the regime made concrete.
+
+The player's own built fences are still his to cut down.
+
+## 2. Two guards, at the gates, who do not walk away
+
+Patrols walked a ring a kilometre out — which meant **the one thing a wall is
+for, who comes through the gate, was watched by nobody.**
+
+Now: **two guards, one at each gate.** One gate is the way **in**, and its guard
+**searches**. The other is the way **out**, and nobody is searched leaving. That
+asymmetry is the whole border, and it is also a rule about the world: *people
+queue to get in, and walk out freely.*
+
+## 3. The search
+
+* Every NPC entering a settlement must go through **the guard on the in-gate**.
+* The search takes **ten seconds**, shown with **the same bar the axe swing
+  uses**, drawn **under the soldier doing the searching**.
+* Only one man is searched at a time, so **a line forms at the in-gate.**
+* This is where the whole economy of the game becomes visible: hordes of people
+  queueing to be looked at, and one of them is carrying something.
+
+## 4. Smuggling — the skill
+
+**`smuggling`, 0 to 10.** How good you are at carrying what the state forbids.
+
+    found = min(1, units / 100) * (1 - 0.09 * smuggling)
+
+| | 100 items | 10 items |
+|---|---|---|
+| **skill 0** | **100% found** | 10% found |
+| **skill 10** | **10% found** | 1% found |
+
+* **Gained by getting contraband through a border**, and by **selling it** —
+  the skill is bought with the risk and paid in coin.
+* **Caught** = the people aggro, **and the news spreads.** The whole town learns
+  your name before you have left the gate.
+
+**Hub traders carry 20 produced items per trip** — static for now, until there
+is a reason for it not to be.
+
+## 5. The interaction screen (what the trade menu becomes)
+
+The trade menu stops being a shop and becomes **a person.** What you get from it
+is what you know about him, and it is gated by a skill of your own.
+
+### 5.1 Social
+
+**`social`** — how much of a person you can read, and how few words it takes.
+Low social: you learn nothing, or learn it wrong. High social: his numbers open
+up like a ledger.
+
+### 5.2 The two numbers
+
+* **Allegiance** — to the government. **0** is a man who would burn it down;
+  **100** is a die-hard.
+* **Loyalty** — to *you*. **0** is *"I wouldn't piss on him if he were on fire"*;
+  **100** is *"love this person more than myself."* **Starts at 50.**
+
+### 5.3 Perceived and actual
+
+**Every person has a perceived version of each number and an actual one.**
+
+> A criminal wants everyone to think he is an upstanding citizen.
+
+* **If your Social is higher than his**, you see **what he actually is.**
+* **If it is not**, you see **what he wants you to see**, and believe it.
+
+That applies **to the player as well**:
+
+* **`P` sets how the player wants to be perceived** — his mask. His *actual*
+  allegiance starts at **50**, and moves toward **0** by carrying and selling
+  contraband.
+* **Whether people see his true self or his mask is decided by his Social
+  against theirs.** The searching guard is the first test of it, and the first
+  time the player learns that his face is a stat.
+
+**This is what the search is really rolling.** Not whether the tobacco is in the
+bag — whether the man in front of you is who he says he is.
+
+---
+
+### Built now
+
+* Hub purse and food **split equally** between its four people, every three
+  minutes.
+* **Fences around a settlement cannot be cut.**
+* **Two guards at the gates** instead of a patrol, standing, **not walking**.
+* **`player.smuggling`** and the search law above, wired to a click on a gate
+  guard.
+
+### Not built
+
+* The ten-second search bar and the **queue** at the in-gate.
+* NPCs being searched on their way in at all (they currently walk through).
+* The **Social** skill, Allegiance, Loyalty, the perceived/actual split, and
+  `P` for the mask.
