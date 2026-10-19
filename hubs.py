@@ -52,6 +52,8 @@ def _note(message: str) -> None:
 HUB_COUNT = 25              # 25 hubs x 4 people = 100, about a tenth of the world
 MIN_FROM_VILLAGE = 6200.0   # out of sight of any fence
 SPACING = 160.0             # a 5x5 of 32-pixel tiles
+YARD = 420.0                # the fenced yard around it -- a homestead, not a
+                            # hutch. Everything was crushed into 212 pixels.
 PLOT = 5
 
 LEAF_PER_MIN = 2.0          # what twenty tiles of leaf yield
@@ -87,20 +89,34 @@ class Hub:
         self.carry_t = self.rng.uniform(10.0, CARRY_MIN)
         self.npcs: list = []
 
-        # THE GROUND. A 5x5 of tiles: one row of food, the rest leaf.
-        cx = int(math.floor(self.x / 32.0))
-        cy = int(math.floor(self.y / 32.0))
+        # A YARD, LAID OUT. The crop grows in one corner, the house stands at
+        # the back, the bench is under the eaves, and the gate is the only way
+        # in. Everything used to be inside a two-hundred-pixel box with the
+        # house hanging off the top of it.
+        half = YARD * 0.5
+        self.fence = pygame.Rect(int(self.x - half), int(self.y - half),
+                                 int(YARD), int(YARD))
+        self.gate = pygame.Rect(int(self.x - 22), self.fence.bottom - 6, 44, 12)
+        self.house = pygame.Rect(int(self.x - 52), int(self.y - half + 26), 104, 74)
+        self.bench = pygame.Rect(int(self.x + half - 70), int(self.y - 20), 48, 30)
+        # the 5x5 block of crop, in the lower left of the yard
+        cx = int(math.floor((self.x - half * 0.42) / 32.0))
+        cy = int(math.floor((self.y + half * 0.34) / 32.0))
         self.plots = []
         for j in range(PLOT):
             for i in range(PLOT):
                 kind = "food" if j == 0 else "leaf"
                 self.plots.append((cx + i - PLOT // 2, cy + j - PLOT // 2, kind))
-        half = SPACING * 0.5
-        self.fence = pygame.Rect(int(self.x - half - 26), int(self.y - half - 26),
-                                 int(SPACING + 52), int(SPACING + 52))
-        self.gate = pygame.Rect(int(self.x - 18), self.fence.bottom - 5, 36, 10)
-        self.house = pygame.Rect(int(self.x - 44), int(self.y - half - 96), 88, 62)
-        self.bench = pygame.Rect(int(self.x + half - 40), int(self.y + 6), 44, 26)
+        self.plot_rect = pygame.Rect(int((cx - PLOT // 2) * 32),
+                                     int((cy - PLOT // 2) * 32),
+                                     PLOT * 32, PLOT * 32)
+        # where each of them belongs when there is nothing else to do
+        self.posts = {
+            "soldier": (self.gate.centerx, self.gate.centery + 16.0),
+            "farm": (self.plot_rect.centerx, self.plot_rect.centery),
+            "trader": (self.bench.centerx - 74.0, self.bench.centery + 6.0),
+        }
+        self.posts[self.brew_kind] = (self.bench.centerx, self.bench.centery + 22.0)
 
         self._people()
 
@@ -157,12 +173,27 @@ class Hub:
         for npc in self.npcs:
             if npc.job == "soldier":
                 npc.asleep = False
-                npc.x, npc.y = self.gate.centerx, self.gate.centery + 14.0
+                npc.x, npc.y = self.posts["soldier"]
                 continue
             npc.asleep = night
             if night:
-                npc.x, npc.y = self.house.centerx + (npc.rng.random() - 0.5) * 30.0, \
-                    self.house.centery + 20.0
+                npc.x = self.house.centerx + (npc.rng.random() - 0.5) * 40.0
+                npc.y = self.house.centery + 26.0
+                continue
+            # DURING THE DAY THEY WORK THEIR OWN CORNER OF THE YARD. They stood
+            # in a clump like statues; a farm hand walks his rows, the bench
+            # hand leans over the bench, the trader waits by the gate for the
+            # next carry.
+            px, py = self.posts.get(npc.job, (self.x, self.y))
+            if npc.job == "farm":
+                px += math.sin(now * 0.5 + npc.rng.random() * 6.0) * 34.0
+                py += math.cos(now * 0.37 + npc.rng.random() * 6.0) * 34.0
+            elif npc.job in ("lab", "brewery"):
+                px += math.sin(now * 0.9) * 5.0
+            elif npc.job == "trader":
+                px += math.sin(now * 0.31) * 26.0
+            npc.x += (px - npc.x) * min(1.0, dt * 1.4)
+            npc.y += (py - npc.y) * min(1.0, dt * 1.4)
         # EVERYTHING IS SHARED, SO EVERYTHING IS SHARED OUT. The purse is not
         # the hut's and the food is not the shelf's: what the hub has, its four
         # people have, equally, and then they go and earn some more. Every few
