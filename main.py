@@ -2504,6 +2504,21 @@ def main() -> None:
             return "market"          # mid-day: business is done in the square
         return "work"
 
+    def _nearest_town():
+        """THE NEAREST SETTLEMENT, WHICHEVER ONE IT IS.
+
+        It used to hand the map `player.settled_at` -- his own town -- and he
+        has none: with no backstory he arrives owning nothing and belonging
+        nowhere, so the gold pin had nothing to draw and the map showed one
+        outlaw hut in an empty country. A man with no town still needs to know
+        where the nearest one is.
+        """
+        towns = list(getattr(villages, "villages", ()) or ())
+        if not towns:
+            return None
+        return min(towns, key=lambda v: (v.x - player.x) ** 2
+                   + (v.y - player.y) ** 2)
+
     def speed_button() -> pygame.Rect:
         return pygame.Rect(vw // 2 - 74, vh - 142, 148, 32)
 
@@ -4807,8 +4822,7 @@ def main() -> None:
                 pause_menu.draw(screen)
             if map_open:
                 try:
-                    mapmod.draw(screen, world, player,
-                                getattr(player, "settled_at", None),
+                    mapmod.draw(screen, world, player, _nearest_town(),
                                 hub_world.hubs)
                 except Exception:
                     import traceback as _tb; _tb.print_exc()
@@ -5068,8 +5082,7 @@ def main() -> None:
             pause_menu.draw(screen)
         if map_open:
             try:
-                mapmod.draw(screen, world, player,
-                            getattr(player, "settled_at", None),
+                mapmod.draw(screen, world, player, _nearest_town(),
                             hub_world.hubs)
             except Exception:
                 pass
