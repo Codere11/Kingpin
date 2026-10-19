@@ -287,8 +287,20 @@ _WORLD_CACHE_VERSION = 5        # bump when the shape of a VILLAGE changes...
 # while every rule in the game used the new ones.
 
 
+# THE WORLD'S SHAPE HAS A VERSION, AND IT BELONGS IN THE FILENAME.
+#
+# The cache is the BUILT world -- every plot, every garden tile already planted,
+# every bench already standing. Changing the rules of what a village may contain
+# does not change a world that was built before the rules, and the game happily
+# loaded the old one: gardens still half tobacco, benches still there, all of it
+# looking exactly like the change had never been made. Bump this and the old
+# cache is simply not found, so the world is laid out again to the new law.
+WORLD_VERSION = 2
+
+
 def _world_cache_path(seed: int) -> str:
-    return os.path.join(persist.DIR, "world_%d.pkl" % int(seed))
+    return os.path.join(persist.DIR,
+                        "world_%d_v%d.pkl" % (int(seed), WORLD_VERSION))
 
 
 def load_cached_world(seed: int):
