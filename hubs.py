@@ -404,14 +404,39 @@ class Hub(village_mod.Village):
                 moved += qty
             return moved
 
-        # the farmer's leaf -> the artisan
+        # the farmer's leaf -> the artisan. AND THE LEDGER'S: `economy.harvest`
+        # gives a farmer a ration of five and puts THE REST IN THE SHARED
+        # SHELF, so looking only in his pack found nothing at all -- he keeps
+        # five a day and the other forty go to the town. The leaf the hub grows
+        # is in the ledger, and the ledger's leaf goes straight to the bench.
         hand(farmer, artisan, leaf_kinds)
+        if artisan is not None:
+            taken = 0
+            for item in list(self.ledger_goods.keys()):
+                if item not in leaf_kinds:
+                    continue
+                qty = int(self.ledger_goods.get(item, 0))
+                if qty > 0:
+                    artisan.stock[item] = artisan.stock.get(item, 0) + qty
+                    self.ledger_goods[item] = 0
+                    taken += qty
+            if taken:
+                pass
         # the artisan's work -> the trader, WHO IS NOT LOADED WHILE HE IS AWAY:
         # what is made meanwhile stockpiles in the artisan's pack.
         if not away:
             for n in live:
                 if n is not trader:
                     hand(n, trader, made_kinds)
+            # ...and anything already finished on the shared shelf
+            if trader is not None:
+                for item in list(self.ledger_goods.keys()):
+                    if item not in made_kinds:
+                        continue
+                    qty = int(self.ledger_goods.get(item, 0))
+                    if qty > 0:
+                        trader.stock[item] = trader.stock.get(item, 0) + qty
+                        self.ledger_goods[item] = 0
 
         # THE TRIP. Twenty is the load, and he goes when he has twenty.
         if trader is not None and not away:
