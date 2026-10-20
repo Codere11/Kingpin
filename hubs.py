@@ -25,6 +25,7 @@ import random
 
 import economy
 import pygame
+import world as world_mod
 
 import village as village_mod
 
@@ -149,11 +150,24 @@ class Hub(village_mod.Village):
             n.stock[self._food_kind()] = 10
         bench.worker = self.npcs[2]
 
-        # ---- FIVE FIELDS, NOT FIFTY ------------------------------------
-        self.farm_plots = list(self.farm_plots)[:5]
-        for i, n in enumerate([n for n in self.npcs
-                               if getattr(n, "job", None) == "farm"]):
-            n.farm_plot = i
+        # ---- FIVE FIELDS, IN THE YARD, IN THE WORLD'S OWN PLOT MAP -----
+        # The town's plots are ITS plots, at its own coordinates -- the farmer
+        # walked to them and the world had never heard of them, which threw a
+        # KeyError out of _work_field every single tick. A hub's fields are
+        # planted where the hub is, in `world.plots`, so the crop machinery
+        # knows them.
+        self.farm_plots = []
+        for k in range(5):
+            tx = int(math.floor((self.x - 80 + (k % 3) * 34) / 32.0))
+            ty = int(math.floor((self.y + 74 + (k // 3) * 34) / 32.0))
+            self.farm_plots.append((tx, ty, "wheat"))
+            if world is not None:
+                try:
+                    world.plots[(tx, ty)] = world_mod.Plot("wheat", 0.0)
+                except Exception:
+                    pass
+        for n in self.npcs:
+            n.farm_plot = 0 if getattr(n, "job", None) == "farm" else None
 
         # ---- AND MOVED TO WHERE IT STANDS ------------------------------
         dx = float(x) - float(self.x)
@@ -179,10 +193,6 @@ class Hub(village_mod.Village):
             self.fence_rect = self.fence_rect.move(int(dx), int(dy))
         if getattr(self, "board", None) is not None:
             self.board = self.board.move(int(dx), int(dy))
-        n_tiles = len(self.farm_plots)
-        self.farm_plots = [(int(math.floor((self.x + (i - n_tiles / 2.0) * 34) / 32)),
-                            int(math.floor((self.y + 96) / 32)), k)
-                           for i, (_t, _u, k) in enumerate(self.farm_plots)]
         # AND RE-FENCED AT ITS OWN SIZE. The fence inherited from the town is
         # five thousand pixels square -- the whole town's wall. A hub is two
         # hundred and ten pixels of yard with one gate, built by the same
