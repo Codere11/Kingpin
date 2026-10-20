@@ -4831,8 +4831,19 @@ def main() -> None:
                     npc.draw(screen, cam_x, cam_y, True)
             player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
         if getattr(player, "search_progress", 0.0) > 0.0:
-            Player._draw_action_bar(screen, screen.get_width() * 0.5,
-                                    screen.get_height() * 0.5,
+            # THE BAR HANGS UNDER THE MAN DOING THE SEARCHING, not in the middle
+            # of the screen. Pivot.md S3: he is ten seconds at it, and the
+            # patience of the queue is the whole point of the gate.
+            _sv = getattr(player, "search_village", None)
+            _bx = _by = None
+            for _s in (getattr(_sv, "patrol", ()) or ()):
+                if getattr(_s, "gate_index", None) == 0 or len(
+                        getattr(_sv, "patrol", ()) or ()) == 1:
+                    _bx, _by = _s.x - cam_x, _s.y - cam_y
+                    break
+            if _bx is None:
+                _bx, _by = screen.get_width() * 0.5, screen.get_height() * 0.5
+            Player._draw_action_bar(screen, _bx, _by,
                                     min(1.0, player.search_progress / 10.0))
             # own coordinates (box.x - cam_x), so it has to be drawn before the
             # frame is blown up -- drawn afterwards it landed at a quarter of
