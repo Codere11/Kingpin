@@ -907,8 +907,10 @@ def main() -> None:
         rabbits.append(Rabbit(rx, ry, biomes.rabbit_fur(
             float(world.temperature(rx, ry)), float(world.humidity(rx, ry)))))
 
-    for _ in range(3):
-        spawn_patrol()
+    # NO PATROLS. The gangs out on the map were removed in favour of the two
+    # standing guards at each gate -- but this line kept spawning three of them
+    # at the start of every game, and they and their shotguns were still out
+    # there looking for somebody.
     for _ in range(3):
         spawn_wolf()
     for _ in range(5):
@@ -4354,8 +4356,6 @@ def main() -> None:
                                     if e.kind == "soldier" and e.alive)
                 live_wolves = sum(1 for e in enemies
                                   if e.kind == "wolf" and e.alive)
-                if live_soldiers < 6:
-                    spawn_patrol()
                 if live_wolves < 4:
                     spawn_wolf()
                 if sum(1 for r in rabbits if r.alive) < 6:
@@ -4895,17 +4895,10 @@ def main() -> None:
         draw_exterior(cam_x, cam_y, True)
         # AND NOBODY WALKS INTO A TOWN WITHOUT BEING SEARCHED, HIM INCLUDED.
         # Through the gate and past the guard, or the whole street turns.
-        try:
-            for _v in draw_villages:
-                if (getattr(player, "searched_village", None) is not _v
-                        and getattr(_v, "fence_rect", None) is not None
-                        and _v.fence_rect.collidepoint(player.x, player.y)):
-                    player.searched_village = _v
-                    toast("You walk past the guard. The whole street turns.")
-                    commit_crime()
-                    break
-        except Exception:
-            pass
+        # (The "walked past the guard" crime is REMOVED until the gate search
+        # is actually built for the player. It fired the moment he stepped
+        # inside any fence -- because nothing ever marked him searched -- and
+        # the whole town, shotguns included, turned on him for approaching.)
         try:
             hub_world.draw(screen, cam_x, cam_y, vw, vh)
         except Exception:
