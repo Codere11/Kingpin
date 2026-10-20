@@ -100,44 +100,24 @@ class Hub(village_mod.Village):
             if n in village_mod.PEOPLE:     # stepped by the hub, not the world
                 village_mod.PEOPLE.remove(n)
 
-        # 3. ONE BENCH, IN THE YARD.
-        bench = industry.Workplace("lab", self.x + 86.0, self.y - 46.0, seed + 5)
-        self.workplaces = [bench]
-        bench.worker = None
+        # 3. (the bench is built AFTER the move -- see below)
 
         # 4. FIVE FIELDS, WITH THEIR TILES -- the thing that was missing.
         self.farm_plots = []
         self.farm_tiles = {}
+        # FROM THE HUB'S REAL POSITION, NOT THE LATTICE. `self.x` here is still
+        # the lattice cell it was constructed on -- the move comes later -- so
+        # the fields were being planted forty thousand pixels from the yard.
         for k in range(5):
-            ctx = int(math.floor((self.x - 96.0 + (k % 3) * 68.0) / 32.0))
-            cty = int(math.floor((self.y + 92.0 + (k // 3) * 68.0) / 32.0))
+            ctx = int(math.floor((float(x) - 96.0 + (k % 3) * 68.0) / 32.0))
+            cty = int(math.floor((float(y) + 92.0 + (k // 3) * 68.0) / 32.0))
             kind = "wheat"
             self.farm_plots.append((ctx, cty, kind))
             cells = [(ctx + dx, cty + dy)
                      for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
             self.farm_tiles[(ctx, cty)] = [(tx, ty, kind) for tx, ty in cells]
 
-        # 5. THE POSTS THE TRADES READ.
-        for n, job in zip(self.npcs, ("soldier", "farm", "lab", "trader")):
-            n.job = job
-            n.role = "Criminal"
-            n.village = self
-            n.hub = self
-            n.nation = NATION
-            n.team = ("nation", NATION)
-            n.searched_village = self
-            n.farm_plot = None
-            n.workplace = None
-            if job == "lab":
-                n.workplace = bench
-                bench.worker = n
-            elif job == "farm":
-                n.farm_plot = 0
-                n.leaf_farmer = True
-                n.stock["shovel"] = 1
-                n.tool_uses = economy.TOOL_USES
-            n.stock.clear()
-            n.stock[self._food_kind(world)] = 10
+        # (posts are assigned at the very end -- see step 10)
 
         # 6. IT STAYS WHERE ITS LATTICE CELL IS. It used to be moved to an
         # arbitrary spot in the wild, which made it invisible to everything:
@@ -171,6 +151,14 @@ class Hub(village_mod.Village):
         house.village = self
         house.occupants = []
         self.houses = [house]
+
+        # 8b. THE BENCH, BUILT HERE, WHERE IT STANDS. `Workplace` computes its
+        # `.door` in __init__, and `_work_place` walks the artisan to that door
+        # -- so a bench built before the hub was moved sent him to a doorway
+        # forty thousand pixels away and he never arrived.
+        bench = industry.Workplace("lab", self.x + 120.0, self.y - 60.0, seed + 5)
+        self.workplaces = [bench]
+        bench.worker = None
 
         # 9. AND A CROP STANDING ON DAY ONE.
         try:
@@ -224,6 +212,15 @@ class Hub(village_mod.Village):
                     n.x, n.y = g[1], g[2] + 26.0
                 except Exception:
                     pass
+            elif job == "trader":
+                n.x, n.y = self.x, self.y + 60.0
+            if job == "farm":
+                # ON HIS OWN FIELD, inside the fence, where the work is.
+                ctx0, cty0, _k = self.farm_plots[0]
+                n.x = ctx0 * 32 + 16.0
+                n.y = cty0 * 32 + 16.0
+            elif job != "soldier" and job != "lab":
+                n.x, n.y = self.x, self.y + 40.0
             n.home = (n.x, n.y)
             n.stock.clear()
             n.stock[self._food_kind(world)] = 10
