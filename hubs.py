@@ -218,17 +218,40 @@ class Hub(village_mod.Village):
 
     def update(self, dt: float, world=None, now: float = 0.0,
                phase: str = "home") -> None:
-        # THE ORDINARY DAY. The town's own update, with the hub's own people in
-        # it -- work by day, home by night, and the real trades in between.
+        """THE DAY, AND THE WORK.
+
+        `Village.update` is the TOWN's business -- its books, its board, its
+        roster -- and it has never ticked a single man. In a town the main loop
+        walks `PEOPLE` and calls `NPC.tick` on every one of them. Hub folk were
+        taken off `PEOPLE` (so they would not be stepped twice) and then
+        nothing stepped them at all: four people, four posts, and not one of
+        them ever moving or working.
+
+        So the hub ticks its own, with the same call the world uses.
+        """
         night = (float(now) % 600.0) >= 300.0
-        super().update(dt, world, now, "home" if night else "work")
-        # the soldier holds the gate and is not allowed to wander
+        for n in self.npcs:
+            if not n.alive:
+                continue
+            try:
+                n.tick(dt, world, now, "home" if night else "work",
+                       night=night)
+            except Exception:
+                pass
+        try:
+            super().update(dt, world, now, "home" if night else "work")
+        except Exception:
+            pass
+        # AND THE SOLDIER NEVER LEAVES THE GATE -- held last, after his own
+        # step, so nothing can walk him off it.
         for n in self.npcs:
             if n.alive and getattr(n, "job", None) == "soldier":
-                g = (self.gate_list()[0] if hasattr(self, "gate_list") else None)
-                if g is not None:
+                try:
+                    g = self.gate_list()[0]
                     n.x, n.y = g[1], g[2] + 26.0
-                n.asleep = False
+                    n.asleep = False
+                except Exception:
+                    pass
 
     def gate_list(self):
         import fence
