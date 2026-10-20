@@ -1177,7 +1177,17 @@ def main() -> None:
         """
         reach = 900.0
         best, bd = None, reach * reach
-        if not player.dead:
+        # THE PLAYER IS ONLY A TARGET IF SOMEBODY HAS A REASON. This handed
+        # every man in the world the player as his enemy the moment he came
+        # within nine hundred pixels -- so a hub's gate guard, a farmer in his
+        # rows, anybody, took a shot at a stranger walking past. A man fights
+        # the player if he has been provoked, if the player is wanted, or if he
+        # is a soldier of a nation at war with his.
+        _reason = (getattr(npc, "hostile", False)
+                   or getattr(player, "wanted", False)
+                   or getattr(getattr(npc, "village", None), "provoked", False)
+                   or getattr(npc, "defender", False))
+        if not player.dead and _reason:
             d = (player.x - npc.x) ** 2 + (player.y - npc.y) ** 2
             if d < bd:
                 bd, best = d, player
