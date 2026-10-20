@@ -139,10 +139,14 @@ class Hub(village_mod.Village):
             n.stock.clear()
             n.stock[self._food_kind(world)] = 10
 
-        # 6. MOVED TO WHERE IT STANDS, then given its own walls.
-        dx = float(x) - float(self.x)
-        dy = float(y) - float(self.y)
-        self.x, self.y = float(x), float(y)
+        # 6. IT STAYS WHERE ITS LATTICE CELL IS. It used to be moved to an
+        # arbitrary spot in the wild, which made it invisible to everything:
+        # `villages.visible` finds a town by asking `village_center(gx, gy)`
+        # where the town is, not by asking the town. A moved hub failed that
+        # test, so the exterior draw never drew it, the player's collision
+        # never met its fence, and the crops were never rendered.
+        dx = 0.0
+        dy = 0.0
         for n in self.npcs:
             n.x += dx
             n.y += dy
@@ -249,19 +253,28 @@ class Hubs:
         tries = 0
         while len(self.hubs) < HUB_COUNT and tries < 8000:
             tries += 1
-            x = rng.uniform(-86000.0, 86000.0)
-            y = rng.uniform(-86000.0, 86000.0)
-            if any((v.x - x) ** 2 + (v.y - y) ** 2 < MIN_FROM_TOWN ** 2
-                   for v in towns):
+            gx = rng.randint(-4, 4)
+            gy = rng.randint(-4, 4)
+            if (gx, gy) in villages._cache:
                 continue
+            x, y = village_mod.village_center(gx, gy, world.seed)
             if any((h.x - x) ** 2 + (h.y - y) ** 2 < 9000.0 ** 2
                    for h in self.hubs):
                 continue
             try:
-                self.hubs.append(Hub(world, x, y, rng.randrange(1 << 30),
-                                     registry=villages))
+                hub = Hub(world, x, y, rng.randrange(1 << 30),
+                          registry=villages)
             except Exception:
                 continue
+            # IN THE REGISTRY, LIKE A TOWN. This is the whole of it: the
+            # exterior draw loop walks `villages.visible`, the player's
+            # collision walks the same villages' `fence_walls`, the crops are
+            # drawn from `world.plots`, and the board, the fence and the people
+            # all appear because they are a village that the world can see.
+            # Hand-drawing them separately gave a picture with no collision,
+            # no crops and nobody in it.
+            villages._cache[(hub.gx, hub.gy)] = hub
+            self.hubs.append(hub)
 
     def update(self, dt: float, now: float) -> None:
         for hub in self.hubs:

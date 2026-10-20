@@ -436,6 +436,8 @@ def nearest_enemy(registry, capital):
     for v in registry.villages:
         if v is capital or getattr(v, "nation", None) == capital.nation:
             continue
+        if getattr(v, "is_hub", False):
+            continue        # the state does not admit that it exists
         d = math.hypot(v.x - capital.x, v.y - capital.y)
         if best_d is None or d < best_d:
             best, best_d = v, d
@@ -826,6 +828,8 @@ def declare(registry, day: int, now: float = 0.0) -> list:
     _LAST_LEVY[0] = now
     raised = []
     for v in registry.villages:
+        if getattr(v, "is_hub", False):
+            continue
         if not getattr(v, "is_capital", False):
             continue
         if v.ledger_coins < WAR_CHEST:
