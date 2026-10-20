@@ -3600,6 +3600,14 @@ def main() -> None:
             house_colliders += [c.rect for c in view_ore]
             colliders = house_colliders + [tree.trunk_rect for tree in view_trees
                                            if not tree.felled]
+            # THE HUBS, EVERY FRAME. This was inside the visible-village loop,
+            # so a hub stepped only when a TOWN happened to be on screen -- out
+            # in the wild it never ran at all, and its people starved between
+            # visits. A settlement's day does not depend on being watched.
+            try:
+                hub_world.update(world_dt, now)
+            except Exception:
+                pass
             grid_timer -= dt
             if grid is None or grid_timer <= 0.0:
                 grid_timer = 0.12
@@ -4151,7 +4159,6 @@ def main() -> None:
                     if _dests:
                         war.rout(village, _dests, now)
                 village.update(world_dt, world, now, day_phase())
-                hub_world.update(world_dt, now)
                 key = (village.gx, village.gy)
                 if key not in seeded_villages:       # plant their back gardens
                     seeded_villages.add(key)
