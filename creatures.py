@@ -84,6 +84,7 @@ def wolf_tier(spawn, now: float):
 
 
 class Soldier(Enemy):
+    name: str = "a soldier"      # guards are named by the gate they hold
     # The war face's timer. A CLASS default, because a soldier who has never
     # swung a blow must not be missing the attribute the draw reads.
     attack_flash: float = 0.0

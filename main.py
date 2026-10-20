@@ -860,6 +860,7 @@ def main() -> None:
             # `None != 1`, so every gate guard in the world shot at him on
             # sight, with `wanted False` and `aggro None` in the log.
             s.guard_village = village
+            s.name = "the guard of %s" % getattr(village, "name", "the gate")
             s.gate_index = gi            # 0 is the way in, 1 the way out
             s.gate_post = (gx, gy + 26.0)
             s.home = s.gate_post
@@ -1171,12 +1172,14 @@ def main() -> None:
                       "berry_wort", "agave_wort")
         units = sum(inventory.count_of(i) for i in contraband)
         if units <= 0:
-            toast("%s looks you over and waves you through" % npc.name)
+            toast("%s looks you over and waves you through"
+              % getattr(npc, "name", "The guard"))
             return
         skill = max(0.0, min(10.0, float(getattr(player, "smuggling", 0.0))))
         found = min(1.0, units / 100.0) * (1.0 - 0.09 * skill)
         if random.random() < found:
-            toast("%s finds it. %d against the wall." % (npc.name, units))
+            toast("%s finds it. %d against the wall."
+                  % (getattr(npc, "name", "The guard"), units))
             commit_crime()
             return
         player.smuggling = min(10.0, skill + 0.06 + units * 0.001)
