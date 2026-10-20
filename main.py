@@ -1928,7 +1928,8 @@ def main() -> None:
         target = target if target is not None else screen
         static_layer.draw(target, cx, cy, vw, vh)
         blood.draw(target, cx, cy, vw, vh)
-        world_villages = villages.visible(cx, cy, vw, vh)
+        world_villages = villages.visible(cx, cy, vw, vh,
+                                          extra=hub_world.hubs)
         world_trees = trees.visible(cx, cy, vw, vh)
         view = pygame.Rect(cx - 150, cy - 150, vw + 300, vh + 300)
         for village in world_villages:
@@ -3497,7 +3498,8 @@ def main() -> None:
             clamp_world()          # the world ends where the loading screen did
             settle_reload()
 
-            visible_villages = villages.visible(cam_x, cam_y, vw, vh)
+            visible_villages = villages.visible(cam_x, cam_y, vw, vh,
+                                             extra=hub_world.hubs)
 
             # ---- RE-CUT THE WORLD, ONCE A SECOND ---------------------
             # The towns in front of the player must be stepped where he is, so
@@ -4902,7 +4904,8 @@ def main() -> None:
         except Exception:
             pass
         draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
-        draw_villages = villages.visible(cam_x, cam_y, vw, vh)
+        draw_villages = villages.visible(cam_x, cam_y, vw, vh,
+                                         extra=hub_world.hubs)
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
 
         # Houses and tree trunks block line of sight; canopies soften it.

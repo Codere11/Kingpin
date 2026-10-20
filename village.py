@@ -3767,7 +3767,7 @@ class Villages:
         return moved
 
     def visible(self, cam_x: float, cam_y: float, vw: int, vh: int,
-                pad: int = 420) -> list[Village]:
+                pad: int = 420, extra=()) -> list[Village]:
         # Villages sit on a coarse lattice, so the cells that intersect the view
         # can be many kilometres away. Only the ones actually near the view are
         # "visible": this keeps the per-frame simulation to the real bubble and
@@ -3790,6 +3790,19 @@ class Villages:
                 r = village_radius(gx, gy) + slack
                 if abs(vx - cx) <= r and abs(vy - cy) <= r:
                     out.append(self.get(gx, gy))
+        # AND THE OFF-LATTICE ONES. Everything above finds a town by asking the
+        # LATTICE where it is -- `village_center(gx, gy)` -- so a settlement
+        # that does not stand on its lattice cell is invisible to every system
+        # that walks this method: the exterior draw, the player's collision,
+        # the guards, the board, the fences. A hub is exactly such a
+        # settlement, and it was being built correctly and then thrown away
+        # here, every frame, by a distance test it could never pass.
+        for v in extra:
+            if v is None:
+                continue
+            r = float(getattr(v, "radius", 0.0)) + slack
+            if abs(v.x - cx) <= r and abs(v.y - cy) <= r:
+                out.append(v)
         return out
 
 
