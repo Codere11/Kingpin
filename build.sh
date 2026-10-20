@@ -36,7 +36,11 @@ echo "Compiling hot modules..."
 # Measured 80.2 -> 61.0 ms p50. If it fails the game still runs as plain
 # Python -- just slower -- so a compile failure must not break the build.
 if ! "$VENV/bin/cythonize" -i -3 village.py economy.py skills.py > /tmp/kingpin-cython.log 2>&1; then
-    echo "  cythonize FAILED -- continuing in pure Python"
+    echo "  CYTHONIZE FAILED. The compiled modules would be STALE and would"
+    echo "  silently shadow the .py files -- every change to village.py,"
+    echo "  economy.py or skills.py would be ignored by the game. Refusing."
+    tail -5 /tmp/kingpin-cython.log
+    exit 1
     tail -5 /tmp/kingpin-cython.log
 fi
 
