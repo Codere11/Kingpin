@@ -109,17 +109,25 @@ class Hub(village_mod.Village):
         # the lattice cell it was constructed on -- the move comes later -- so
         # the fields were being planted forty thousand pixels from the yard.
         for k in range(5):
-            ctx = int(math.floor((float(x) - 96.0 + (k % 3) * 68.0) / 32.0))
-            cty = int(math.floor((float(y) + 92.0 + (k // 3) * 68.0) / 32.0))
+            ctx = int(math.floor((float(x) - 110.0 + (k % 3) * 150.0) / 32.0))
+            cty = int(math.floor((float(y) + 40.0 + (k // 3) * 150.0) / 32.0))
             kind = "wheat"
             self.farm_plots.append((ctx, cty, kind))
+            # A FIVE BY FIVE PLOT, as specified -- twenty-five tiles, not nine.
+            # Nine-tile plots gave the hub five food tiles in total and no
+            # surplus at all, so `economy.harvest` passed nothing to the common
+            # shelf, the dole had nothing to hand out, and three of the four
+            # starved inside the first quarter of an hour every single time.
             cells = [(ctx + dx, cty + dy)
-                     for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
+                     for dx in (-2, -1, 0, 1, 2) for dy in (-2, -1, 0, 1, 2)]
             # FIVE PLANTS ARE FOOD, THE REST IS THE LEAF OF THIS COUNTRY.
             # Every tile was wheat, so the artisan had nothing to work and the
             # bench stood idle with a man standing at it.
             self.farm_tiles[(ctx, cty)] = [
-                (tx, ty, "wheat" if (k == 0 and i < 5) else self._leaf_kind(world))
+                # FIVE FOOD IN EVERY PLOT -- "5 plants are food, rest is the
+                # local version of leaf". Applied to the first plot only, the
+                # whole hub had five food tiles and starved.
+                (tx, ty, "wheat" if i < 5 else self._leaf_kind(world))
                 for i, (tx, ty) in enumerate(cells)]
 
         # (posts are assigned at the very end -- see step 10)
@@ -446,6 +454,30 @@ class Hub(village_mod.Village):
                 self._load_and_go(trader)
 
         self._carry_step(dt, world, now)
+
+        # THEIR TOOLS DO NOT WEAR OUT -- nation 1 only, which is the guard in
+        # `_swing_tool`. Give them back the uses every tick so nothing a
+        # criminal picks up can ever break while we watch the trade.
+        for n in live:
+            n.tool_uses = max(int(getattr(n, "tool_uses", 0)),
+                              int(economy.TOOL_USES))
+            if n.job == "farm":
+                n.stock["shovel"] = 1
+
+        # AND THE FOOD GOES ON THE COMMON SHELF, or the three who do not farm
+        # have nothing. `economy.harvest` gives a farmer a ration and puts the
+        # remainder in the town's store -- but a hub has five fields and the
+        # remainder was zero, so the shelf stayed empty and three of the four
+        # starved every time. What the farmer grows ABOVE his own ration is the
+        # shelf's, and the dole feeds the rest from it.
+        if farmer is not None and farmer.alive:
+            for item in economy.FOOD:
+                have = int(farmer.stock.get(item, 0))
+                if have > 6:
+                    give = have - 6
+                    farmer.stock[item] = 6
+                    self.ledger_goods[item] = int(
+                        self.ledger_goods.get(item, 0)) + give
 
         # THE SOLDIER NEVER LEAVES THE GATE.
         for n in self.npcs:
