@@ -3614,6 +3614,13 @@ def main() -> None:
             view_trees = trees.visible(cam_x, cam_y, vw, vh)
             view_ore = ore_field.visible(cam_x, cam_y, vw, vh)
             for village in visible_villages:        # 5 border guards per village
+                # A HUB IS NOT A TOWN AND GETS NO GARRISON. `visible()` now
+                # hands back the off-lattice hubs too, so this loop was putting
+                # five wall guards AND a two-man gate patrol on every hut --
+                # more soldiers in a criminal camp than in a market town. A hub
+                # has exactly one armed man: the soldier's post at his gate.
+                if getattr(village, "is_hub", False):
+                    continue
                 if (getattr(village, "guards", None) is None
                         and math.hypot(village.x - player.x,
                                        village.y - player.y) < 6000.0):

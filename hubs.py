@@ -108,9 +108,12 @@ class Hub(village_mod.Village):
         # FROM THE HUB'S REAL POSITION, NOT THE LATTICE. `self.x` here is still
         # the lattice cell it was constructed on -- the move comes later -- so
         # the fields were being planted forty thousand pixels from the yard.
-        for k in range(5):
-            ctx = int(math.floor((float(x) - 110.0 + (k % 3) * 150.0) / 32.0))
-            cty = int(math.floor((float(y) + 40.0 + (k // 3) * 150.0) / 32.0))
+        # ONE FIELD, FIVE BY FIVE. It was five fields of twenty-five tiles --
+        # a hundred and twenty-five plots marching across the wild, which is
+        # not what a hut in the woods looks like and not what was asked for.
+        for k in range(1):
+            ctx = int(math.floor((float(x) - 110.0) / 32.0))
+            cty = int(math.floor((float(y) + 40.0) / 32.0))
             kind = "wheat"
             self.farm_plots.append((ctx, cty, kind))
             # A FIVE BY FIVE PLOT, as specified -- twenty-five tiles, not nine.
@@ -151,7 +154,11 @@ class Hub(village_mod.Village):
             w.y += dy
             w.rect = pygame.Rect(int(w.x - w.rect.w / 2),
                                  int(w.y - w.rect.h / 2), w.rect.w, w.rect.h)
-        self.board = self.board.move(int(dx), int(dy))
+        # NO NOTICE BOARD IN A HUT. A board is the state talking: taxes,
+        # elections, the crown's business. There is no state here. Zero-sized,
+        # so it is neither drawn nor solid and every `village.board` reference
+        # in the rest of the game stays valid.
+        self.board = pygame.Rect(0, 0, 0, 0)
         self.radius = HUB_RADIUS
         # 7. ITS OWN FENCE AND GATES -- the same call a town uses.
         self._rng2 = random.Random(seed & 0xFFFFFFFF)
