@@ -837,36 +837,32 @@ def main() -> None:
     nav = None
     nav_timer = 0.0
 
-    def make_village_patrol(village):
-        """TWO GUARDS, ONE AT EACH GATE, WHO DO NOT WALK AWAY.
+    def make_village_patrol(village, count=2):
+        """THE MEN AT THE GATE. Standing still, armed, thirty rounds each.
 
-        They used to walk the village's whole political border -- a ring a
-        kilometre out -- which meant the one thing a wall is for, WHO COMES
-        THROUGH THE GATE, was watched by nobody. The wall cannot be cut now and
-        the gate is the only way in, so the gate is where the state stands.
+        Pivot.md S2: two guards, one at each gate, who DO NOT WALK AWAY. One gate
+        is the way in and its guard SEARCHES; the other is the way out and nobody
+        is searched leaving. That asymmetry is the whole border.
 
-        One gate is the way IN and the other the way OUT, and the guard on the
-        way in SEARCHES. That is the whole border.
+        A hub gets ONE (S1: "a soldier -- always standing at the gate"), a
+        settlement gets two.
         """
         squad = []
-        try:
-            gates = fence.gate_list(village)
-        except Exception:
-            gates = []
-        for gi, (_side, gx, gy) in enumerate(gates[:2]):
+        for gi, (_side, gx, gy) in enumerate(fence.gate_list(village)[:count]):
             s = Soldier(gx, gy + 26.0, village.nation, melee=False,
                         seed=random.randint(0, 2 ** 31),
                         color=nation_color(village.nation))
             s.gate_village = village
             s.gate_index = gi            # 0 is the way in, 1 the way out
             s.gate_post = (gx, gy + 26.0)
-            s.patrol_center = (village.x, village.y)
-            s.patrol_r = 0.0             # he does not walk
-            s.patrol_phase = 0.0
-            s.patrol_village = village
+            s.home = s.gate_post
+            s.target = s.gate_post
+            s.patrol_center = None       # not a territory patrol: he STANDS
+            s.patrol_r = 0.0
+            s.idle_timer = 1.0e9         # never picks a new spot to walk to
             s.hostile = getattr(village, "provoked", False)
             s.fire_cd = random.uniform(0.05, 0.30)
-            s.home = s.gate_post
+            s.ammo = 30                  # thirty rounds, and then he is a man
             squad.append(s)
         return squad
 
@@ -3619,9 +3615,8 @@ def main() -> None:
                 # five wall guards AND a two-man gate patrol on every hut --
                 # more soldiers in a criminal camp than in a market town. A hub
                 # has exactly one armed man: the soldier's post at his gate.
-                if getattr(village, "is_hub", False):
-                    continue
-                if (getattr(village, "guards", None) is None
+                if (not getattr(village, "is_hub", False)
+                        and getattr(village, "guards", None) is None
                         and math.hypot(village.x - player.x,
                                        village.y - player.y) < 6000.0):
                     loop = village.fence_rect.inflate(-218, -218)
@@ -3654,13 +3649,15 @@ def main() -> None:
                 if squad is None:
                     if math.hypot(village.x - player.x,
                                   village.y - player.y) < 30000.0:
-                        village.patrol = make_village_patrol(village)
+                        village.patrol = make_village_patrol(
+                            village, 1 if getattr(village, "is_hub", False) else 2)
                         village.patrol_timer = 30.0
                         enemies.extend(village.patrol)
                 elif not any(s.alive for s in squad):
                     village.patrol_timer -= dt
                     if village.patrol_timer <= 0.0:      # squad wiped: respawn
-                        village.patrol = make_village_patrol(village)
+                        village.patrol = make_village_patrol(
+                            village, 1 if getattr(village, "is_hub", False) else 2)
                         village.patrol_timer = 30.0
                         enemies.extend(village.patrol)
                 village._assign_duty_bodies()

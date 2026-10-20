@@ -42,11 +42,22 @@ OUTWARD = {0: (0.0, -1.0), 1: (1.0, 0.0), 2: (0.0, 1.0), 3: (-1.0, 0.0)}
 
 
 def gate_list(village):
-    """Both gates, as (side, x, y). Two opposite walls, always."""
-    r = village.fence_rect
+    """Both gates, as (side, x, y). Two opposite walls, always.
+
+    It read `village.gate_side` and `village.gate_off` straight off the object.
+    A settlement restored from the world cache never runs __init__, so those
+    can be missing -- and the AttributeError was swallowed by every caller,
+    which is why a town near the player reported a patrol of ZERO men and no
+    guard ever appeared at its gate.
+    """
+    r = getattr(village, "fence_rect", None)
+    if r is None:
+        return []
     out = []
-    for side, off in ((village.gate_side, village.gate_off),
-                      (getattr(village, "gate_side2", (village.gate_side + 2) % 4),
+    for side, off in ((getattr(village, "gate_side", 0),
+                       getattr(village, "gate_off", 0.0)),
+                      (getattr(village, "gate_side2",
+                              (getattr(village, "gate_side", 0) + 2) % 4),
                        getattr(village, "gate_off2", 0.0))):
         if side == 0:
             out.append((side, village.x + off, r.top))

@@ -294,8 +294,15 @@ class Enemy:
             self.y += ux * self.strafe * speed * 0.6 * dt
 
         self.fire_cd -= dt
+        # A GUARD CARRIES THIRTY ROUNDS. None means unlimited, which is what
+        # every other soldier in the game still has.
+        _ammo = getattr(self, "ammo", None)
+        if _ammo is not None and _ammo <= 0:
+            return
         if (self.fire_cd <= 0.0 and distance <= 520.0 and visible
                 and not getattr(target, "dead", False) and self._round_ready()):
+            if _ammo is not None:
+                self.ammo = _ammo - 1
             self.fire_cd = random.uniform(0.5, 0.9)      # ~2x the old rate
             angle = math.atan2(dy, dx) + random.uniform(-0.03, 0.03)
             muzzle_x = self.x + ux * 20.0
