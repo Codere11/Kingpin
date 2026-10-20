@@ -2321,7 +2321,7 @@ class Village:
     # only `search_queue`, so a cache-built town had a queue but no
     # `search_now`, and gate_tick raised AttributeError on the frame the player
     # first came near the wall. That is the crash at the settlement entry.
-    search_queue: list = []
+    search_queue: tuple = ()        # per-village: set in __init__, never shared
     search_now: object = None
     search_t: float = 0.0
 
@@ -2349,6 +2349,7 @@ class Village:
         self.killer_since: dict = {}     # and when it was told of each
         # the notice board that stands in the square
         self.board = pygame.Rect(int(self.x - 26), int(self.y - 56), 52, 48)
+        self.search_queue: list = []      # THE GATE QUEUE IS THIS TOWN'S
         self.local_food = "wheat"
         self.local_leaf = "plant"
         # A nation's capital is twice the village: twice the ground, twice the
@@ -2984,7 +2985,7 @@ class Village:
         is what a queue IS when the alternative is walking through a wall.
         """
         if not isinstance(getattr(self, "search_queue", None), list):
-            self.search_queue = []
+            self.search_queue = []       # instance list, not the class's
         if not hasattr(self, "search_now"):
             self.search_now = None
         if not hasattr(self, "search_t"):
@@ -3052,14 +3053,27 @@ class Village:
                     except Exception:
                         n.alive = False
 
-        # and nobody walks in unsearched
+        # AND NOBODY WALKS IN UNSEARCHED -- BUT A RESIDENT IS NOT A STRANGER.
+        # This put back outside the gate EVERY man inside the fence who had not
+        # been searched, and nobody ever has: searched is set when a man enters,
+        # and a man born here never entered. So every townsman in the world was
+        # evicted onto the road every single frame, and a town with twenty-seven
+        # people in it looked deserted. Only a man actually standing IN A
+        # GATEWAY is asked to wait his turn.
         r = self.fence_rect
         for n in self.npcs:
             if not n.alive:
                 continue
             if getattr(n, "searched_village", None) is self:
                 continue
-            if r.collidepoint(n.x, n.y):
+            if getattr(n, "home_house", None) is not None:
+                continue                       # he lives here
+            if not r.collidepoint(n.x, n.y):
+                continue
+            _g = fence.nearest_gate(self, n.x, n.y)
+            if math.hypot(n.x - _g[1], n.y - _g[2]) > 160.0:
+                continue                       # not at the gate: not arriving
+            if True:
                 g = fence.nearest_gate(self, n.x, n.y)
                 n.x = g[1] + (0.0 if g[0] in (0, 2) else 34.0)
                 n.y = g[2] + (34.0 if g[0] == 0 else -34.0)
