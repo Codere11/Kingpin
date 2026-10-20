@@ -91,6 +91,7 @@ class Hub:
         self.brew_kind = "lab"
         self.timer = self.rng.uniform(0.0, 30.0)
         self.carry_t = self.rng.uniform(10.0, CARRY_MIN)
+        self.world = world
         self.npcs: list = []
 
         # THE SAME CODE A TOWN IS BUILT WITH. The fence and its gates come from
@@ -203,20 +204,34 @@ class Hub:
             npc.nation = NATION
             npc.team = ("nation", NATION)
             npc.hub = self
+            if npc in village_mod.PEOPLE:
+                village_mod.PEOPLE.remove(npc)
             # AND HE IS A VILLAGER OF THIS PLACE. Everything a man does --
             # walking, working, eating, sleeping, his trade -- is in NPC.tick,
             # and it finds his town through `npc.village`. He was taken off the
             # register and drawn by hand, which is why four people stood in a
             # yard pivoting on a sine wave instead of living in it.
             npc.village = self
+            # THE POST ITSELF. `_work_place` finds a man's bench through
+            # `npc.workplace`; `_work_field` finds his rows through
+            # `npc.farm_plot`. Without them a man with a job stands where he
+            # was put and does nothing at all.
+            if job in ("lab", "brewery"):
+                npc.workplace = self.workplaces[0] if self.workplaces else None
+                if npc.workplace is not None:
+                    npc.workplace.worker = npc
+            elif job == "farm":
+                npc.farm_plot = 0
+                npc.leaf_farmer = True
+                npc.stock["shovel"] = 1
+                npc.tool_uses = economy.TOOL_USES
             if job == "soldier":
                 npc.x, npc.y = self.gate.centerx, self.gate.centery + 14.0
                 npc.home = (npc.x, npc.y)
                 npc.weapon = "rifle"
             self.npcs.append(npc)
-            # AND HE IS ON THE REGISTER, like everybody else, so the world
-            # steps him once a tick with the same code it uses for a
-            # townsman.
+            # NOT ON THE WORLD REGISTER. He is stepped by his hub, with the
+            # same NPC.tick a town uses -- and only once, not twice.
 
     # -- the work ---------------------------------------------------------
     def update(self, dt: float, now: float, villages) -> None:
@@ -224,13 +239,23 @@ class Hub:
         # day off: they work while it is light and they sleep while it is dark,
         # and the SOLDIER DOES NOT SLEEP AT ALL -- he stands at the gate because
         # a gate nobody watches is a door.
-        # THEY STEP THEMSELVES. NPC.tick does the walking, the work and the
-        # sleeping; the only thing this does is hold the SOLDIER at his gate,
-        # because he is the one man in the world who is not allowed to wander.
+        # THE REAL STEP, THE SAME ONE A TOWNSMAN GETS. `phase` is what drives
+        # the work: "work" calls _work_field, _work_place and the bench, "home"
+        # sends them indoors. Nothing here animates anything -- the people
+        # walk, work, eat and sleep because that is what NPC.tick does.
+        night = self._is_night(now)
+        phase = "home" if night else "work"
         for npc in self.npcs:
-            if npc.alive and npc.job == "soldier":
+            if not npc.alive:
+                continue
+            if npc.job == "soldier":
                 npc.x, npc.y = self.posts["soldier"]
                 npc.asleep = False
+                continue
+            try:
+                npc.tick(dt, self.world, now, phase, night=night)
+            except Exception:
+                pass
         # EVERYTHING IS SHARED, SO EVERYTHING IS SHARED OUT. The purse is not
         # the hut's and the food is not the shelf's: what the hub has, its four
         # people have, equally, and then they go and earn some more. Every few
@@ -432,8 +457,10 @@ class Hub:
             except Exception:
                 pass
         for wp in self.workplaces:
+            # THE REAL THING, NOT A RECTANGLE. A Workplace draws itself, and
+            # it draws a bench with a roof and a chimney on it.
             try:
-                pygame.draw.rect(screen, BENCH, wp.rect.move(ox, oy))
+                wp.draw(screen, cam_x, cam_y)
             except Exception:
                 pass
         for npc in self.npcs:
