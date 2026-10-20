@@ -23,6 +23,19 @@ import pygame
 import face
 from palette import rich, dim
 
+import os as _os
+
+
+def _note(message: str) -> None:
+    """The village log. Cython refused to compile this module for hours over
+    THIS NAME -- `gate_tick` called `_note` and nothing declared it, so the
+    whole file failed to compile and the stale .so shadowed every edit."""
+    try:
+        with open(_os.path.expanduser("~/.kingpin_saves/village.log"), "a") as fh:
+            fh.write(message + "\n")
+    except Exception:
+        pass
+
 import fence
 import crop
 import biomes
