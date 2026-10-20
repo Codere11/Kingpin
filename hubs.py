@@ -509,6 +509,17 @@ class Hub(village_mod.Village):
                     n.stock[item] = int(n.stock.get(item, 0)) + give
                     break
 
+        # NOBODY HERE FIGHTS A STRANGER. `nearest_hostile` gives a man a
+        # target, and `aggro` decides whether he takes it -- so a hub that had
+        # been provoked once, or whose people had been set hostile by the
+        # nation they belong to, shot at every man who walked in the gate. The
+        # four of them mind their own business unless they are attacked.
+        for n in self.npcs:
+            if n.alive:
+                n.aggro = False
+                n.hostile = False
+                n.provoked = False
+
         # THE SOLDIER NEVER LEAVES THE GATE.
         for n in self.npcs:
             if n.alive and getattr(n, "job", None) == "soldier":
