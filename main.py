@@ -567,6 +567,34 @@ def _total_houses(towns) -> int:
     return max(1, sum(len(getattr(v, "houses", ())) for v in towns))
 
 
+
+def _present(dest, src, w, h):
+    """PUT THE SCALED VIEW ON THE WINDOW, WITHOUT ASSUMING ITS SIZE.
+
+    `pygame.transform.scale(src, (w, h), dest)` raises ValueError -- "Destination
+    surface not the given width or height" -- when the window surface is not
+    exactly (w, h). That is a hard crash in the last line of drawing, and it is
+    what closed the game at the gate.
+    """
+    try:
+        size = dest.get_size()
+    except Exception:
+        return
+    if size == (w, h):
+        try:
+            pygame.transform.scale(src, (w, h), dest)
+            return
+        except (TypeError, ValueError):
+            pass
+    try:
+        pygame.transform.scale(src, size, dest)
+    except (TypeError, ValueError):
+        try:
+            dest.blit(pygame.transform.smoothscale(src, size), (0, 0))
+        except Exception:
+            pass
+
+
 def main() -> None:
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
@@ -4763,7 +4791,10 @@ def main() -> None:
                                 for r in interior.occluders]
             mask = interior_vision.build(vw, vh, eye_x, eye_y, player.facing_angle,
                                          inside_occluders, None, 1.3)
-            screen.blit(mask, (0, 0))
+            if mask is not None and mask.get_size() != screen.get_size():
+                mask = pygame.transform.smoothscale(mask, screen.get_size())
+            if mask is not None:
+                screen.blit(mask, (0, 0))
             # Show the live outdoors clearly through every window and the door.
             for opening in interior.window_rects + [interior.door_rect]:
                 sr = pygame.Rect(int(round(opening.x - cam_x)),
@@ -4788,7 +4819,7 @@ def main() -> None:
             draw_placing()
             # ...and back to the window for everything that is not the room.
             screen = real_screen
-            pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
+            _present(screen, view_surf, scr_w, scr_h)
             vw, vh = scr_w, scr_h
             draw_hunger_gray()
             if not inventory_open:
@@ -5073,7 +5104,7 @@ def main() -> None:
             # kept the last frame it had. That is what "it freezes instead of
             # showing a game over screen" was: a correct panel, drawn offscreen.
             screen = real_screen
-            pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
+            _present(screen, view_surf, scr_w, scr_h)
             overlay.draw(screen, [
                 f"Kills: {kills}",
                 f"Tobacco: {inventory.count_of('tobacco')}",
@@ -5101,7 +5132,7 @@ def main() -> None:
 
             # ---- ...and back to the window ---------------------------------
             screen = real_screen
-            pygame.transform.scale(view_surf, (scr_w, scr_h), screen)
+            _present(screen, view_surf, scr_w, scr_h)
             vw, vh = scr_w, scr_h
             hotbar.draw(screen)
             # THE INSPECTOR IS DRAWN ABOVE GROUND TOO.
