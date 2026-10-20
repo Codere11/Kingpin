@@ -853,6 +853,13 @@ def main() -> None:
                         seed=random.randint(0, 2 ** 31),
                         color=nation_color(village.nation))
             s.gate_village = village
+            # AND `guard_village`, which is the name the TARGETING reads. He had
+            # only `gate_village`, so choose_target fell through every branch it
+            # knows -- guard, patrol, march -- and landed in the fallback, which
+            # shoots any man of another nation. A nationless player is
+            # `None != 1`, so every gate guard in the world shot at him on
+            # sight, with `wanted False` and `aggro None` in the log.
+            s.guard_village = village
             s.gate_index = gi            # 0 is the way in, 1 the way out
             s.gate_post = (gx, gy + 26.0)
             s.home = s.gate_post

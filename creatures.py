@@ -759,7 +759,11 @@ def choose_target(creature, player, enemies, rabbits, villages, squad=(),
                                                    npc.y - creature.y) < 480.0):
                                 cands.append(npc)
         else:
-            if not player.dead and player.nation != creature.nation and not hidden:
+            # THE SAME RULE AS EVERYWHERE ELSE: a man with no nation has no
+            # nation's war. This line was the last place that read
+            # `None != 1` as "an enemy soldier".
+            if (not player.dead and getattr(player, "nation", None) is not None
+                    and player.nation != creature.nation and not hidden):
                 cands.append(player)
             for other in enemies:
                 if other is creature or not other.alive:
