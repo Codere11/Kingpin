@@ -3810,11 +3810,16 @@ class Villages:
         # the guards, the board, the fences. A hub is exactly such a
         # settlement, and it was being built correctly and then thrown away
         # here, every frame, by a distance test it could never pass.
-        for v in extra:
+        # AND THE OFF-LATTICE ONES, ALWAYS. `extra` was something a caller had
+        # to remember to pass, which meant three sites saw hubs and the other
+        # thirty did not. The list is attached to the registry itself, so every
+        # caller -- drawing, collision, wolves, ore, the crop loop, the board,
+        # the census -- hears the same answer without being told.
+        for v in list(extra) + list(getattr(self, "offlattice", ())):
             if v is None:
                 continue
             r = float(getattr(v, "radius", 0.0)) + slack
-            if abs(v.x - cx) <= r and abs(v.y - cy) <= r:
+            if abs(v.x - cx) <= r and abs(v.y - cy) <= r and v not in out:
                 out.append(v)
         return out
 

@@ -181,6 +181,60 @@ class Hub(village_mod.Village):
         self.ledger_coins = max(120, int(self.ledger_coins))
         self.ledger_goods = {}
 
+        # 10. AND THE FOUR POSTS, LAST OF ALL -- after the move, the re-fence
+        # and the seeding, none of which may undo them. Assigned by index, and
+        # asserted: if the four are not exactly these four, the hub is not a
+        # hub and saying so now is worth more than finding out by watching a
+        # farmer stand in an untouched field for ten minutes.
+        self.npcs = [n for n in self.npcs if n.alive][:4]
+        while len(self.npcs) < 4:
+            k = len(self.npcs)
+            who = "%s %s" % (self._rng.choice(village_mod.FIRST_NAMES),
+                             self._rng.choice(village_mod.LAST_NAMES))
+            self.npcs.append(village_mod.NPC(
+                self.x + (k - 1.5) * 30.0, self.y + 34.0,
+                self._rng.randrange(1 << 30), who,
+                "%08x%02x" % (seed & 0xFFFFFFFF, k), "Criminal", self))
+        for k, (n, job) in enumerate(zip(self.npcs,
+                                         ("soldier", "farm", "lab", "trader"))):
+            n.job = job
+            n.role = "Criminal"
+            n.village = self
+            n.hub = self
+            n.nation = NATION
+            n.team = ("nation", NATION)
+            n.searched_village = self
+            n.farm_plot = None
+            n.workplace = None
+            n.alive = True
+            if n in village_mod.PEOPLE:
+                village_mod.PEOPLE.remove(n)
+            if job == "lab":
+                n.workplace = bench
+                n.x, n.y = bench.x, bench.y + 30.0
+                bench.worker = n
+            elif job == "farm":
+                n.farm_plot = 0
+                n.leaf_farmer = True
+                n.stock["shovel"] = 1
+                n.tool_uses = economy.TOOL_USES
+            elif job == "soldier":
+                try:
+                    g = self.gate_list()[0]
+                    n.x, n.y = g[1], g[2] + 26.0
+                except Exception:
+                    pass
+            n.home = (n.x, n.y)
+            n.stock.clear()
+            n.stock[self._food_kind(world)] = 10
+        got = [n.job for n in self.npcs]
+        if got != ["soldier", "farm", "lab", "trader"]:
+            raise RuntimeError("hub %s has the wrong posts: %r"
+                               % (self.name, got))
+        _note("HUB %-14s at (%.0f,%.0f)  posts %s  plots %d  bench %s"
+              % (self.name, self.x, self.y, got, len(self.farm_plots),
+                 bench.kind))
+
     # -- what grows here ----------------------------------------------------
     def _food_kind(self, world) -> str:
         try:
@@ -249,6 +303,9 @@ class Hubs:
         self.build(world, villages)
 
     def build(self, world, villages) -> None:
+        # ATTACHED TO THE REGISTRY, so every system that asks the registry
+        # which settlements are near a point gets the hubs too.
+        villages.offlattice = self.hubs
         rng = random.Random(int(world.seed) ^ 0x0C0FFEE)
         towns = list(getattr(villages, "villages", ()) or ())
         tries = 0
