@@ -4822,10 +4822,10 @@ def main() -> None:
                 if npc.alive and npc.in_interior:      # residents move about
                     npc.draw(screen, cam_x, cam_y, True)
             player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
-        if gate_search_t > 0.0:
-            Player._draw_action_bar(screen, vw * 0.5, vh * 0.5,
-                                    min(1.0, gate_search_t / 10.0))
-            # THE GHOST BELONGS TO THE ROOM. draw_placing() works in the room's
+        if getattr(player, "search_progress", 0.0) > 0.0:
+            Player._draw_action_bar(screen, screen.get_width() * 0.5,
+                                    screen.get_height() * 0.5,
+                                    min(1.0, player.search_progress / 10.0))
             # own coordinates (box.x - cam_x), so it has to be drawn before the
             # frame is blown up -- drawn afterwards it landed at a quarter of
             # its size and a third of a screen from the cursor.
@@ -4978,49 +4978,71 @@ def main() -> None:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
         draw_exterior(cam_x, cam_y, True)
-        # AND NOBODY WALKS INTO A TOWN WITHOUT BEING SEARCHED, HIM INCLUDED.
-        # Through the gate and past the guard, or the whole street turns.
-        # ---- THE GATE SEARCH, FOR HIM -------------------------------
+        try:
+            hub_world.draw(screen, cam_x, cam_y, vw, vh)
+        except Exception:
+            pass
+        draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
+        draw_villages = villages.visible(cam_x, cam_y, vw, vh,
+                                         extra=hub_world.hubs)
+        draw_trees = trees.visible(cam_x, cam_y, vw, vh)
+        # ---- THE GATE SEARCH, FOR HIM -------------------------------------
         # Every man entering a settlement is searched by the guard on the IN
         # gate, one at a time, ten seconds each. He is no exception:
         #
-        #   at the gate   -> the search runs, with the bar under him
-        #   anywhere else inside the fence -> he climbed the wall
+        #     at the gate                    -> the search runs, with the bar
+        #     anywhere else inside the fence -> he climbed the wall
         #
-        # and the search is the smuggling roll: a hundred of contraband at no
-        # skill is a certainty, a hundred at ten is one in ten.
+        # A HUB DOES NOT SEARCH. The huts are nation 1: they are where the
+        # tobacco comes from, and a criminal settlement rummaging your pack for
+        # contraband would be a shop that arrests its customers. The regime's
+        # towns search; the black market does not. That asymmetry is the game.
         CONTraband = ("tobacco", "cigar", "beer", "liqueur", "mezcal",
                       "dried_mushroom", "red_mushroom", "agave")
-        # WHERE IS HE, relative to the wall? A gate is ON the fence line, so
-        # standing at one is NEITHER inside nor outside -- the old test asked
-        # "inside the fence" and a man at the gate failed it, so no search ever
-        # ran and nothing ever happened at a gate at all.
-        _gate_v, _near_gate, _inside = None, None, None
-        for _v in visible_villages:
+        _gate_v, _inside = None, None
+        # BY DISTANCE FROM THE REGISTRY, NOT BY WHAT IS ON SCREEN. A gate is on
+        # the fence line, and `visible()` keeps a town only if its CENTRE is in
+        # view -- so a man standing at a gate had the town culled out from under
+        # him and no search ever ran. Thirty-six towns is a trivial scan.
+        _cands = []
+        try:
+            for _v in list(getattr(villages, "villages", ()) or ()):
+                if getattr(_v, "fence_rect", None) is None:
+                    continue
+                if math.hypot(_v.x - player.x, _v.y - player.y) < 3000.0:
+                    _cands.append(_v)
+        except Exception:
+            _cands = list(draw_villages)
+        for _v in _cands:
+            if getattr(_v, "is_hub", False):
+                continue                       # a hut never searches you
             _fr = getattr(_v, "fence_rect", None)
             if _fr is None:
                 continue
+            _hit = False
             try:
-                _gs = fence.gate_list(_v)
+                for _g in fence.gate_list(_v):
+                    if math.hypot(player.x - _g[1], player.y - _g[2]) < 110.0:
+                        _gate_v, _hit = _v, True
+                        break
             except Exception:
-                _gs = []
-            for _g in _gs:
-                if math.hypot(player.x - _g[1], player.y - _g[2]) < 110.0:
-                    _gate_v, _near_gate = _v, _g
-                    break
-            if _gate_v is not None:
+                pass
+            if _hit:
                 break
             if _fr.collidepoint(player.x, player.y):
                 _inside = _v
                 break
         if _gate_v is not None:
-            if gate_search_v is not _gate_v:
-                gate_search_v, gate_search_t = _gate_v, 0.0
-            gate_search_t += dt
-            if gate_search_t >= 10.0:
-                gate_search_t = 0.0
+            if getattr(player, "search_village", None) is not _gate_v:
+                player.search_village = _gate_v
+                player.search_progress = 0.0
+            player.search_progress = float(getattr(player, "search_progress", 0.0)) + dt
+            if player.search_progress >= 10.0:
+                player.search_progress = 0.0
                 player.searched_village = _gate_v
-                units = sum(inventory.count_of(i) for i in CONTraband)
+                units = sum(inventory.count_of(_i) for _i in CONTraband)
+                plog.log("SEARCHED", getattr(_gate_v, "name", "?"),
+                         "units", units)
                 if units > 0:
                     _sk = max(0.0, min(10.0, float(getattr(player, "smuggling", 0.0))))
                     if random.random() < min(1.0, units / 100.0) * 0.55 * (1.0 - 0.09 * _sk):
@@ -5032,21 +5054,14 @@ def main() -> None:
                 else:
                     toast("Searched and waved through")
         elif _inside is not None and getattr(player, "searched_village", None) is not _inside:
-            gate_search_v, gate_search_t = None, 0.0
+            player.search_progress = 0.0
             if getattr(player, "_climbed", None) is not _inside:
                 player._climbed = _inside
                 toast("You climb the fence. The whole street turns.")
                 commit_crime()
         else:
-            gate_search_v, gate_search_t = None, 0.0
-        try:
-            hub_world.draw(screen, cam_x, cam_y, vw, vh)
-        except Exception:
-            pass
-        draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
-        draw_villages = villages.visible(cam_x, cam_y, vw, vh,
-                                         extra=hub_world.hubs)
-        draw_trees = trees.visible(cam_x, cam_y, vw, vh)
+            player.search_progress = 0.0
+
 
         # Houses and tree trunks block line of sight; canopies soften it.
         reach = vision.max_dist

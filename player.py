@@ -43,6 +43,13 @@ SWING_ANIM = 0.32
 
 
 class Player:
+    # THE GATE. `searched_village` is the last township that has had its hands
+    # in his pack; `search_progress` is the ten seconds it takes; `search_village`
+    # is whose gate he is standing at. Class defaults, because a player restored
+    # from a save is never re-__init__'d.
+    searched_village: object = None
+    search_village: object = None
+    search_progress: float = 0.0
     # A CLASS ATTRIBUTE, NOT A MODULE ONE. main() has a LOCAL called `player`
     # -- the Player instance -- which SHADOWS the `player` module for the whole
     # of main(). So `player.LEVEL_FLASH` reached the instance, and the module's
