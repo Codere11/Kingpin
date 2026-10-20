@@ -3632,6 +3632,18 @@ def main() -> None:
             solids += [(tree.trunk_rect, (118, 88, 48)) for tree in view_trees
                        if not tree.felled]
             solids += [(c.rect, (104, 104, 116)) for c in view_ore]
+            # AND THE HUBS' WALLS. A hub is not in `villages`, so nothing that
+            # walks the village list -- drawing, collision, crops -- knew it
+            # was there, and the player walked straight through its fence.
+            try:
+                for _hub in hub_world.hubs:
+                    if not view.colliderect(_hub.fence_rect):
+                        continue
+                    solids += [(w, (150, 108, 64)) for w in _hub.fence_walls]
+                    solids += [(h.rect, (150, 140, 120)) for h in _hub.houses]
+                    solids += [(wp.rect, (96, 92, 88)) for wp in _hub.workplaces]
+            except Exception:
+                pass
             solids += [(v.board, (120, 86, 52)) for v in visible_villages]
             solids += [(wp.rect, (96, 92, 88)) for v in visible_villages
                        for wp in v.workplaces]

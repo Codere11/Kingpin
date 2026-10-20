@@ -145,8 +145,9 @@ class Hub(village_mod.Village):
         # where the town is, not by asking the town. A moved hub failed that
         # test, so the exterior draw never drew it, the player's collision
         # never met its fence, and the crops were never rendered.
-        dx = 0.0
-        dy = 0.0
+        dx = float(x) - float(self.x)
+        dy = float(y) - float(self.y)
+        self.x, self.y = float(x), float(y)
         for n in self.npcs:
             n.x += dx
             n.y += dy
@@ -253,11 +254,16 @@ class Hubs:
         tries = 0
         while len(self.hubs) < HUB_COUNT and tries < 8000:
             tries += 1
-            gx = rng.randint(-4, 4)
-            gy = rng.randint(-4, 4)
-            if (gx, gy) in villages._cache:
+            # OFF THE LATTICE, AND INSIDE THE MAP. Every lattice cell within
+            # reach is already a town, so a hub cannot be on the lattice -- and
+            # `villages.visible` finds a town by asking the LATTICE where it is,
+            # so nothing that walks `villages` will ever find a hub. That is
+            # why a hub needs its own list, its own draw AND ITS OWN COLLISION.
+            x = rng.uniform(-80000.0, 80000.0)
+            y = rng.uniform(-80000.0, 80000.0)
+            if any((v.x - x) ** 2 + (v.y - y) ** 2 < MIN_FROM_TOWN ** 2
+                   for v in towns):
                 continue
-            x, y = village_mod.village_center(gx, gy, world.seed)
             if any((h.x - x) ** 2 + (h.y - y) ** 2 < 9000.0 ** 2
                    for h in self.hubs):
                 continue
@@ -273,7 +279,6 @@ class Hubs:
             # all appear because they are a village that the world can see.
             # Hand-drawing them separately gave a picture with no collision,
             # no crops and nobody in it.
-            villages._cache[(hub.gx, hub.gy)] = hub
             self.hubs.append(hub)
 
     def update(self, dt: float, now: float) -> None:
