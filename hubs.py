@@ -155,23 +155,6 @@ class Hub(village_mod.Village):
                                if getattr(n, "job", None) == "farm"]):
             n.farm_plot = i
 
-        # ---- ONE HOUSE, IN THE YARD ------------------------------------
-        # The town's houses stay where the town is, five thousand pixels
-        # away; moving a House's x does not move its rect. A hub gets its own,
-        # built by `village.House` in the corner of the fence.
-        self.houses = []
-        try:
-            _fr = getattr(self, "fence_rect", None)
-            _hx = self.x - (110.0 if _fr is None else _fr.w * 0.28)
-            _hy = self.y - (130.0 if _fr is None else _fr.h * 0.28)
-            _house = village_mod.House(_hx, _hy, 96, 68, (118, 62, 50),
-                                       (0.0, 1.0), seed + 13)
-            _house.village = self
-            _house.occupants = []
-            self.houses = [_house]
-        except Exception:
-            pass
-
         # ---- AND MOVED TO WHERE IT STANDS ------------------------------
         dx = float(x) - float(self.x)
         dy = float(y) - float(self.y)
@@ -207,6 +190,21 @@ class Hub(village_mod.Village):
         import fence
         self.radius = HUB_RADIUS
         fence.install(self, self._rng)
+        # AND ONLY NOW IS THERE A HOUSE, because only now is the fence the
+        # hub's own. It was built against the TOWN's five-thousand-pixel wall
+        # -- five kilometres from where the hub stands -- so the yard had a
+        # bench, two gates and not one building inside it.
+        self.houses = []
+        try:
+            _fr = self.fence_rect
+            _house = village_mod.House(self.x - _fr.w * 0.26,
+                                       self.y - _fr.h * 0.26, 96, 68,
+                                       (118, 62, 50), (0.0, 1.0), seed + 13)
+            _house.village = self
+            _house.occupants = []
+            self.houses = [_house]
+        except Exception:
+            pass
         self.ledger_coins = max(60, int(self.ledger_coins))
         self.ledger_goods = {}
 
