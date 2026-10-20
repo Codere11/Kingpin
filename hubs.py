@@ -216,7 +216,11 @@ class Hub(village_mod.Village):
             if n in village_mod.PEOPLE:
                 village_mod.PEOPLE.remove(n)
             n.stock.clear()                  # CLEARED FIRST -- it was being
-            n.stock[self._food_kind(world)] = 10   # cleared AFTER the shovel,
+            # TEN OF THE LOCAL **FOOD**, NOT TEN OF THE LOCAL CROP. Wheat is
+            # grain; `needs()` eats bread, berries and cactus fruit. They were
+            # starting with a bag of seed grain, nothing edible, and were dead
+            # of hunger before the first harvest came in.
+            n.stock[economy.FOOD[0]] = 10   # cleared AFTER the shovel,
                                                 # so the farmer had none
             if job == "lab":
                 n.workplace = bench
@@ -359,6 +363,13 @@ class Hub(village_mod.Village):
         # `PEOPLE`, and `Village.update` has never ticked a man.
         for n in self.npcs:
             if n.alive:
+                # NO IDLING. `NPC.update` opens with `if self.pause > 0:
+                # return`, and a pause is a second or two of a day in a TOWN
+                # where there are sixty men to work forty plots. Here there are
+                # four of them on a hundred and twenty-five tiles, so a pause
+                # between every swing meant they never reaped enough to fill
+                # the shelf -- and all four starved beside a growing field.
+                n.pause = 0.0
                 n.tick(dt, world, now, "home" if night else "work",
                        night=night)
         # ...and then the town's own business: the board, the books, the crop.
@@ -478,6 +489,25 @@ class Hub(village_mod.Village):
                     farmer.stock[item] = 6
                     self.ledger_goods[item] = int(
                         self.ledger_goods.get(item, 0)) + give
+
+        # FEED THEM FROM THE LEDGER, EVERY TICK. `needs()` eats only out of a
+        # man's OWN pack, and dies at hunger 100 having found nothing -- so in
+        # a hut where the shelf holds the food and the men hold none, all four
+        # starve beside a full larder. This is the equal redistribution: any
+        # man with nothing to eat is handed a few from the shelf, and the
+        # farmer's surplus is what fills it.
+        for n in live:
+            if not n.alive:
+                continue
+            if any(int(n.stock.get(x, 0)) > 0 for x in economy.FOOD):
+                continue
+            for item in economy.FOOD:
+                have = int(self.ledger_goods.get(item, 0))
+                if have > 0:
+                    give = min(have, 3)
+                    self.ledger_goods[item] = have - give
+                    n.stock[item] = int(n.stock.get(item, 0)) + give
+                    break
 
         # THE SOLDIER NEVER LEAVES THE GATE.
         for n in self.npcs:
