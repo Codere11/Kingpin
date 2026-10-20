@@ -547,7 +547,12 @@ class Hubs:
     def draw(self, screen, cam_x: float, cam_y: float, vw: int, vh: int) -> None:
         view = pygame.Rect(int(cam_x) - 200, int(cam_y) - 200, vw + 400, vh + 400)
         for hub in self.hubs:
-            if view.colliderect(hub.fence):
+            # `fence` does not exist any more -- the real layout keeps the
+            # rect on `fence_rect`, because the walls themselves live in
+            # `fence_walls`. Reading the old name threw, the try/except in the
+            # main loop swallowed it, and the whole hub drew nothing: an empty
+            # field with the woods around it.
+            if view.colliderect(getattr(hub, "fence_rect", view)):
                 hub.draw(screen, cam_x, cam_y)
 
     def all_npcs(self) -> list:
