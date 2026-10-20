@@ -27,6 +27,7 @@ import sys
 import time
 
 import pygame
+import plog
 
 import crop
 import biomes
@@ -1191,6 +1192,14 @@ def main() -> None:
             d = (player.x - npc.x) ** 2 + (player.y - npc.y) ** 2
             if d < bd:
                 bd, best = d, player
+                plog.log("TARGET", getattr(npc, "job", "?"),
+                         "nation", getattr(npc, "nation", None),
+                         "host=%s wanted=%s prov=%s def=%s"
+                         % (getattr(npc, "hostile", False),
+                            getattr(player, "wanted", False),
+                            getattr(getattr(npc, "village", None), "provoked", False),
+                            getattr(npc, "defender", False)),
+                         "dist", int(d ** 0.5))
         # NO SOLDIER MUSTERED ANYWHERE is the common case, and it costs one
         # truth test rather than a neighbourhood assembled to answer "nobody".
         if not soldier_grid.buckets:
@@ -3737,6 +3746,11 @@ def main() -> None:
                 if _n.weapon is None:
                     _n.weapon = _n.arm()
                 if _n.weapon:
+                    plog.log("KNOWS-AGGRO", getattr(_n, "job", "?"),
+                             getattr(_n, "name", "?"), "nation",
+                             getattr(_n, "nation", None),
+                             "dist", int(math.hypot(_n.x - player.x, _n.y - player.y)),
+                             "weapon", getattr(_n.weapon, "kind", _n.weapon))
                     _n.aggro = True
                     _n.panic = 0.0
                 else:
@@ -4292,6 +4306,17 @@ def main() -> None:
                     if bullet.shooter is not player and is_trader(obj):
                         continue
                     if obj is player:
+                        _sh = bullet.shooter
+                        if _sh is not None and _sh is not player:
+                            plog.log("SHOT", getattr(_sh, "name", "?"),
+                                     getattr(_sh, "kind", getattr(_sh, "job", "?")),
+                                     "nation", getattr(_sh, "nation", None),
+                                     "dmg", bullet.damage,
+                                     "hp_before", int(player.health),
+                                     "wanted", getattr(player, "wanted", False),
+                                     "aggro", getattr(_sh, "aggro", None),
+                                     "dist", int(math.hypot(_sh.x - player.x,
+                                                            _sh.y - player.y)))
                         player.take_damage(bullet.damage)
                         blood.spawn(player.x, player.y, 7, 14.0)
                         bullet.remove = True
