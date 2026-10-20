@@ -115,7 +115,12 @@ class Hub(village_mod.Village):
             self.farm_plots.append((ctx, cty, kind))
             cells = [(ctx + dx, cty + dy)
                      for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
-            self.farm_tiles[(ctx, cty)] = [(tx, ty, kind) for tx, ty in cells]
+            # FIVE PLANTS ARE FOOD, THE REST IS THE LEAF OF THIS COUNTRY.
+            # Every tile was wheat, so the artisan had nothing to work and the
+            # bench stood idle with a man standing at it.
+            self.farm_tiles[(ctx, cty)] = [
+                (tx, ty, "wheat" if (k == 0 and i < 5) else self._leaf_kind(world))
+                for i, (tx, ty) in enumerate(cells)]
 
         # (posts are assigned at the very end -- see step 10)
 
@@ -233,6 +238,16 @@ class Hub(village_mod.Village):
                  bench.kind))
 
     # -- what grows here ----------------------------------------------------
+    def _leaf_kind(self, world) -> str:
+        """The leaf of this country: tobacco, mushrooms or agave."""
+        try:
+            import biomes
+            t = float(biomes.temperature(self.x, self.y, 20240501))
+            h = float(biomes.humidity(self.x, self.y, 20240501))
+            return biomes.crop_kinds(t, h)[1]
+        except Exception:
+            return "plant"
+
     def _food_kind(self, world) -> str:
         try:
             import biomes
@@ -257,6 +272,41 @@ class Hub(village_mod.Village):
                        night=night)
         # ...and then the town's own business: the board, the books, the crop.
         super().update(dt, world, now, "home" if night else "work")
+        # ONE COMMON LEDGER. Nobody in a hut owns a coin: the hut does. A man
+        # draws what he needs to buy with straight out of the ledger, and
+        # whatever he takes in goes straight back into it. The ledger is the
+        # purse, the shop and the payroll, and between shifts the four of them
+        # hold nothing at all.
+        live = [n for n in self.npcs if n.alive]
+        if live:
+            keep = 60                       # what a man may carry to buy with
+            for n in live:
+                purse = int(getattr(n, "coins", 0))
+                if purse < keep:
+                    take = min(keep - purse, int(self.ledger_coins))
+                    if take > 0:
+                        n.coins = purse + take
+                        self.ledger_coins -= take
+                elif purse > keep * 3:
+                    gave = purse - keep
+                    n.coins = keep
+                    self.ledger_coins += gave
+
+        # AND WHAT THEY MAKE IS THE LEDGER'S. Every finished good in their
+        # packs goes onto the shared shelf; the trader carries it out; the coin
+        # comes back. Nothing is anybody's.
+        for n in live:
+            for item in list(n.stock.keys()):
+                if item in ("coin", "shovel", "axe", "pickaxe", "watering_can",
+                            "seed_bag", "wheat_seed"):
+                    continue
+                qty = int(n.stock.get(item, 0))
+                if qty > 2:
+                    give = qty - 2          # he keeps a mouthful in his pack
+                    n.stock[item] = 2
+                    self.ledger_goods[item] = int(
+                        self.ledger_goods.get(item, 0)) + give
+
         # THE SOLDIER NEVER LEAVES THE GATE.
         for n in self.npcs:
             if n.alive and getattr(n, "job", None) == "soldier":
