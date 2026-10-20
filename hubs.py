@@ -203,16 +203,20 @@ class Hub:
             npc.nation = NATION
             npc.team = ("nation", NATION)
             npc.hub = self
+            # AND HE IS A VILLAGER OF THIS PLACE. Everything a man does --
+            # walking, working, eating, sleeping, his trade -- is in NPC.tick,
+            # and it finds his town through `npc.village`. He was taken off the
+            # register and drawn by hand, which is why four people stood in a
+            # yard pivoting on a sine wave instead of living in it.
+            npc.village = self
             if job == "soldier":
                 npc.x, npc.y = self.gate.centerx, self.gate.centery + 14.0
                 npc.home = (npc.x, npc.y)
                 npc.weapon = "rifle"
             self.npcs.append(npc)
-            # THEY ARE NOT ON ANYBODY'S REGISTER. The village machinery walks
-            # `PEOPLE` every tick and would step them again, with no village to
-            # step them in -- so they are taken off it and stepped here.
-            if npc in village_mod.PEOPLE:
-                village_mod.PEOPLE.remove(npc)
+            # AND HE IS ON THE REGISTER, like everybody else, so the world
+            # steps him once a tick with the same code it uses for a
+            # townsman.
 
     # -- the work ---------------------------------------------------------
     def update(self, dt: float, now: float, villages) -> None:
@@ -220,31 +224,13 @@ class Hub:
         # day off: they work while it is light and they sleep while it is dark,
         # and the SOLDIER DOES NOT SLEEP AT ALL -- he stands at the gate because
         # a gate nobody watches is a door.
-        night = self._is_night(now)
+        # THEY STEP THEMSELVES. NPC.tick does the walking, the work and the
+        # sleeping; the only thing this does is hold the SOLDIER at his gate,
+        # because he is the one man in the world who is not allowed to wander.
         for npc in self.npcs:
-            if npc.job == "soldier":
-                npc.asleep = False
+            if npc.alive and npc.job == "soldier":
                 npc.x, npc.y = self.posts["soldier"]
-                continue
-            npc.asleep = night
-            if night:
-                npc.x = self.house.centerx + (npc.rng.random() - 0.5) * 40.0
-                npc.y = self.house.centery + 26.0
-                continue
-            # DURING THE DAY THEY WORK THEIR OWN CORNER OF THE YARD. They stood
-            # in a clump like statues; a farm hand walks his rows, the bench
-            # hand leans over the bench, the trader waits by the gate for the
-            # next carry.
-            px, py = self.posts.get(npc.job, (self.x, self.y))
-            if npc.job == "farm":
-                px += math.sin(now * 0.5 + npc.rng.random() * 6.0) * 34.0
-                py += math.cos(now * 0.37 + npc.rng.random() * 6.0) * 34.0
-            elif npc.job in ("lab", "brewery"):
-                px += math.sin(now * 0.9) * 5.0
-            elif npc.job == "trader":
-                px += math.sin(now * 0.31) * 26.0
-            npc.x += (px - npc.x) * min(1.0, dt * 1.4)
-            npc.y += (py - npc.y) * min(1.0, dt * 1.4)
+                npc.asleep = False
         # EVERYTHING IS SHARED, SO EVERYTHING IS SHARED OUT. The purse is not
         # the hut's and the food is not the shelf's: what the hub has, its four
         # people have, equally, and then they go and earn some more. Every few

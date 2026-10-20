@@ -637,6 +637,19 @@ def main() -> None:
     # ---- THE HUBS IN THE WILD -- not villages; no war can be declared
     # on one, because no one admits it exists.
     hub_world = hubs.Hubs(world, villages)
+    # AND NO WOODS IN THE YARD. The trees are staked per VILLAGE, so a hub out
+    # in the wild had a forest growing through its crop and its house. They are
+    # marked felled directly rather than cut, because cutting leaves a stump
+    # that regrows in three minutes.
+    for _h in hub_world.hubs:
+        _fr = getattr(_h, "fence_rect", None)
+        if _fr is None:
+            continue
+        for _t in trees.visible(_fr.x - 200, _fr.y - 200,
+                                _fr.w + 400, _fr.h + 400):
+            if _fr.collidepoint(_t.x, _t.y):
+                _t.felled = True
+            pass
 
     # ---- A THOUSAND PEOPLE, AND A THOUSAND CAP, ALWAYS ------------------
     #
