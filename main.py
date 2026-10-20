@@ -5014,6 +5014,18 @@ def main() -> None:
         draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
         draw_villages = villages.visible(cam_x, cam_y, vw, vh,
                                          extra=hub_world.hubs)
+        # THE BAR UNDER THE GUARD, for the man HE is searching -- ten seconds
+        # on the same bar the axe swing uses.
+        for _v2 in draw_villages:
+            _sq = getattr(_v2, "search_now", None)
+            if _sq is None:
+                continue
+            for _g3 in (getattr(_v2, "patrol", ()) or ()):
+                Player._draw_action_bar(
+                    screen, _g3.x - cam_x, _g3.y - cam_y,
+                    min(1.0, float(getattr(_v2, "search_t", 0.0)) / 10.0))
+                break
+
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
         # ---- THE GATE SEARCH, FOR HIM -------------------------------------
         # Every man entering a settlement is searched by the guard on the IN
@@ -5084,18 +5096,23 @@ def main() -> None:
                     toast("Searched and waved through")
         elif _inside is not None and getattr(player, "searched_village", None) is not _inside:
             player.search_progress = 0.0
+            # (2) CROSSED UNSEARCHED IS AGGRO, AT ONCE. Being in the gateway is
+            # waiting your turn; being anywhere else inside the wall is having
+            # gone over it. No 260-pixel grace: the perimeter is the perimeter.
             _deep = True
             try:
                 for _g2 in fence.gate_list(_inside):
-                    if math.hypot(player.x - _g2[1], player.y - _g2[2]) < 260.0:
-                        _deep = False       # still in the gateway: not a crime
+                    if math.hypot(player.x - _g2[1], player.y - _g2[2]) < 130.0:
+                        _deep = False       # in the gateway, waiting
                         break
             except Exception:
                 _deep = False
             if _deep and getattr(player, "_climbed", None) is not _inside:
                 player._climbed = _inside
-                toast("You climb the fence. The whole street turns.")
+                player.wanted = True
+                toast("You crossed the wall unsearched. The street turns.")
                 commit_crime()
+                plog.log("CROSSED-UNSEARCHED", getattr(_inside, "name", "?"))
         else:
             player.search_progress = 0.0
 

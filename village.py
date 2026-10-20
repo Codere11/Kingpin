@@ -2315,6 +2315,11 @@ def rebuild_people(registry) -> int:
     return len(PEOPLE)
 
 
+_CONTRABAND = ("tobacco", "cigar", "beer", "liqueur", "mezcal",
+               "dried_mushroom", "red_mushroom", "agave", "wheat_wort",
+               "berry_wort", "agave_wort")
+
+
 class Village:
     # THE GATE QUEUE. Class-level defaults, because a village that came out of
     # the world cache never runs __init__ again -- and the old guard checked
@@ -2985,73 +2990,35 @@ class Village:
     SEARCH_CATCH = 0.55         # a carrier with 20 items is caught this often
 
     def gate_tick(self, dt: float, now: float) -> None:
-        """THE GATE IS THE ONLY WAY IN, AND IT IS A QUEUE.
+        """THE GATE IS THE ONLY WAY THROUGH A WALL, AND IT IS A QUEUE.
 
-        One man is searched at a time and it takes ten seconds, so people stand
-        in a line to get into a town. Nobody is exempt: a man who has not been
-        searched is put back outside the fence and made to wait his turn, which
-        is what a queue IS when the alternative is walking through a wall.
+        Four laws, in this order:
+
+          1. A resident is not a stranger. Men who live here walk in and out.
+          2. Nobody crosses the perimeter unsearched. A man who does is wanted
+             on the spot -- and a wanted man at the gate is shot at.
+          3. One man is searched at a time, ten seconds, by the guard on that
+             gate. ENTERING AND LEAVING both wait.
+          4. A hub does not search. A hut is not the state.
         """
-        if not isinstance(getattr(self, "search_queue", None), list):
-            self.search_queue = []       # instance list, not the class's
-        if not hasattr(self, "search_now"):
+        # (4) A HUB HAS NO SEARCH. Its soldier stands and minds the wolves.
+        if getattr(self, "is_hub", False):
             self.search_now = None
-        if not hasattr(self, "search_t"):
             self.search_t = 0.0
-        # and the town calms down
-        if getattr(self, "provoked", False):
-            self.provoked_t = float(getattr(self, "provoked_t", 0.0)) - dt
-            if self.provoked_t <= 0.0:
-                self.provoked = False
-                for _n2 in self.npcs:
-                    _n2.hostile = False
-                    _n2.aggro = False
-        # the man at the head of the line
-        if self.search_now is not None and not self.search_now.alive:
-            self.search_now, self.search_t = None, 0.0
-        if self.search_now is None and self.search_queue:
-            self.search_now = self.search_queue.pop(0)
-            self.search_t = 0.0
-        if self.search_now is not None:
-            n = self.search_now
-            self.search_t += dt
-            if self.search_t >= self.SEARCH_SECONDS:
-                units = sum(int(n.stock.get(k, 0)) for k in
-                            ("tobacco", "cigar", "beer", "liqueur", "mezcal",
-                             "dried_mushroom", "red_mushroom", "agave"))
-                if units > 0:
-                    skill = max(0.0, min(10.0, float(getattr(n, "smuggling", 0.0))))
-                    found = min(1.0, units / 100.0) * self.SEARCH_CATCH * (1.0 - 0.09 * skill)
-                    if n.rng.random() < found:
-                        # CAUGHT. He loses it, and the town learns his face.
-                        for k in ("tobacco", "cigar", "beer", "liqueur", "mezcal",
-                                  "dried_mushroom", "red_mushroom", "agave"):
-                            n.stock[k] = 0
-                        n.wanted = True
-                        self.provoked = True
-                        _note("SEARCH  %-16s caught with %d in %s"
-                              % (n.name, units, self.name))
-                    else:
-                        n.smuggling = min(10.0, skill + 0.06 + units * 0.001)
-                        n.social = min(getattr(n, "social_cap", 3.0),
-                                       getattr(n, "social", 0.0) + 0.05)
-                else:
-                    n.social = min(getattr(n, "social_cap", 3.0),
-                                   getattr(n, "social", 0.0) + 0.02)
-                n.searched_at = now
-                n.searched_village = self
-                self.search_now, self.search_t = None, 0.0
-        # AND A WANTED MAN NEAR A GUARD IS SHOT AT. `wanted` is set when a
-        # search finds something and NOTHING READ IT: `provoked` is a village-
-        # wide mood that only ever reached the player, so a carrier could be
-        # caught, marked, and stroll out again with the guards looking through
-        # him.
-        # (The gate guards are SOLDIERS and live in the main loop's own list,
-        # not in `self.npcs` -- so looking for them here found nobody and no
-        # one ever fired. The town is armed; a wanted man inside its ground is
-        # shot at, and who is holding the rifle is not this method's business.)
-        _armed = getattr(self, "guards", None) or True
-        for n in list(self.npcs) + list(getattr(self, "_hub_folk", ())):
+            self.search_queue = []
+            self.search_dir = "in"
+            return
+
+        r = getattr(self, "fence_rect", None)
+        if r is None:
+            return
+        if not isinstance(getattr(self, "search_queue", None), list):
+            self.search_queue = []
+        if not hasattr(self, "search_dir"):
+            self.search_dir = "in"
+
+        # A WANTED MAN AT THE GATE IS SHOT AT, whoever put him on the list.
+        for n in list(self.npcs):
             if not n.alive or not getattr(n, "wanted", False):
                 continue
             if math.hypot(self.x - n.x, self.y - n.y) > self.radius + 200.0:
@@ -3069,33 +3036,79 @@ class Village:
                     except Exception:
                         n.alive = False
 
-        # AND NOBODY WALKS IN UNSEARCHED -- BUT A RESIDENT IS NOT A STRANGER.
-        # This put back outside the gate EVERY man inside the fence who had not
-        # been searched, and nobody ever has: searched is set when a man enters,
-        # and a man born here never entered. So every townsman in the world was
-        # evicted onto the road every single frame, and a town with twenty-seven
-        # people in it looked deserted. Only a man actually standing IN A
-        # GATEWAY is asked to wait his turn.
-        r = self.fence_rect
-        for n in self.npcs:
-            if not n.alive:
-                continue
-            if getattr(n, "searched_village", None) is self:
+        # (1) (2) (3) -- who may pass, who may not, who waits.
+        for n in list(self.npcs):
+            if not n.alive or getattr(n, "in_interior", False):
                 continue
             if getattr(n, "home_house", None) is not None:
-                continue                       # he lives here
-            if not r.collidepoint(n.x, n.y):
+                continue                          # he lives here
+            inside = r.collidepoint(n.x, n.y)
+            cleared = getattr(n, "searched_village", None) is self
+            g = fence.nearest_gate(self, n.x, n.y)
+            at_gate = math.hypot(n.x - g[1], n.y - g[2]) <= 130.0
+
+            # (2) OVER THE WALL: wanted at once.
+            if inside and not cleared and not at_gate:
+                if not getattr(n, "wanted", False):
+                    n.wanted = True
+                    _note("CROSSED   %s over the wall of %s"
+                          % (getattr(n, "name", "?"), self.name))
                 continue
-            _g = fence.nearest_gate(self, n.x, n.y)
-            if math.hypot(n.x - _g[1], n.y - _g[2]) > 160.0:
-                continue                       # not at the gate: not arriving
-            if True:
-                g = fence.nearest_gate(self, n.x, n.y)
-                n.x = g[1] + (0.0 if g[0] in (0, 2) else 34.0)
-                n.y = g[2] + (34.0 if g[0] == 0 else -34.0)
-                n.target = (n.x, n.y)
+
+            # a pass is spent the moment he is back outside
+            if (not inside) and cleared:
+                n.searched_village = None
+                continue
+
+            if not at_gate:
+                continue
+
+            # (3) THE QUEUE, BOTH WAYS.
+            if inside and cleared:                # he wants out
+                n.searched_village = None
                 if n not in self.search_queue and n is not self.search_now:
+                    n.search_dir = "out"
                     self.search_queue.append(n)
+            elif (not inside) and not cleared:    # he wants in
+                if n not in self.search_queue and n is not self.search_now:
+                    n.search_dir = "in"
+                    self.search_queue.append(n)
+
+        # THE ONE MAN AT THE HEAD OF THE LINE
+        if self.search_now is not None and (not self.search_now.alive
+                                            or getattr(self.search_now, "alive", True) is False):
+            self.search_now, self.search_t = None, 0.0
+        if self.search_now is None and self.search_queue:
+            self.search_now = self.search_queue.pop(0)
+            self.search_t = 0.0
+
+        if self.search_now is not None:
+            n = self.search_now
+            n.pause = max(float(getattr(n, "pause", 0.0)), 0.25)   # he stands
+            n.target = (n.x, n.y)
+            self.search_t += dt
+            if self.search_t >= self.SEARCH_SECONDS:
+                self.search_now, self.search_t = None, 0.0
+                units = sum(int(n.stock.get(k, 0)) for k in _CONTRABAND)
+                _sk = max(0.0, min(10.0, float(getattr(n, "smuggling", 0.0))))
+                caught = (units > 0 and random.random()
+                          < min(1.0, units / 100.0) * self.SEARCH_CATCH
+                          * (1.0 - 0.09 * _sk))
+                if caught:
+                    n.wanted = True
+                    n.searched_village = None
+                    _note("SEARCH    %s caught with %d at the gate of %s"
+                          % (getattr(n, "name", "?"), units, self.name))
+                else:
+                    if units > 0:
+                        n.smuggling = min(10.0, _sk + 0.06 + units * 0.001)
+                    n.wanted = False
+                    if getattr(n, "search_dir", "in") == "in":
+                        n.searched_village = self      # waved through
+                    else:
+                        n.searched_village = None      # let out
+                    _note("SEARCH    %s clean at the gate of %s"
+                          % (getattr(n, "name", "?"), self.name))
 
     def update(self, dt: float, world=None, now: float = 0.0,
                phase: str = "home") -> None:
@@ -3841,9 +3854,28 @@ class Villages:
                 # villages are near here" -- wolves, ore, fences, the sim --
                 # must hear the same answer, and a hard-coded village size hid
                 # every capital from all of them.
-                r = village_radius(gx, gy) + slack
-                if abs(vx - cx) <= r and abs(vy - cy) <= r:
-                    out.append(self.get(gx, gy))
+                # THE WALL COUNTS AS THE TOWN. A settlement's fence is not
+                # always centred on its lattice cell -- some are kilometres
+                # off -- so culling by the cell alone threw away towns whose
+                # walls were on screen. That is why a man standing at a gate
+                # saw no guard: the town was never in the visible list, so the
+                # guard detail was never raised.
+                _v0 = self.get(gx, gy)
+                _fr = getattr(_v0, "fence_rect", None)
+                _ext = (math.hypot(_fr.w, _fr.h) / 2.0) if _fr is not None else 0.0
+                r = max(village_radius(gx, gy), _ext) + slack
+                # WHERE THE WALL IS, NOT WHERE THE CELL IS. A settlement's
+                # fence can stand kilometres from its own coordinates, and a
+                # man at the gate was therefore culled out of the world with the
+                # town he was standing at -- no fence drawn, no guard raised,
+                # nobody searching. Test the fence's centre when there is one.
+                if _fr is not None:
+                    _vx2, _vy2 = float(_fr.centerx), float(_fr.centery)
+                else:
+                    _vx2, _vy2 = vx, vy
+                if abs(_vx2 - cx) <= r and abs(_vy2 - cy) <= r:
+                    if _v0 not in out:
+                        out.append(_v0)
         # AND THE OFF-LATTICE ONES. Everything above finds a town by asking the
         # LATTICE where it is -- `village_center(gx, gy)` -- so a settlement
         # that does not stand on its lattice cell is invisible to every system
