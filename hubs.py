@@ -171,6 +171,11 @@ class Hub(village_mod.Village):
         except Exception:
             pass
 
+        self._stage = "idle"        # idle -> out -> home -> idle
+        self._carrier = None        # the trader, while he is on the road
+        self._cargo = {}
+        self._goal = None
+        self._split_t = 180.0
         self.ledger_coins = max(120, int(self.ledger_coins))
         self.ledger_goods = {}
 
@@ -257,6 +262,83 @@ class Hub(village_mod.Village):
         except Exception:
             return "wheat"
 
+    # -- the trip -----------------------------------------------------------
+    def _load_and_go(self, trader) -> None:
+        """He takes exactly twenty and leaves. Nothing more goes into his pack
+        until he is back -- what is made meanwhile waits with the artisan."""
+        made = ("cigar", "dried_mushroom", "beer", "liqueur", "mezcal")
+        cargo = {}
+        need = 20
+        for item in made:
+            have = int(trader.stock.get(item, 0))
+            if have <= 0:
+                continue
+            take = min(have, need)
+            trader.stock[item] = have - take
+            cargo[item] = cargo.get(item, 0) + take
+            need -= take
+            if need <= 0:
+                break
+        if not cargo:
+            return
+        self._cargo = cargo
+        self._carrier = trader
+        self._stage = "out"
+        _note("TRIP     %s leaves %s with %d"
+              % (trader.name, self.name, sum(cargo.values())))
+
+    def _carry_step(self, dt: float, world, now: float) -> None:
+        """Out to the nearest town, searched at its gate, and home again."""
+        trader = self._carrier
+        if self._stage == "idle":
+            return
+        if trader is None or not trader.alive:
+            self._carrier, self._cargo, self._stage = None, {}, "idle"
+            return
+        towns = list(getattr(self.registry, "villages", ()) or ())
+        towns = [t for t in towns if not getattr(t, "is_hub", False)]
+        if not towns:
+            self._carrier, self._cargo, self._stage = None, {}, "idle"
+            return
+        if self._goal is None:
+            self._goal = min(towns, key=lambda v: (v.x - trader.x) ** 2
+                             + (v.y - trader.y) ** 2)
+        goal = self._goal
+        if self._stage == "out":
+            if (goal.x - trader.x) ** 2 + (goal.y - trader.y) ** 2 > 150.0 ** 2:
+                d = math.hypot(goal.x - trader.x, goal.y - trader.y) or 1.0
+                step = min(d, 70.0 * dt)
+                trader.x += (goal.x - trader.x) / d * step
+                trader.y += (goal.y - trader.y) / d * step
+                return
+            units = sum(self._cargo.values())
+            skill = max(0.0, min(10.0, float(getattr(trader, "smuggling", 0.0))))
+            if trader.rng.random() < min(1.0, units / 100.0) * 0.55 * (1.0 - 0.09 * skill):
+                goal.provoked = True
+                trader.health = getattr(trader, "health", 100.0) - 45.0
+                _note("SEARCH   %s caught at %s with %d" % (trader.name, goal.name, units))
+                self._cargo = {}
+            else:
+                for item, qty in self._cargo.items():
+                    economy.store_add(goal, item, qty, 2)
+                    unit = max(1, int(round(economy.value(goal, item) * 0.5)))
+                    self.ledger_coins += qty * unit
+                    goal.ledger_coins = max(0, int(goal.ledger_coins) - qty * unit)
+                trader.smuggling = min(10.0, skill + 0.06 + units * 0.001)
+                self._cargo = {}
+            self._stage = "home"
+            return
+        # home again
+        if (self.x - trader.x) ** 2 + (self.y - trader.y) ** 2 > 120.0 ** 2:
+            d = math.hypot(self.x - trader.x, self.y - trader.y) or 1.0
+            step = min(d, 70.0 * dt)
+            trader.x += (self.x - trader.x) / d * step
+            trader.y += (self.y - trader.y) / d * step
+            return
+        trader.x, trader.y = self.x, self.y + 40.0
+        trader.home = (trader.x, trader.y)
+        self._carrier, self._cargo, self._stage, self._goal = None, {}, "idle", None
+
     def gate_list(self):
         return fence.gate_list(self)
 
@@ -292,20 +374,52 @@ class Hub(village_mod.Village):
                     n.coins = keep
                     self.ledger_coins += gave
 
-        # AND WHAT THEY MAKE IS THE LEDGER'S. Every finished good in their
-        # packs goes onto the shared shelf; the trader carries it out; the coin
-        # comes back. Nothing is anybody's.
-        for n in live:
-            for item in list(n.stock.keys()):
-                if item in ("coin", "shovel", "axe", "pickaxe", "watering_can",
-                            "seed_bag", "wheat_seed"):
+        # A PHYSICAL CHAIN OF HANDS, NOT A SHOP.
+        #
+        # The farmer puts leaf into the ARTISAN's hands, in full, the moment it
+        # is picked. The artisan works it and puts what he makes into the
+        # TRADER's hands. Nothing is bought and nothing goes through a shop --
+        # it is passed along, man to man, the way it would actually happen.
+        farmer = next((n for n in live if n.job == "farm"), None)
+        artisan = next((n for n in live if n.job in ("lab", "brewery")), None)
+        trader = next((n for n in live if n.job == "trader"), None)
+        away = bool(self._carrier) or self._stage != "idle"
+
+        leaf_kinds = ("tobacco", "red_mushroom", "agave", "plant", "mushroom")
+        made_kinds = ("cigar", "dried_mushroom", "beer", "liqueur", "mezcal")
+
+        def hand(src, dst, kinds):
+            """Everything of these kinds goes from one man's pack to another."""
+            if src is None or dst is None:
+                return 0
+            moved = 0
+            for item in list(src.stock.keys()):
+                if item not in kinds:
                     continue
-                qty = int(n.stock.get(item, 0))
-                if qty > 2:
-                    give = qty - 2          # he keeps a mouthful in his pack
-                    n.stock[item] = 2
-                    self.ledger_goods[item] = int(
-                        self.ledger_goods.get(item, 0)) + give
+                qty = int(src.stock.get(item, 0))
+                if qty <= 0:
+                    continue
+                dst.stock[item] = dst.stock.get(item, 0) + qty
+                src.stock[item] = 0
+                moved += qty
+            return moved
+
+        # the farmer's leaf -> the artisan
+        hand(farmer, artisan, leaf_kinds)
+        # the artisan's work -> the trader, WHO IS NOT LOADED WHILE HE IS AWAY:
+        # what is made meanwhile stockpiles in the artisan's pack.
+        if not away:
+            for n in live:
+                if n is not trader:
+                    hand(n, trader, made_kinds)
+
+        # THE TRIP. Twenty is the load, and he goes when he has twenty.
+        if trader is not None and not away:
+            carry = sum(int(trader.stock.get(k, 0)) for k in made_kinds)
+            if carry >= 20:
+                self._load_and_go(trader)
+
+        self._carry_step(dt, world, now)
 
         # THE SOLDIER NEVER LEAVES THE GATE.
         for n in self.npcs:
