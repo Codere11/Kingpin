@@ -2969,6 +2969,9 @@ def main() -> None:
     _LANE_PEOPLE = list(village_mod.PEOPLE)
     _lane_timer = 0.0
     _lane_warned = False
+    # THE GATE SEARCH, bound before the loop: the frame reads these.
+    gate_search_t = 0.0
+    gate_search_v = None
     running = True
     # THE WINDOW IS NEVER A FROZEN PICTURE WITH NOTHING ON IT. The first
     # second of the world does its one-time work INSIDE the loop -- indexing
@@ -4740,6 +4743,9 @@ def main() -> None:
                 if npc.alive and npc.in_interior:      # residents move about
                     npc.draw(screen, cam_x, cam_y, True)
             player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
+        if gate_search_t > 0.0:
+            Player._draw_action_bar(screen, vw * 0.5, vh * 0.5,
+                                    min(1.0, gate_search_t / 10.0))
             # THE GHOST BELONGS TO THE ROOM. draw_placing() works in the room's
             # own coordinates (box.x - cam_x), so it has to be drawn before the
             # frame is blown up -- drawn afterwards it landed at a quarter of
@@ -4895,10 +4901,65 @@ def main() -> None:
         draw_exterior(cam_x, cam_y, True)
         # AND NOBODY WALKS INTO A TOWN WITHOUT BEING SEARCHED, HIM INCLUDED.
         # Through the gate and past the guard, or the whole street turns.
-        # (The "walked past the guard" crime is REMOVED until the gate search
-        # is actually built for the player. It fired the moment he stepped
-        # inside any fence -- because nothing ever marked him searched -- and
-        # the whole town, shotguns included, turned on him for approaching.)
+        # ---- THE GATE SEARCH, FOR HIM -------------------------------
+        # Every man entering a settlement is searched by the guard on the IN
+        # gate, one at a time, ten seconds each. He is no exception:
+        #
+        #   at the gate   -> the search runs, with the bar under him
+        #   anywhere else inside the fence -> he climbed the wall
+        #
+        # and the search is the smuggling roll: a hundred of contraband at no
+        # skill is a certainty, a hundred at ten is one in ten.
+        CONTraband = ("tobacco", "cigar", "beer", "liqueur", "mezcal",
+                      "dried_mushroom", "red_mushroom", "agave")
+        # WHERE IS HE, relative to the wall? A gate is ON the fence line, so
+        # standing at one is NEITHER inside nor outside -- the old test asked
+        # "inside the fence" and a man at the gate failed it, so no search ever
+        # ran and nothing ever happened at a gate at all.
+        _gate_v, _near_gate, _inside = None, None, None
+        for _v in visible_villages:
+            _fr = getattr(_v, "fence_rect", None)
+            if _fr is None:
+                continue
+            try:
+                _gs = fence.gate_list(_v)
+            except Exception:
+                _gs = []
+            for _g in _gs:
+                if math.hypot(player.x - _g[1], player.y - _g[2]) < 110.0:
+                    _gate_v, _near_gate = _v, _g
+                    break
+            if _gate_v is not None:
+                break
+            if _fr.collidepoint(player.x, player.y):
+                _inside = _v
+                break
+        if _gate_v is not None:
+            if gate_search_v is not _gate_v:
+                gate_search_v, gate_search_t = _gate_v, 0.0
+            gate_search_t += dt
+            if gate_search_t >= 10.0:
+                gate_search_t = 0.0
+                player.searched_village = _gate_v
+                units = sum(inventory.count_of(i) for i in CONTraband)
+                if units > 0:
+                    _sk = max(0.0, min(10.0, float(getattr(player, "smuggling", 0.0))))
+                    if random.random() < min(1.0, units / 100.0) * 0.55 * (1.0 - 0.09 * _sk):
+                        toast("Searched. %d found. Run." % units)
+                        commit_crime()
+                    else:
+                        player.smuggling = min(10.0, _sk + 0.06 + units * 0.001)
+                        toast("Searched clean   (smuggling %.1f)" % player.smuggling)
+                else:
+                    toast("Searched and waved through")
+        elif _inside is not None and getattr(player, "searched_village", None) is not _inside:
+            gate_search_v, gate_search_t = None, 0.0
+            if getattr(player, "_climbed", None) is not _inside:
+                player._climbed = _inside
+                toast("You climb the fence. The whole street turns.")
+                commit_crime()
+        else:
+            gate_search_v, gate_search_t = None, 0.0
         try:
             hub_world.draw(screen, cam_x, cam_y, vw, vh)
         except Exception:
