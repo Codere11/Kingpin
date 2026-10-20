@@ -207,6 +207,9 @@ class Hub(village_mod.Village):
             n.alive = True
             if n in village_mod.PEOPLE:
                 village_mod.PEOPLE.remove(n)
+            n.stock.clear()                  # CLEARED FIRST -- it was being
+            n.stock[self._food_kind(world)] = 10   # cleared AFTER the shovel,
+                                                # so the farmer had none
             if job == "lab":
                 n.workplace = bench
                 n.x, n.y = bench.x, bench.y + 30.0
@@ -232,8 +235,6 @@ class Hub(village_mod.Village):
             elif job != "soldier" and job != "lab":
                 n.x, n.y = self.x, self.y + 40.0
             n.home = (n.x, n.y)
-            n.stock.clear()
-            n.stock[self._food_kind(world)] = 10
         got = [n.job for n in self.npcs]
         if got != ["soldier", "farm", "lab", "trader"]:
             raise RuntimeError("hub %s has the wrong posts: %r"
