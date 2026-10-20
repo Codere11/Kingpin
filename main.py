@@ -3629,7 +3629,11 @@ def main() -> None:
                     # Guards are posted along the wall, so a capital twice the
                     # size keeps twice as many -- same rule, read off the
                     # village's own scale.
-                    many = 5 * int(round(village.scale / VILLAGE_SCALE))
+                    # NOBODY WALKS THE PERIMETER. Two men, at the two gates,
+                    # standing still -- one searching the way in, one watching
+                    # the way out. The ring of five was a patrol nobody asked
+                    # for; the gate is the only way through a wall.
+                    many = 0
                     for gi in range(many):
                         phase = gi / float(many)
                         gx0, gy0, gnx, gny = fence.perimeter_point(loop, phase)
@@ -3649,7 +3653,7 @@ def main() -> None:
                 squad = getattr(village, "patrol", None)
                 if squad is None:
                     if math.hypot(village.x - player.x,
-                                  village.y - player.y) < 13000.0:
+                                  village.y - player.y) < 30000.0:
                         village.patrol = make_village_patrol(village)
                         village.patrol_timer = 30.0
                         enemies.extend(village.patrol)

@@ -158,7 +158,14 @@ class Hub(village_mod.Village):
         # elections, the crown's business. There is no state here. Zero-sized,
         # so it is neither drawn nor solid and every `village.board` reference
         # in the rest of the game stays valid.
-        self.board = pygame.Rect(0, 0, 0, 0)
+        # NOT AT (0, 0). A zero-size rect still has a CENTRE, and the origin is
+        # where the player spawns -- `near_board()` measures against
+        # `v.board.center`, so every hub in the world read as "you are standing
+        # at the notice board", `board_open` went true, the frame set
+        # `keys = _NO_KEYS`, and movement died while the menus kept working.
+        # Put it ten million pixels away: nothing is ever near it, it draws
+        # nothing at zero size, and it collides with nothing.
+        self.board = pygame.Rect(-10 ** 7, -10 ** 7, 0, 0)
         self.radius = HUB_RADIUS
         # 7. ITS OWN FENCE AND GATES -- the same call a town uses.
         self._rng2 = random.Random(seed & 0xFFFFFFFF)
