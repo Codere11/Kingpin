@@ -3019,6 +3019,7 @@ def main() -> None:
     # THE GATE SEARCH, bound before the loop: the frame reads these.
     gate_search_t = 0.0
     gate_search_v = None
+    _hb = 0.0
     running = True
     # THE WINDOW IS NEVER A FROZEN PICTURE WITH NOTHING ON IT. The first
     # second of the world does its one-time work INSIDE the loop -- indexing
@@ -3545,6 +3546,18 @@ def main() -> None:
             player.skill_stamina = skills.stamina_scale()
             player.skill_axe_cd = skills.axe_cooldown()
             _px0, _py0 = player.x, player.y
+            # THE HEARTBEAT. Written from INSIDE the overworld update, every two
+            # seconds of game time, so that "the world froze" has evidence: if
+            # these lines stop while the game is still drawing the HUD, the
+            # overworld branch is not being reached -- and the last line before
+            # they stop says where the loop was.
+            _hb += dt
+            if _hb >= 2.0:
+                _hb = 0.0
+                plog.log("HEARTBEAT", "x", int(player.x), "y", int(player.y),
+                         "dt", round(dt, 3), "board", board_open,
+                         "dead", player.dead,
+                         "hp", int(player.health))
             player.update(dt, keys, aim, 1.0 - 0.25 * foliage)
             skills.gain_movement(math.hypot(player.x - _px0, player.y - _py0))
             clamp_world()          # the world ends where the loading screen did

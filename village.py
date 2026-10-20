@@ -2316,6 +2316,15 @@ def rebuild_people(registry) -> int:
 
 
 class Village:
+    # THE GATE QUEUE. Class-level defaults, because a village that came out of
+    # the world cache never runs __init__ again -- and the old guard checked
+    # only `search_queue`, so a cache-built town had a queue but no
+    # `search_now`, and gate_tick raised AttributeError on the frame the player
+    # first came near the wall. That is the crash at the settlement entry.
+    search_queue: list = []
+    search_now: object = None
+    search_t: float = 0.0
+
     def __init__(self, gx: int, gy: int, seed: int) -> None:
         code = (gx * 73856093) ^ (gy * 19349663) ^ (seed * 2654435761)
         rng = random.Random(code & 0xFFFFFFFF)
@@ -2974,9 +2983,11 @@ class Village:
         searched is put back outside the fence and made to wait his turn, which
         is what a queue IS when the alternative is walking through a wall.
         """
-        if not hasattr(self, "search_queue"):
+        if not isinstance(getattr(self, "search_queue", None), list):
             self.search_queue = []
+        if not hasattr(self, "search_now"):
             self.search_now = None
+        if not hasattr(self, "search_t"):
             self.search_t = 0.0
         # the man at the head of the line
         if self.search_now is not None and not self.search_now.alive:
