@@ -1,20 +1,30 @@
-"""hubs.py -- the illegal production hubs, as a KIND OF VILLAGE.
+"""hubs.py -- the illegal production hubs.
 
-A hub is not a special effect and not a diorama. It is a `Village` -- the same
-class the thirty-six towns are -- with a smaller radius, five fields instead of
-a town's worth, one house, one bench, four people, and `nation = 1`.
+A HUB IS A VILLAGE. Not a diorama, not a special effect: a `Hub(Village)`, the
+same class the thirty-six towns are, built by the same constructor, and then
+made small. Everything a villager does in a town, a villager does in a hub,
+because it is the same code reading the same fields.
 
-That is the whole design, and it is the whole reason this file is short: every
-thing a villager does in a town, a villager does in a hub, because it is the
-same code reading the same fields. The farmer works `village.farm_plots`, the
-artisan works `village.workplaces`, the trader runs the caravan, the board is a
-board. There is no hub-specific behaviour anywhere, because a hub is not a
-special case -- it is a small town that the state does not admit exists.
+WHAT THE TOWNS DO THAT A HUB MUST ALSO DO -- the list I got wrong four times:
 
-WHAT THE STATE CANNOT SEE. Hubs are NOT in `Villages` -- the registry every
-crown, tax collector and army walks -- so no war can be declared on one, no
-levy can be raised from one, and no census counts its people. Its protection is
-not walls. It is not being on the list.
+  `farm_plots`   [(ctx, cty, kind)] -- one entry per field
+  `farm_tiles`   {(ctx, cty): [(tx, ty, kind) ...]} -- THE TILES OF EACH FIELD.
+                 `NPC._work_field` reads this and nothing else: without it a
+                 farmer throws KeyError the moment he gets to his rows.
+  `_seed_fields` plants those tiles into the world's plot map so there is a
+                 standing crop on day one instead of a bare field.
+  `registry`     the Villages object, so a trader can ask `nearest_other()` for
+                 somewhere to go. A hub is NOT in `_cache`, so the crown, the
+                 tax, the levy and the war code still cannot see it.
+  `workplaces`   a real `industry.Workplace`, with `.worker` set.
+  `houses`       a real `village.House`, inside the fence.
+  `npcs`         four people, each with the field his trade reads:
+                 `workplace` for the bench hand, `farm_plot` for the farmer.
+
+AND WHO STEPS THEM. In a town the main loop walks `PEOPLE` and calls `NPC.tick`
+on each man. A hub's people are not in `PEOPLE` (they must not be stepped
+twice), so THE HUB STEPS THEM ITSELF, with the same call. `Village.update` is
+the town's business -- books, board, roster -- and has never ticked a man.
 """
 
 from __future__ import annotations
@@ -23,22 +33,25 @@ import math
 import os
 import random
 
-import economy
 import pygame
+
+import economy
+import fence
+import industry
+import village as village_mod
 import world as world_mod
 
-import village as village_mod
-
 NATION = 1              # the criminals' flag; the state does not acknowledge it
-HUB_COUNT = 25          # 25 x 4 people = 100, about a tenth of the world
+HUB_COUNT = 25          # 25 x 4 = 100 people, about a tenth of the world
 MIN_FROM_TOWN = 6200.0  # out of sight of any fence
 HUB_RADIUS = 210.0
-HUB_NAME = ("Stillwater", "Cinder Creek", "Hollow Ash", "Bitter Wells",
-            "Crow Hollow", "Dry Gulch", "Salt Lick", "Sour Run", "Mud Lick",
-            "Wolf Trap", "Grave Hollow", "Rattler's Rest", "Bone Ford",
-            "Dead Ox", "Cold Camp", "Thin Pine", "Red Dirt", "Smoke Rise",
-            "Long Gulch", "Quiet Fork", "Black Bank", "Last Chance",
-            "Hard Scratch", "Poor Farm", "Nine Mile")
+
+NAMES = ("Stillwater", "Cinder Creek", "Hollow Ash", "Bitter Wells",
+         "Crow Hollow", "Dry Gulch", "Salt Lick", "Sour Run", "Mud Lick",
+         "Wolf Trap", "Grave Hollow", "Rattler's Rest", "Bone Ford",
+         "Dead Ox", "Cold Camp", "Thin Pine", "Red Dirt", "Smoke Rise",
+         "Long Gulch", "Quiet Fork", "Black Bank", "Last Chance",
+         "Hard Scratch", "Poor Farm", "Nine Mile")
 
 
 def _note(message: str) -> None:
@@ -55,84 +68,57 @@ class Hub(village_mod.Village):
     is_hub = True
     is_capital = False
 
-    def __init__(self, world, x: float, y: float, seed: int) -> None:
-        # Built by the same constructor a town is built by -- from the cell it
-        # stands in -- and then MADE SMALL and MOVED to where it belongs.
-        gx = int(math.floor(x / village_mod.SPACING))
-        gy = int(math.floor(y / village_mod.SPACING))
+    def __init__(self, world, x: float, y: float, seed: int,
+                 registry=None) -> None:
+        gx = int(math.floor(float(x) / village_mod.SPACING))
+        gy = int(math.floor(float(y) / village_mod.SPACING))
+        # 1. THE TOWN, BUILT AS A TOWN IS BUILT.
         super().__init__(gx, gy, seed)
         self.is_capital = False
         self.is_hub = True
         self.nation = NATION
-        self.radius = HUB_RADIUS
-        self.name = HUB_NAME[abs(hash((gx, gy, seed))) % len(HUB_NAME)]
-        self.hub_seed = seed
+        self.registry = registry            # so a trader can find a town
+        self.name = NAMES[abs(hash((gx, gy, seed))) % len(NAMES)]
 
-        # ---- FOUR PEOPLE, NOT FORTY ------------------------------------
-        wanted = ("soldier", "farm", None, "trader")     # None = the bench
-        keep = []
-        for job in wanted:
-            if job is None:
-                pick = next((n for n in self.npcs
-                             if getattr(n, "workplace", None) is not None
-                             or getattr(n, "job", None) in ("lab", "brewery")),
-                            None)
-            else:
-                pick = next((n for n in self.npcs
-                             if getattr(n, "job", None) == job), None)
-            if pick is not None and pick not in keep:
-                keep.append(pick)
-        for job in ("farm", "trader"):
-            if not any(getattr(n, "job", None) == job for n in keep):
-                spare = next((n for n in self.npcs if n not in keep), None)
-                if spare is not None:
-                    spare.job = job
-                    keep.append(spare)
-        if not any(n not in keep and getattr(n, "workplace", None) for n in self.npcs):
-            spare = next((n for n in self.npcs if n not in keep), None)
-            if spare is not None:
-                keep.append(spare)
-        dropped = [n for n in self.npcs if n not in keep]
-        for n in dropped:
-            n.alive = False
-            n.village = None
-            try:
-                if n in village_mod.PEOPLE:
-                    village_mod.PEOPLE.remove(n)
-            except Exception:
-                pass
-        self.npcs = keep
-        for n in self.npcs:
-            n.nation = NATION
-            n.team = ("nation", NATION)
-            n.village = self
-            n.hub = self
-            n.searched_village = self        # they live inside their own fence
-
-        # ---- EXACTLY FOUR, WITH THE FOUR POSTS --------------------------
-        # Built from scratch rather than hoped for. The town no longer makes a
-        # bench, so the hub MAKES one; and the four posts are assigned by
-        # index, so a hub is always a soldier, a farmer, a bench hand and a
-        # trader, whatever the town happened to give us.
-        import industry
-        # THE BENCH, AND ONLY THE BENCH. A town's workplaces belong to the
-        # town -- three mines and a smithy it built for itself -- and they are
-        # nowhere near this yard. A hub has exactly one bench, standing in it.
-        wp = industry.Workplace("lab", self.x + 96.0, self.y - 40.0, seed + 5)
-        self.workplaces = [wp]
-        bench = wp
+        # 2. FOUR PEOPLE, WITH THE FOUR POSTS.
         while len(self.npcs) < 4:
             k = len(self.npcs)
             who = "%s %s" % (self._rng.choice(village_mod.FIRST_NAMES),
                              self._rng.choice(village_mod.LAST_NAMES))
-            n = village_mod.NPC(self.x + (k - 1.5) * 26.0, self.y + 30.0,
-                                self._rng.randrange(1 << 30), who,
-                                "%08x%02x" % (seed & 0xFFFFFFFF, k),
-                                "Criminal", self)
-            self.npcs.append(n)
-        self.npcs = self.npcs[:4]
-        for k, (n, job) in enumerate(zip(self.npcs,
-                                         ("soldier", "farm", "lab", "trader"))):
+            self.npcs.append(village_mod.NPC(
+                self.x + (k - 1.5) * 26.0, self.y + 30.0,
+                self._rng.randrange(1 << 30), who,
+                "%08x%02x" % (seed & 0xFFFFFFFF, k), "Criminal", self))
+        keep = self.npcs[:4]
+        for n in self.npcs[4:]:
+            n.alive = False
+            n.village = None
+            if n in village_mod.PEOPLE:
+                village_mod.PEOPLE.remove(n)
+        self.npcs = keep
+        for n in self.npcs:
+            if n in village_mod.PEOPLE:     # stepped by the hub, not the world
+                village_mod.PEOPLE.remove(n)
+
+        # 3. ONE BENCH, IN THE YARD.
+        bench = industry.Workplace("lab", self.x + 86.0, self.y - 46.0, seed + 5)
+        self.workplaces = [bench]
+        bench.worker = None
+
+        # 4. FIVE FIELDS, WITH THEIR TILES -- the thing that was missing.
+        self.farm_plots = []
+        self.farm_tiles = {}
+        for k in range(5):
+            ctx = int(math.floor((self.x - 96.0 + (k % 3) * 68.0) / 32.0))
+            cty = int(math.floor((self.y + 92.0 + (k // 3) * 68.0) / 32.0))
+            kind = "wheat"
+            self.farm_plots.append((ctx, cty, kind))
+            cells = [(ctx + dx, cty + dy)
+                     for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
+            self.farm_tiles[(ctx, cty)] = [(tx, ty, kind) for tx, ty in cells]
+
+        # 5. THE POSTS THE TRADES READ.
+        for n, job in zip(self.npcs, ("soldier", "farm", "lab", "trader")):
             n.job = job
             n.role = "Criminal"
             n.village = self
@@ -140,36 +126,20 @@ class Hub(village_mod.Village):
             n.nation = NATION
             n.team = ("nation", NATION)
             n.searched_village = self
-            n.farm_plot = 0 if job == "farm" else None
-            n.workplace = bench if job == "lab" else None
-            if job == "farm":
+            n.farm_plot = None
+            n.workplace = None
+            if job == "lab":
+                n.workplace = bench
+                bench.worker = n
+            elif job == "farm":
+                n.farm_plot = 0
                 n.leaf_farmer = True
                 n.stock["shovel"] = 1
                 n.tool_uses = economy.TOOL_USES
             n.stock.clear()
-            n.stock[self._food_kind()] = 10
-        bench.worker = self.npcs[2]
+            n.stock[self._food_kind(world)] = 10
 
-        # ---- FIVE FIELDS, IN THE YARD, IN THE WORLD'S OWN PLOT MAP -----
-        # The town's plots are ITS plots, at its own coordinates -- the farmer
-        # walked to them and the world had never heard of them, which threw a
-        # KeyError out of _work_field every single tick. A hub's fields are
-        # planted where the hub is, in `world.plots`, so the crop machinery
-        # knows them.
-        self.farm_plots = []
-        for k in range(5):
-            tx = int(math.floor((self.x - 80 + (k % 3) * 34) / 32.0))
-            ty = int(math.floor((self.y + 74 + (k // 3) * 34) / 32.0))
-            self.farm_plots.append((tx, ty, "wheat"))
-            if world is not None:
-                try:
-                    world.plots[(tx, ty)] = world_mod.Plot("wheat", 0.0)
-                except Exception:
-                    pass
-        for n in self.npcs:
-            n.farm_plot = 0 if getattr(n, "job", None) == "farm" else None
-
-        # ---- AND MOVED TO WHERE IT STANDS ------------------------------
+        # 6. MOVED TO WHERE IT STANDS, then given its own walls.
         dx = float(x) - float(self.x)
         dy = float(y) - float(self.y)
         self.x, self.y = float(x), float(y)
@@ -178,126 +148,95 @@ class Hub(village_mod.Village):
             n.y += dy
             n.home = (n.x, n.y)
             n.refuge = None
-        for h in self.houses:
-            h.x += dx
-            h.y += dy
         for w in self.workplaces:
             w.x += dx
             w.y += dy
             w.rect = pygame.Rect(int(w.x - w.rect.w / 2),
                                  int(w.y - w.rect.h / 2), w.rect.w, w.rect.h)
-        for r in list(getattr(self, "fence_walls", ())):
-            r.x = int(r.x + dx)
-            r.y = int(r.y + dy)
-        if getattr(self, "fence_rect", None) is not None:
-            self.fence_rect = self.fence_rect.move(int(dx), int(dy))
-        if getattr(self, "board", None) is not None:
-            self.board = self.board.move(int(dx), int(dy))
-        # AND RE-FENCED AT ITS OWN SIZE. The fence inherited from the town is
-        # five thousand pixels square -- the whole town's wall. A hub is two
-        # hundred and ten pixels of yard with one gate, built by the same
-        # `fence.install` a town uses.
-        import fence
+        self.board = self.board.move(int(dx), int(dy))
         self.radius = HUB_RADIUS
-        fence.install(self, self._rng)
-        # AND ONLY NOW IS THERE A HOUSE, because only now is the fence the
-        # hub's own. It was built against the TOWN's five-thousand-pixel wall
-        # -- five kilometres from where the hub stands -- so the yard had a
-        # bench, two gates and not one building inside it.
-        self.houses = []
+        # 7. ITS OWN FENCE AND GATES -- the same call a town uses.
+        self._rng2 = random.Random(seed & 0xFFFFFFFF)
+        fence.install(self, self._rng2)
+
+        # 8. A HOUSE, inside the fence (fence_rect is finally ours).
+        fr = self.fence_rect
+        house = village_mod.House(self.x - fr.w * 0.26, self.y - fr.h * 0.26,
+                                  96, 68, (118, 62, 50), (0.0, 1.0), seed + 13)
+        house.village = self
+        house.occupants = []
+        self.houses = [house]
+
+        # 9. AND A CROP STANDING ON DAY ONE.
         try:
-            _fr = self.fence_rect
-            _house = village_mod.House(self.x - _fr.w * 0.26,
-                                       self.y - _fr.h * 0.26, 96, 68,
-                                       (118, 62, 50), (0.0, 1.0), seed + 13)
-            _house.village = self
-            _house.occupants = []
-            self.houses = [_house]
+            self._seed_fields(world, 0.0)
         except Exception:
             pass
-        self.ledger_coins = max(60, int(self.ledger_coins))
+
+        self.ledger_coins = max(120, int(self.ledger_coins))
         self.ledger_goods = {}
 
-    def _food_kind(self) -> str:
+    # -- what grows here ----------------------------------------------------
+    def _food_kind(self, world) -> str:
         try:
             import biomes
-            return biomes.crop_kinds(float(biomes.temperature(self.x, self.y, 20240501)),
-                                     float(biomes.humidity(self.x, self.y, 20240501)))[0]
+            t = float(biomes.temperature(self.x, self.y, 20240501))
+            h = float(biomes.humidity(self.x, self.y, 20240501))
+            return biomes.crop_kinds(t, h)[0]
         except Exception:
             return "wheat"
 
+    def gate_list(self):
+        return fence.gate_list(self)
+
+    # -- the day ------------------------------------------------------------
     def update(self, dt: float, world=None, now: float = 0.0,
                phase: str = "home") -> None:
-        """THE DAY, AND THE WORK.
-
-        `Village.update` is the TOWN's business -- its books, its board, its
-        roster -- and it has never ticked a single man. In a town the main loop
-        walks `PEOPLE` and calls `NPC.tick` on every one of them. Hub folk were
-        taken off `PEOPLE` (so they would not be stepped twice) and then
-        nothing stepped them at all: four people, four posts, and not one of
-        them ever moving or working.
-
-        So the hub ticks its own, with the same call the world uses.
-        """
         night = (float(now) % 600.0) >= 300.0
+        # THE HUB STEPS ITS OWN PEOPLE. Nothing else does: they are not in
+        # `PEOPLE`, and `Village.update` has never ticked a man.
         for n in self.npcs:
-            if not n.alive:
-                continue
-            try:
+            if n.alive:
                 n.tick(dt, world, now, "home" if night else "work",
                        night=night)
-            except Exception:
-                pass
-        try:
-            super().update(dt, world, now, "home" if night else "work")
-        except Exception:
-            pass
-        # AND THE SOLDIER NEVER LEAVES THE GATE -- held last, after his own
-        # step, so nothing can walk him off it.
+        # ...and then the town's own business: the board, the books, the crop.
+        super().update(dt, world, now, "home" if night else "work")
+        # THE SOLDIER NEVER LEAVES THE GATE.
         for n in self.npcs:
             if n.alive and getattr(n, "job", None) == "soldier":
                 try:
                     g = self.gate_list()[0]
                     n.x, n.y = g[1], g[2] + 26.0
+                    n.home = (n.x, n.y)
                     n.asleep = False
                 except Exception:
                     pass
 
-    def gate_list(self):
-        import fence
-        return fence.gate_list(self)
-
-    # -- drawing: all of it the real renderers ---------------------------
+    # -- the picture, by the real renderers ---------------------------------
     def draw(self, screen, cam_x: float, cam_y: float, vw: int = 900,
              vh: int = 900) -> None:
         import crop
-        import fence
-        ox, oy = -cam_x, -cam_y
         view = pygame.Rect(int(cam_x) - 300, int(cam_y) - 300, 1200, 1200)
-        for (tx, ty, kind) in self.farm_plots:
-            try:
-                crop.draw_crop(screen, tx * 32 + 16, ty * 32 + 16,
-                               "wheat" if kind in ("wheat", "food") else "plant",
-                               70.0, cam_x, cam_y, None)
-            except Exception:
-                pass
+        for ctx, cty, _kind in self.farm_plots:
+            for tx, ty, tkind in self.farm_tiles.get((ctx, cty), ()):
+                try:
+                    crop.draw_crop(screen, tx * 32 + 16, ty * 32 + 16, tkind,
+                                   120.0, cam_x, cam_y, None)
+                except Exception:
+                    pass
         fence.draw(screen, cam_x, cam_y, self, view)
         for house in self.houses:
-            try:
-                house.draw(screen, cam_x, cam_y)
-            except Exception:
-                pass
-        for wp in self.workplaces:
-            try:
-                wp.draw(screen, cam_x, cam_y)
-            except Exception:
-                pass
+            house.draw(screen, cam_x, cam_y)
+        for w in self.workplaces:
+            w.draw(screen, cam_x, cam_y)
         for n in self.npcs:
             if n.alive:
                 n.draw(screen, cam_x, cam_y, False)
 
 
 class Hubs:
+    """The hubs, and nothing else. Not a registry: the crown cannot see them."""
+
     def __init__(self, world, villages) -> None:
         self._world = world
         self._villages = villages
@@ -308,7 +247,7 @@ class Hubs:
         rng = random.Random(int(world.seed) ^ 0x0C0FFEE)
         towns = list(getattr(villages, "villages", ()) or ())
         tries = 0
-        while len(self.hubs) < HUB_COUNT and tries < 6000:
+        while len(self.hubs) < HUB_COUNT and tries < 8000:
             tries += 1
             x = rng.uniform(-86000.0, 86000.0)
             y = rng.uniform(-86000.0, 86000.0)
@@ -319,17 +258,14 @@ class Hubs:
                    for h in self.hubs):
                 continue
             try:
-                hub = Hub(world, x, y, rng.randrange(1 << 30))
+                self.hubs.append(Hub(world, x, y, rng.randrange(1 << 30),
+                                     registry=villages))
             except Exception:
                 continue
-            self.hubs.append(hub)
 
     def update(self, dt: float, now: float) -> None:
         for hub in self.hubs:
-            try:
-                hub.update(dt, self._world, now)
-            except Exception:
-                pass
+            hub.update(dt, self._world, now)
 
     def draw(self, screen, cam_x: float, cam_y: float, vw: int, vh: int) -> None:
         view = pygame.Rect(int(cam_x) - 300, int(cam_y) - 300, vw + 600, vh + 600)
