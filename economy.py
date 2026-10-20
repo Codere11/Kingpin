@@ -882,7 +882,14 @@ def wants(npc, item: str) -> int:
         return 0
     if item in TOOLS:
         return 2 if needs_tool(npc, item) else 0     # a spare, while he is there
-    return 1 if npc.rng.random() < 0.03 else 0
+    # A soldier traded with at a gate has no `rng` of his own, and this
+    # raised AttributeError inside the menu's layout -- which froze the game
+    # the moment you clicked one. Anyone without dice rolls the world's.
+    _rng = getattr(npc, "rng", None)
+    if _rng is None:
+        import random as _random
+        _rng = _random.Random()
+    return 1 if _rng.random() < 0.03 else 0
 
 
 # -- settlement ---------------------------------------------------------------

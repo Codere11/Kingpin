@@ -685,9 +685,15 @@ def choose_target(creature, player, enemies, rabbits, villages, squad=(),
             outside = not guard.fence_rect.collidepoint(player.x, player.y)
             in_sight = math.hypot(player.x - creature.x,
                                   player.y - creature.y) < creature.view_range + 90.0
+            # A MAN WITH NO NATION HAS NO NATION'S WAR. This read
+            # `player.nation != creature.nation`, and the arrival owns nothing
+            # and belongs to nobody -- None != 1 -- so every gate guard in the
+            # country treated him as a foreign soldier and opened fire the
+            # moment he walked up the road. Nationless is not foreign.
             if (not player.dead
                     and (getattr(creature, "hostile", False)
-                         or (player.nation != creature.nation
+                         or (player.nation is not None
+                             and player.nation != creature.nation
                              and outside and in_sight))):
                 cands.append(player)
             for other in enemies:
@@ -701,7 +707,8 @@ def choose_target(creature, player, enemies, rabbits, villages, squad=(),
             # A territory patrol: shoots any non-army player on sight (inside
             # a village or not), other nations' soldiers, and wolves. Same
             # nation means no quarrel.
-            if not player.dead and player.nation != creature.nation:
+            if (not player.dead and player.nation is not None
+                    and player.nation != creature.nation):
                 cands.append(player)
             for other in enemies:
                 if other is creature or not other.alive:
