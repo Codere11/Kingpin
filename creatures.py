@@ -690,8 +690,13 @@ def choose_target(creature, player, enemies, rabbits, villages, squad=(),
             # and belongs to nobody -- None != 1 -- so every gate guard in the
             # country treated him as a foreign soldier and opened fire the
             # moment he walked up the road. Nationless is not foreign.
+            _town = getattr(creature, "gate_village", None) or getattr(
+                creature, "guard_village", None)
+            _angry = (getattr(creature, "hostile", False)
+                      or getattr(_town, "provoked", False)
+                      or getattr(player, "wanted", False))
             if (not player.dead
-                    and (getattr(creature, "hostile", False)
+                    and (_angry
                          or (player.nation is not None
                              and player.nation != creature.nation
                              and outside and in_sight))):

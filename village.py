@@ -2322,6 +2322,7 @@ class Village:
     # `search_now`, and gate_tick raised AttributeError on the frame the player
     # first came near the wall. That is the crash at the settlement entry.
     search_queue: tuple = ()        # per-village: set in __init__, never shared
+    provoked_t: float = 0.0         # how long the town stays up in arms
     search_now: object = None
     search_t: float = 0.0
 
@@ -2958,6 +2959,7 @@ class Village:
         armed here; the man beside him, who owns neither, is a refugee.
         """
         self.provoked = True
+        self.provoked_t = self.PROVOKE_SECONDS
         for npc in self.npcs:
             if not npc.alive:
                 continue
@@ -2972,6 +2974,12 @@ class Village:
                 g.hostile = True
                 g.aware = True
                 g.aware_timer = 30.0
+
+    # TWO MINUTES UP IN ARMS, THEN THE TOWN GOES BACK TO ITS BUSINESS. A
+    # provoked village was permanent: nothing ever set it false again, so a man
+    # who once stepped over a fence was shot at by every guard made in that town
+    # for the rest of the save, with no way to live it down.
+    PROVOKE_SECONDS = 120.0
 
     SEARCH_SECONDS = 10.0
     SEARCH_CATCH = 0.55         # a carrier with 20 items is caught this often
@@ -2990,6 +2998,14 @@ class Village:
             self.search_now = None
         if not hasattr(self, "search_t"):
             self.search_t = 0.0
+        # and the town calms down
+        if getattr(self, "provoked", False):
+            self.provoked_t = float(getattr(self, "provoked_t", 0.0)) - dt
+            if self.provoked_t <= 0.0:
+                self.provoked = False
+                for _n2 in self.npcs:
+                    _n2.hostile = False
+                    _n2.aggro = False
         # the man at the head of the line
         if self.search_now is not None and not self.search_now.alive:
             self.search_now, self.search_t = None, 0.0

@@ -5074,7 +5074,15 @@ def main() -> None:
                     toast("Searched and waved through")
         elif _inside is not None and getattr(player, "searched_village", None) is not _inside:
             player.search_progress = 0.0
-            if getattr(player, "_climbed", None) is not _inside:
+            _deep = True
+            try:
+                for _g2 in fence.gate_list(_inside):
+                    if math.hypot(player.x - _g2[1], player.y - _g2[2]) < 260.0:
+                        _deep = False       # still in the gateway: not a crime
+                        break
+            except Exception:
+                _deep = False
+            if _deep and getattr(player, "_climbed", None) is not _inside:
                 player._climbed = _inside
                 toast("You climb the fence. The whole street turns.")
                 commit_crime()
