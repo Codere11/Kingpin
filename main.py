@@ -3047,6 +3047,7 @@ def main() -> None:
     gate_search_t = 0.0
     gate_search_v = None
     _hb = 0.0
+    _blk = 0.0
     running = True
     # THE WINDOW IS NEVER A FROZEN PICTURE WITH NOTHING ON IT. The first
     # second of the world does its one-time work INSIDE the loop -- indexing
@@ -3471,6 +3472,29 @@ def main() -> None:
                 save_now()
         door_cooldown = max(0.0, door_cooldown - dt)
         work_cd = max(0.0, work_cd - dt)
+        # WHY IS HE NOT MOVING? Every frame that any of these is set skips the
+        # world update entirely -- and `board_open` zeroes the keys outright --
+        # so a man can be frozen solid with the HUD happily drawing on top. If
+        # the log has a BLOCKED line, the line names what did it.
+        if (inventory_open or trade_open or build_menu_open or chest_open
+                or workshop_open or confirm_open or pause_open or map_open
+                or placing is not None or inside_house is not None
+                or inside_mine is not None or board_open or smith_open):
+            _blk += dt
+            if _blk >= 1.0:
+                _blk = 0.0
+                plog.log("BLOCKED", "inv", inventory_open, "trade", trade_open,
+                         "board", board_open, "chest", chest_open,
+                         "smith", smith_open, "work", workshop_open,
+                         "confirm", confirm_open, "pause", pause_open,
+                         "map", map_open, "placing", placing is not None,
+                         "house", inside_house is not None,
+                         "mine", inside_mine is not None,
+                         "dead", player.dead, "hp", int(player.health),
+                         "at", "%d,%d" % (int(player.x), int(player.y)))
+        else:
+            _blk = 0.0
+
         if (inside_house is not None and not game_over and not inventory_open
                 and not build_menu_open and not chest_open and not trade_open
                 and not workshop_open and not confirm_open and not pause_open
