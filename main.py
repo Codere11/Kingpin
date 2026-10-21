@@ -1290,8 +1290,19 @@ def main() -> None:
                     town = v
                     break
         if town is not None:
+            # EXACTLY WHAT A MURDER DOES (see the kill path, main.py:1468).
+            # The town turns, AND it is told whose crime it was -- a story with
+            # his name on it, which is what the guards, the army at the gate and
+            # every refugee on the road carry to the next town. Without the
+            # second line the town is merely angry; nobody remembers.
             town.provoke()
-            plog.log("AGGRO", getattr(town, "name", "?"))
+            town.learn_killers((village_mod.PLAYER_ID,), now)
+            for _w in town.npcs:                 # and the men who saw it
+                if _w.alive and math.hypot(_w.x - player.x,
+                                           _w.y - player.y) <= WITNESS_PX:
+                    _w.witness((village_mod.PLAYER_ID,))
+            plog.log("AGGRO", getattr(town, "name", "?"),
+                     "known_to", len(getattr(town, "killers", ()) or ()))
             return
         for v in villages.villages:
             if math.hypot(v.x - player.x, v.y - player.y) < v.radius + 400.0:
