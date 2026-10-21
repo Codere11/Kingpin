@@ -3145,6 +3145,8 @@ def main() -> None:
                       min(0.97, (10 - min(10, _boot_left[0])) / 10.0 + 0.05))
             if _boot_left[0] > 0:
                 _boot_left[0] -= 1
+        _framet0 = time.perf_counter()
+        _pt1 = _pt2 = _pt3 = _framet0      # phase marks, if no phase runs
         dt = min(clock.tick(FPS) / 1000.0, 0.05)
         _PH["f"] += 1
         dt = min(dt * time_scale, 0.5)          # test-mode speed-up
@@ -5463,6 +5465,37 @@ def main() -> None:
             except Exception:
                 pass
 
+        # ---- THE SLOW-FRAME RECORD -------------------------------------
+        # If this frame took more than a quarter of a second, say so, with the
+        # breakdown and the one number that matters -- how many towns were being
+        # simulated at the time. A freeze is a frame that never ends, and now it
+        # leaves a receipt.
+        try:
+            _fend = time.perf_counter()
+            _fms = (_fend - _framet0) * 1000.0
+            if _fms > 250.0:
+                _vis_n = 0
+                try:
+                    _vis_n = len(visible_villages)
+                except Exception:
+                    _vis_n = -1
+                _ng = -1
+                try:
+                    _ng = int(min(abs(v.x - player.x) + abs(v.y - player.y)
+                                  for v in villages.villages))
+                except Exception:
+                    pass
+                plog.log("SLOWFRAME", "%dms" % int(_fms),
+                         "towns %dms" % int((_pt1 - _framet0) * 1000.0),
+                         "men %dms" % int((_pt2 - _pt1) * 1000.0),
+                         "rest %dms" % int((_pt3 - _pt2) * 1000.0),
+                         "draw %dms" % int((_fend - _pt3) * 1000.0),
+                         "visible_towns", _vis_n,
+                         "nearest_town_px", _ng,
+                         "at", "%d,%d" % (int(player.x), int(player.y)),
+                         "dead", player.dead)
+        except Exception:
+            pass
         pygame.display.flip()
 
     pygame.mouse.set_visible(True)
