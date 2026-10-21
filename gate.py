@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import random
 
+import fence
+
 CONTRABAND = ("tobacco", "cigar", "beer", "liqueur", "mezcal",
               "dried_mushroom", "red_mushroom", "agave",
               "wheat_wort", "berry_wort", "agave_wort")
@@ -208,10 +210,34 @@ def tick_town(dt: float, town):
         town.search_now = town.search_queue.pop(0)
         town.search_t = 0.0
     cur = town.search_now
+
+    # THEY WAIT IN FRONT OF THE GATE, IN ORDER. Everyone in the line -- the man
+    # being searched and the men behind him -- walks to a place just outside
+    # the gate and STANDS THERE until his turn comes, and then he goes on about
+    # his business. Before this they were stopped wherever they happened to be,
+    # in the middle of the road, which is not a queue at the gate.
+    _line = ([cur] if cur is not None else []) + list(town.search_queue)
+    for _i, _w in enumerate(_line):
+        if not getattr(_w, "alive", True):
+            continue
+        try:
+            _g = fence.nearest_gate(town, _w.x, _w.y)
+            _ox, _oy = fence.OUTWARD[_g[0]]
+            _slot = (44.0 + 30.0 * _i)
+            _tx = _g[1] + _ox * _slot
+            _ty = _g[2] + _oy * _slot
+            _w.target = (_tx, _ty)
+            if ((_w.x - _tx) ** 2 + (_w.y - _ty) ** 2) < 34.0 ** 2:
+                _w.pause = max(float(getattr(_w, "pause", 0.0)), 0.25)   # he stands
+            else:
+                _w.pause = 0.0                                           # he walks
+        except Exception:
+            pass
+
     if cur is None:
         return None
-    cur.pause = max(float(getattr(cur, "pause", 0.0)), 0.2)
-    cur.target = (cur.x, cur.y)
+    if getattr(cur, "pause", 0.0) <= 0.0:
+        return None                    # still walking to the gate: not yet
     town.search_t = float(getattr(town, "search_t", 0.0)) + dt
     if town.search_t < SEARCH_SECONDS:
         return None
