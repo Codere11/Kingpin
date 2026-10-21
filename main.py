@@ -3048,6 +3048,30 @@ def main() -> None:
     gate_search_v = None
     _hb = 0.0
     _blk = 0.0
+    _stuck = 0.0
+
+    def close_modals(why="") -> None:
+        """SHUT EVERY PANEL. THE WORLD IS NEVER HELD HOSTAGE BY A MENU.
+
+        Each of these flags skips the whole world update while it is set, so a
+        menu that fails to close -- or a click that opens one the player never
+        notices -- freezes him solid while the HUD keeps drawing. There must
+        always be a way out, and this is it.
+        """
+        nonlocal inventory_open, trade_open, board_open, chest_open
+        nonlocal smith_open, workshop_open, confirm_open, map_open
+        nonlocal pause_open, build_menu_open, placing
+        inventory_open = trade_open = board_open = chest_open = False
+        smith_open = workshop_open = confirm_open = map_open = False
+        pause_open = build_menu_open = False
+        placing = None
+        try:
+            pygame.mouse.set_visible(False)
+        except Exception:
+            pass
+        if why:
+            toast(why)
+
     running = True
     # THE WINDOW IS NEVER A FROZEN PICTURE WITH NOTHING ON IT. The first
     # second of the world does its one-time work INSIDE the loop -- indexing
@@ -3121,7 +3145,9 @@ def main() -> None:
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
         wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM  # world space
 
+        _had_event = False
         for event in pygame.event.get():
+            _had_event = True
             # ---- THE KEY LOG. A one-line record of every key this build's
             # event loop actually receives, appended to
             # ~/.kingpin_saves/keys.log. It exists because I kept claiming the
@@ -3429,8 +3455,20 @@ def main() -> None:
                 map_open = not map_open
                 pygame.mouse.set_visible(map_open)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                pause_open = True
-                pygame.mouse.set_visible(True)
+                # ESC USED TO PAUSE UNCONDITIONALLY, even with a menu already
+                # open -- so a panel that would not close left a man with no
+                # way out at all. ESC now closes what is open, and only opens
+                # the pause menu when nothing is.
+                if (inventory_open or trade_open or board_open or chest_open
+                        or smith_open or workshop_open or confirm_open
+                        or map_open or build_menu_open or placing is not None):
+                    close_modals()
+                elif pause_open:
+                    pause_open = False
+                    pygame.mouse.set_visible(False)
+                else:
+                    pause_open = True
+                    pygame.mouse.set_visible(True)
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_TAB):
                 # THE PACK NEEDED A KEY ABOVE GROUND AND NEVER HAD ONE.
                 # inventory_open was only ever toggled inside the mine's key
@@ -3481,6 +3519,13 @@ def main() -> None:
                 or placing is not None or inside_house is not None
                 or inside_mine is not None or board_open or smith_open):
             _blk += dt
+            # A MENU LEFT ALONE FOR TWENTY SECONDS RELEASES THE WORLD. Not a
+            # fix for any particular panel -- a guarantee that no panel, known
+            # or not yet written, can hold the game still for good.
+            _stuck = 0.0 if _had_event else _stuck + dt
+            if _stuck >= 20.0:
+                _stuck = 0.0
+                close_modals("Closed: that menu had stopped responding")
             if _blk >= 1.0:
                 _blk = 0.0
                 plog.log("BLOCKED", "inv", inventory_open, "trade", trade_open,
