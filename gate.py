@@ -33,6 +33,11 @@ BREAK_RANGE = 420.0         # run this far and it is a flight, not a search
 CATCH_BASE = 0.55           # of the men carrying contraband, this many are found
 
 _STATE = {"guard": None, "t": 0.0, "town": None}
+_RETURNING = []             # soldiers walking back to their post: usually empty
+
+
+def _post_of(g):
+    return getattr(g, "gate_post", None) or getattr(g, "home", None)
 
 
 def reset() -> None:
@@ -90,6 +95,24 @@ def nearest_guard(player, towns):
 
 def tick(dt: float, player, towns, inventory=None):
     """The player's search. Returns ("caught"|"clean", town, units) or None."""
+    # A SOLDIER WHO HAS FINISHED WALKS BACK TO HIS POST. Nothing else drives
+    # this, so it lives here: a handful of men, and usually none at all.
+    if _RETURNING:
+        for _g in list(_RETURNING):
+            if not getattr(_g, "alive", True):
+                _RETURNING.remove(_g)
+                continue
+            _post = _post_of(_g)
+            if _post is None:
+                _RETURNING.remove(_g)
+                continue
+            if ((_g.x - _post[0]) ** 2 + (_g.y - _post[1]) ** 2) < 26.0 ** 2:
+                _g.target = (_post[0], _post[1])
+                _g.idle_timer = 1.0e9          # back on duty: he stands
+                _RETURNING.remove(_g)
+            else:
+                _g.idle_timer = 0.0            # walking
+                _g.target = (_post[0], _post[1])
     g = _STATE["guard"]
     if g is not None and not getattr(g, "alive", True):
         reset()
@@ -144,6 +167,10 @@ def tick(dt: float, player, towns, inventory=None):
         return ("caught", town, units)
     if units > 0:
         player.smuggling = min(10.0, skill + 0.06 + units * 0.001)
+    # A CLEAN SEARCH IS NOT A CRIME: the soldier goes back and stands at his
+    # gate again.
+    if g is not None and not getattr(g, "hostile", False):
+        _RETURNING.append(g)
     return ("clean", town, units)
 
 
