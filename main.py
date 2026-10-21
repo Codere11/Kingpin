@@ -5228,38 +5228,38 @@ def main() -> None:
 
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
         # ---- THE GATE SEARCH, FOR HIM -------------------------------------
-        # THE SAME INTERACTION THE TOWNS USE. Find the guard nearest to him --
-        # only a guard, only within reach. Stand in that reach for ten seconds
-        # and he looks through the pack: contraband and the town turns on you,
-        # nothing and you are waved through. There is no penalty for crossing a
-        # line, and no alarm for a clean man: the ONLY thing that ever turns a
-        # town against you is what is found in your pack.
-        _guard = None
-        _gdist = 1e18
-        for _v in villages.villages:
-            if getattr(_v, "is_hub", False):
-                continue
-            for _s in (getattr(_v, "patrol", ()) or ()):
-                if not getattr(_s, "alive", True):
-                    continue
-                _d = (player.x - _s.x) ** 2 + (player.y - _s.y) ** 2
-                if _d < _gdist:
-                    _gdist, _guard = _d, _s
-        # FORGIVING BY TWENTY PACES. A search that restarts whenever he drifts
-        # a pixel out of reach can never finish -- `srch=0.1` in the log was the
-        # timer being wiped every frame. He keeps his ten seconds while he is
-        # within two hundred and sixty pixels of the guard.
-        if _guard is not None and _gdist <= 260.0 ** 2:
-            if getattr(player, "search_guard", None) is not _guard:
-                player.search_guard = _guard
+        # ONCE, WHEN HE CROSSES THE WALL. Which town is he inside? Ask its
+        # fence, nothing else. If that answer changed since the last frame, he
+        # has crossed in or out -- and the guard searches him: ten seconds, one
+        # roll. A man standing still is never polled, never re-searched, and
+        # nothing else in the world is touched.
+        _inside_v = None
+        try:
+            for _v in villages.villages:
+                _fr = getattr(_v, "fence_rect", None)
+                if _fr is not None and _fr.collidepoint(player.x, player.y):
+                    _inside_v = _v
+                    break
+        except Exception:
+            _inside_v = None
+        _was_v = getattr(player, "was_inside_v", None)
+        player.was_inside_v = _inside_v
+        if _was_v is not _inside_v and (_inside_v is not None or _was_v is not None):
+            _crossed_v = _inside_v if _inside_v is not None else _was_v
+            if not getattr(_crossed_v, "is_hub", False):
+                player.search_village = _crossed_v
                 player.search_progress = 0.0
+                plog.log("CROSSED-A-GATE", getattr(_crossed_v, "name", "?"),
+                         "dir", "in" if _inside_v is not None else "out")
+
+        if getattr(player, "search_village", None) is not None:
             player.search_progress = float(getattr(player, "search_progress", 0.0)) + dt
             if player.search_progress >= 10.0:
+                _sv = player.search_village
                 player.search_progress = 0.0
-                player.search_guard = None
+                player.search_village = None
                 units = sum(inventory.count_of(_i) for _i in CONTraband)
-                plog.log("SEARCHED", "units", units, "by",
-                         getattr(_guard, "name", "?"))
+                plog.log("SEARCHED", getattr(_sv, "name", "?"), "units", units)
                 if units > 0:
                     _sk = max(0.0, min(10.0, float(getattr(player, "smuggling", 0.0))))
                     if random.random() < min(1.0, units / 100.0) * 0.55 * (1.0 - 0.09 * _sk):
@@ -5270,9 +5270,6 @@ def main() -> None:
                         toast("Searched clean   (smuggling %.1f)" % player.smuggling)
                 else:
                     toast("Searched and waved through")
-        else:
-            player.search_progress = 0.0
-            player.search_guard = None
 
         # Houses and tree trunks block line of sight; canopies soften it.
         reach = vision.max_dist

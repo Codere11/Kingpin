@@ -3000,14 +3000,12 @@ class Village:
     SEARCH_CATCH = 0.55         # a carrier with 20 items is caught this often
 
     def search_tick(self, dt: float, now: float = 0.0) -> None:
-        """ONE GUARD, ONE MAN, TEN SECONDS -- AND A LINE BEHIND HIM.
+        """ONCE, WHEN A MAN CROSSES THE WALL. Nothing else is ever polled.
 
-        No passes, no directions, no crossing law. A man who comes within reach
-        of the guard joins the line; the man at the head of it is searched, ten
-        seconds, and the rest WAIT their turn instead of walking past. If the
-        pack has contraband in it he is caught and the town turns on him. If it
-        has nothing, he goes on his way -- and NOTHING happens to a clean man,
-        ever.
+        He steps over the fence line -- in or out -- and that is the event: he
+        is searched. One man at a time, ten seconds, and while one is being
+        looked at the others wait their turn. A man who does not cross is never
+        looked at, and no man is ever looked at twice for the same crossing.
         """
         if getattr(self, "is_hub", False):
             return                      # a hut is not the state
@@ -3016,58 +3014,50 @@ class Village:
             return
         guard = squad[0]                # the man on the way IN
         if not getattr(guard, "alive", True):
+            self.search_now, self.search_t = None, 0.0
+            return
+        r = getattr(self, "fence_rect", None)
+        if r is None:
             return
         if not isinstance(getattr(self, "search_queue", None), list):
             self.search_queue = []
 
-        # WHO IS IN REACH. Walking away takes you out of the line.
+        # ---- THE ONLY THING LOOKED AT: WHO JUST CROSSED ----------------
         for n in self.npcs:
             if not n.alive or getattr(n, "village", None) is self:
-                continue                # a resident is not searched here
-            if getattr(n, "searched_by", None) is guard:
+                continue                # a resident crosses his own wall freely
+            now_in = r.collidepoint(n.x, n.y)
+            was_in = getattr(n, "was_inside", None)
+            n.was_inside = now_in
+            if was_in is None or was_in == now_in:
+                continue                # he did not cross: he is not searched
+            if n is self.search_now or n in self.search_queue:
                 continue
-            if math.hypot(n.x - guard.x, n.y - guard.y) > self.SEARCH_RANGE:
-                if n in self.search_queue:
-                    self.search_queue.remove(n)
-                if self.search_now is n:
-                    self.search_now, self.search_t = None, 0.0
-                continue
-            if n is not self.search_now and n not in self.search_queue:
-                self.search_queue.append(n)
+            n.search_t = 0.0
+            self.search_queue.append(n)
 
-        # THE MAN AT THE HEAD OF THE LINE
+        # ---- the one being searched: a timer, and nothing else ----------
         if self.search_now is None and self.search_queue:
             self.search_now = self.search_queue.pop(0)
             self.search_t = 0.0
         cur = self.search_now
-        if cur is not None:
-            if (not cur.alive
-                    or math.hypot(cur.x - guard.x, cur.y - guard.y) > self.SEARCH_RANGE):
-                self.search_now, self.search_t = None, 0.0
-            else:
-                cur.pause = max(float(getattr(cur, "pause", 0.0)), 0.2)   # he stands
-                cur.target = (cur.x, cur.y)
-                self.search_t = float(getattr(self, "search_t", 0.0)) + dt
-                if self.search_t >= self.SEARCH_SECONDS:
-                    self.search_now, self.search_t = None, 0.0
-                    cur.searched_by = guard
-                    units = sum(int(cur.stock.get(k, 0)) for k in _CONTRABAND)
-                    if (units > 0 and random.random()
-                            < min(1.0, units / 100.0) * self.SEARCH_CATCH):
-                        cur.wanted = True
-                        self.provoke()          # CAUGHT IS AGGRO, and that is all
-                        _note("SEARCH    %s caught with %d at the gate of %s"
-                              % (getattr(cur, "name", "?"), units, self.name))
-
-        # AND THE LINE STANDS IN A LINE
-        for _qi, _qn in enumerate(self.search_queue):
-            if not _qn.alive:
-                continue
-            _g = fence.nearest_gate(self, _qn.x, _qn.y)
-            _ox, _oy = fence.OUTWARD[_g[0]]
-            _slot = 58.0 + 34.0 * _qi
-            _qn.target = (_g[1] + _ox * _slot, _g[2] + _oy * _slot)
-            _qn.pause = 0.0
+        if cur is None:
+            return
+        if not cur.alive:
+            self.search_now, self.search_t = None, 0.0
+            return
+        cur.pause = max(float(getattr(cur, "pause", 0.0)), 0.2)     # he waits
+        cur.target = (cur.x, cur.y)
+        self.search_t = float(getattr(self, "search_t", 0.0)) + dt
+        if self.search_t < self.SEARCH_SECONDS:
+            return
+        self.search_now, self.search_t = None, 0.0
+        units = sum(int(cur.stock.get(k, 0)) for k in _CONTRABAND)
+        if units > 0 and random.random() < min(1.0, units / 100.0) * self.SEARCH_CATCH:
+            cur.wanted = True
+            self.provoke()              # CAUGHT IS AGGRO, and that is all
+            _note("SEARCH    %s caught with %d at the gate of %s"
+                  % (getattr(cur, "name", "?"), units, self.name))
 
     def update(self, dt: float, world=None, now: float = 0.0,
                phase: str = "home") -> None:
