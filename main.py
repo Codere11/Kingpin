@@ -5259,6 +5259,9 @@ def main() -> None:
                 if _kind == "caught":
                     toast("Searched. %d found. Run." % _units)
                     commit_crime(_town)
+                elif _kind == "fled":
+                    toast("You broke away from the guard. He shouts.")
+                    commit_crime(_town)
                 elif _units > 0:
                     toast("Searched clean   (smuggling %.1f)" % player.smuggling)
                 else:

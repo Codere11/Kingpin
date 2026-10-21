@@ -28,6 +28,8 @@ CONTRABAND = ("tobacco", "cigar", "beer", "liqueur", "mezcal",
 
 SEARCH_RANGE = 260.0        # he will come this far to look at you
 SEARCH_SECONDS = 10.0
+STANDOFF = 46.0             # he stops here: close enough to look, not to push
+BREAK_RANGE = 420.0         # run this far and it is a flight, not a search
 CATCH_BASE = 0.55           # of the men carrying contraband, this many are found
 
 _STATE = {"guard": None, "t": 0.0, "town": None}
@@ -103,18 +105,31 @@ def tick(dt: float, player, towns, inventory=None):
         _STATE["t"] = 0.0
         _STATE["town"] = getattr(g, "gate_village", None)
 
-    # HE COMES TO YOU, and stands while he looks.
+    # HE COMES TO YOU -- AND STOPS AT ARM'S LENGTH. Walking into the man he is
+    # searching shoved him across the road, which is not a search.
+    _d2 = (player.x - g.x) ** 2 + (player.y - g.y) ** 2
     try:
-        g.target = (player.x, player.y)
         g.pause = 0.0
         g.idle_timer = 0.0
+        if _d2 > STANDOFF * STANDOFF:
+            g.target = (player.x, player.y)          # still closing
+        else:
+            g.target = (g.x, g.y)                    # close enough: stand still
     except Exception:
         pass
 
-    # walked away? then it never happened.
-    if (player.x - g.x) ** 2 + (player.y - g.y) ** 2 > (SEARCH_RANGE * 2.5) ** 2:
+    # RUNNING AWAY IS A CRIME, NOT A NO-OP. Walking off used to cancel the
+    # search quietly. Break away from a guard who is looking at you and he
+    # treats it as flight: he turns hostile and the town is told.
+    if _d2 > BREAK_RANGE * BREAK_RANGE:
+        town = _STATE["town"]
         reset()
-        return None
+        try:
+            g.hostile = True
+            g.aggro = True
+        except Exception:
+            pass
+        return ("fled", town, 0)
 
     _STATE["t"] = float(_STATE["t"]) + dt
     if _STATE["t"] < SEARCH_SECONDS:
