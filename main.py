@@ -4991,6 +4991,10 @@ def main() -> None:
                 pause_menu.draw(screen)
             if map_open:
                 try:
+                    _wh = 0
+                    for _e in pygame.event.get(pygame.MOUSEWHEEL):
+                        _wh += _e.y
+                    mapmod.handle_input(dt, player, wheel=_wh)
                     mapmod.draw(screen, world, player, _nearest_town(),
                                 hub_world.hubs)
                 except Exception:
@@ -5340,6 +5344,10 @@ def main() -> None:
             pause_menu.draw(screen)
         if map_open:
             try:
+                _wh2 = 0
+                for _e in pygame.event.get(pygame.MOUSEWHEEL):
+                    _wh2 += _e.y
+                mapmod.handle_input(dt, player, wheel=_wh2)
                 mapmod.draw(screen, world, player, _nearest_town(),
                             hub_world.hubs)
             except Exception:
