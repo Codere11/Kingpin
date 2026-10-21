@@ -5190,112 +5190,47 @@ def main() -> None:
 
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
         # ---- THE GATE SEARCH, FOR HIM -------------------------------------
-        # Every man entering a settlement is searched by the guard on the IN
-        # gate, one at a time, ten seconds each. He is no exception:
-        #
-        #     at the gate                    -> the search runs, with the bar
-        #     anywhere else inside the fence -> he climbed the wall
-        #
-        # A HUB DOES NOT SEARCH. The huts are nation 1: they are where the
-        # tobacco comes from, and a criminal settlement rummaging your pack for
-        # contraband would be a shop that arrests its customers. The regime's
-        # towns search; the black market does not. That asymmetry is the game.
-        # ONE LIST OF WHAT IS ILLEGAL, shared with the town's own gate law --
-        # a copy here had already drifted by three items, so the guard and the
-        # town were counting different crimes.
-        CONTraband = getattr(village_mod, "_CONTRABAND", (
-            "tobacco", "cigar", "beer", "liqueur", "mezcal",
-            "dried_mushroom", "red_mushroom", "agave"))
-        _gate_v, _inside = None, None
-        # BY DISTANCE FROM THE REGISTRY, NOT BY WHAT IS ON SCREEN. A gate is on
-        # the fence line, and `visible()` keeps a town only if its CENTRE is in
-        # view -- so a man standing at a gate had the town culled out from under
-        # him and no search ever ran. Thirty-six towns is a trivial scan.
-        _cands = None
-        try:
-            _cands = [v for v in villages.villages
-                      if getattr(v, "fence_rect", None) is not None
-                      and abs(v.x - player.x) < 9000.0
-                      and abs(v.y - player.y) < 9000.0]
-        except Exception:
-            _cands = draw_villages
-        for _v in _cands:
+        # THE SAME INTERACTION THE TOWNS USE. Find the guard nearest to him --
+        # only a guard, only within reach. Stand in that reach for ten seconds
+        # and he looks through the pack: contraband and the town turns on you,
+        # nothing and you are waved through. There is no penalty for crossing a
+        # line, and no alarm for a clean man: the ONLY thing that ever turns a
+        # town against you is what is found in your pack.
+        _guard = None
+        _gdist = 1e18
+        for _v in villages.villages:
             if getattr(_v, "is_hub", False):
-                continue                       # a hut never searches you
-            _fr = getattr(_v, "fence_rect", None)
-            if _fr is None:
                 continue
-            _hit = False
-            try:
-                for _g in fence.gate_list(_v):
-                    if math.hypot(player.x - _g[1], player.y - _g[2]) < 110.0:
-                        _gate_v, _hit = _v, True
-                        break
-            except Exception:
-                pass
-            if _hit:
-                break
-            if _fr.collidepoint(player.x, player.y):
-                _inside = _v
-                break
-        if _gate_v is None and getattr(player, "search_village", None) is not None:
-            # Still standing at the gate he was being searched at? Then the ten
-            # seconds keep counting: a step of drift is not walking away.
-            _sv0 = player.search_village
-            _near0 = False
-            try:
-                for _g0 in fence.gate_list(_sv0):
-                    if math.hypot(player.x - _g0[1], player.y - _g0[2]) < 320.0:
-                        _near0 = True
-                        break
-            except Exception:
-                _near0 = False
-            if _near0:
-                _gate_v = _sv0
-        if _gate_v is not None:
-            if getattr(player, "search_village", None) is not _gate_v:
-                player.search_village = _gate_v
+            for _s in (getattr(_v, "patrol", ()) or ()):
+                if not getattr(_s, "alive", True):
+                    continue
+                _d = (player.x - _s.x) ** 2 + (player.y - _s.y) ** 2
+                if _d < _gdist:
+                    _gdist, _guard = _d, _s
+        if _guard is not None and _gdist <= 160.0 ** 2:
+            if getattr(player, "search_guard", None) is not _guard:
+                player.search_guard = _guard
                 player.search_progress = 0.0
             player.search_progress = float(getattr(player, "search_progress", 0.0)) + dt
             if player.search_progress >= 10.0:
                 player.search_progress = 0.0
-                player.searched_village = _gate_v
+                player.search_guard = None
                 units = sum(inventory.count_of(_i) for _i in CONTraband)
-                plog.log("SEARCHED", getattr(_gate_v, "name", "?"),
-                         "units", units)
+                plog.log("SEARCHED", "units", units, "by",
+                         getattr(_guard, "name", "?"))
                 if units > 0:
                     _sk = max(0.0, min(10.0, float(getattr(player, "smuggling", 0.0))))
                     if random.random() < min(1.0, units / 100.0) * 0.55 * (1.0 - 0.09 * _sk):
-                        player.wanted = True          # caught is caught
                         toast("Searched. %d found. Run." % units)
-                        commit_crime()
+                        commit_crime()          # CAUGHT IS AGGRO, and that is all
                     else:
                         player.smuggling = min(10.0, _sk + 0.06 + units * 0.001)
                         toast("Searched clean   (smuggling %.1f)" % player.smuggling)
                 else:
                     toast("Searched and waved through")
-        elif _inside is not None and getattr(player, "searched_village", None) is not _inside:
-            player.search_progress = 0.0
-            # (2) CROSSED UNSEARCHED IS AGGRO, AT ONCE. Being in the gateway is
-            # waiting your turn; being anywhere else inside the wall is having
-            # gone over it. No 260-pixel grace: the perimeter is the perimeter.
-            _deep = True
-            try:
-                for _g2 in fence.gate_list(_inside):
-                    if math.hypot(player.x - _g2[1], player.y - _g2[2]) < 130.0:
-                        _deep = False       # in the gateway, waiting
-                        break
-            except Exception:
-                _deep = False
-            if _deep and getattr(player, "_climbed", None) is not _inside:
-                player._climbed = _inside
-                player.wanted = True
-                toast("You crossed the wall unsearched. The street turns.")
-                commit_crime()
-                plog.log("CROSSED-UNSEARCHED", getattr(_inside, "name", "?"))
         else:
             player.search_progress = 0.0
-
+            player.search_guard = None
 
         # Houses and tree trunks block line of sight; canopies soften it.
         reach = vision.max_dist

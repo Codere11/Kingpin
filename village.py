@@ -2994,189 +2994,80 @@ class Village:
     # THE GATE IS PHYSICAL. A man queues because he is five tiles from the guard
     # on that gate and his road runs to the other side of the wall -- and the
     # line he stands in is spaced out behind it.
-    GATE_REACH = 160.0          # five tiles of 32 px
-    GATE_LINE_GAP = 34.0        # one man between each pair
+    SEARCH_RANGE = 160.0        # five tiles: close enough to be looked at
 
     SEARCH_SECONDS = 10.0
     SEARCH_CATCH = 0.55         # a carrier with 20 items is caught this often
 
     def gate_tick(self, dt: float, now: float) -> None:
-        """THE GATE IS THE ONLY WAY THROUGH A WALL, AND IT IS A QUEUE.
+        """ONE GUARD, ONE MAN, TEN SECONDS -- AND A LINE BEHIND HIM.
 
-        Four laws, in this order:
-
-          1. A resident is not a stranger. Men who live here walk in and out.
-          2. Nobody crosses the perimeter unsearched. A man who does is wanted
-             on the spot -- and a wanted man at the gate is shot at.
-          3. One man is searched at a time, ten seconds, by the guard on that
-             gate. ENTERING AND LEAVING both wait.
-          4. A hub does not search. A hut is not the state.
+        No passes, no directions, no crossing law. A man who comes within reach
+        of the guard joins the line; the man at the head of it is searched, ten
+        seconds, and the rest WAIT their turn instead of walking past. If the
+        pack has contraband in it he is caught and the town turns on him. If it
+        has nothing, he goes on his way -- and NOTHING happens to a clean man,
+        ever.
         """
-        # (4) A HUB HAS NO SEARCH. Its soldier stands and minds the wolves.
         if getattr(self, "is_hub", False):
-            self.search_now = None
-            self.search_t = 0.0
-            self.search_queue = []
-            self.search_dir = "in"
+            return                      # a hut is not the state
+        squad = getattr(self, "patrol", None)
+        if not squad:
             return
-
-        r = getattr(self, "fence_rect", None)
-        if r is None:
+        guard = squad[0]                # the man on the way IN
+        if not getattr(guard, "alive", True):
             return
         if not isinstance(getattr(self, "search_queue", None), list):
             self.search_queue = []
-        if not hasattr(self, "search_dir"):
-            self.search_dir = "in"
 
-        # A WANTED MAN AT THE GATE IS SHOT AT, whoever put him on the list.
-        for n in list(self.npcs):
-            if not n.alive or not getattr(n, "wanted", False):
+        # WHO IS IN REACH. Walking away takes you out of the line.
+        for n in self.npcs:
+            if not n.alive or getattr(n, "village", None) is self:
+                continue                # a resident is not searched here
+            if getattr(n, "searched_by", None) is guard:
                 continue
-            if math.hypot(self.x - n.x, self.y - n.y) > self.radius + 200.0:
+            if math.hypot(n.x - guard.x, n.y - guard.y) > self.SEARCH_RANGE:
+                if n in self.search_queue:
+                    self.search_queue.remove(n)
+                if self.search_now is n:
+                    self.search_now, self.search_t = None, 0.0
                 continue
-            n.shot_t = getattr(n, "shot_t", 0.0) + dt
-            if n.shot_t >= 1.2:
-                n.shot_t = 0.0
-                n.health = getattr(n, "health", 100.0) - 22.0
-                if n.health <= 0:
-                    n.wanted = False
-                    _note("SKIRMISH  %s shot at the gate of %s"
-                          % (getattr(n, "name", "?"), self.name))
-                    try:
-                        n.die()
-                    except Exception:
-                        n.alive = False
+            if n is not self.search_now and n not in self.search_queue:
+                self.search_queue.append(n)
 
-        # (1) (2) (3) -- who may pass, who may not, who waits.
-        for n in list(self.npcs):
-            if not n.alive or getattr(n, "in_interior", False):
-                continue
-            # HE LIVES HERE IF HE BELONGS HERE. The test was
-            # `home_house.village is self`, and a HOUSE HAS NO `village` FIELD --
-            # only the hubs set one -- so it was None for every house in every
-            # town, no townsman was ever a resident, and the WHOLE POPULATION of
-            # every settlement queued at the gates and stood frozen, ten seconds
-            # each: a town of sixty took ten minutes and looked dead. `NPC` is
-            # the one that carries a village (`self.village = village`).
-            if getattr(n, "village", None) is self:
-                continue                          # he lives HERE
-            # A man who belongs to another town is a TRAVELLER here, and
-            # travellers are exactly who the gate is for.
-            inside = r.collidepoint(n.x, n.y)
-            cleared = getattr(n, "searched_village", None) is self
-            g = fence.nearest_gate(self, n.x, n.y)
-            _dgate = math.hypot(n.x - g[1], n.y - g[2])
-            # HE WANTS TO CROSS, OR HE DOES NOT. A man joins the queue because
-            # of where he is going, not because he happens to stand near a wall:
-            # his destination must be on the OTHER SIDE of this fence from
-            # himself. A man who lives here and is walking to the well is not
-            # waiting for anything.
-            _dest = (getattr(n, "trade_dest", None)
-                     or getattr(n, "home", None) or n.target)
-            _wants_across = False
-            try:
-                _wants_across = (r.collidepoint(_dest[0], _dest[1]) != inside)
-            except Exception:
-                _wants_across = False
-            # AND IT IS PHYSICAL: five tiles from the guard on that gate.
-            at_gate = _dgate <= self.GATE_REACH and _wants_across
-
-            # (2) OVER THE WALL: wanted at once.
-            if inside and not cleared and not at_gate:
-                if not getattr(n, "wanted", False):
-                    n.wanted = True
-                    _note("CROSSED   %s over the wall of %s"
-                          % (getattr(n, "name", "?"), self.name))
-                continue
-
-            # a pass is spent the moment he is back outside
-            if (not inside) and cleared:
-                n.searched_village = None
-                continue
-
-            if not at_gate:
-                continue
-
-            # (3) THE QUEUE, BOTH WAYS -- AND ONCE PER CROSSING.
-            #
-            # A man searched on his way OUT ends up outside with no pass, and
-            # the "outside and not cleared" rule then queued him to come back
-            # IN on the very next frame. He was searched, let in, walked to the
-            # gate, un-cleared, queued again -- the same villager for ever, at
-            # the head of the line, while nobody else was ever reached. He gets
-            # a moment after a search in which he is not a candidate again: by
-            # then he is a hundred pixels down the road and out of the gateway.
-            _cd = float(getattr(n, "gate_cd", 0.0))
-            if _cd > 0.0:
-                n.gate_cd = max(0.0, _cd - dt)
-                continue
-            if inside and cleared:                # he wants out
-                n.searched_village = None
-                if n not in self.search_queue and n is not self.search_now:
-                    n.search_dir = "out"
-                    self.search_queue.append(n)
-            elif (not inside) and not cleared:    # he wants in
-                if n not in self.search_queue and n is not self.search_now:
-                    n.search_dir = "in"
-                    self.search_queue.append(n)
-
-        # THEY FORM A LINE. A man in the queue stands in his place behind the
-        # gate -- outside the wall if he is coming in, inside it if he is going
-        # out -- one behind the next. Without this they all gathered on the same
-        # spot, which is not a queue and does not look like one.
-        for _qi, _qn in enumerate(self.search_queue):
-            if not _qn.alive:
-                continue
-            _qg = fence.nearest_gate(self, _qn.x, _qn.y)
-            _ox, _oy = fence.OUTWARD[_qg[0]]
-            _sign = 1.0 if getattr(_qn, "search_dir", "in") == "in" else -1.0
-            _slot = self.GATE_LINE_GAP * (_qi + 1)
-            _tx = _qg[1] + _ox * _sign * _slot
-            _ty = _qg[2] + _oy * _sign * _slot
-            _qn.target = (_tx, _ty)
-            _qn.pause = 0.0
-
-        # THE ONE MAN AT THE HEAD OF THE LINE
-        if self.search_now is not None and (not self.search_now.alive
-                                            or getattr(self.search_now, "alive", True) is False):
-            self.search_now, self.search_t = None, 0.0
+        # THE MAN AT THE HEAD OF THE LINE
         if self.search_now is None and self.search_queue:
             self.search_now = self.search_queue.pop(0)
             self.search_t = 0.0
-
-        if self.search_now is not None:
-            n = self.search_now
-            n.pause = max(float(getattr(n, "pause", 0.0)), 0.25)   # he stands
-            _sg = fence.nearest_gate(self, n.x, n.y)
-            _oxn, _oyn = fence.OUTWARD[_sg[0]]
-            n.target = (_sg[1] + _oxn * (26.0 if getattr(n, "search_dir", "in") == "in"
-                                        else -26.0),
-                        _sg[2] + _oyn * (26.0 if getattr(n, "search_dir", "in") == "in"
-                                        else -26.0))
-            self.search_t += dt
-            if self.search_t >= self.SEARCH_SECONDS:
+        cur = self.search_now
+        if cur is not None:
+            if (not cur.alive
+                    or math.hypot(cur.x - guard.x, cur.y - guard.y) > self.SEARCH_RANGE):
                 self.search_now, self.search_t = None, 0.0
-                units = sum(int(n.stock.get(k, 0)) for k in _CONTRABAND)
-                _sk = max(0.0, min(10.0, float(getattr(n, "smuggling", 0.0))))
-                caught = (units > 0 and random.random()
-                          < min(1.0, units / 100.0) * self.SEARCH_CATCH
-                          * (1.0 - 0.09 * _sk))
-                n.gate_cd = 6.0          # he is not a candidate again for a while
-                if caught:
-                    n.wanted = True
-                    n.searched_village = None
-                    _note("SEARCH    %s caught with %d at the gate of %s"
-                          % (getattr(n, "name", "?"), units, self.name))
-                else:
-                    if units > 0:
-                        n.smuggling = min(10.0, _sk + 0.06 + units * 0.001)
-                    n.wanted = False
-                    if getattr(n, "search_dir", "in") == "in":
-                        n.searched_village = self      # waved through
-                    else:
-                        n.searched_village = None      # let out
-                    _note("SEARCH    %s clean at the gate of %s"
-                          % (getattr(n, "name", "?"), self.name))
+            else:
+                cur.pause = max(float(getattr(cur, "pause", 0.0)), 0.2)   # he stands
+                cur.target = (cur.x, cur.y)
+                self.search_t = float(getattr(self, "search_t", 0.0)) + dt
+                if self.search_t >= self.SEARCH_SECONDS:
+                    self.search_now, self.search_t = None, 0.0
+                    cur.searched_by = guard
+                    units = sum(int(cur.stock.get(k, 0)) for k in _CONTRABAND)
+                    if (units > 0 and random.random()
+                            < min(1.0, units / 100.0) * self.SEARCH_CATCH):
+                        cur.wanted = True
+                        self.provoke()          # CAUGHT IS AGGRO, and that is all
+                        _note("SEARCH    %s caught with %d at the gate of %s"
+                              % (getattr(cur, "name", "?"), units, self.name))
+
+        # AND THE LINE STANDS IN A LINE
+        for _qi, _qn in enumerate(self.search_queue):
+            if not _qn.alive:
+                continue
+            _g = fence.nearest_gate(self, _qn.x, _qn.y)
+            _ox, _oy = fence.OUTWARD[_g[0]]
+            _slot = 58.0 + 34.0 * _qi
+            _qn.target = (_g[1] + _ox * _slot, _g[2] + _oy * _slot)
+            _qn.pause = 0.0
 
     def update(self, dt: float, world=None, now: float = 0.0,
                phase: str = "home") -> None:
