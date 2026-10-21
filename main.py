@@ -3073,6 +3073,29 @@ def main() -> None:
     _hb = 0.0
     _blk = 0.0
     _stuck = 0.0
+    # ---- THE PLAYER TRACE -------------------------------------------------
+    # The last ninety frames, every number that could stop him moving. It is
+    # held in memory and written ONLY when something is wrong, so it costs
+    # nothing and cannot itself be the reason for a hitch.
+    from collections import deque as _deque
+    _trace = _deque(maxlen=90)
+    _still = 0
+    _lastpt = [None]
+    _branch = "?"
+
+    def _inside_h():
+        try:
+            return inside_house is not None
+        except Exception:
+            return "?"
+
+    def _dump_trace(why):
+        try:
+            plog.log("==== TRACE:", why, "====")
+            for row in _trace:
+                plog.log("  T:", " ".join(str(c) for c in row))
+        except Exception:
+            pass
 
     def close_modals(why="") -> None:
         """SHUT EVERY PANEL. THE WORLD IS NEVER HELD HOSTAGE BY A MENU.
@@ -3570,6 +3593,7 @@ def main() -> None:
                 and not build_menu_open and not chest_open and not trade_open
                 and not workshop_open and not confirm_open and not pause_open
                 and not map_open and placing is None):
+            _branch = 'house'
             keys = pygame.key.get_pressed()
             if board_open or smith_open:                       # reading the board: stand still
                 keys = _NO_KEYS
@@ -3658,6 +3682,7 @@ def main() -> None:
               and not chest_open and not trade_open and not workshop_open
               and not confirm_open and not pause_open and not map_open
               and placing is None):
+            _branch = 'world'
             now += dt
             tick_nemesis(now)
             creatures_set_time(now)
@@ -4830,6 +4855,7 @@ def main() -> None:
         # view out, and a seam in the middle that never runs out. Handled here
         # and returned from, so nothing in the open air can be disturbed by it.
         if inside_mine is not None:
+            _branch = 'mine'
             _room = inside_mine.room
             _room.update(dt)
             mine_cd = max(0.0, mine_cd - dt)
@@ -5482,6 +5508,43 @@ def main() -> None:
             except Exception:
                 pass
 
+        # ---- THE PLAYER TRACE, EVERY FRAME ------------------------------
+        try:
+            _ks = pygame.key.get_pressed()
+            _b = (1 if _ks[pygame.K_w] or _ks[pygame.K_UP] else 0) | \
+                 (2 if _ks[pygame.K_s] or _ks[pygame.K_DOWN] else 0) | \
+                 (4 if _ks[pygame.K_a] or _ks[pygame.K_LEFT] else 0) | \
+                 (8 if _ks[pygame.K_d] or _ks[pygame.K_RIGHT] else 0)
+            _lp = _lastpt[0]
+            _mv = -1.0 if _lp is None else ((player.x - _lp[0]) ** 2
+                                            + (player.y - _lp[1]) ** 2) ** 0.5
+            try:
+                _visn = len(visible_villages)
+            except Exception:
+                _visn = -1
+            _trace.append((
+                "%dms" % int((time.perf_counter() - _framet0) * 1000.0),
+                "br=%s" % _branch, "dt=%.3f" % dt, "key=%d" % _b,
+                "mv=%.1f" % _mv,
+                "at=%d,%d" % (int(player.x), int(player.y)),
+                "hp=%d" % int(player.health), "dead=%s" % player.dead,
+                "want=%s" % getattr(player, "wanted", False),
+                "srch=%.1f" % float(getattr(player, "search_progress", 0.0)),
+                "sv=%s" % getattr(getattr(player, "searched_village", None), "name", "-"),
+                "house=%s" % (_inside_h()),
+                "vis=%d" % _visn, "wanted=%s" % getattr(player, "wanted", False),
+            ))
+            _lastpt[0] = (player.x, player.y)
+            if _b and _mv >= 0.0 and _mv < 0.6:
+                _still += 1
+            else:
+                _still = 0
+            if _still == 40:
+                _dump_trace("STUCK: %d frames with a movement key held and no movement"
+                            % _still)
+        except Exception:
+            pass
+
         # ---- THE SLOW-FRAME RECORD -------------------------------------
         # If this frame took more than a quarter of a second, say so, with the
         # breakdown and the one number that matters -- how many towns were being
@@ -5511,6 +5574,7 @@ def main() -> None:
                          "nearest_town_px", _ng,
                          "at", "%d,%d" % (int(player.x), int(player.y)),
                          "dead", player.dead)
+                _dump_trace("SLOW FRAME %dms" % int(_fms))
         except Exception:
             pass
         pygame.display.flip()
