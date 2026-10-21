@@ -50,6 +50,15 @@ class Player:
     searched_village: object = None
     search_village: object = None
     search_progress: float = 0.0
+    # THE GATE. Every one of these is read before it is ever written, so every
+    # one of them must exist on the class -- a player restored from a save is
+    # never __init__'d again.
+    gate_guard: object = None       # the soldier who has come over to search him
+    passed_guard: object = None     # the one who has already waved him through
+    aggro_village: object = None    # the town that has turned on him
+    was_inside_v: object = None     # which town's fence he was inside last frame
+    search_guard: object = None
+    wanted: bool = False
     # A CLASS ATTRIBUTE, NOT A MODULE ONE. main() has a LOCAL called `player`
     # -- the Player instance -- which SHADOWS the `player` module for the whole
     # of main(). So `player.LEVEL_FLASH` reached the instance, and the module's
