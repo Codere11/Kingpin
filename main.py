@@ -1264,8 +1264,15 @@ def main() -> None:
 
     def commit_crime() -> None:
         """If any villager can see the player, the village turns hostile."""
+        # ONLY WHAT CAN STAND BETWEEN HIM AND A WITNESS. This built the sight
+        # rects of every house in every visible village and tested each one
+        # against every person -- on the frame the crime happens, which is the
+        # frame he is walking through a gate. The houses that matter are within
+        # sight range of him; so are the trees.
         occluders = [house.sight_rect for village in visible_villages
-                     for house in village.houses]
+                     for house in village.houses
+                     if abs(house.x - player.x) < 700.0
+                     and abs(house.y - player.y) < 700.0]
         occluders += [tree.trunk_rect
                       for tree in trees.near(player.x, player.y, 560.0)
                       if not tree.felled]

@@ -3860,8 +3860,16 @@ class Villages:
                 # walls were on screen. That is why a man standing at a gate
                 # saw no guard: the town was never in the visible list, so the
                 # guard detail was never raised.
-                _v0 = self.get(gx, gy)
-                _fr = getattr(_v0, "fence_rect", None)
+                # NEVER BUILD A TOWN TO ASK WHERE IT IS. `get()` lays a whole
+                # village out -- fifty to eighty milliseconds -- and this loop
+                # runs for every cell in view on every call, a dozen times a
+                # frame. `visible()` is asked by drawing, collision, wolves,
+                # ore, the crop loop and the census, so a cell that had not been
+                # built yet was rebuilt... or rather, built, mid-frame, over and
+                # over: seconds per frame, which is the freeze at the gate. Look
+                # in the cache; build only when the cell has actually passed.
+                _v0 = self._cache.get((gx, gy))
+                _fr = getattr(_v0, "fence_rect", None) if _v0 is not None else None
                 _ext = (math.hypot(_fr.w, _fr.h) / 2.0) if _fr is not None else 0.0
                 r = max(village_radius(gx, gy), _ext) + slack
                 # WHERE THE WALL IS, NOT WHERE THE CELL IS. A settlement's
@@ -3874,6 +3882,8 @@ class Villages:
                 else:
                     _vx2, _vy2 = vx, vy
                 if abs(_vx2 - cx) <= r and abs(_vy2 - cy) <= r:
+                    if _v0 is None:
+                        _v0 = self.get(gx, gy)      # now, and only now
                     if _v0 not in out:
                         out.append(_v0)
         # AND THE OFF-LATTICE ONES. Everything above finds a town by asking the
