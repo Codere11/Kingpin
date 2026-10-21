@@ -371,6 +371,14 @@ def world_from_data(villages, blob) -> None:
         if v is None:
             continue
         _restore(v, rec.get("state"))
+        # WHERE A TOWN IS, IS NOT STATE. `_restore` copied x and y off the save,
+        # and a save written in another world put every village twenty-two
+        # kilometres from the position the lattice reports -- so its fence,
+        # gates, guards and culling were all computed for a place the town was
+        # not. The seed decides where a town stands; a save only decides what
+        # has happened to it since.
+        _c = village_center(v.gx, v.gy, villages.seed)
+        v.x, v.y = float(_c[0]), float(_c[1])
         for i, hb in enumerate(rec.get("houses", [])):
             if i >= len(v.houses):
                 break
