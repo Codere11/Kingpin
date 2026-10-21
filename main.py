@@ -772,6 +772,23 @@ def main() -> None:
             _spot = type("P", (), {"x": _tx * 32 + 16, "y": _ty * 32 + 16})()
         if _spot is not None:
             _hx, _hy = _spot.x, _spot.y + 64.0
+    # OUT THE GATE, NOT IN THE SQUARE. A new arrival starts a hundred paces
+    # outside the IN gate of the nearest settlement, on the road, so the first
+    # thing he can do is walk up to the guard and be searched. He was put in the
+    # middle of the world, which is a long walk from anything.
+    try:
+        _towns = [v for v in villages.villages
+                  if getattr(v, "fence_rect", None) is not None
+                  and not getattr(v, "is_hub", False)]
+        if _towns:
+            _near = min(_towns, key=lambda v: v.x * v.x + v.y * v.y)
+            _g = fence.gate_list(_near)[0]
+            _ox, _oy = fence.OUTWARD[_g[0]]
+            _hx, _hy = _g[1] + _ox * 150.0, _g[2] + _oy * 150.0
+            _origin_town = _near
+            player_start_town = _near
+    except Exception:
+        pass
     player = Player(_hx, _hy)
     # A NAME, AND A LETTER WAITING FOR HIM. The name is drawn the same way the
     # towns draw theirs, so he is a man out of this world and not a visitor to

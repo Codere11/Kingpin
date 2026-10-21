@@ -2991,6 +2991,12 @@ class Village:
     # for the rest of the save, with no way to live it down.
     PROVOKE_SECONDS = 120.0
 
+    # THE GATE IS PHYSICAL. A man queues because he is five tiles from the guard
+    # on that gate and his road runs to the other side of the wall -- and the
+    # line he stands in is spaced out behind it.
+    GATE_REACH = 160.0          # five tiles of 32 px
+    GATE_LINE_GAP = 34.0        # one man between each pair
+
     SEARCH_SECONDS = 10.0
     SEARCH_CATCH = 0.55         # a carrier with 20 items is caught this often
 
@@ -3059,7 +3065,21 @@ class Village:
             inside = r.collidepoint(n.x, n.y)
             cleared = getattr(n, "searched_village", None) is self
             g = fence.nearest_gate(self, n.x, n.y)
-            at_gate = math.hypot(n.x - g[1], n.y - g[2]) <= 130.0
+            _dgate = math.hypot(n.x - g[1], n.y - g[2])
+            # HE WANTS TO CROSS, OR HE DOES NOT. A man joins the queue because
+            # of where he is going, not because he happens to stand near a wall:
+            # his destination must be on the OTHER SIDE of this fence from
+            # himself. A man who lives here and is walking to the well is not
+            # waiting for anything.
+            _dest = (getattr(n, "trade_dest", None)
+                     or getattr(n, "home", None) or n.target)
+            _wants_across = False
+            try:
+                _wants_across = (r.collidepoint(_dest[0], _dest[1]) != inside)
+            except Exception:
+                _wants_across = False
+            # AND IT IS PHYSICAL: five tiles from the guard on that gate.
+            at_gate = _dgate <= GATE_REACH and _wants_across
 
             # (2) OVER THE WALL: wanted at once.
             if inside and not cleared and not at_gate:
@@ -3100,6 +3120,22 @@ class Village:
                     n.search_dir = "in"
                     self.search_queue.append(n)
 
+        # THEY FORM A LINE. A man in the queue stands in his place behind the
+        # gate -- outside the wall if he is coming in, inside it if he is going
+        # out -- one behind the next. Without this they all gathered on the same
+        # spot, which is not a queue and does not look like one.
+        for _qi, _qn in enumerate(self.search_queue):
+            if not _qn.alive:
+                continue
+            _qg = fence.nearest_gate(self, _qn.x, _qn.y)
+            _ox, _oy = fence.OUTWARD[_qg[0]]
+            _sign = 1.0 if getattr(_qn, "search_dir", "in") == "in" else -1.0
+            _slot = GATE_LINE_GAP * (_qi + 1)
+            _tx = _qg[1] + _ox * _sign * _slot
+            _ty = _qg[2] + _oy * _sign * _slot
+            _qn.target = (_tx, _ty)
+            _qn.pause = 0.0
+
         # THE ONE MAN AT THE HEAD OF THE LINE
         if self.search_now is not None and (not self.search_now.alive
                                             or getattr(self.search_now, "alive", True) is False):
@@ -3111,7 +3147,12 @@ class Village:
         if self.search_now is not None:
             n = self.search_now
             n.pause = max(float(getattr(n, "pause", 0.0)), 0.25)   # he stands
-            n.target = (n.x, n.y)
+            _sg = fence.nearest_gate(self, n.x, n.y)
+            _oxn, _oyn = fence.OUTWARD[_sg[0]]
+            n.target = (_sg[1] + _oxn * (26.0 if getattr(n, "search_dir", "in") == "in"
+                                        else -26.0),
+                        _sg[2] + _oyn * (26.0 if getattr(n, "search_dir", "in") == "in"
+                                        else -26.0))
             self.search_t += dt
             if self.search_t >= self.SEARCH_SECONDS:
                 self.search_now, self.search_t = None, 0.0
