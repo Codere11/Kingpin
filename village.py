@@ -2754,10 +2754,14 @@ class Village:
             self.farm_plots.append((ctx, cty, kind))
             cells = [(ctx + dx, cty + dy)
                      for dx in (-2, -1, 0, 1, 2) for dy in (-2, -1, 0, 1, 2)]
-            food_cells = (len(cells) * 2) // 3        # two thirds to the larder
+            # EVERY TILE IS FOOD. This read "two thirds to the larder" and
+            # planted the other NINE TILES OF EVERY TWENTY-FIVE as the local
+            # leaf -- fifty illegal plants in every settlement, which I then
+            # reported as fixed because I had changed the PLOT kind and never
+            # the tiles. A settlement grows food. Leaf is grown where the
+            # regime is not, and that is the hubs' whole reason to exist.
             self.farm_tiles[(ctx, cty)] = [
-                (cx2, cy2, food if i < food_cells else leaf)
-                for i, (cx2, cy2) in enumerate(cells)]
+                (cx2, cy2, food) for cx2, cy2 in cells]
         # Every household should have at least one breadwinner, so the jobs go
         # out one per house first; whatever is left is then handed to anybody.
         eligible = [n for n in self.npcs
@@ -2803,7 +2807,7 @@ class Village:
         for worker, job in handed:
             if job == "farm":
                 worker.farm_plot = field_i
-                worker.leaf_farmer = True     # every plot grows some leaf now
+                worker.leaf_farmer = False    # a settlement grows no leaf
                 worker.stock["shovel"] = 1
                 worker.tool_uses = economy.TOOL_USES
                 field_i += 1
@@ -2842,10 +2846,10 @@ class Village:
         for item in economy.FOOD:
             if item != food_item:
                 self.prices[item] = int(round(economy.ITEM_VALUE[item] * 1.45))
-        self.prices[self.leaf_item] = int(round(economy.ITEM_VALUE[self.leaf_item] * 0.70))
+        # NO LOCAL LEAF, SO NO LOCAL LEAF PRICE. Every leaf is dear here: it
+        # comes in over the wall, which is what makes the huts worth walking to.
         for item in economy.LEAF:
-            if item != self.leaf_item:
-                self.prices[item] = int(round(economy.ITEM_VALUE[item] * 1.45))
+            self.prices[item] = int(round(economy.ITEM_VALUE[item] * 1.45))
         self.ledger_goods[food_item] = 4 * len(self.npcs)
         self.ledger_coins = 40 * len(self.npcs)   # the bank, not just the wage float
         if self.is_capital:
@@ -3041,8 +3045,11 @@ class Village:
         for n in list(self.npcs):
             if not n.alive or getattr(n, "in_interior", False):
                 continue
-            if getattr(n, "home_house", None) is not None:
-                continue                          # he lives here
+            _hh = getattr(n, "home_house", None)
+            if _hh is not None and getattr(_hh, "village", None) is self:
+                continue                          # he lives HERE
+            # A man with a house in another town is a TRAVELLER here, and
+            # travellers are exactly who the gate is for.
             inside = r.collidepoint(n.x, n.y)
             cleared = getattr(n, "searched_village", None) is self
             g = fence.nearest_gate(self, n.x, n.y)
@@ -3476,7 +3483,7 @@ class Village:
             if i in taken:
                 continue
             npc.farm_plot = i
-            npc.leaf_farmer = True                 # dual culture: leaf too
+            npc.leaf_farmer = False                # a settlement grows no leaf
             npc.stock["shovel"] = 1
             npc.grade["shovel"] = 0
             npc.tool_uses = economy.TOOL_USES
@@ -3885,6 +3892,17 @@ class Villages:
                 _v0 = self._cache.get((gx, gy))
                 _fr = getattr(_v0, "fence_rect", None) if _v0 is not None else None
                 _ext = (math.hypot(_fr.w, _fr.h) / 2.0) if _fr is not None else 0.0
+                # AND A SANITY CLAMP. The half-diagonal of a fence as a town's
+                # REACH multiplied the area a town claims by seven, and a
+                # capital by thirty -- so approaching one gate put several whole
+                # towns into the per-frame simulation at once. That is the
+                # freeze. A fence further than eight kilometres from its own
+                # town is not believed either: it is the signature of a world
+                # whose positions were overwritten.
+                if _fr is not None and (abs(_fr.centerx - vx) > 8000.0
+                                        or abs(_fr.centery - vy) > 8000.0):
+                    _ext = 0.0
+                _ext = min(_ext, 6000.0)
                 r = max(village_radius(gx, gy), _ext) + slack
                 # WHERE THE WALL IS, NOT WHERE THE CELL IS. A settlement's
                 # fence can stand kilometres from its own coordinates, and a

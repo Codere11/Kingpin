@@ -3618,6 +3618,14 @@ def main() -> None:
                 for village in sim_villages:
                     if not world_tick:
                         break
+                    # THE BUBBLE, NOT THE VIEW. `visible()` is a DRAWING cull --
+                # a fence is big, so it returns every town whose wall is
+                # anywhere near the frame. Stepping each of those costs a dozen
+                # economy passes, and several towns at once is what made the
+                # frame die at a gate. A town's books run when the man is near
+                # the town.
+                if (abs(village.x - player.x) < village.radius + 3000.0
+                        and abs(village.y - player.y) < village.radius + 3000.0):
                     village.update(world_dt, world, now, day_phase())
                 for enemy in enemies:
                     if enemy.alive:
@@ -4343,7 +4351,15 @@ def main() -> None:
                     _dests = war.friendly_neighbours(villages, village)
                     if _dests:
                         war.rout(village, _dests, now)
-                village.update(world_dt, world, now, day_phase())
+                # THE BUBBLE, NOT THE VIEW. `visible()` is a DRAWING cull --
+                # a fence is big, so it returns every town whose wall is
+                # anywhere near the frame. Stepping each of those costs a dozen
+                # economy passes, and several towns at once is what made the
+                # frame die at a gate. A town's books run when the man is near
+                # the town.
+                if (abs(village.x - player.x) < village.radius + 3000.0
+                        and abs(village.y - player.y) < village.radius + 3000.0):
+                    village.update(world_dt, world, now, day_phase())
                 key = (village.gx, village.gy)
                 if key not in seeded_villages:       # plant their back gardens
                     seeded_villages.add(key)
@@ -5139,8 +5155,12 @@ def main() -> None:
         # tobacco comes from, and a criminal settlement rummaging your pack for
         # contraband would be a shop that arrests its customers. The regime's
         # towns search; the black market does not. That asymmetry is the game.
-        CONTraband = ("tobacco", "cigar", "beer", "liqueur", "mezcal",
-                      "dried_mushroom", "red_mushroom", "agave")
+        # ONE LIST OF WHAT IS ILLEGAL, shared with the town's own gate law --
+        # a copy here had already drifted by three items, so the guard and the
+        # town were counting different crimes.
+        CONTraband = getattr(village_mod, "_CONTRABAND", (
+            "tobacco", "cigar", "beer", "liqueur", "mezcal",
+            "dried_mushroom", "red_mushroom", "agave"))
         _gate_v, _inside = None, None
         # BY DISTANCE FROM THE REGISTRY, NOT BY WHAT IS ON SCREEN. A gate is on
         # the fence line, and `visible()` keeps a town only if its CENTRE is in
@@ -5150,8 +5170,8 @@ def main() -> None:
         try:
             _cands = [v for v in villages.villages
                       if getattr(v, "fence_rect", None) is not None
-                      and abs(v.x - player.x) < 3000.0
-                      and abs(v.y - player.y) < 3000.0]
+                      and abs(v.x - player.x) < 9000.0
+                      and abs(v.y - player.y) < 9000.0]
         except Exception:
             _cands = draw_villages
         for _v in _cands:
@@ -5201,6 +5221,7 @@ def main() -> None:
                 if units > 0:
                     _sk = max(0.0, min(10.0, float(getattr(player, "smuggling", 0.0))))
                     if random.random() < min(1.0, units / 100.0) * 0.55 * (1.0 - 0.09 * _sk):
+                        player.wanted = True          # caught is caught
                         toast("Searched. %d found. Run." % units)
                         commit_crime()
                     else:
