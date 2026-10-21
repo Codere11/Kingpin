@@ -2330,6 +2330,7 @@ class Village:
     provoked_t: float = 0.0         # how long the town stays up in arms
     search_now: object = None
     search_t: float = 0.0
+    gate_cd: float = 0.0            # a man's cooling-off after being searched
 
     def __init__(self, gx: int, gy: int, seed: int) -> None:
         code = (gx * 73856093) ^ (gy * 19349663) ^ (seed * 2654435761)
@@ -3063,7 +3064,19 @@ class Village:
             if not at_gate:
                 continue
 
-            # (3) THE QUEUE, BOTH WAYS.
+            # (3) THE QUEUE, BOTH WAYS -- AND ONCE PER CROSSING.
+            #
+            # A man searched on his way OUT ends up outside with no pass, and
+            # the "outside and not cleared" rule then queued him to come back
+            # IN on the very next frame. He was searched, let in, walked to the
+            # gate, un-cleared, queued again -- the same villager for ever, at
+            # the head of the line, while nobody else was ever reached. He gets
+            # a moment after a search in which he is not a candidate again: by
+            # then he is a hundred pixels down the road and out of the gateway.
+            _cd = float(getattr(n, "gate_cd", 0.0))
+            if _cd > 0.0:
+                n.gate_cd = max(0.0, _cd - dt)
+                continue
             if inside and cleared:                # he wants out
                 n.searched_village = None
                 if n not in self.search_queue and n is not self.search_now:
@@ -3094,6 +3107,7 @@ class Village:
                 caught = (units > 0 and random.random()
                           < min(1.0, units / 100.0) * self.SEARCH_CATCH
                           * (1.0 - 0.09 * _sk))
+                n.gate_cd = 6.0          # he is not a candidate again for a while
                 if caught:
                     n.wanted = True
                     n.searched_village = None

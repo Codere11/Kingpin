@@ -5146,15 +5146,14 @@ def main() -> None:
         # the fence line, and `visible()` keeps a town only if its CENTRE is in
         # view -- so a man standing at a gate had the town culled out from under
         # him and no search ever ran. Thirty-six towns is a trivial scan.
-        _cands = []
+        _cands = None
         try:
-            for _v in list(getattr(villages, "villages", ()) or ()):
-                if getattr(_v, "fence_rect", None) is None:
-                    continue
-                if math.hypot(_v.x - player.x, _v.y - player.y) < 3000.0:
-                    _cands.append(_v)
+            _cands = [v for v in villages.villages
+                      if getattr(v, "fence_rect", None) is not None
+                      and abs(v.x - player.x) < 3000.0
+                      and abs(v.y - player.y) < 3000.0]
         except Exception:
-            _cands = list(draw_villages)
+            _cands = draw_villages
         for _v in _cands:
             if getattr(_v, "is_hub", False):
                 continue                       # a hut never searches you
@@ -5174,6 +5173,20 @@ def main() -> None:
             if _fr.collidepoint(player.x, player.y):
                 _inside = _v
                 break
+        if _gate_v is None and getattr(player, "search_village", None) is not None:
+            # Still standing at the gate he was being searched at? Then the ten
+            # seconds keep counting: a step of drift is not walking away.
+            _sv0 = player.search_village
+            _near0 = False
+            try:
+                for _g0 in fence.gate_list(_sv0):
+                    if math.hypot(player.x - _g0[1], player.y - _g0[2]) < 320.0:
+                        _near0 = True
+                        break
+            except Exception:
+                _near0 = False
+            if _near0:
+                _gate_v = _sv0
         if _gate_v is not None:
             if getattr(player, "search_village", None) is not _gate_v:
                 player.search_village = _gate_v
