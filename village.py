@@ -2999,7 +2999,7 @@ class Village:
     SEARCH_SECONDS = 10.0
     SEARCH_CATCH = 0.55         # a carrier with 20 items is caught this often
 
-    def gate_tick(self, dt: float, now: float) -> None:
+    def search_tick(self, dt: float, now: float = 0.0) -> None:
         """ONE GUARD, ONE MAN, TEN SECONDS -- AND A LINE BEHIND HIM.
 
         No passes, no directions, no crossing law. A man who comes within reach
@@ -3078,7 +3078,10 @@ class Village:
         NPC.tick() -- and he registers himself in village.PEOPLE, so the world
         walks the people once instead of sixty-four towns walking their own.
         """
-        self.gate_tick(dt, now)
+        # (the gate search is NOT here -- see search_tick. Looking in one man's
+        # pack must not run the wages, the tax, the tithe, the election, the
+        # court, the garrison and the market of the whole town, which is what
+        # made a ten-second search cost a quarter of a second a frame.)
         self.forget_killers(now)
         day = int(now / economy.DAY_LENGTH)
         self._day = now / economy.DAY_LENGTH

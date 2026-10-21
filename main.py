@@ -3058,6 +3058,7 @@ def main() -> None:
     # proved. If the audit ever fails the frame falls back to stepping the
     # whole world, because a lane that has lost a man is worse than no lanes.
     _LANES = lanes.Partition(1)
+    _town_acc = {}            # accumulated time per town, for its books
     _LANE_TOWNS = list(villages.villages)
     _LANE_PEOPLE = list(village_mod.PEOPLE)
     _lane_timer = 0.0
@@ -3664,7 +3665,21 @@ def main() -> None:
                 # the town.
                 if (abs(village.x - player.x) < village.radius + 3000.0
                         and abs(village.y - player.y) < village.radius + 3000.0):
-                    village.update(world_dt, world, now, day_phase())
+                    # THE SEARCH, EVERY FRAME: one guard, the men near him,
+                    # and nothing else in the world.
+                    try:
+                        village.search_tick(world_dt, now)
+                    except Exception:
+                        pass
+                    # THE TOWN'S BOOKS, TEN TIMES A SECOND. They are all
+                    # day-guarded anyway; asking sixty times a second whether
+                    # the day has changed was most of the town phase's cost.
+                    _bk = _town_acc.get(id(village), 0.0) + world_dt
+                    if _bk >= 0.1:
+                        _town_acc[id(village)] = 0.0
+                        village.update(_bk, world, now, day_phase())
+                    else:
+                        _town_acc[id(village)] = _bk
                 for enemy in enemies:
                     if enemy.alive:
                         enemy.update(dt, house, combat, [], 1.0, 1.0, False)
@@ -4398,7 +4413,21 @@ def main() -> None:
                 # the town.
                 if (abs(village.x - player.x) < village.radius + 3000.0
                         and abs(village.y - player.y) < village.radius + 3000.0):
-                    village.update(world_dt, world, now, day_phase())
+                    # THE SEARCH, EVERY FRAME: one guard, the men near him,
+                    # and nothing else in the world.
+                    try:
+                        village.search_tick(world_dt, now)
+                    except Exception:
+                        pass
+                    # THE TOWN'S BOOKS, TEN TIMES A SECOND. They are all
+                    # day-guarded anyway; asking sixty times a second whether
+                    # the day has changed was most of the town phase's cost.
+                    _bk = _town_acc.get(id(village), 0.0) + world_dt
+                    if _bk >= 0.1:
+                        _town_acc[id(village)] = 0.0
+                        village.update(_bk, world, now, day_phase())
+                    else:
+                        _town_acc[id(village)] = _bk
                 key = (village.gx, village.gy)
                 if key not in seeded_villages:       # plant their back gardens
                     seeded_villages.add(key)
