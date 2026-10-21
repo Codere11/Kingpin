@@ -53,7 +53,8 @@ class Player:
     # THE GATE. Every one of these is read before it is ever written, so every
     # one of them must exist on the class -- a player restored from a save is
     # never __init__'d again.
-    gate_guard: object = None       # the soldier who has come over to search him
+    gate_guard: object = None
+    waved_by: object = None        # the town that has already waved him through       # the soldier who has come over to search him
     passed_guard: object = None     # the one who has already waved him through
     aggro_village: object = None    # the town that has turned on him
     was_inside_v: object = None     # which town's fence he was inside last frame

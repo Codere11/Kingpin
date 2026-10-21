@@ -1,0 +1,181 @@
+"""gate.py -- THE SEARCH AT THE GATE, and nothing else.
+
+One guard, one man, ten seconds, one roll. Written from scratch, because the
+version that grew inside `Village.update` reached into wages, taxes, the tithe,
+the election, the court, the garrison and the market -- and froze the game for
+forty-six seconds to look in somebody's pack.
+
+IN FULL:
+
+    close to a guard  ->  he walks to you, and ten seconds start
+    ten seconds       ->  one roll against what you carry
+    caught            ->  the town turns on you
+    clean             ->  you are waved through
+    stepping over a wall without being waved through -> the town turns on you
+
+The only state is one dictionary. The only per-frame work is a distance, a
+timer, and -- when nothing is running -- one pass over the guards of towns near
+the player. No town books, no line-of-sight, no queue for the player.
+"""
+
+from __future__ import annotations
+
+import random
+
+CONTRABAND = ("tobacco", "cigar", "beer", "liqueur", "mezcal",
+              "dried_mushroom", "red_mushroom", "agave",
+              "wheat_wort", "berry_wort", "agave_wort")
+
+SEARCH_RANGE = 260.0        # he will come this far to look at you
+SEARCH_SECONDS = 10.0
+CATCH_BASE = 0.55           # of the men carrying contraband, this many are found
+
+_STATE = {"guard": None, "t": 0.0, "town": None}
+
+
+def reset() -> None:
+    _STATE["guard"] = None
+    _STATE["t"] = 0.0
+    _STATE["town"] = None
+
+
+def progress() -> float:
+    """0 to 1: the bar under the guard's feet."""
+    if _STATE["guard"] is None:
+        return 0.0
+    return max(0.0, min(1.0, _STATE["t"] / SEARCH_SECONDS))
+
+
+def guard_of():
+    return _STATE["guard"]
+
+
+def units_on(carrier, inventory=None) -> int:
+    """What he is carrying that the state forbids."""
+    if inventory is not None:
+        try:
+            return sum(int(inventory.count_of(i)) for i in CONTRABAND)
+        except Exception:
+            return 0
+    stock = getattr(carrier, "stock", None)
+    if isinstance(stock, dict):
+        return sum(int(stock.get(i, 0)) for i in CONTRABAND)
+    return 0
+
+
+def _roll(units: int, skill: float) -> bool:
+    if units <= 0:
+        return False
+    chance = (min(1.0, units / 100.0) * CATCH_BASE
+              * (1.0 - 0.09 * max(0.0, min(10.0, skill))))
+    return random.random() < chance
+
+
+def nearest_guard(player, towns):
+    """The closest living guard of a settlement -- never a hub's."""
+    best, bd = None, SEARCH_RANGE * SEARCH_RANGE
+    for v in towns:
+        if getattr(v, "is_hub", False):
+            continue
+        for s in (getattr(v, "patrol", ()) or ()):
+            if not getattr(s, "alive", True):
+                continue
+            d = (player.x - s.x) ** 2 + (player.y - s.y) ** 2
+            if d < bd:
+                best, bd = s, d
+    return best
+
+
+def tick(dt: float, player, towns, inventory=None):
+    """The player's search. Returns ("caught"|"clean", town, units) or None."""
+    g = _STATE["guard"]
+    if g is not None and not getattr(g, "alive", True):
+        reset()
+        g = None
+
+    if g is None:
+        if getattr(player, "waved_by", None) is not None:
+            return None                      # already let through
+        g = nearest_guard(player, towns)
+        if g is None:
+            return None                      # nobody near: no work at all
+        _STATE["guard"] = g
+        _STATE["t"] = 0.0
+        _STATE["town"] = getattr(g, "gate_village", None)
+
+    # HE COMES TO YOU, and stands while he looks.
+    try:
+        g.target = (player.x, player.y)
+        g.pause = 0.0
+        g.idle_timer = 0.0
+    except Exception:
+        pass
+
+    # walked away? then it never happened.
+    if (player.x - g.x) ** 2 + (player.y - g.y) ** 2 > (SEARCH_RANGE * 2.5) ** 2:
+        reset()
+        return None
+
+    _STATE["t"] = float(_STATE["t"]) + dt
+    if _STATE["t"] < SEARCH_SECONDS:
+        return None
+
+    town = _STATE["town"]
+    reset()
+    player.waved_by = town
+    units = units_on(player, inventory)
+    skill = float(getattr(player, "smuggling", 0.0))
+    if _roll(units, skill):
+        return ("caught", town, units)
+    if units > 0:
+        player.smuggling = min(10.0, skill + 0.06 + units * 0.001)
+    return ("clean", town, units)
+
+
+def tick_town(dt: float, town):
+    """The same thing for a town's own men: one at a time, on the crossing."""
+    if getattr(town, "is_hub", False):
+        return None
+    squad = getattr(town, "patrol", None)
+    if not squad:
+        return None
+    guard = squad[0]
+    if not getattr(guard, "alive", True):
+        town.search_now, town.search_t = None, 0.0
+        return None
+    r = getattr(town, "fence_rect", None)
+    if r is None:
+        return None
+    if not isinstance(getattr(town, "search_queue", None), list):
+        town.search_queue = []
+
+    # WHO JUST STEPPED OVER THE WALL. That is the only trigger.
+    for n in town.npcs:
+        if not n.alive or getattr(n, "village", None) is town:
+            continue
+        inside = r.collidepoint(n.x, n.y)
+        was = getattr(n, "was_inside", None)
+        n.was_inside = inside
+        if was is None or was == inside:
+            continue
+        if n is town.search_now or n in town.search_queue:
+            continue
+        town.search_queue.append(n)
+
+    if town.search_now is None and town.search_queue:
+        town.search_now = town.search_queue.pop(0)
+        town.search_t = 0.0
+    cur = town.search_now
+    if cur is None:
+        return None
+    cur.pause = max(float(getattr(cur, "pause", 0.0)), 0.2)
+    cur.target = (cur.x, cur.y)
+    town.search_t = float(getattr(town, "search_t", 0.0)) + dt
+    if town.search_t < SEARCH_SECONDS:
+        return None
+    town.search_now, town.search_t = None, 0.0
+    units = units_on(cur)
+    if _roll(units, float(getattr(cur, "smuggling", 0.0))):
+        cur.wanted = True
+        return ("caught", cur, units)
+    return ("clean", cur, units)

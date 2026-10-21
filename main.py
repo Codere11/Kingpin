@@ -3676,7 +3676,12 @@ def main() -> None:
                     # THE SEARCH, EVERY FRAME: one guard, the men near him,
                     # and nothing else in the world.
                     try:
-                        village.search_tick(world_dt, now)
+                        import gate as gate_mod
+                        _r2 = gate_mod.tick_town(world_dt, village)
+                        if _r2 is not None and _r2[0] == "caught":
+                            village.provoke()
+                        elif _r2 is not None:
+                            pass
                     except Exception:
                         pass
                     # THE TOWN'S BOOKS, TEN TIMES A SECOND. They are all
@@ -4424,7 +4429,12 @@ def main() -> None:
                     # THE SEARCH, EVERY FRAME: one guard, the men near him,
                     # and nothing else in the world.
                     try:
-                        village.search_tick(world_dt, now)
+                        import gate as gate_mod
+                        _r2 = gate_mod.tick_town(world_dt, village)
+                        if _r2 is not None and _r2[0] == "caught":
+                            village.provoke()
+                        elif _r2 is not None:
+                            pass
                     except Exception:
                         pass
                     # THE TOWN'S BOOKS, TEN TIMES A SECOND. They are all
@@ -5236,66 +5246,46 @@ def main() -> None:
 
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
         # ---- THE GATE ------------------------------------------------------
-        #    close  ->  the soldier comes to YOU  ->  ten seconds, bar under
-        #    him  ->  one roll  ->  aggro, or you are let through.
-        # and crossing the wall without having been let through is aggro on the
-        # spot. That is the whole of it.
-        _gate_guard = getattr(player, "gate_guard", None)
-        if _gate_guard is not None and not getattr(_gate_guard, "alive", True):
-            _gate_guard = None
-            player.gate_guard = None
-        if player.gate_guard is None and not getattr(player, "passed_guard", None):
-            # WHO IS NEAR ENOUGH TO COME OVER. Only guards, only close.
-            _best, _bd = None, 240.0 ** 2
-            for _v in villages.villages:
-                if getattr(_v, "is_hub", False):
-                    continue
-                for _s in (getattr(_v, "patrol", ()) or ()):
-                    if not getattr(_s, "alive", True):
-                        continue
-                    _d = (player.x - _s.x) ** 2 + (player.y - _s.y) ** 2
-                    if _d < _bd:
-                        _best, _bd = _s, _d
-            if _best is not None:
-                player.gate_guard = _best
-                player.search_progress = 0.0
-                _gate_guard = _best
-        if player.gate_guard is not None:
-            # HE WALKS TO YOU.
-            player.gate_guard.target = (player.x, player.y)
-            player.search_progress = float(getattr(player, "search_progress", 0.0)) + dt
-            _gg = player.gate_guard
-            Player._draw_action_bar(screen, _gg.x - cam_x, _gg.y - cam_y,
-                                    min(1.0, player.search_progress / 10.0))
-            if player.search_progress >= 10.0:
-                player.search_progress = 0.0
-                player.gate_guard = None
-                player.passed_guard = _gg
-                units = sum(inventory.count_of(_i) for _i in CONTraband)
-                plog.log("SEARCHED", "units", units, "by",
-                         getattr(_gg, "name", "?"))
-                if units > 0:
-                    _sk = max(0.0, min(10.0, float(getattr(player, "smuggling", 0.0))))
-                    if random.random() < min(1.0, units / 100.0) * 0.55 * (1.0 - 0.09 * _sk):
-                        toast("Searched. %d found. Run." % units)
-                        commit_crime(getattr(_gg, "gate_village", None))
-                    else:
-                        player.smuggling = min(10.0, _sk + 0.06 + units * 0.001)
-                        toast("Searched clean   (smuggling %.1f)" % player.smuggling)
+        # Everything about it lives in gate.py now: close -> he comes to you ->
+        # ten seconds, bar under him -> one roll -> aggro or through. This block
+        # only reports what the module decided.
+        try:
+            import gate as gate_mod
+            _res = gate_mod.tick(dt, player, villages.villages, inventory)
+            if _res is not None:
+                _kind, _town, _units = _res
+                plog.log("SEARCHED", _kind, "units", _units,
+                         "town", getattr(_town, "name", "?"))
+                if _kind == "caught":
+                    toast("Searched. %d found. Run." % _units)
+                    commit_crime(_town)
+                elif _units > 0:
+                    toast("Searched clean   (smuggling %.1f)" % player.smuggling)
                 else:
                     toast("Searched and waved through")
-        # CROSSING WITHOUT BEING LET THROUGH IS AGGRO. One test, one call.
-        for _v in villages.villages:
-            _fr = getattr(_v, "fence_rect", None)
-            if _fr is None or getattr(_v, "is_hub", False):
-                continue
-            if _fr.collidepoint(player.x, player.y):
-                if getattr(player, "passed_guard", None) is None:
-                    if getattr(player, "aggro_village", None) is not _v:
-                        player.aggro_village = _v
-                        toast("You crossed the wall unsearched. The street turns.")
-                        commit_crime(_v)
-                break
+            _pg = gate_mod.progress()
+            if _pg > 0.0 and gate_mod.guard_of() is not None:
+                _gg = gate_mod.guard_of()
+                Player._draw_action_bar(screen, _gg.x - cam_x, _gg.y - cam_y, _pg)
+        except Exception:
+            import traceback as _tb
+            _tb.print_exc()
+
+        # CROSSING A WALL WITHOUT BEING WAVED THROUGH IS AGGRO.
+        try:
+            for _v in villages.villages:
+                _fr = getattr(_v, "fence_rect", None)
+                if _fr is None or getattr(_v, "is_hub", False):
+                    continue
+                if _fr.collidepoint(player.x, player.y):
+                    if getattr(player, "waved_by", None) is not _v:
+                        if getattr(player, "aggro_village", None) is not _v:
+                            player.aggro_village = _v
+                            toast("You crossed the wall unsearched. The street turns.")
+                            commit_crime(_v)
+                    break
+        except Exception:
+            pass
 
         # Houses and tree trunks block line of sight; canopies soften it.
         reach = vision.max_dist
