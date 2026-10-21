@@ -1258,14 +1258,9 @@ def main() -> None:
             d = (player.x - npc.x) ** 2 + (player.y - npc.y) ** 2
             if d < bd:
                 bd, best = d, player
-                plog.log("TARGET", getattr(npc, "job", "?"),
-                         "nation", getattr(npc, "nation", None),
-                         "host=%s wanted=%s prov=%s def=%s"
-                         % (getattr(npc, "hostile", False),
-                            getattr(player, "wanted", False),
-                            getattr(getattr(npc, "village", None), "provoked", False),
-                            getattr(npc, "defender", False)),
-                         "dist", int(d ** 0.5))
+                # (The TARGET log lived here and wrote a line per man per
+                # frame -- 305 KB in six minutes, from the hottest function in
+                # the game. It answered its question; it is gone.)
         # NO SOLDIER MUSTERED ANYWHERE is the common case, and it costs one
         # truth test rather than a neighbourhood assembled to answer "nobody".
         if not soldier_grid.buckets:
@@ -4420,14 +4415,22 @@ def main() -> None:
                             # Leaf is grown where the state is not.
                             kind = food
                             world.set_plot(tx, ty, kind, -1000.0)
-                            ground.invalidate_tile(tx, ty)
+                            # NOT IMMEDIATE. `invalidate_tile` THROWS THE CHUNK
+                            # AWAY and generates a fresh 256x256 one -- noise,
+                            # temperature, humidity, numpy clip -- and a town
+                            # seeds a garden tile for every house and every
+                            # tile of every field: about three hundred and
+                            # ninety chunk rebuilds in ONE frame. Measured: 46
+                            # to 49 seconds, on the frame a town first came into
+                            # the simulation. The worker thread does these.
+                            ground.invalidate_tile(tx, ty, False)
                             village_plots.add((tx, ty))
                     # The communal 5x5 crop plots on the inner border ring.
                     for ctx, cty, kind in getattr(village, "farm_plots", ()):
                         # dual culture: every cell carries its own crop kind
                         for tx, ty, tkind in village.farm_tiles[(ctx, cty)]:
                             world.set_plot(tx, ty, tkind, now - 6.0)
-                            ground.invalidate_tile(tx, ty)
+                            ground.invalidate_tile(tx, ty, False)
                             village_plots.add((tx, ty))
 
             _pt1 = time.perf_counter()
