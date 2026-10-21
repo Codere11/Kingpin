@@ -3079,7 +3079,7 @@ class Village:
             except Exception:
                 _wants_across = False
             # AND IT IS PHYSICAL: five tiles from the guard on that gate.
-            at_gate = _dgate <= GATE_REACH and _wants_across
+            at_gate = _dgate <= self.GATE_REACH and _wants_across
 
             # (2) OVER THE WALL: wanted at once.
             if inside and not cleared and not at_gate:
@@ -3130,7 +3130,7 @@ class Village:
             _qg = fence.nearest_gate(self, _qn.x, _qn.y)
             _ox, _oy = fence.OUTWARD[_qg[0]]
             _sign = 1.0 if getattr(_qn, "search_dir", "in") == "in" else -1.0
-            _slot = GATE_LINE_GAP * (_qi + 1)
+            _slot = self.GATE_LINE_GAP * (_qi + 1)
             _tx = _qg[1] + _ox * _sign * _slot
             _ty = _qg[2] + _oy * _sign * _slot
             _qn.target = (_tx, _ty)
