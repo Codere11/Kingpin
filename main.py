@@ -643,7 +643,14 @@ def main() -> None:
     # reads the built villages back from disk instead of making them again --
     # the loading bar is for a genuinely new world, not for every time you
     # sit down to play.
-    _cached = load_cached_world(world.seed)
+    # THE CACHE IS NOT READ. A fresh build agrees with `village_center()` to the
+    # pixel; the cached world on disk did not -- every town in it stood 22 km
+    # from the position the lattice reports, so its fence, its gates, its
+    # guards and its culling were all computed for a place the town was not.
+    # That is why a man at a gate saw no wall and no guard, and why a settlement
+    # looked like a patch of berries with nothing around it. 1.8 seconds at the
+    # loading screen is cheaper than a world that lies about where it is.
+    _cached = None
     if _cached is not None:
         villages = _cached
         ground.villages_v = villages
