@@ -899,7 +899,7 @@ def main() -> None:
             s.target = s.gate_post
             s.patrol_center = None       # not a territory patrol: he STANDS
             s.patrol_r = 0.0
-            s.idle_timer = 1.0e9         # never picks a new spot to walk to
+            s.idle_timer = 1.0e9         # stands at his gate until he is sent
             s.hostile = getattr(village, "provoked", False)
             s.fire_cd = random.uniform(0.05, 0.30)
             s.ammo = 30                  # thirty rounds, and then he is a man
@@ -1274,32 +1274,29 @@ def main() -> None:
                 bd, best = d, e
         return best
 
-    def commit_crime() -> None:
-        """If any villager can see the player, the village turns hostile."""
-        # ONLY WHAT CAN STAND BETWEEN HIM AND A WITNESS. This built the sight
-        # rects of every house in every visible village and tested each one
-        # against every person -- on the frame the crime happens, which is the
-        # frame he is walking through a gate. The houses that matter are within
-        # sight range of him; so are the trees.
-        occluders = [house.sight_rect for village in visible_villages
-                     for house in village.houses
-                     if abs(house.x - player.x) < 700.0
-                     and abs(house.y - player.y) < 700.0]
-        occluders += [tree.trunk_rect
-                      for tree in trees.near(player.x, player.y, 560.0)
-                      if not tree.felled]
-        for village in visible_villages:
-            for npc in village.npcs:
-                if not npc.alive:
-                    continue
-                if math.hypot(npc.x - player.x, npc.y - player.y) > 540.0:
-                    continue
-                if any(segment_rect_hit(npc.x, npc.y, player.x, player.y, rect)
-                       for rect in occluders):
-                    continue
-                village.provoke()
-                if player.nation == village.nation:      # crime against your own
-                    banish(village.nation)
+    def commit_crime(where=None) -> None:
+        """THE TOWN TURNS ON HIM. One call, one town, nothing else.
+
+        This used to gather the sight rects of every house in every visible
+        village and run a line-of-sight test for every man against every one of
+        them -- on the frame the crime happened, which is the frame he is
+        crossing a gate. Aggro is a flag on a town. Say so, once.
+        """
+        town = where
+        if town is None:
+            for v in villages.villages:
+                fr = getattr(v, "fence_rect", None)
+                if fr is not None and fr.collidepoint(player.x, player.y):
+                    town = v
+                    break
+        if town is not None:
+            town.provoke()
+            plog.log("AGGRO", getattr(town, "name", "?"))
+            return
+        for v in villages.villages:
+            if math.hypot(v.x - player.x, v.y - player.y) < v.radius + 400.0:
+                v.provoke()
+                plog.log("AGGRO", getattr(v, "name", "?"))
                 break
 
     def player_hunted() -> bool:
@@ -5227,49 +5224,67 @@ def main() -> None:
                 break
 
         draw_trees = trees.visible(cam_x, cam_y, vw, vh)
-        # ---- THE GATE SEARCH, FOR HIM -------------------------------------
-        # ONCE, WHEN HE CROSSES THE WALL. Which town is he inside? Ask its
-        # fence, nothing else. If that answer changed since the last frame, he
-        # has crossed in or out -- and the guard searches him: ten seconds, one
-        # roll. A man standing still is never polled, never re-searched, and
-        # nothing else in the world is touched.
-        _inside_v = None
-        try:
+        # ---- THE GATE ------------------------------------------------------
+        #    close  ->  the soldier comes to YOU  ->  ten seconds, bar under
+        #    him  ->  one roll  ->  aggro, or you are let through.
+        # and crossing the wall without having been let through is aggro on the
+        # spot. That is the whole of it.
+        _gate_guard = getattr(player, "gate_guard", None)
+        if _gate_guard is not None and not getattr(_gate_guard, "alive", True):
+            _gate_guard = None
+            player.gate_guard = None
+        if player.gate_guard is None and not getattr(player, "passed_guard", None):
+            # WHO IS NEAR ENOUGH TO COME OVER. Only guards, only close.
+            _best, _bd = None, 240.0 ** 2
             for _v in villages.villages:
-                _fr = getattr(_v, "fence_rect", None)
-                if _fr is not None and _fr.collidepoint(player.x, player.y):
-                    _inside_v = _v
-                    break
-        except Exception:
-            _inside_v = None
-        _was_v = getattr(player, "was_inside_v", None)
-        player.was_inside_v = _inside_v
-        if _was_v is not _inside_v and (_inside_v is not None or _was_v is not None):
-            _crossed_v = _inside_v if _inside_v is not None else _was_v
-            if not getattr(_crossed_v, "is_hub", False):
-                player.search_village = _crossed_v
+                if getattr(_v, "is_hub", False):
+                    continue
+                for _s in (getattr(_v, "patrol", ()) or ()):
+                    if not getattr(_s, "alive", True):
+                        continue
+                    _d = (player.x - _s.x) ** 2 + (player.y - _s.y) ** 2
+                    if _d < _bd:
+                        _best, _bd = _s, _d
+            if _best is not None:
+                player.gate_guard = _best
                 player.search_progress = 0.0
-                plog.log("CROSSED-A-GATE", getattr(_crossed_v, "name", "?"),
-                         "dir", "in" if _inside_v is not None else "out")
-
-        if getattr(player, "search_village", None) is not None:
+                _gate_guard = _best
+        if player.gate_guard is not None:
+            # HE WALKS TO YOU.
+            player.gate_guard.target = (player.x, player.y)
             player.search_progress = float(getattr(player, "search_progress", 0.0)) + dt
+            _gg = player.gate_guard
+            Player._draw_action_bar(screen, _gg.x - cam_x, _gg.y - cam_y,
+                                    min(1.0, player.search_progress / 10.0))
             if player.search_progress >= 10.0:
-                _sv = player.search_village
                 player.search_progress = 0.0
-                player.search_village = None
+                player.gate_guard = None
+                player.passed_guard = _gg
                 units = sum(inventory.count_of(_i) for _i in CONTraband)
-                plog.log("SEARCHED", getattr(_sv, "name", "?"), "units", units)
+                plog.log("SEARCHED", "units", units, "by",
+                         getattr(_gg, "name", "?"))
                 if units > 0:
                     _sk = max(0.0, min(10.0, float(getattr(player, "smuggling", 0.0))))
                     if random.random() < min(1.0, units / 100.0) * 0.55 * (1.0 - 0.09 * _sk):
                         toast("Searched. %d found. Run." % units)
-                        commit_crime()          # CAUGHT IS AGGRO, and that is all
+                        commit_crime(getattr(_gg, "gate_village", None))
                     else:
                         player.smuggling = min(10.0, _sk + 0.06 + units * 0.001)
                         toast("Searched clean   (smuggling %.1f)" % player.smuggling)
                 else:
                     toast("Searched and waved through")
+        # CROSSING WITHOUT BEING LET THROUGH IS AGGRO. One test, one call.
+        for _v in villages.villages:
+            _fr = getattr(_v, "fence_rect", None)
+            if _fr is None or getattr(_v, "is_hub", False):
+                continue
+            if _fr.collidepoint(player.x, player.y):
+                if getattr(player, "passed_guard", None) is None:
+                    if getattr(player, "aggro_village", None) is not _v:
+                        player.aggro_village = _v
+                        toast("You crossed the wall unsearched. The street turns.")
+                        commit_crime(_v)
+                break
 
         # Houses and tree trunks block line of sight; canopies soften it.
         reach = vision.max_dist
