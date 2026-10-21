@@ -4443,6 +4443,12 @@ def main() -> None:
                             # settlement the state permits what feeds people.
                             # Leaf is grown where the state is not.
                             kind = food
+                            # A PLOT IS DRAWN BY THE CROP RENDERER, NOT BY THE
+                            # GROUND CHUNK. Invalidating the chunk here threw it
+                            # away and re-composed the layer for every planted
+                            # tile -- three hundred and ninety of them on the
+                            # frame the town arrived. The ground under a field
+                            # does not change when something is planted in it.
                             world.set_plot(tx, ty, kind, -1000.0)
                             # NOT IMMEDIATE. `invalidate_tile` THROWS THE CHUNK
                             # AWAY and generates a fresh 256x256 one -- noise,
@@ -4452,14 +4458,14 @@ def main() -> None:
                             # ninety chunk rebuilds in ONE frame. Measured: 46
                             # to 49 seconds, on the frame a town first came into
                             # the simulation. The worker thread does these.
-                            ground.invalidate_tile(tx, ty, False)
+
                             village_plots.add((tx, ty))
                     # The communal 5x5 crop plots on the inner border ring.
                     for ctx, cty, kind in getattr(village, "farm_plots", ()):
                         # dual culture: every cell carries its own crop kind
                         for tx, ty, tkind in village.farm_tiles[(ctx, cty)]:
                             world.set_plot(tx, ty, tkind, now - 6.0)
-                            ground.invalidate_tile(tx, ty, False)
+
                             village_plots.add((tx, ty))
 
             _pt1 = time.perf_counter()
@@ -5239,7 +5245,11 @@ def main() -> None:
                 _d = (player.x - _s.x) ** 2 + (player.y - _s.y) ** 2
                 if _d < _gdist:
                     _gdist, _guard = _d, _s
-        if _guard is not None and _gdist <= 160.0 ** 2:
+        # FORGIVING BY TWENTY PACES. A search that restarts whenever he drifts
+        # a pixel out of reach can never finish -- `srch=0.1` in the log was the
+        # timer being wiped every frame. He keeps his ten seconds while he is
+        # within two hundred and sixty pixels of the guard.
+        if _guard is not None and _gdist <= 260.0 ** 2:
             if getattr(player, "search_guard", None) is not _guard:
                 player.search_guard = _guard
                 player.search_progress = 0.0
