@@ -3045,10 +3045,16 @@ class Village:
         for n in list(self.npcs):
             if not n.alive or getattr(n, "in_interior", False):
                 continue
-            _hh = getattr(n, "home_house", None)
-            if _hh is not None and getattr(_hh, "village", None) is self:
+            # HE LIVES HERE IF HE BELONGS HERE. The test was
+            # `home_house.village is self`, and a HOUSE HAS NO `village` FIELD --
+            # only the hubs set one -- so it was None for every house in every
+            # town, no townsman was ever a resident, and the WHOLE POPULATION of
+            # every settlement queued at the gates and stood frozen, ten seconds
+            # each: a town of sixty took ten minutes and looked dead. `NPC` is
+            # the one that carries a village (`self.village = village`).
+            if getattr(n, "village", None) is self:
                 continue                          # he lives HERE
-            # A man with a house in another town is a TRAVELLER here, and
+            # A man who belongs to another town is a TRAVELLER here, and
             # travellers are exactly who the gate is for.
             inside = r.collidepoint(n.x, n.y)
             cleared = getattr(n, "searched_village", None) is self
