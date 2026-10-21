@@ -2597,7 +2597,13 @@ def main() -> None:
         outlaw hut in an empty country. A man with no town still needs to know
         where the nearest one is.
         """
-        towns = list(getattr(villages, "villages", ()) or ())
+        # ONLY A TOWN YOU COULD ACTUALLY WALK TO. The world is laid out one ring
+        # beyond the edge it plays in, so men on the road have neighbours to
+        # trade with -- but those cells stand out past WORLD_HALF, where the
+        # player is clamped and the map ends. Pinning one sent a man walking at
+        # a settlement he could never reach.
+        towns = [v for v in (getattr(villages, "villages", ()) or ())
+                 if abs(v.x) <= WORLD_HALF and abs(v.y) <= WORLD_HALF]
         if not towns:
             return None
         return min(towns, key=lambda v: (v.x - player.x) ** 2
