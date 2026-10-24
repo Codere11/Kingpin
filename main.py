@@ -2097,6 +2097,8 @@ def main() -> None:
         inside_house = None
         door_cooldown = 0.7
 
+    _TRUTH = [None]      # the man who is always beside the player, if any
+
     def draw_exterior(cx, cy, show_names: bool = False, target=None) -> None:
         target = target if target is not None else screen
         static_layer.draw(target, cx, cy, vw, vh)
@@ -2163,11 +2165,20 @@ def main() -> None:
             for npc in village.npcs:
                 if npc.asleep or npc.in_interior:
                     continue
+                if npc is _TRUTH[0]:
+                    continue        # drawn once, with the world, below
                 if not view.collidepoint(npc.x, npc.y):
                     continue
                 near = show_names and ((npc.x - player.x) ** 2
                                        + (npc.y - player.y) ** 2) < 260.0 ** 2
                 items.append((npc.y, lambda n=npc, s=near:
+                              n.draw(target, cx, cy, s)))
+        if _TRUTH[0] is not None and not _TRUTH[0].asleep:
+            _tn = _TRUTH[0]
+            if view.collidepoint(_tn.x, _tn.y):
+                _tnear = show_names and ((_tn.x - player.x) ** 2
+                                         + (_tn.y - player.y) ** 2) < 260.0 ** 2
+                items.append((_tn.y, lambda n=_tn, s=_tnear:
                               n.draw(target, cx, cy, s)))
         items.sort(key=lambda item: item[0])
         for _y, draw in items:
@@ -5254,12 +5265,6 @@ def main() -> None:
             for npc in getattr(inside_house, "occupants", ()):
                 if npc.alive and npc.in_interior:      # residents move about
                     npc.draw(screen, cam_x, cam_y, True)
-            if _truth is not None:      # the man who is always beside you
-                _truth.x, _truth.y = player.x + 44.0, player.y
-                _truth.alive = True
-                _truth.health = _truth.max_health
-                _truth.pause = 1.0
-                _truth.draw(screen, cam_x, cam_y, True)
         _sel0 = inventory.selected_stack()      # never rely on a name that a
         # branch may not have assigned: `selected` was unbound on the frames the
         # player was not inside a house, and this is the line that draws him.
@@ -5434,6 +5439,7 @@ def main() -> None:
         else:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
+            _TRUTH[0] = _truth
         draw_exterior(cam_x, cam_y, True)
         try:
             hub_world.draw(screen, cam_x, cam_y, vw, vh)
@@ -5556,13 +5562,6 @@ def main() -> None:
         draw_night()
 
         selected = inventory.selected_stack()
-        if _truth is not None:
-            # HE IS PINNED TO HIM. Nothing can move him, nothing can kill him.
-            _truth.x, _truth.y = player.x + 44.0, player.y
-            _truth.alive = True
-            _truth.health = _truth.max_health
-            _truth.pause = 1.0
-            _truth.draw(screen, cam_x, cam_y, True)
         _sel0 = inventory.selected_stack()      # never rely on a name that a
         # branch may not have assigned: `selected` was unbound on the frames the
         # player was not inside a house, and this is the line that draws him.
