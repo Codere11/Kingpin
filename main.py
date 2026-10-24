@@ -838,6 +838,7 @@ def main() -> None:
     # the same class every other man in the world is made of -- he simply
     # cannot be killed and does not walk away. He exists to be talked to.
     _truth = None
+    _truth_home = [0.0, 0.0]      # the spot on the ground he never leaves
     try:
         _towns_t = [v for v in villages.villages
                     if getattr(v, "fence_rect", None) is not None
@@ -857,6 +858,7 @@ def main() -> None:
             _truth.max_health = 1_000_000.0
             _truth.health = 1_000_000.0
             _tt_town.npcs.append(_truth)
+            _truth_home[0], _truth_home[1] = _truth.x, _truth.y
             plog.log("TRUTH", "created", _truth.name, "of", _tt_town.name,
                      "trade", _truth.job, "at", "%d,%d"
                      % (int(_truth.x), int(_truth.y)))
@@ -1747,6 +1749,8 @@ def main() -> None:
         # Clicking a villager while not wielding a weapon opens trade.
         if math.hypot(wx - player.x, wy - player.y) <= REACH + 24.0:
             _folk = [n for v in visible_villages for n in v.npcs]
+            if _TRUTH[0] is not None and _TRUTH[0] not in _folk:
+                _folk.append(_TRUTH[0])         # he is a man like any other
             # AND THE SOLDIERS. They are not in a village's list -- they are
             # the nation's, and they march -- so they were the one kind of man
             # in the world you could not do business with.
@@ -4177,10 +4181,13 @@ def main() -> None:
             # square unable to see anyone.
             sieges = [a.target for a in armies
                       if not a.done and a.target is not None]
-            folk_grid.build([n for v in visible_villages
-                             + [x for x in sieges if x not in visible_villages]
-                             for n in v.npcs
-                             if n.alive and not n.in_interior])
+            _folk_list = [n for v in visible_villages
+                          + [x for x in sieges if x not in visible_villages]
+                          for n in v.npcs
+                          if n.alive and not n.in_interior]
+            if _TRUTH[0] is not None and _TRUTH[0] not in _folk_list:
+                _folk_list.append(_TRUTH[0])    # shootable, healable, seen
+            folk_grid.build(_folk_list)
             # THE WORLD KNOWS YOUR FACE. Once word of a murderer has reached a
             # man -- by refugee, by trader, by the army at his gate -- he does
             # one of two things when he lays eyes on him, and nothing else:
@@ -5456,8 +5463,12 @@ def main() -> None:
         # and `asleep` must be cleared, because an NPC is born asleep at night
         # and the draw pass used to skip a sleeping man.
         if _truth is not None:
-            _truth.x = player.x + 44.0
-            _truth.y = player.y
+            # HE DOES NOT FOLLOW. He was pinned to the player's shoulder every
+            # frame, so he slid along the road beside him -- "fixed to where I
+            # move" instead of a man standing in one place. He is placed ONCE,
+            # at the spot he was born on, and held there like a post.
+            _truth.x = _truth_home[0]
+            _truth.y = _truth_home[1]
             _truth.asleep = False
             _truth.in_interior = False
             _truth.alive = True
