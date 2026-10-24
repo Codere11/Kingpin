@@ -96,7 +96,9 @@ class Dialogue:
         self.font = pygame.font.SysFont("dejavusans", 16, bold=True)
         self.font_small = pygame.font.SysFont("dejavusans", 13)
         self.font_title = pygame.font.SysFont("dejavusans", 18, bold=True)
+        self.font_body = pygame.font.SysFont("dejavusans", 15)
         self.rows: list = []          # (rect, key)
+        self._rect = None
 
     # -- opening ---------------------------------------------------------
     def open(self, npc, player, capital=None) -> None:
@@ -105,6 +107,9 @@ class Dialogue:
         self.capital = capital
         self.who = getattr(npc, "name", "him")
         self.answer = ""
+
+    def hit(self, pos) -> bool:
+        return self._rect is not None and self._rect.collidepoint(pos)
 
     def close(self) -> None:
         self.npc = None
@@ -159,58 +164,87 @@ class Dialogue:
         return ""
 
     # -- drawing ---------------------------------------------------------
+    @staticmethod
+    def spaced(screen, font, text, pos, colour, extra=1):
+        """TEXT WITH LETTER SPACING. pygame renders glyphs flush against one
+        another and a short string set that way looks cramped; each character is
+        drawn a pixel apart and the whole line is measured as it goes."""
+        x, y = pos
+        for ch in text:
+            glyph = font.render(ch, True, colour)
+            screen.blit(glyph, (x, y))
+            x += glyph.get_width() + extra
+        return x
+
+    def _wrap(self, text, font, width) -> list:
+        lines, cur = [], ""
+        for word in text.split():
+            trial = (cur + " " + word).strip()
+            if self.spaced_len(font, trial) > width and cur:
+                lines.append(cur)
+                cur = word
+            else:
+                cur = trial
+        if cur:
+            lines.append(cur)
+        return lines
+
+    @staticmethod
+    def spaced_len(font, text) -> int:
+        return sum(font.size(ch)[0] + 1 for ch in text)
+
     def draw(self, screen: pygame.Surface) -> None:
         if not self.open_:
             return
         vw, vh = screen.get_size()
-        w, h = 470, 250
+        w = min(560, vw - 80)
+        h = 320
         panel = pygame.Rect(vw // 2 - w // 2, vh // 2 - h // 2, w, h)
+        self._rect = panel
         shade = pygame.Surface((vw, vh), pygame.SRCALPHA)
         shade.fill((0, 0, 0, 150))
         screen.blit(shade, (0, 0))
         pygame.draw.rect(screen, (24, 22, 20), panel, border_radius=10)
         pygame.draw.rect(screen, (154, 118, 78), panel, 2, border_radius=10)
 
-        title = self.font_title.render(self.who.upper(), True, (238, 224, 190))
-        screen.blit(title, (panel.x + 16, panel.y + 12))
-        job = "  -  %s" % (getattr(self.npc, "job", None) or "no trade")
-        screen.blit(self.font_small.render(job, True, (176, 168, 152)),
-                    (panel.x + 16 + title.get_width(), panel.y + 16))
+        # ---- the man -------------------------------------------------
+        self.spaced(screen, self.font_title, self.who.upper(),
+                    (panel.x + 18, panel.y + 14), (238, 224, 190), 1)
+        job = "-  %s" % (getattr(self.npc, "job", None) or "no trade")
+        self.spaced(screen, self.font_small, job,
+                    (panel.x + 18, panel.y + 38), (176, 168, 152), 1)
 
-        _cap = self.capital
-        dname = dictator_name(_cap)
+        # ---- the questions -------------------------------------------
+        dname = dictator_name(self.capital)
         options = [
-            (1, "1.  Wanna trade?"),
-            (2, "2.  What do you think about %s?" % dname),
-            (3, "3.  What do you think about me?"),
+            (1, "1.   Wanna trade?"),
+            (2, "2.   What do you think about %s?" % dname),
+            (3, "3.   What do you think about me?"),
         ]
         self.rows = []
-        y = panel.y + 52
+        y = panel.y + 66
         for key, text in options:
-            r = pygame.Rect(panel.x + 16, y, w - 32, 30)
+            r = pygame.Rect(panel.x + 16, y, w - 32, 32)
             hover = r.collidepoint(pygame.mouse.get_pos())
-            pygame.draw.rect(screen, (44, 40, 34) if hover else (32, 30, 26),
+            pygame.draw.rect(screen, (46, 42, 36) if hover else (31, 29, 25),
                              r, border_radius=5)
-            screen.blit(self.font.render(text, True, (226, 216, 196)),
-                        (r.x + 10, r.y + 6))
+            pygame.draw.rect(screen, (66, 60, 50), r, 1, border_radius=5)
+            self.spaced(screen, self.font, text, (r.x + 12, r.y + 8),
+                        (228, 218, 198), 1)
             self.rows.append((r, key))
-            y += 34
+            y += 38
 
+        # ---- the answer ----------------------------------------------
+        pygame.draw.line(screen, (74, 68, 58),
+                         (panel.x + 16, y + 4), (panel.right - 16, y + 4), 1)
+        ay = y + 16
         if self.answer:
-            lines, cur = [], ""
-            for word in self.answer.split():
-                trial = (cur + " " + word).strip()
-                if self.font_small.size(trial)[0] > w - 44:
-                    lines.append(cur)
-                    cur = word
-                else:
-                    cur = trial
-            if cur:
-                lines.append(cur)
-            ay = panel.y + 158
-            for line in lines[:3]:
-                screen.blit(self.font_small.render(line, True, (206, 232, 200)),
-                            (panel.x + 16, ay))
-                ay += 18
-        screen.blit(self.font_small.render("ESC to walk away", True, (140, 134, 122)),
-                    (panel.x + 16, panel.bottom - 24))
+            for line in self._wrap(self.answer, self.font_body, w - 44)[:5]:
+                self.spaced(screen, self.font_body, line,
+                            (panel.x + 18, ay), (206, 232, 200), 1)
+                ay += 22
+        else:
+            self.spaced(screen, self.font_small, "Ask him anything. He does not lie.",
+                        (panel.x + 18, ay), (150, 146, 134), 1)
+        self.spaced(screen, self.font_small, "[1] [2] [3]   ESC to walk away",
+                    (panel.x + 18, panel.bottom - 26), (140, 134, 122), 1)
