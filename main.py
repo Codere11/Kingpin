@@ -1160,11 +1160,48 @@ def main() -> None:
         player.x = min(max(player.x, -WORLD_HALF), WORLD_HALF)
         player.y = min(max(player.y, -WORLD_HALF), WORLD_HALF)
 
+    def try_talk() -> bool:
+        """DID THE PLAYER CLICK THE MAN WHO ANSWERS QUESTIONS?
+
+        His own test, in the EVENT LOOP, before anything else can consume the
+        click -- items, the hotbar, trade. A cutout is drawn above its anchor,
+        so the box is his whole silhouette: 34 px each way, from 80 px above his
+        feet to 30 below.
+        """
+        tt = _TRUTH[0]
+        if tt is None:
+            for _n in list(village_mod.PEOPLE) + list(village_mod.TRAVELLERS):
+                if getattr(_n, "is_truth_teller", False):
+                    tt = _n
+                    _TRUTH[0] = tt
+                    break
+        if tt is None:
+            return False
+        mx, my = pygame.mouse.get_pos()
+        wx = cam_x + mx / ZOOM
+        wy = cam_y + my / ZOOM
+        if abs(wx - tt.x) < 34.0 and -80.0 < (wy - tt.y) < 30.0:
+            dialogue_panel.open(tt, player, _main_capital()[0])
+            pygame.mouse.set_visible(True)
+            plog.log("TALK", "opened with", getattr(tt, "name", "?"))
+            return True
+        return False
+
     def respawn() -> None:
         nonlocal game_over
         game_over = False
         pygame.mouse.set_visible(False)
         player.respawn()
+        # HE COMES BACK WITH YOU. A respawn moved the player to the middle of
+        # the world and left the truth-teller standing where the body fell, out
+        # of sight for ever.
+        if _truth is not None:
+            _truth_home[0], _truth_home[1] = player.x + 44.0, player.y
+            _truth.x, _truth.y = _truth_home[0], _truth_home[1]
+            _truth.alive = True
+            _truth.asleep = False
+            _truth.health = _truth.max_health
+            _TRUTH[0] = _truth
         combat.bullets.clear()
         combat.flashes.clear()
 
@@ -3705,6 +3742,20 @@ def main() -> None:
             elif event.type == pygame.KEYDOWN and pygame.K_1 <= event.key <= pygame.K_9:
                 hotbar.select_visible(event.key - pygame.K_1)
             elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEWHEEL):
+                if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1):
+                    if dialogue_panel.open_:
+                        _dd = dialogue_panel.handle_event(event)
+                        if _dd == "trade":
+                            _dn = dialogue_panel.npc
+                            dialogue_panel.close()
+                            pygame.mouse.set_visible(False)
+                            if _dn is not None:
+                                open_trade(_dn)
+                        elif _dd == "close":
+                            pygame.mouse.set_visible(False)
+                        break
+                    if try_talk():
+                        break
                 consumed = hotbar.handle_event(event)
                 if (not consumed and event.type == pygame.MOUSEBUTTONDOWN
                         and event.button == 1):
