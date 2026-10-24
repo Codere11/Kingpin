@@ -1748,6 +1748,19 @@ def main() -> None:
         if item_id in ("rifle", "shotgun"):
             fire()
             return
+        # TALKING COMES BEFORE THE AXE. `on_click` returned at the axe branch
+        # below, so with a weapon in hand -- and the starter kit IS an axe --
+        # no man could ever be spoken to. The man who answers questions is
+        # clicked first, and the axe still works on everybody else.
+        if _TRUTH[0] is not None:
+            _mx, _my = pygame.mouse.get_pos()
+            _wx = cam_x + _mx / ZOOM
+            _wy = cam_y + _my / ZOOM
+            if (math.hypot(_wx - _TRUTH[0].x, _wy - _TRUTH[0].y) < 26.0
+                    and math.hypot(_wx - player.x, _wy - player.y) <= REACH + 40.0):
+                dialogue_panel.open(_TRUTH[0], player, _main_capital()[0])
+                pygame.mouse.set_visible(True)
+                return
         if item_id == "axe":
             use_axe()
             return
@@ -1758,6 +1771,21 @@ def main() -> None:
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
         wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM  # world space
         wx, wy = cam_x + wmouse_x, cam_y + wmouse_y   # the world mouse
+
+        # THE MAN WHO ANSWERS QUESTIONS IS CLICKED ON HIS BODY, NOT HIS FEET.
+        # A cutout figure is drawn ABOVE its anchor point, so a click on the
+        # chest is 20-40 px from (x, y) and a 22 px circle around the feet
+        # missed him entirely. He is found first, by his silhouette.
+        _tt = _TRUTH[0]
+        if _tt is None:
+            for _n in list(village_mod.PEOPLE) + list(village_mod.TRAVELLERS):
+                if getattr(_n, "is_truth_teller", False):
+                    _tt = _n
+                    break
+        if _tt is not None and abs(wx - _tt.x) < 30.0 and -70.0 < (wy - _tt.y) < 26.0:
+            dialogue_panel.open(_tt, player, _main_capital()[0])
+            pygame.mouse.set_visible(True)
+            return
 
         # Clicking a villager while not wielding a weapon opens trade.
         if math.hypot(wx - player.x, wy - player.y) <= REACH + 24.0:
