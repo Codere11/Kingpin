@@ -778,21 +778,11 @@ def main() -> None:
             _spot = type("P", (), {"x": _tx * 32 + 16, "y": _ty * 32 + 16})()
         if _spot is not None:
             _hx, _hy = _spot.x, _spot.y + 64.0
-    # OUT THE GATE, NOT IN THE SQUARE. A new arrival starts a hundred paces
-    # outside the IN gate of the nearest settlement, on the road, so the first
-    # thing he can do is walk up to the guard and be searched. He was put in the
-    # middle of the world, which is a long walk from anything.
+    # SOMEWHERE AT RANDOM, IN THE WILD. He begins wherever the country puts him
+    # -- not at the gate of a settlement and not at the middle of the world.
     try:
-        _towns = [v for v in villages.villages
-                  if getattr(v, "fence_rect", None) is not None
-                  and not getattr(v, "is_hub", False)]
-        if _towns:
-            _near = min(_towns, key=lambda v: v.x * v.x + v.y * v.y)
-            _g = fence.gate_list(_near)[0]
-            _ox, _oy = fence.OUTWARD[_g[0]]
-            _hx, _hy = _g[1] + _ox * 150.0, _g[2] + _oy * 150.0
-            _origin_town = _near
-            player_start_town = _near
+        _hx = random.uniform(-WORLD_HALF * 0.35, WORLD_HALF * 0.35)
+        _hy = random.uniform(-WORLD_HALF * 0.35, WORLD_HALF * 0.35)
     except Exception:
         pass
     # ---- OBSERVE MODE ------------------------------------------------------
@@ -842,6 +832,35 @@ def main() -> None:
                   "f": 0, "wall0": time.perf_counter(), "last_say": -1.0}
 
     player = Player(_hx, _hy)
+    # ---- THE TRUTH-TELLER -----------------------------------------------
+    # One man who stands beside the player from the first frame and never
+    # leaves. He is a REAL NPC -- a real name, a real settlement, a real trade,
+    # the same class every other man in the world is made of -- he simply
+    # cannot be killed and does not walk away. He exists to be talked to.
+    _truth = None
+    try:
+        _towns_t = [v for v in villages.villages
+                    if getattr(v, "fence_rect", None) is not None
+                    and not getattr(v, "is_hub", False)]
+        _tt_town = random.choice(_towns_t) if _towns_t else None
+        if _tt_town is not None:
+            _truth = village_mod.NPC(
+                player.x + 44.0, player.y, random.randrange(1 << 30),
+                "%s %s" % (random.choice(village_mod.FIRST_NAMES),
+                           random.choice(village_mod.LAST_NAMES)),
+                "truth_teller", "Truth-teller", _tt_town)
+            _truth.job = random.choice(
+                ["farm", "logger", "mine", "smith", "trader",
+                 "lab", "brewery", "hand"])
+            _truth.nation = _tt_town.nation
+            _truth.team = ("nation", _tt_town.nation)
+            _truth.max_health = 1_000_000.0
+            _truth.health = 1_000_000.0
+            _tt_town.npcs.append(_truth)
+            print("TRUTH-TELLER %s of %s, trade %s"
+                  % (_truth.name, _tt_town.name, _truth.job))
+    except Exception as _te:
+        print("truth-teller failed: %r" % (_te,))
     if _observe_spot is not None:
         player.god = True
     # A NAME, AND A LETTER WAITING FOR HIM. The name is drawn the same way the
@@ -5235,7 +5254,16 @@ def main() -> None:
             for npc in getattr(inside_house, "occupants", ()):
                 if npc.alive and npc.in_interior:      # residents move about
                     npc.draw(screen, cam_x, cam_y, True)
-            player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
+            if _truth is not None:      # the man who is always beside you
+                _truth.x, _truth.y = player.x + 44.0, player.y
+                _truth.alive = True
+                _truth.health = _truth.max_health
+                _truth.pause = 1.0
+                _truth.draw(screen, cam_x, cam_y, True)
+        _sel0 = inventory.selected_stack()      # never rely on a name that a
+        # branch may not have assigned: `selected` was unbound on the frames the
+        # player was not inside a house, and this is the line that draws him.
+        player.draw(screen, cam_x, cam_y, _sel0.defn.id if _sel0 else None)
         if getattr(player, "search_progress", 0.0) > 0.0:
             # THE BAR HANGS UNDER THE MAN DOING THE SEARCHING, not in the middle
             # of the screen. Pivot.md S3: he is ten seconds at it, and the
@@ -5528,7 +5556,17 @@ def main() -> None:
         draw_night()
 
         selected = inventory.selected_stack()
-        player.draw(screen, cam_x, cam_y, selected.defn.id if selected else None)
+        if _truth is not None:
+            # HE IS PINNED TO HIM. Nothing can move him, nothing can kill him.
+            _truth.x, _truth.y = player.x + 44.0, player.y
+            _truth.alive = True
+            _truth.health = _truth.max_health
+            _truth.pause = 1.0
+            _truth.draw(screen, cam_x, cam_y, True)
+        _sel0 = inventory.selected_stack()      # never rely on a name that a
+        # branch may not have assigned: `selected` was unbound on the frames the
+        # player was not inside a house, and this is the line that draws him.
+        player.draw(screen, cam_x, cam_y, _sel0.defn.id if _sel0 else None)
         combat.draw(screen, cam_x, cam_y)
         draw_hunger_gray()
 
