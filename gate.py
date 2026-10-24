@@ -23,6 +23,7 @@ from __future__ import annotations
 import random
 
 import fence
+import plog
 
 CONTRABAND = ("tobacco", "cigar", "beer", "liqueur", "mezcal",
               "dried_mushroom", "red_mushroom", "agave",
@@ -36,6 +37,7 @@ CATCH_BASE = 0.55           # of the men carrying contraband, this many are foun
 
 _STATE = {"guard": None, "t": 0.0, "town": None}
 _RETURNING = []             # soldiers walking back to their post: usually empty
+_VISITORS = {}              # (town, traveller) -> seconds at that gate
 
 
 def _post_of(g):
@@ -72,11 +74,44 @@ def units_on(carrier, inventory=None) -> int:
     return 0
 
 
+# THE THRESHOLD A MAN CANNOT WALK THROUGH. Thirty items is a certainty for a
+# beginner; three hundred is the same certainty for a master. Everything
+# between is the straight line.
+CAUGHT_AT_ZERO = 30.0
+CAUGHT_AT_MAX = 300.0
+
+
+# A TRIP CARRIES A FIFTH OF WHAT HIS SKILL WOULD LET HIM RISK. A beginner
+# risks six of the thirty that would certainly catch him; a master risks sixty
+# of his three hundred. Nobody risks everything on one cart.
+RISK_PER_TRIP = 0.2
+
+
+def caravan_load(skill: float) -> int:
+    """What a trader of this skill carries per trip, in whole items.
+
+    Rounded, not truncated, and floored at one -- a 0.2 x 30 of 6.000000001
+    must not become 5, and a 60.000000001 must not become 61.
+    """
+    raw = RISK_PER_TRIP * caught_threshold(skill)
+    n = int(round(raw + 1e-9))
+    return max(1, n)
+
+
+def caught_threshold(skill: float) -> float:
+    k = max(0.0, min(10.0, float(skill))) / 10.0
+    return CAUGHT_AT_ZERO + (CAUGHT_AT_MAX - CAUGHT_AT_ZERO) * k
+
+
 def _roll(units: int, skill: float) -> bool:
+    """Caught in proportion to what he carries against what his skill allows.
+
+    30 of contraband at smuggling 0 is a certainty; 300 at smuggling 10 is a
+    certainty; half of each is a coin toss.
+    """
     if units <= 0:
         return False
-    chance = (min(1.0, units / 100.0) * CATCH_BASE
-              * (1.0 - 0.09 * max(0.0, min(10.0, skill))))
+    chance = min(1.0, float(units) / caught_threshold(skill))
     return random.random() < chance
 
 
@@ -181,6 +216,19 @@ def tick_town(dt: float, town):
     if getattr(town, "is_hub", False):
         return None
     squad = getattr(town, "patrol", None)
+    if not getattr(town, "_gate_logged", False):
+        town._gate_logged = True
+        try:
+            _trav = sum(1 for n in town.npcs if n.alive and (
+                getattr(n, "village", None) is not town
+                or getattr(n, "refuge", None) is not None
+                or getattr(n, "trade_state", "none") != "none"))
+            plog.log("GATE-INIT", getattr(town, "name", "?"),
+                     "guards", len(squad or ()), "men", len(town.npcs),
+                     "travellers", _trav,
+                     "fence", tuple(getattr(town, "fence_rect", (0, 0, 0, 0))))
+        except Exception:
+            pass
     if not squad:
         return None
     guard = squad[0]
@@ -205,6 +253,13 @@ def tick_town(dt: float, town):
         if n is town.search_now or n in town.search_queue:
             continue
         town.search_queue.append(n)
+        try:
+            plog.log("CROSSING", getattr(town, "name", "?"),
+                     getattr(n, "name", "?"),
+                     "units", units_on(n),
+                     "way", "in" if inside else "out")
+        except Exception:
+            pass
 
     if town.search_now is None and town.search_queue:
         town.search_now = town.search_queue.pop(0)
@@ -223,11 +278,11 @@ def tick_town(dt: float, town):
         try:
             _g = fence.nearest_gate(town, _w.x, _w.y)
             _ox, _oy = fence.OUTWARD[_g[0]]
-            _slot = (44.0 + 30.0 * _i)
+            _slot = (34.0 + 26.0 * _i)
             _tx = _g[1] + _ox * _slot
             _ty = _g[2] + _oy * _slot
             _w.target = (_tx, _ty)
-            if ((_w.x - _tx) ** 2 + (_w.y - _ty) ** 2) < 34.0 ** 2:
+            if ((_w.x - _tx) ** 2 + (_w.y - _ty) ** 2) < 22.0 ** 2:
                 _w.pause = max(float(getattr(_w, "pause", 0.0)), 0.25)   # he stands
             else:
                 _w.pause = 0.0                                           # he walks
@@ -243,7 +298,43 @@ def tick_town(dt: float, town):
         return None
     town.search_now, town.search_t = None, 0.0
     units = units_on(cur)
-    if _roll(units, float(getattr(cur, "smuggling", 0.0))):
+    _caught = _roll(units, float(getattr(cur, "smuggling", 0.0)))
+    try:
+        plog.log("SEARCH", getattr(town, "name", "?"),
+                 getattr(cur, "name", "?"), "units", units,
+                 "result", "CAUGHT" if _caught else "clean")
+    except Exception:
+        pass
+    if _caught:
         cur.wanted = True
         return ("caught", cur, units)
     return ("clean", cur, units)
+
+
+def search_visitor(dt: float, town, who):
+    """A TRADER AT A TOWN'S GATE: ten seconds by the guard, one roll.
+
+    Returns "caught", "clean", or None (still being looked at). Called once a
+    frame by whoever is walking the man to the gate -- it does nothing else.
+    """
+    squad = getattr(town, "patrol", None)
+    if not squad:
+        return "clean"                     # no guard on the gate
+    g = squad[0]
+    if not getattr(g, "alive", True):
+        return "clean"
+    key = (id(town), id(who))
+    t = _VISITORS.get(key, 0.0) + dt
+    _VISITORS[key] = t
+    if t < SEARCH_SECONDS:
+        return None
+    _VISITORS.pop(key, None)
+    units = units_on(who)
+    caught = _roll(units, float(getattr(who, "smuggling", 0.0)))
+    try:
+        plog.log("SEARCH", getattr(town, "name", "?"),
+                 getattr(who, "name", "?"), "units", units,
+                 "result", "CAUGHT" if caught else "clean", "at", "gate")
+    except Exception:
+        pass
+    return "caught" if caught else "clean"

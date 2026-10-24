@@ -643,6 +643,12 @@ def harvest(village, npc, kind: str, rng) -> None:
     item, count = crop_yield(kind, rng)
     if not item or count <= 0:
         return
+    # A MASTER'S HAND GATHERS THREE TIMES AS MUCH from the same plant.
+    try:
+        import crop as _crop
+        count = max(1, int(round(count * _crop.yield_scale(npc.skills.farming))))
+    except Exception:
+        pass
     if kind == "wheat":                    # thresh it too: bread, and grain
         grain = rng.randint(2, 4)
         npc.stock["wheat"] = npc.stock.get("wheat", 0) + grain

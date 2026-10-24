@@ -15,7 +15,25 @@ from palette import rich
 
 from world import TILE, World
 
-GROW_SECONDS = 180.0                 # a full crop cycle: three minutes
+GROW_SECONDS = 180.0                 # a full crop cycle at skill 0
+FASTEST_GROW = 60.0                  # ...and at the top of the trade, one minute
+
+
+def grow_seconds(skill: float) -> float:
+    """HOW LONG HIS CROP TAKES: three minutes green, one minute a master.
+
+    The hand that plants it decides it. A farmer at 0 of 8 brings a crop in at
+    the old GROW_SECONDS; at 8 he does it in a minute, and everything between
+    is the straight line between the two.
+    """
+    k = max(0.0, min(8.0, float(skill))) / 8.0
+    return GROW_SECONDS + (FASTEST_GROW - GROW_SECONDS) * k
+
+
+def yield_scale(skill: float) -> float:
+    """How much ONE crop gives him: 1x green, 3x a master."""
+    k = max(0.0, min(8.0, float(skill))) / 8.0
+    return 1.0 + 2.0 * k
 PHASE_SECONDS = GROW_SECONDS / 4.0        # 3 growth phases, then ripe
 
 LEAF_KINDS = ("plant", "mushroom", "agave")

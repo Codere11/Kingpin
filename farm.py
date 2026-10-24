@@ -44,7 +44,7 @@ def water(world, ground, tx: int, ty: int, toast) -> bool:
 
 
 def plant(world, ground, inventory, tx: int, ty: int, now: float, toast,
-          seed: str) -> bool:
+          seed: str, skill: float = 0.0) -> bool:
     """Plant the seed you are holding -- it grows exactly that crop."""
     kind = crop.SEED_CROP.get(seed)
     if kind is None:
@@ -70,6 +70,7 @@ def plant(world, ground, inventory, tx: int, ty: int, now: float, toast,
         return False
     plot.kind = kind
     plot.planted_at = now
+    plot.grow = crop.grow_seconds(skill)      # HIS hand sets the clock too
     ground.invalidate_tile(tx, ty)
     toast("Planted some %s" % items.get(kind_name(kind)).name.lower())
     return True
@@ -82,7 +83,7 @@ def kind_name(kind: str) -> str:
 
 def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
             tx: int | None = None, ty: int | None = None,
-            share=None) -> bool:
+            share=None, skill: float = 0.0) -> bool:
     """Collect a ripe crop and its own seed.
 
     ``share``, when given, is called with (item, amount) for every crop taken
@@ -90,23 +91,27 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
     is taxed by economy.take_fifth out of the yield of his plot, and a player
     who farms must pay the same fifth of the same crop. See main.pay_share.
     """
-    if crop.stage(now - (plot.planted_at if plot.planted_at is not None else now)) < 3:
+    _grow = getattr(plot, "grow", None) or crop.GROW_SECONDS
+    _elapsed = now - (plot.planted_at if plot.planted_at is not None else now)
+    if _elapsed < _grow:
         toast("Not ready yet")
         return False
     kind = plot.kind
     seed = crop.CROP_SEED.get(kind)
+    _scale = crop.yield_scale(skill)
     if kind in crop.LEAF_KINDS:
         item = crop.LEAF_ITEM[kind]
-        amount = random.randint(3, 6)
+        amount = max(1, int(round(random.randint(3, 6) * _scale)))
         seeds = random.randint(2, 5)
         inventory.add(item, amount, quality)
         if share is not None:
             share(item, amount)
     else:
         item = crop.FOOD_ITEM[kind]
-        amount = {"wheat": random.randint(1, 3),
-                  "berries": random.randint(2, 5),
-                  "cactus": random.randint(1, 2)}.get(kind, 1)
+        amount = max(1, int(round({"wheat": random.randint(1, 3),
+                                   "berries": random.randint(2, 5),
+                                   "cactus": random.randint(1, 2)}.get(kind, 1)
+                                  * _scale)))
         seeds = random.randint(1, 3)
         inventory.add(item, amount)
         if share is not None:

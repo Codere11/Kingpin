@@ -958,8 +958,11 @@ class NPC:
             plot = world.plot_at(ttx, tty)
             state = plot.kind if plot is not None else None
             if state in crop.FOOD_KINDS or state in crop.LEAF_KINDS:
+                # THE PLANTER'S HAND SETS THE TIME. A master brings a crop in
+                # in a minute; a green man takes three.
+                _grow = getattr(plot, "grow", None) or crop.GROW_SECONDS
                 if (plot.planted_at is not None
-                        and now - plot.planted_at >= crop.GROW_SECONDS):
+                        and now - plot.planted_at >= _grow):
                     todo.setdefault("harvest", (ttx, tty, tkind))
             elif state == "fertile":
                 todo.setdefault("plant", (ttx, tty, tkind))   # ready for the seed
@@ -968,8 +971,21 @@ class NPC:
             else:
                 todo.setdefault("till", (ttx, tty, tkind))    # grass: break it open
         can_till = self.tool_uses > 0 or self.stock.get("shovel", 0) > 0
+        # ONE ACTION A TICK, AND EVERY PART OF THE FIELD GETS ITS TURN.
+        #
+        # This always tried harvest first, then plant, water, till -- and
+        # `todo` holds one tile per action. Five wheat tiles come ripe in a
+        # cycle, so there was nearly always a harvest to take, and the twenty
+        # GRASS tiles of the same field were never broken open at all: a farmer
+        # worked five tiles out of twenty-five for ever, grew no leaf, and the
+        # artisan upstream of him starved for stock. The order now rotates by
+        # one each action, so a ripe harvest cannot starve the tilling.
+        _turn = int(getattr(self, "_field_turn", 0)) + 1
+        self._field_turn = _turn
+        _order = ["harvest", "plant", "water", "till"]
+        _order = _order[_turn % 4:] + _order[:_turn % 4]
         task = None
-        for action in ("harvest", "plant", "water", "till"):
+        for action in _order:
             if action in todo:
                 ttx, tty, tkind = todo[action]   # the KIND travels with the task
                 task = (ttx, tty, action)
@@ -996,6 +1012,9 @@ class NPC:
         if action == "harvest":
             plot = world.plot_at(ttx, tty)
             if plot is not None:
+                if getattr(self.village, "is_hub", False):
+                    _note("FIELD   %s harvests %s at %d,%d"
+                          % (getattr(self, "name", "?"), plot.kind, ttx, tty))
                 economy.harvest(self.village, self, plot.kind, self.rng)
                 self.skills.gain_farming(0.02)  # reaping hones the hand, slowly
             world.set_plot(ttx, tty, "grass", None)     # the soil is spent
@@ -1006,7 +1025,8 @@ class NPC:
         elif action == "water":
             world.set_plot(ttx, tty, "fertile", None)
         else:                                    # plant the seed for that cell
-            world.set_plot(ttx, tty, tkind, now)
+            world.set_plot(ttx, tty, tkind, now,
+                           crop.grow_seconds(self.skills.farming))
         ground = getattr(world, "ground", None)
         if ground is not None:
             # DEFERRED. Rebuilding a 256x256 chunk of terrain noise inside the

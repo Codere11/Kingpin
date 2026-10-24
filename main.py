@@ -612,7 +612,12 @@ def main() -> None:
 
     import menu
     pygame.mouse.set_visible(True)
-    chosen = menu.run(screen, clock)
+    # AN UNATTENDED INSTANCE STILL HAS TO GET PAST THE MENU. In observe mode
+    # there is nobody to click "new game", so it is chosen for him.
+    if os.environ.get("KINGPIN_OBSERVE"):
+        chosen = (0, True)      # 0 = new game, True = start
+    else:
+        chosen = menu.run(screen, clock)
     if chosen is None:
         pygame.quit()
         return
@@ -681,6 +686,7 @@ def main() -> None:
     # ---- THE HUBS IN THE WILD -- not villages; no war can be declared
     # on one, because no one admits it exists.
     hub_world = hubs.Hubs(world, villages)
+    hub_world.build_caravans(world)
     # AND NO WOODS IN THE YARD. The trees are staked per VILLAGE, so a hub out
     # in the wild had a forest growing through its crop and its house. They are
     # marked felled directly rather than cut, because cutting leaves a stump
@@ -789,7 +795,55 @@ def main() -> None:
             player_start_town = _near
     except Exception:
         pass
+    # ---- OBSERVE MODE ------------------------------------------------------
+    # KINGPIN_OBSERVE=1 runs a real instance -- real window, real frame, real
+    # world -- with the player standing invincible in open ground while
+    # everything else lives around him. He is not moved by anything and nothing
+    # can hurt him; the world carries on. Used to watch the gates work.
+    _observe_spot = None
+    if os.environ.get("KINGPIN_OBSERVE"):
+        try:
+            _towns = [v for v in villages.villages
+                      if getattr(v, "fence_rect", None) is not None
+                      and not getattr(v, "is_hub", False)]
+            if _towns:
+                _t0 = min(_towns, key=lambda v: v.x * v.x + v.y * v.y)
+                # AT THE GATE. The point of watching is to see the guard walk
+                # over and search him, ten seconds, bar under his feet.
+                _g0 = fence.gate_list(_t0)[0]
+                _ox0, _oy0 = fence.OUTWARD[_g0[0]]
+                _observe_spot = (_g0[1] + _ox0 * 130.0, _g0[2] + _oy0 * 130.0)
+                _hx, _hy = _observe_spot
+                _origin_town = _t0
+                print("OBSERVE: pinned at %.0f,%.0f -- 1.7 km from %s"
+                      % (_observe_spot[0], _observe_spot[1], _t0.name))
+        except Exception:
+            _observe_spot = None
+    # ---- THE CHAIN TEST ----------------------------------------------------
+    # KINGPIN_CHAIN=1 watches ONE hub, link by link, in the running game. Each
+    # link has a deadline; when one does not happen in time the instance STOPS
+    # and says which link broke. Nothing is simulated outside the game.
+    def _csay(msg: str) -> None:
+        """A line the test can be read from: written and flushed at once,
+        because a windowed build buffers stdout and shows nothing."""
+        try:
+            print(msg, flush=True)
+        except Exception:
+            pass
+        try:
+            with open(os.path.expanduser("~/.kingpin_saves/chain.log"), "a") as fh:
+                fh.write(msg + "\n")
+        except Exception:
+            pass
+
+    _chain = None
+    if os.environ.get("KINGPIN_CHAIN"):
+        _chain = {"hub": None, "t0": 0.0, "link": 1, "seen": {}, "t": 0.0,
+                  "f": 0, "wall0": time.perf_counter(), "last_say": -1.0}
+
     player = Player(_hx, _hy)
+    if _observe_spot is not None:
+        player.god = True
     # A NAME, AND A LETTER WAITING FOR HIM. The name is drawn the same way the
     # towns draw theirs, so he is a man out of this world and not a visitor to
     # it; the letter is the only thing in the game that will ever explain
@@ -1720,6 +1774,7 @@ def main() -> None:
         if plot is not None and plot.kind in crop.LEAF_KINDS:
             grade = skills.tobacco_grade()
             if farm.harvest(world, inventory, plot, now, toast, grade,
+                            skill=skills.farming,
                             tx=tx, ty=ty, share=pay_share):
                 # The same rate the farmers get. At the old default (0.12) the
                 # player reached skill 8 in ~67 harvests -- SSS tobacco by day
@@ -1730,6 +1785,7 @@ def main() -> None:
             return
         if plot is not None and plot.kind in crop.FOOD_KINDS:
             if farm.harvest(world, inventory, plot, now, toast, tx=tx, ty=ty,
+                            skill=skills.farming,
                             share=pay_share):
                 if (tx, ty) in village_plots and not tile_is_mine(tx, ty):
                     commit_crime()
@@ -1747,7 +1803,8 @@ def main() -> None:
         elif item_id == "watering_can":
             farm.water(world, ground, tx, ty, toast)
         elif item_id in crop.SEED_CROP:
-            farm.plant(world, ground, inventory, tx, ty, now, toast, item_id)
+            farm.plant(world, ground, inventory, tx, ty, now, toast, item_id,
+                       skills.farming)
 
     # -- building placement -------------------------------------------------
     def placement_pos():
@@ -3173,6 +3230,24 @@ def main() -> None:
             player.nation = _origin_town.nation
         if origin in _JOB:
             player.job = _JOB[origin]
+    # EVERY GATE IS GUARDED FROM THE FIRST DAY, not only the ones the player
+    # happens to walk past. The guards used to be raised for towns in the
+    # player's lane -- so a caravan arriving anywhere else in the world found an
+    # EMPTY gate, was waved through by `search_visitor`, and sold its load
+    # without ever being looked at. Measured in a live day: 132 purchases, 13
+    # loads, 2 sales, and ZERO searches. A wall with nobody on the gate is not a
+    # border.
+    try:
+        for _v in villages.villages:
+            if getattr(_v, "is_hub", False) or getattr(_v, "patrol", None):
+                continue
+            _v.patrol = make_village_patrol(_v, 2)
+            enemies.extend(_v.patrol)
+            _v.patrol_timer = 30.0
+        print("gate guards raised for %d settlements" % len(villages.villages))
+    except Exception as _ge:
+        print("gate guard pass failed: %r" % (_ge,))
+
     while running:
         _boot_t0 = pygame.time.get_ticks()
         # THE FLAG COMES DOWN WHEN A FRAME WAS QUICK. Measure the PREVIOUS one:
@@ -3737,6 +3812,112 @@ def main() -> None:
                          "dead", player.dead,
                          "hp", int(player.health))
             player.update(dt, keys, aim, 1.0 - 0.25 * foliage)
+            if _chain is not None:
+                try:
+                    if _chain["hub"] is None:
+                        _chain["hub"] = hub_world.hubs[0]
+                        _chain["t0"] = now
+                        _csay("CHAIN watching hub %s" % _chain["hub"].name)
+                    _hubx = _chain["hub"]      # NOT `_hb`: that is the
+                    # heartbeat timer, and overwriting it with a Hub object
+                    # raised a TypeError on the very next frame -- which is why
+                    # this report printed its first line and then nothing.
+                    _live = [n for n in _hubx.npcs if n.alive]
+                    _farm = next((n for n in _live if n.job == "farm"), None)
+                    _art = next((n for n in _live if n.job in ("lab", "brewery")), None)
+                    _trd = next((n for n in _live if n.job == "trader"), None)
+                    _LEAF = ("tobacco", "red_mushroom", "agave", "plant", "mushroom")
+                    _MADE = ("cigar", "dried_mushroom", "beer", "liqueur", "mezcal")
+                    _food = sum(int((_farm.stock if _farm else {}).get(x, 0))
+                                for x in economy.FOOD) if _farm else 0
+                    _shelf = sum(int(_hubx.ledger_goods.get(x, 0)) for x in economy.FOOD)
+                    _leaf = (sum(int((_art.stock if _art else {}).get(k, 0)) for k in _LEAF)
+                             if _art else 0)
+                    _made = (sum(int((_art.stock if _art else {}).get(k, 0)) for k in _MADE)
+                             if _art else 0)
+                    _carry = (sum(int((_trd.stock if _trd else {}).get(k, 0)) for k in _MADE)
+                              if _trd else 0)
+                    _st = _chain["seen"]
+                    _st["food"] = max(_st.get("food", 0), _food + _shelf)
+                    _st["leaf"] = max(_st.get("leaf", 0), _leaf)
+                    _st["made"] = max(_st.get("made", 0), _made)
+                    _st["carry"] = max(_st.get("carry", 0), _carry)
+                    _st["trip"] = _st.get("trip", 0) or bool(_hubx._carrier)
+                    _st["stage"] = _hubx._stage
+                    _st["ledger"] = int(_hubx.ledger_coins)
+                    _chain["f"] += 1
+                    _chain["t"] = time.perf_counter() - _chain["wall0"]
+                    # A STATUS LINE EVERY MINUTE: the actual contents, item by
+                    # item. Without this the test could only say "the leaf did
+                    # not arrive" -- never where it went.
+                    if _chain["t"] - _chain.get("last_say", -1.0) >= 15.0:
+                        _chain["last_say"] = _chain["t"]
+                        _csay("CHAIN %4.0fs  farmer.food=%d shelf.food=%d  "
+                              "farmer.leaf=%s  shelf=%s  artisan=%s  trader=%d"
+                              % (_chain["t"], _food, _shelf,
+                                 {k: int(_farm.stock.get(k, 0)) for k in _LEAF
+                                  if int(_farm.stock.get(k, 0)) > 0} if _farm else {},
+                                 {k: int(v) for k, v in _hubx.ledger_goods.items() if v},
+                                 {k: int(_art.stock.get(k, 0)) for k in
+                                  (_LEAF + _MADE) if int(_art.stock.get(k, 0)) > 0}
+                                 if _art else {},
+                                 _carry))
+                    _deadline = {1: 300.0, 2: 600.0, 3: 900.0, 4: 1200.0,
+                                 5: 1500.0, 6: 2400.0, 7: 2700.0, 8: 3300.0,
+                                 9: 3900.0}
+                    _need = {1: ("food", 1), 2: ("leaf", 1), 3: ("made", 1),
+                             4: ("carry", 20), 5: ("trip", True)}
+                    _say = {1: "the farmer harvests any food at all",
+                            2: "the farmer hands leaf to the artisan",
+                            3: "the artisan makes a finished product",
+                            4: "the artisan gives 20 finished goods to the trader",
+                            5: "the trader leaves on a trip with 20",
+                            6: "the trader reaches a town gate",
+                            7: "the guard searches him at the gate",
+                            8: "he sells to the town",
+                            9: "he comes home and the hut's purse grows"}
+                    while _chain["link"] <= 9:
+                        _k = _chain["link"]
+                        _ok = False
+                        if _k in _need:
+                            _key, _val = _need[_k]
+                            _ok = (_st.get(_key, 0) >= _val) if _val is not True else bool(_st.get(_key))
+                        elif _k == 6:
+                            _ok = _st.get("stage") in ("home",) and bool(_st.get("trip"))
+                        elif _k == 7:
+                            _ok = _st.get("ledger", 0) > 0 or _st.get("stage") == "home"
+                        elif _k in (8, 9):
+                            _ok = _st.get("stage") == "idle" and _st.get("trip")
+                        if _ok:
+                            plog.log("CHAIN OK", _k, _say[_k])
+                            _csay("CHAIN OK  %d: %s" % (_k, _say[_k]))
+                            _chain["link"] = _k + 1
+                            continue
+                        if _chain["t"] > _deadline[_k]:
+                            _csay("CHAIN FAILED AT LINK %d: %s" % (_k, _say[_k]))
+                            _csay("   state: food=%s leaf=%s made=%s carry=%s "
+                                  "trip=%s stage=%s ledger=%s"
+                                  % (_st.get("food"), _st.get("leaf"),
+                                     _st.get("made"), _st.get("carry"),
+                                     _st.get("trip"), _st.get("stage"),
+                                     _st.get("ledger")))
+                            plog.log("CHAIN FAILED", _k, _say[_k], _st)
+                            pygame.quit()
+                            raise SystemExit(9)
+                        break
+                    if _chain["link"] > 9:
+                        _csay("CHAIN COMPLETE: every link fired")
+                        plog.log("CHAIN COMPLETE")
+                        pygame.quit()
+                        raise SystemExit(0)
+                except SystemExit:
+                    raise
+                except Exception as _ce:
+                    _csay("CHAIN MONITOR ERROR:", repr(_ce)[:160])
+            if _observe_spot is not None:
+                player.god = True
+                player.hunger = 100.0
+                player.x, player.y = _observe_spot      # fixed: nothing moves him
             skills.gain_movement(math.hypot(player.x - _px0, player.y - _py0))
             clamp_world()          # the world ends where the loading screen did
             settle_reload()
@@ -3860,7 +4041,8 @@ def main() -> None:
             # in the wild it never ran at all, and its people starved between
             # visits. A settlement's day does not depend on being watched.
             try:
-                hub_world.update(world_dt, now)
+                hub_world.update(world_dt, now, day_phase(), combat,
+                                 nearest_hostile)
             except Exception:
                 pass
             grid_timer -= dt

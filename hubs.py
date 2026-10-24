@@ -37,6 +37,8 @@ import pygame
 
 import economy
 import fence
+import gate
+import caravans
 import industry
 import village as village_mod
 import world as world_mod
@@ -60,6 +62,10 @@ def _note(message: str) -> None:
             fh.write(message + "\n")
     except Exception:
         pass
+
+
+_NAME_TAIL = ("Ansel", "Bram", "Cass", "Dorn", "Ewan", "Fen",
+              "Galt", "Hale", "Ivo", "Jory", "Kell", "Lund")
 
 
 class Hub(village_mod.Village):
@@ -200,14 +206,27 @@ class Hub(village_mod.Village):
         self._split_t = 180.0
         self.ledger_coins = max(120, int(self.ledger_coins))
         self.ledger_goods = {}
+        # A HUT HAS A LARDER, and it must cover the FIRST crop. `hunger` is
+        # satiety in this game: it climbs to 100 and a man dies there, so ten
+        # loaves each is about a hundred seconds of life -- and the first
+        # harvest is GROW_SECONDS (180 s) away. Every hut therefore starved to
+        # death at day 0.02 with its field still growing. The shelf feeds them
+        # until the farmer brings the first crop in.
+        try:
+            self.ledger_goods[economy.FOOD[0]] = 40
+        except Exception:
+            pass
 
         # 10. AND THE FOUR POSTS, LAST OF ALL -- after the move, the re-fence
         # and the seeding, none of which may undo them. Assigned by index, and
         # asserted: if the four are not exactly these four, the hub is not a
         # hub and saying so now is worth more than finding out by watching a
         # farmer stand in an untouched field for ten minutes.
-        self.npcs = [n for n in self.npcs if n.alive][:4]
-        while len(self.npcs) < 4:
+        # THREE MEN, AND NO MORE: a soldier, a farmer, an artisan. The trader
+        # is not a hut's man at all -- traders are free, nationless men who COME
+        # to the huts, buy what the bench has made and carry it to a settlement.
+        self.npcs = [n for n in self.npcs if n.alive][:3]
+        while len(self.npcs) < 3:
             k = len(self.npcs)
             who = "%s %s" % (self._rng.choice(village_mod.FIRST_NAMES),
                              self._rng.choice(village_mod.LAST_NAMES))
@@ -216,7 +235,7 @@ class Hub(village_mod.Village):
                 self._rng.randrange(1 << 30), who,
                 "%08x%02x" % (seed & 0xFFFFFFFF, k), "Criminal", self))
         for k, (n, job) in enumerate(zip(self.npcs,
-                                         ("soldier", "farm", "lab", "trader"))):
+                                         ("soldier", "farm", "lab"))):
             n.job = job
             n.role = "Criminal"
             n.village = self
@@ -262,7 +281,7 @@ class Hub(village_mod.Village):
                 n.x, n.y = self.x, self.y + 40.0
             n.home = (n.x, n.y)
         got = [n.job for n in self.npcs]
-        if got != ["soldier", "farm", "lab", "trader"]:
+        if got != ["soldier", "farm", "lab"]:
             raise RuntimeError("hub %s has the wrong posts: %r"
                                % (self.name, got))
         _note("HUB %-14s at (%.0f,%.0f)  posts %s  plots %d  bench %s"
@@ -332,27 +351,66 @@ class Hub(village_mod.Village):
                              + (v.y - trader.y) ** 2)
         goal = self._goal
         if self._stage == "out":
-            if (goal.x - trader.x) ** 2 + (goal.y - trader.y) ** 2 > 150.0 ** 2:
-                d = math.hypot(goal.x - trader.x, goal.y - trader.y) or 1.0
+            # HE GOES TO THE GATE, NOT THE TOWN SQUARE. The old route walked to
+            # the middle of the settlement -- through its fence and its guard --
+            # and then rolled a private dice of its own. The guard on the gate
+            # is the whole point: the town searches him, or it does not.
+            try:
+                gside, gxw, gyw = fence.gate_list(goal)[0]
+                gox, goy = fence.OUTWARD[gside]
+                gpx, gpy = gxw + gox * 70.0, gyw + goy * 70.0
+            except Exception:
+                gpx, gpy = goal.x, goal.y
+            if (gpx - trader.x) ** 2 + (gpy - trader.y) ** 2 > 40.0 ** 2:
+                d = math.hypot(gpx - trader.x, gpy - trader.y) or 1.0
                 step = min(d, 70.0 * dt)
-                trader.x += (goal.x - trader.x) / d * step
-                trader.y += (goal.y - trader.y) / d * step
+                trader.x += (gpx - trader.x) / d * step
+                trader.y += (gpy - trader.y) / d * step
                 return
-            units = sum(self._cargo.values())
-            skill = max(0.0, min(10.0, float(getattr(trader, "smuggling", 0.0))))
-            if trader.rng.random() < min(1.0, units / 100.0) * 0.55 * (1.0 - 0.09 * skill):
-                goal.provoked = True
+            # AT THE GATE. The town's own guard looks at him, ten seconds.
+            verdict = gate.search_visitor(dt, goal, trader)
+            if verdict is None:
+                return                       # still being looked at
+            if verdict == "caught":
+                goal.provoke()
+                _note("SEARCH   %s caught at the gate of %s with %d"
+                      % (trader.name, goal.name, sum(self._cargo.values())))
+                self._cargo = {}
                 trader.health = getattr(trader, "health", 100.0) - 45.0
-                _note("SEARCH   %s caught at %s with %d" % (trader.name, goal.name, units))
-                self._cargo = {}
-            else:
-                for item, qty in self._cargo.items():
+                self._stage = "home"
+                return
+            # THROUGH THE GATE, AND SOLD TO THE MEN WHO STILL WANT IT. Not
+            # dumped into the town's own store: a man with the craving and the
+            # coin buys it from him, and the money goes home with him.
+            units = sum(self._cargo.values())
+            sold = 0
+            for item in list(self._cargo):
+                qty = int(self._cargo.get(item, 0))
+                price = max(1, int(round(economy.value(goal, item) * 1.35)))
+                for n in goal.npcs:
+                    if qty <= 0:
+                        break
+                    if not n.alive or n.in_interior:
+                        continue
+                    if float(getattr(n, "yearning", 0.0)) < economy.YEARING_BUY:
+                        continue
+                    coins = int(getattr(n, "coins", 0))
+                    if coins < price:
+                        continue
+                    n.stock[item] = int(n.stock.get(item, 0)) + 1
+                    n.coins = coins - price
+                    n.yearning = max(0.0, float(n.yearning) - 0.5)
+                    self.ledger_coins += price
+                    qty -= 1
+                    sold += 1
+                if qty > 0:                      # what nobody wanted is left here
                     economy.store_add(goal, item, qty, 2)
-                    unit = max(1, int(round(economy.value(goal, item) * 0.5)))
-                    self.ledger_coins += qty * unit
-                    goal.ledger_coins = max(0, int(goal.ledger_coins) - qty * unit)
-                trader.smuggling = min(10.0, skill + 0.06 + units * 0.001)
-                self._cargo = {}
+                self._cargo[item] = 0
+            trader.smuggling = min(10.0, float(getattr(trader, "smuggling", 0.0))
+                                   + 0.06 + units * 0.001)
+            _note("TRIP     %s sold %d of %d at %s"
+                  % (trader.name, sold, units, goal.name))
+            self._cargo = {}
             self._stage = "home"
             return
         # home again
@@ -364,17 +422,48 @@ class Hub(village_mod.Village):
             return
         trader.x, trader.y = self.x, self.y + 40.0
         trader.home = (trader.x, trader.y)
+        _note("RETURN   %s is home; the hut's purse is %d coin"
+              % (getattr(trader, "name", "trader"), int(self.ledger_coins)))
         self._carrier, self._cargo, self._stage, self._goal = None, {}, "idle", None
 
     def gate_list(self):
         return fence.gate_list(self)
 
     # -- the day ------------------------------------------------------------
+    def _field_census(self, world, now) -> None:
+        """ONCE A MINUTE: WHAT IS STANDING IN THE FIELD, TILE BY TILE."""
+        if now - getattr(self, "_census_t", -999.0) < 60.0:
+            return
+        self._census_t = now
+        try:
+            ctx, cty, _k = self.farm_plots[0]
+            states = {}
+            ages = []
+            for tx, ty, tile_kind in self.farm_tiles[(ctx, cty)]:
+                p = world.plot_at(tx, ty) if world is not None else None
+                st = getattr(p, "kind", "none") if p is not None else "none"
+                key = "%s/%s" % (st, tile_kind)
+                states[key] = states.get(key, 0) + 1
+                if p is not None and getattr(p, "planted_at", None) is not None:
+                    ages.append(now - float(p.planted_at))
+            _note("FIELD   %s tiles %s  now=%.0f  crop age min/max=%s"
+                  % (self.name, states, now,
+                     ("%.0f/%.0f" % (min(ages), max(ages))) if ages else "none"))
+        except Exception as _e:
+            _note("FIELD   %s census failed %s" % (self.name, repr(_e)[:80]))
+
     def update(self, dt: float, world=None, now: float = 0.0,
-               phase: str = "home") -> None:
-        night = (float(now) % 600.0) >= 300.0
+               phase: str = "home", combat=None, threat_of=None,
+               colliders=()) -> None:
+        # THE SAME DAY A SETTLEMENT KEEPS. `phase` is handed in from main's own
+        # `day_phase()` and the night flag from `night_factor()` -- the hub used
+        # to make up its own crude `(now % 600) >= 300`, so its people worked on
+        # a different clock from every farmer in the world, which is exactly the
+        # kind of difference that leaves one field reaped and another not.
+        night = phase == "sleep"
         # THE HUB STEPS ITS OWN PEOPLE. Nothing else does: they are not in
         # `PEOPLE`, and `Village.update` has never ticked a man.
+        self._field_census(world, now)
         for n in self.npcs:
             if n.alive:
                 # NO IDLING. `NPC.update` opens with `if self.pause > 0:
@@ -384,10 +473,42 @@ class Hub(village_mod.Village):
                 # between every swing meant they never reaped enough to fill
                 # the shelf -- and all four starved beside a growing field.
                 n.pause = 0.0
-                n.tick(dt, world, now, "home" if night else "work",
-                       night=night)
-        # ...and then the town's own business: the board, the books, the crop.
-        super().update(dt, world, now, "home" if night else "work")
+                # AND HE IS NEVER ASLEEP. `NPC.tick` wakes a sleeping man only
+                # if he has a `home_door` to step out of -- and a hub's house is
+                # built with no doors at all, so once a hut's farmer fell asleep
+                # he slept FOR EVER: the tick returned at `if self.asleep:
+                # return` on every frame after it, and he never worked a tile
+                # again. That is why settlement farmers farm and hub ones do
+                # not: a settlement has doors.
+                n.asleep = False
+                n.in_interior = False
+                n.on_duty = False
+                try:
+                    n.tick(dt, world, now, "work" if phase == "sleep" else phase,
+                           combat, night, colliders, threat_of)
+                except Exception as _e:
+                    # NEVER SILENT. This ran inside main's `except: pass`, so a
+                    # single error here stopped every man in every hut on every
+                    # frame -- no farming, no bench, no trade -- and the game
+                    # simply looked idle.
+                    import traceback as _tb
+                    _note("HUB ERROR %s: %s" % (self.name, repr(_e)[:140]))
+                    if getattr(self, "_err_shown", 0) < 3:
+                        self._err_shown = getattr(self, "_err_shown", 0) + 1
+                        _tb.print_exc()
+        # A HUT HAS NO CIVIC LIFE, AND MUST NOT RUN A TOWN'S.
+        #
+        # This called Village.update -- wages, tax, crown dues, the tithe, the
+        # MARKET and the ELECTIONS. A hut held an election, elected its own
+        # trader as MAYOR, and from that moment there was no trader in it:
+        # `trader = next(n for n in live if n.job == "trader")` was None, the
+        # artisan's pack could never be emptied into a carrier, and the whole
+        # chain of hands stopped dead. Seen in the live game:
+        #     HANDOFF? Poor Farm bench=1 moved=0 trader=None
+        #     HANDOFF?   Orville Lassiter job=mayor
+        # A hut keeps its own books (the ledger, the wages it draws, the
+        # handoffs above) and owes the crown nothing at all -- it does not
+        # exist, as far as the crown is concerned.
         # ONE COMMON LEDGER. Nobody in a hut owns a coin: the hut does. A man
         # draws what he needs to buy with straight out of the ledger, and
         # whatever he takes in goes straight back into it. The ledger is the
@@ -417,6 +538,20 @@ class Hub(village_mod.Village):
         farmer = next((n for n in live if n.job == "farm"), None)
         artisan = next((n for n in live if n.job in ("lab", "brewery")), None)
         trader = next((n for n in live if n.job == "trader"), None)
+        # A TRIP THAT CANNOT FINISH MUST NOT BLOCK THE HUT FOR EVER. `_carrier`
+        # and `_stage` are saved, so a trip interrupted by a save came back
+        # as "away" on every frame: the made goods were never handed to the
+        # trader, the artisan's pack filled with cigars and nothing was ever
+        # sold again. If the carrier is missing, dead, no longer one of ours,
+        # or the stage is not a stage, the trip is over.
+        if (self._carrier is not None
+                and (not getattr(self._carrier, "alive", False)
+                     or self._carrier not in self.npcs)):
+            _note("TRIP     %s: lost carrier %s, back to idle"
+                  % (self.name, getattr(self._carrier, "name", "?")))
+            self._carrier, self._cargo, self._stage, self._goal = None, {}, "idle", None
+        if self._stage not in ("idle", "out", "home"):
+            self._carrier, self._cargo, self._stage, self._goal = None, {}, "idle", None
         away = bool(self._carrier) or self._stage != "idle"
 
         leaf_kinds = ("tobacco", "red_mushroom", "agave", "plant", "mushroom")
@@ -443,7 +578,11 @@ class Hub(village_mod.Village):
         # SHELF, so looking only in his pack found nothing at all -- he keeps
         # five a day and the other forty go to the town. The leaf the hub grows
         # is in the ledger, and the ledger's leaf goes straight to the bench.
-        hand(farmer, artisan, leaf_kinds)
+        _moved = hand(farmer, artisan, leaf_kinds)
+        if _moved:
+            _note("HANDOFF  %s -> %s  %d leaf (by hand)"
+                  % (getattr(farmer, "name", "farmer"),
+                     getattr(artisan, "name", "artisan"), _moved))
         if artisan is not None:
             taken = 0
             for item in list(self.ledger_goods.keys()):
@@ -455,13 +594,72 @@ class Hub(village_mod.Village):
                     self.ledger_goods[item] = 0
                     taken += qty
             if taken:
-                pass
+                _note("HANDOFF  shelf -> %s  %d leaf"
+                      % (getattr(artisan, "name", "artisan"), taken))
+        # THE BENCH KEEPS TWENTY, AND THE REST IS FOR SALE. Every leaf the hut
+        # grows was going straight into the artisan's pack, so a passing trader
+        # had nothing to buy until the bench had finished with it -- and the
+        # bench is one man. What he cannot work today goes on the shelf, and a
+        # cart takes it away: the hut earns on the leaf as well as the product.
+        if artisan is not None:
+            _held = 0
+            for _k in leaf_kinds:
+                _q = int(artisan.stock.get(_k, 0))
+                if _q <= 0:
+                    continue
+                _room = max(0, 20 - _held)
+                if _q > _room:
+                    _spare = _q - _room
+                    artisan.stock[_k] = _room
+                    self.ledger_goods[_k] = int(self.ledger_goods.get(_k, 0)) + _spare
+                _held += int(artisan.stock.get(_k, 0))
         # the artisan's work -> the trader, WHO IS NOT LOADED WHILE HE IS AWAY:
         # what is made meanwhile stockpiles in the artisan's pack.
+        if artisan is not None:
+            _made = sum(int(artisan.stock.get(k, 0)) for k in made_kinds)
+            if _made >= 20 and getattr(self, "_made_logged", 0) < _made // 20:
+                self._made_logged = _made // 20
+                _note("MADE     %s has %d finished goods"
+                      % (getattr(artisan, "name", "artisan"), _made))
+        if not getattr(self, "_away_logged", 0) or away != getattr(self, "_away_last", None):
+            self._away_logged = 1
+            self._away_last = away
+            _note("TRADE    %s away=%s trader=%s stage=%s carrier=%s"
+                  % (self.name, away, getattr(trader, "name", None),
+                     self._stage, getattr(self._carrier, "name", None)))
+        _bench = (sum(int(artisan.stock.get(k, 0)) for k in made_kinds)
+                  if artisan is not None else 0)
+        if away and _bench > 0:
+            _note("HANDOFF? %s BLOCKED away=True stage=%s carrier=%s bench=%d"
+                  % (self.name, self._stage,
+                     getattr(self._carrier, "name", None), _bench))
         if not away:
+            _moved = 0
             for n in live:
                 if n is not trader:
-                    hand(n, trader, made_kinds)
+                    _g = hand(n, trader, made_kinds)
+                    _moved += _g
+                    if _g:
+                        _note("HANDOFF  %s -> %s  %d finished"
+                              % (getattr(n, "name", "?"),
+                                 getattr(trader, "name", "trader"), _g))
+            # AND SAY SO WHEN IT DOES NOTHING. A man holding twenty-five and a
+            # trader holding none, with the handoff "running", is the exact
+            # state this chain died in -- so the values it ran with are logged.
+            if _bench > 0 and _moved == 0 and not getattr(self, "_stuck_logged", 0):
+                self._stuck_logged = 1
+                _note("HANDOFF? %s bench=%d moved=0 trader=%s trader_is_artisan=%s"
+                      " trader_alive=%s trader_in_npcs=%s live=%d"
+                      % (self.name, _bench, getattr(trader, "name", None),
+                         trader is artisan,
+                         getattr(trader, "alive", None),
+                         trader in self.npcs if trader is not None else None,
+                         len(live)))
+                for _n2 in live:
+                    _note("HANDOFF?   %-16s job=%-8s made=%d alive=%s"
+                          % (getattr(_n2, "name", "?"), _n2.job,
+                             sum(int(_n2.stock.get(k, 0)) for k in made_kinds),
+                             _n2.alive))
             # ...and anything already finished on the shared shelf
             if trader is not None:
                 for item in list(self.ledger_goods.keys()):
@@ -472,6 +670,14 @@ class Hub(village_mod.Village):
                         trader.stock[item] = trader.stock.get(item, 0) + qty
                         self.ledger_goods[item] = 0
 
+        # THE HUT'S STOCK FOR SALE. The bench's finished goods go onto the
+        # shelf, and that is what a free trader coming up the road buys.
+        if artisan is not None:
+            for _k in made_kinds:
+                _q = int(artisan.stock.get(_k, 0))
+                if _q > 0:
+                    self.ledger_goods[_k] = int(self.ledger_goods.get(_k, 0)) + _q
+                    artisan.stock[_k] = 0
         # THE TRIP. Twenty is the load, and he goes when he has twenty.
         if trader is not None and not away:
             carry = sum(int(trader.stock.get(k, 0)) for k in made_kinds)
@@ -612,9 +818,116 @@ class Hubs:
             # no crops and nobody in it.
             self.hubs.append(hub)
 
-    def update(self, dt: float, now: float) -> None:
+    def build_caravans(self, world) -> None:
+        """THE FREE TRADERS. Nationless, owned by nobody, and not a hut's man:
+        they buy what the huts make and sell it where the craving is. Two for
+        every five huts, so a hut sees a buyer reasonably often."""
+        if getattr(self, "_caravans", None):
+            return
+        import village as _vm
+        self._caravans = []
+        want = len(self.hubs)        # ONE TRADER FOR EVERY HUT
+        for i in range(want):
+            hub = self.hubs[(i * 7) % len(self.hubs)]
+            n = _vm.NPC(hub.x + 30.0 * (i % 3), hub.y + 60.0 + 10.0 * i,
+                        900000 + i * 13, "Trader %s" % _NAME_TAIL[i % len(_NAME_TAIL)],
+                        "caravan_%d" % i, "Free trader", None)
+            n.nation = None                 # NATIONLESS: no crown may claim him
+            n.team = None
+            n.village = None
+            n.hub = None
+            n.job = "trader"
+            n.role = "Free trader"
+            n.stock = {"bread": 10}         # ten loaves and the road
+            # A CART NEEDS CAPITAL. At 120 coin a trader could not afford a
+            # single cigar -- a luxury is worth more than that -- so every
+            # purchase came out as `take = purse // price = 0`, 323 attempts
+            # with 3 loads. He carries enough to buy a full load and a margin.
+            n.coins = 600
+            n.hunger = 0.0
+            # ONE PILOT ONLY. `NPC` registers every man it makes in
+            # `village.PEOPLE`, and the world's own loop ticks those -- so a
+            # cart was being walked to its hut by `caravans` AND walked to its
+            # own civilian errand by the world, every frame, and it never
+            # arrived anywhere. Measured: 100 samples of 100, all `to_hub`,
+            # one of them 87 px from the hut it had been heading to for three
+            # minutes. A hut's men are removed from that register for exactly
+            # this reason; a cart's must be too.
+            if n in _vm.PEOPLE:
+                _vm.PEOPLE.remove(n)
+            self._caravans.append(caravans.Caravan(n, hub))
+            if n not in _vm.TRAVELLERS:
+                _vm.TRAVELLERS.append(n)    # stepped with the wanderers
+        _note("CARAVANS %d free traders on the road" % len(self._caravans))
+
+    def update(self, dt: float, now: float, phase: str = "home",
+               combat=None, threat_of=None, colliders=()) -> None:
         for hub in self.hubs:
-            hub.update(dt, self._world, now)
+            hub.update(dt, self._world, now, phase, combat, threat_of, colliders)
+        for c in getattr(self, "_caravans", ()):
+            try:
+                c.tick(dt, self.hubs, self._villages.villages, now)
+            except Exception as _e:
+                if not getattr(self, "_car_shown", 0):
+                    self._car_shown = 1
+                    _note("CARAVAN ERROR %s" % repr(_e)[:150])
+        try:
+            self._refill(dt, now)
+        except Exception as _e:
+            import traceback as _tb
+            if not getattr(self, "_refill_shown", 0):
+                self._refill_shown = 1
+                _note("REFILL ERROR %s" % repr(_e)[:160])
+                _tb.print_exc()
+
+    def _refill(self, dt: float, now: float) -> None:
+        """A HUT THAT LOSES A MAN TAKES ANOTHER.
+
+        There was no such thing: a hub whose trader died kept the post empty
+        for ever, so the artisan's pack filled with cigars that could never be
+        carried anywhere, and the chain of hands simply stopped. The nation has
+        idle men in its towns; a hut takes one, and he becomes a criminal
+        because that is what living out here makes him.
+        """
+        need_row = ("soldier", "farm", "lab")
+        for hub in self.hubs:
+            have = {n.job for n in hub.npcs if n.alive}
+            missing = [j for j in need_row if j not in have]
+            if not missing:
+                continue
+            want = missing[0]
+            for town in (getattr(self._villages, "villages", ()) or ()):
+                if getattr(town, "is_hub", False):
+                    continue
+                cand = next((n for n in town.npcs
+                             if n.alive and n.job is None
+                             and n.farm_plot is None and n.workplace is None
+                             and not n.defender and not n.is_commander
+                             and not n.is_mayor), None)
+                if cand is None:
+                    continue
+                town.npcs.remove(cand)
+                try:
+                    import village as _vm
+                    if cand in _vm.PEOPLE:
+                        _vm.PEOPLE.remove(cand)
+                except Exception:
+                    pass
+                cand.village = hub
+                cand.hub = hub
+                cand.nation = NATION
+                cand.role = "Criminal"
+                cand.job = want
+                cand.farm_plot = 0 if want == "farm" else None
+                cand.workplace = None
+                cand.stock["shovel" if want == "farm" else "axe"] = 1
+                cand.tool_uses = economy.TOOL_USES
+                cand.x, cand.y = hub.x, hub.y + 40.0
+                cand.home = (cand.x, cand.y)
+                hub.npcs.append(cand)
+                _note("HUB      %s takes %s from %s as %s"
+                      % (hub.name, getattr(cand, "name", "?"), town.name, want))
+                break
 
     def draw(self, screen, cam_x: float, cam_y: float, vw: int, vh: int) -> None:
         view = pygame.Rect(int(cam_x) - 300, int(cam_y) - 300, vw + 600, vh + 600)

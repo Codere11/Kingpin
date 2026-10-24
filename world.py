@@ -69,6 +69,7 @@ class Plot:
     """A tile the player has worked: dug soil, watered soil, or a crop."""
     kind: str                       # "dirt" | "fertile" | "plant"
     planted_at: float | None = None
+    grow: float | None = None       # seconds to ripen, set by the planter's skill
 
 
 class World:
@@ -125,9 +126,10 @@ class World:
             return self.plots.get((tx, ty))
 
     def set_plot(self, tx: int, ty: int, kind: str,
-                 planted_at: float | None = None) -> None:
+                 planted_at: float | None = None,
+                 grow: float | None = None) -> None:
         with self._lock:
-            self.plots[(tx, ty)] = Plot(kind, planted_at)
+            self.plots[(tx, ty)] = Plot(kind, planted_at, grow)
 
     def plot_keys(self):
         with self._lock:

@@ -297,3 +297,104 @@ bag — whether the man in front of you is who he says he is.
 * NPCs being searched on their way in at all (they currently walk through).
 * The **Social** skill, Allegiance, Loyalty, the perceived/actual split, and
   `P` for the mask.
+
+---
+
+# §9 — THE WORLD LOOP
+
+## 9.0 FIRST: THE DICTATORSHIP HAS NO ELECTIONS
+
+**Marked for removal.** There are no elections under a dictatorship. The
+machinery currently in the game that assumes a republic must go:
+
+| to remove | where it lives |
+|---|---|
+| `economy.hold_election` and every call to it | `economy.py`, `Village.update` |
+| the **vote market** (`buy_vote`, `nearest_voter`, `K`) | `main.py` |
+| the **mayor** as an elected office | `economy.pay_mayor`, `mayor.at_court` |
+| the **crown contest** — `candidates_for_crown`, `Village.crown`, the King being chosen by towns | `village.py`, `economy` |
+| `ELECTION_DAYS` and the mayoral court cycle | `economy.py`, `village.court_day` |
+
+**Replacements, not deletions:**
+
+* A mayor becomes a **Governor appointed by the Dictator** — he is not elected,
+  he is *sent*, and he cannot be replaced from below. Loyalty to the crown, not
+  to the town.
+* The King becomes **the Dictator** (already: only the seat crowns him). He is
+  never replaced by a contest. **Only a violent overthrow removes him** — and
+  the seat does not fall because a town voted; it falls because an army took it.
+* A settlement changes hands **by force, one at a time**. Take it, hold it, and
+  it is yours. Until then it is his.
+
+## 9.1 The loop, in order
+
+```
+Dictator bans alcohol and drugs
+        ↓
+player earns money and grows a network   (hubs, carts, gates, informers)
+        ↓
+player has an army
+        ↓
+player takes the settlements, one by one, out of the Dictator's hands
+        ↓
+the seat falls. The Dictator falls. The regime does not.
+        ↓
+the Chief of the secret police — or whoever takes his place — wages a
+constant rebellion against the player
+        ↓
+assassination attempts · infiltration · hubs and criminal networks turned
+against him
+        ↓
+the rebellion is financed by selling drugs AND guns
+        ↓
+THE PLAYER'S CHOICE: keep the bans, or lift them
+```
+
+**The regime is not destroyed when the Dictator is.** The service survives its
+master, and that is the second half of the game.
+
+## 9.2 The ban decision — the price of every choice
+
+The rebellion's income comes from what is forbidden. **Legalising it starves
+them — and poisons your own country.** Four positions, each with a real cost:
+
+| position | what it does to the rebellion | what it does to the player |
+|---|---|---|
+| **Keep both bans** | **a steady, growing income**: drugs and guns both move through the hubs | nothing. It is the old world, with you on the throne. |
+| **Legalise alcohol and drugs** | their drug money dries up; they lean harder on arms | the population turns **idle, quarrelsome and short-lived**; deaths by brawl and overdose climb; **your army is worse** — fewer men fit to march; **support is unreliable** — men change sides for a bottle |
+| **Legalise guns** | they buy freely on the open market — **the rebellion arms itself faster** | **every dispute becomes a shooting**; murders among townsfolk; the rebellion's attacks get bloodier |
+| **Legalise both** | they lose the drug margin, and buy their weapons in daylight | **an intoxicated country with a lot of guns**: idleness, killings, unreliable men, and a rebellion that is well-armed and still rich |
+
+**And keeping the bans has its own cost**: every cart is a crime, every hub a
+crime scene, and the service that you *just defeated* knows exactly where the
+trade runs. **The ban is what the rebellion feeds on — the player's job is to
+choose which poison they take.**
+
+The numbers (to be tuned): each legalisation moves a `temptation` multiplier on
+idleness/brawling/deaths, and a `rebellion_income` multiplier on the rebel
+ledger. They pull in opposite directions, and there is no position with no cost.
+
+## 9.3 The rebellion as an adversary
+
+It must behave like a **network**, not an army:
+
+* **assassination** — a man in the crowd, a shot from a window, a cup that is
+  not yours. It targets **you**, and the men around you.
+* **infiltration** — a trader who wants to buy into your hub. A guard who
+  volunteers. A townsman who is very keen to be your friend.
+* **the criminal network is its treasury** — the hubs you left standing, the
+  carters you did not pay, the towns whose bans you kept.
+* and it is **patient**: it does not need to beat your army, only to make your
+  rule cost more than it earns.
+
+## 9.4 What this means for the systems already built
+
+| system | its role in this loop |
+|---|---|
+| **hubs** | the player's first economy **and** the rebellion's future income |
+| **carts / free traders** | the vein that carries both contraband and rebel coin |
+| **gate searches** | the state's tool — and, after the fall, **yours** |
+| **smuggling skill** | how much risk a man will take per trip |
+| **opinion / social / fear** | what decides whether a man is yours or theirs |
+| **news and `knows`** | how a name travels, and how a lie travels with it |
+| **elections** | **removed.** Office is appointed, or taken by force. |
