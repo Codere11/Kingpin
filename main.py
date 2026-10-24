@@ -1784,12 +1784,14 @@ def main() -> None:
                          "player_to_him", int(_pd))
                 if _pd <= 140.0:
                     dialogue_panel.open(_tt, player, _main_capital()[0])
+                    toast("%s looks at you." % getattr(_tt, "name", "He"))
                     pygame.mouse.set_visible(True)
                     plog.log("PICK", getattr(_tt, "name", "?"), "by", "proximity")
                     return True
             return False
         if getattr(best, "is_truth_teller", False):
             dialogue_panel.open(best, player, _main_capital()[0])
+            toast("%s looks at you." % getattr(best, "name", "He"))
         else:
             open_trade(best)
         pygame.mouse.set_visible(True)
@@ -5627,7 +5629,11 @@ def main() -> None:
             if compass_open:
                 compass_menu.draw(screen)
             if dialogue_panel.open_:
-                dialogue_panel.draw(screen)
+                try:
+                    dialogue_panel.draw(screen)
+                except Exception:
+                    import traceback as _tb
+                    _tb.print_exc()
             if inventory_open:
                 panel.draw(screen)
             if chest_open:
@@ -5972,6 +5978,12 @@ def main() -> None:
             trade_menu.draw(screen)
         if build_menu_open:
             build_menu.draw(screen)
+        # THE CONVERSATION. It was drawn ONLY inside the house branch, so
+        # outdoors it opened and was never painted -- a click that changed the
+        # state and showed nothing. Every other panel is drawn here, in the
+        # frame the player is actually looking at.
+        if dialogue_panel.open_:
+            dialogue_panel.draw(screen)
         if inventory_open:
             panel.draw(screen)
         if confirm_open:
