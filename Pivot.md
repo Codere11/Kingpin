@@ -293,6 +293,12 @@ bag — whether the man in front of you is who he says he is.
 
 ### Not built
 
+* **KNOWN BROKEN — THE SEARCH ONLY HAPPENS ONCE PER PERSON.** A guard searches
+  a man the first time he approaches the gate and never again: the
+  pass is remembered (`player.waved_by`, `npc.searched_by`, and the
+  `_VISITORS` key in `gate.py`) and nothing clears it. It must be **every
+  approach, every time** — each arrival at the gate is a fresh search, and a
+  man who comes back an hour later is a stranger again.
 * The ten-second search bar and the **queue** at the in-gate.
 * NPCs being searched on their way in at all (they currently walk through).
 * The **Social** skill, Allegiance, Loyalty, the perceived/actual split, and
