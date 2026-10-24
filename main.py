@@ -1740,6 +1740,49 @@ def main() -> None:
     EAT_RESTORE = 35.0      # any food fills the same belly, as it does for
                             # every villager: one item, one meal.
 
+    def click_a_man() -> bool:
+        """CLICK A MAN, OPEN THAT MAN. Nothing else.
+
+        The nearest living man to the point you clicked, within 48 px. If he is
+        the truth-teller his questions open; if he is anybody else his trade
+        opens. It does not care what you are holding, where you are standing,
+        whether a house is open, or which men happen to be on screen -- every
+        man in the world is a candidate, because a man you can see is a man in
+        a village's list.
+        """
+        mx, my = pygame.mouse.get_pos()
+        wx = cam_x + mx / ZOOM
+        wy = cam_y + my / ZOOM
+        best, bd = None, 1e18
+        # HIM FIRST AND ALWAYS. He is a village's man, but a village's list can
+        # be rebuilt at load -- so he is a candidate in his own right.
+        if _TRUTH[0] is not None:
+            best = _TRUTH[0]
+            bd = math.hypot(best.x - wx, best.y - wy)
+        for _v in villages.villages:
+            for _n in _v.npcs:
+                if not getattr(_n, "alive", True) or getattr(_n, "in_interior", False):
+                    continue
+                d = math.hypot(_n.x - wx, _n.y - wy)
+                if d < bd:
+                    best, bd = _n, d
+        for _n in list(getattr(village_mod, "TRAVELLERS", ())):
+            if not getattr(_n, "alive", True):
+                continue
+            d = math.hypot(_n.x - wx, _n.y - wy)
+            if d < bd:
+                best, bd = _n, d
+        if best is None or bd > 48.0:
+            return False
+        if getattr(best, "is_truth_teller", False):
+            dialogue_panel.open(best, player, _main_capital()[0])
+        else:
+            open_trade(best)
+        pygame.mouse.set_visible(True)
+        plog.log("PICK", getattr(best, "name", "?"), "at", int(bd),
+                 "truth", getattr(best, "is_truth_teller", False))
+        return True
+
     def on_click() -> None:
         nonlocal confirm_open
         _st0 = inventory.selected_stack()
@@ -3821,6 +3864,13 @@ def main() -> None:
             elif event.type == pygame.KEYDOWN and pygame.K_1 <= event.key <= pygame.K_9:
                 hotbar.select_visible(event.key - pygame.K_1)
             elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEWHEEL):
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    _held = inventory.selected_stack()
+                    _held_id = _held.defn.id if _held else None
+                    # A WEAPON IS AN ATTACK, NOT A CONVERSATION.
+                    if _held_id not in ("axe", "pickaxe", "rifle", "shotgun"):
+                        if click_a_man():
+                            break
                 consumed = hotbar.handle_event(event)
                 if (not consumed and event.type == pygame.MOUSEBUTTONDOWN
                         and event.button == 1):
