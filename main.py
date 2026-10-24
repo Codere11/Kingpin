@@ -1772,7 +1772,21 @@ def main() -> None:
             d = math.hypot(_n.x - wx, _n.y - wy)
             if d < bd:
                 best, bd = _n, d
+        # NOTHING WITHIN 48 PX? THEN ANY CLICK NEAR HIM OPENS HIM. There is
+        # exactly one truth-teller in the world; if you are standing beside him
+        # and you click, that click is for him -- no distance arithmetic, no
+        # camera/zoom to get wrong, nothing left to fail.
         if best is None or bd > 48.0:
+            _tt = _TRUTH[0]
+            if _tt is not None:
+                _pd = math.hypot(_tt.x - player.x, _tt.y - player.y)
+                plog.log("PICK-NONE", "nearest", int(bd) if best is not None else -1,
+                         "player_to_him", int(_pd))
+                if _pd <= 140.0:
+                    dialogue_panel.open(_tt, player, _main_capital()[0])
+                    pygame.mouse.set_visible(True)
+                    plog.log("PICK", getattr(_tt, "name", "?"), "by", "proximity")
+                    return True
             return False
         if getattr(best, "is_truth_teller", False):
             dialogue_panel.open(best, player, _main_capital()[0])
