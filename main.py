@@ -3818,11 +3818,16 @@ def main() -> None:
                 # nearest town -- was a debug tool.
                 map_open = not map_open
                 pygame.mouse.set_visible(map_open)
-            elif dialogue_panel.open_:
-                # THE PANEL TAKES EVERY EVENT WHILE IT IS OPEN. It used to be
-                # handled from the drawing block, where `event` is a leftover
-                # from the last frame -- so a key press could be read twice, at
-                # the wrong time, or not at all.
+            elif (dialogue_panel.open_
+                  and event.type == pygame.KEYDOWN
+                  and event.key in (pygame.K_1, pygame.K_2, pygame.K_3,
+                                    pygame.K_KP1, pygame.K_KP2, pygame.K_KP3,
+                                    pygame.K_ESCAPE, pygame.K_q)):
+                # ONLY ITS OWN FOUR KEYS. This branch used to take EVERY event
+                # while the panel was open -- so one click opened it and from
+                # then on the mouse, the wheel and the pack were dead: no NPC
+                # could be clicked and the inventory could not be scrolled.
+                # A conversation must never own the input system.
                 _d = dialogue_panel.handle_event(event)
                 if _d == "close":
                     pygame.mouse.set_visible(False)
@@ -3864,6 +3869,10 @@ def main() -> None:
             elif event.type == pygame.KEYDOWN and pygame.K_1 <= event.key <= pygame.K_9:
                 hotbar.select_visible(event.key - pygame.K_1)
             elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEWHEEL):
+                if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                        and dialogue_panel.open_):
+                    dialogue_panel.close()          # click away: put it away
+                    pygame.mouse.set_visible(False)
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     _held = inventory.selected_stack()
                     _held_id = _held.defn.id if _held else None
