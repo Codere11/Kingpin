@@ -1753,12 +1753,32 @@ def main() -> None:
         # Every other path in this handler can return first: a held item, a
         # house, an axe, the reach gate, the list of men in view. This does not
         # depend on any of them. Click his body and the questions open.
-        if _TRUTH[0] is not None:
+        # ALWAYS FIND HIM. The handle can be stale after a reload; his own
+        # town's list and the wanderers' list are both searched, so there is no
+        # state in which he exists and this cannot find him.
+        _tt0 = _TRUTH[0]
+        if _tt0 is None:
+            for _tv in villages.villages:
+                for _tn in _tv.npcs:
+                    if getattr(_tn, "is_truth_teller", False):
+                        _tt0 = _tn
+                        _TRUTH[0] = _tt0
+                        break
+                if _tt0 is not None:
+                    break
+        if _tt0 is not None:
             _tmx, _tmy = pygame.mouse.get_pos()
             _twx = cam_x + _tmx / ZOOM
             _twy = cam_y + _tmy / ZOOM
-            _tt0 = _TRUTH[0]
-            if abs(_twx - _tt0.x) <= 34.0 and -34.0 <= (_twy - _tt0.y) <= 34.0:
+            _tdx, _tdy = _twx - _tt0.x, _twy - _tt0.y
+            # LOGGED ON EVERY CLICK, HIT OR MISS, WITH THE NUMBERS. If this ever
+            # fails again, the log says by how much rather than needing a guess.
+            plog.log("CLICK-HIM", "click", "%d,%d" % (int(_twx), int(_twy)),
+                     "him", "%d,%d" % (int(_tt0.x), int(_tt0.y)),
+                     "d", "%d,%d" % (int(_tdx), int(_tdy)))
+            # SIXTY PIXELS, AND NOTHING ELSE IN FRONT OF IT. He is one man on
+            # screen; a click within two body-widths of him is a click on him.
+            if abs(_tdx) <= 60.0 and abs(_tdy) <= 60.0:
                 dialogue_panel.open(_tt0, player, _main_capital()[0])
                 pygame.mouse.set_visible(True)
                 plog.log("TALK", "opened with", getattr(_tt0, "name", "?"),
