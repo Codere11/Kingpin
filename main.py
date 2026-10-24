@@ -1742,6 +1742,11 @@ def main() -> None:
 
     def on_click() -> None:
         nonlocal confirm_open
+        _st0 = inventory.selected_stack()
+        plog.log("CLICK", "on_click", "item",
+                 (_st0.defn.id if _st0 else None), "dead", player.dead,
+                 "house", inside_house is not None,
+                 "at", "%d,%d" % (int(player.x), int(player.y)))
         if player.dead:
             return
         stack = inventory.selected_stack()
@@ -1850,7 +1855,17 @@ def main() -> None:
                       if getattr(e, "kind", "") == "soldier"
                       and getattr(e, "alive", True)
                       and not getattr(e, "attacked", False)]
+            plog.log("CLICK", "folk", len(_folk), "reach_test", True,
+                     "mouse", "%d,%d" % (int(wx), int(wy)),
+                     "player", "%d,%d" % (int(player.x), int(player.y)))
             for npc in _folk:
+                    _dd = math.hypot(npc.x - wx, npc.y - wy)
+                    if _dd < 60.0:
+                        plog.log("CLICK-NEAR", getattr(npc, "name", "?"),
+                                 "d", int(_dd), "dx", int(npc.x - wx),
+                                 "dy", int(npc.y - wy),
+                                 "truth", getattr(npc, "is_truth_teller", False),
+                                 "alive", getattr(npc, "alive", None))
                     # A cutout is drawn ABOVE its anchor, so the hit area is his
                     # body, not a circle at his feet -- the same test for every
                     # man in the world, villagers included.
