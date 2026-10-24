@@ -843,6 +843,7 @@ def main() -> None:
         _chain = {"hub": None, "t0": 0.0, "link": 1, "seen": {}, "t": 0.0,
                   "f": 0, "wall0": time.perf_counter(), "last_say": -1.0}
 
+    _TRUTH = [None]      # the man who is always beside the player, if any
     player = Player(_hx, _hy)
     # ---- THE TRUTH-TELLER -----------------------------------------------
     # One man who stands beside the player from the first frame and never
@@ -871,6 +872,7 @@ def main() -> None:
             _truth.health = 1_000_000.0
             _truth.is_truth_teller = True
             _tt_town.npcs.append(_truth)
+            _TRUTH[0] = _truth      # from the moment he exists, he is clickable
             _truth_home[0], _truth_home[1] = _truth.x, _truth.y
             plog.log("TRUTH", "created", _truth.name, "of", _tt_town.name,
                      "trade", _truth.job, "at", "%d,%d"
@@ -1347,6 +1349,14 @@ def main() -> None:
 
     def open_trade(npc) -> None:
         nonlocal trade_open, trade_menu
+        # THE MAN WHO ANSWERS QUESTIONS. He comes through the very same click
+        # that opens a villager's trade menu -- and here it becomes a
+        # conversation instead of a counter.
+        if getattr(npc, "is_truth_teller", False):
+            dialogue_panel.open(npc, player, _main_capital()[0])
+            pygame.mouse.set_visible(True)
+            plog.log("TALK", "opened with", getattr(npc, "name", "?"))
+            return
         try:
             npc = make_tradeable(npc)
         except Exception:
@@ -1841,7 +1851,12 @@ def main() -> None:
                       and getattr(e, "alive", True)
                       and not getattr(e, "attacked", False)]
             for npc in _folk:
-                    if getattr(npc, "alive", True) and math.hypot(npc.x - wx, npc.y - wy) < 22.0:
+                    # A cutout is drawn ABOVE its anchor, so the hit area is his
+                    # body, not a circle at his feet -- the same test for every
+                    # man in the world, villagers included.
+                    if (getattr(npc, "alive", True)
+                            and abs(npc.x - wx) < 26.0
+                            and -64.0 < (wy - npc.y) < 22.0):
                         if getattr(npc, "is_truth_teller", False):
                             dialogue_panel.open(npc, player, _main_capital()[0])
                             pygame.mouse.set_visible(True)
@@ -2186,7 +2201,6 @@ def main() -> None:
         inside_house = None
         door_cooldown = 0.7
 
-    _TRUTH = [None]      # the man who is always beside the player, if any
     _draws: dict = {}
 
     def draw_exterior(cx, cy, show_names: bool = False, target=None) -> None:
@@ -3742,20 +3756,6 @@ def main() -> None:
             elif event.type == pygame.KEYDOWN and pygame.K_1 <= event.key <= pygame.K_9:
                 hotbar.select_visible(event.key - pygame.K_1)
             elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEWHEEL):
-                if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1):
-                    if dialogue_panel.open_:
-                        _dd = dialogue_panel.handle_event(event)
-                        if _dd == "trade":
-                            _dn = dialogue_panel.npc
-                            dialogue_panel.close()
-                            pygame.mouse.set_visible(False)
-                            if _dn is not None:
-                                open_trade(_dn)
-                        elif _dd == "close":
-                            pygame.mouse.set_visible(False)
-                        break
-                    if try_talk():
-                        break
                 consumed = hotbar.handle_event(event)
                 if (not consumed and event.type == pygame.MOUSEBUTTONDOWN
                         and event.button == 1):
