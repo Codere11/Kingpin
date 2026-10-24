@@ -1749,6 +1749,22 @@ def main() -> None:
                  "at", "%d,%d" % (int(player.x), int(player.y)))
         if player.dead:
             return
+        # ---- HIM, BEFORE ANYTHING ELSE -------------------------------------
+        # Every other path in this handler can return first: a held item, a
+        # house, an axe, the reach gate, the list of men in view. This does not
+        # depend on any of them. Click his body and the questions open.
+        if _TRUTH[0] is not None:
+            _tmx, _tmy = pygame.mouse.get_pos()
+            _twx = cam_x + _tmx / ZOOM
+            _twy = cam_y + _tmy / ZOOM
+            _tt0 = _TRUTH[0]
+            if abs(_twx - _tt0.x) <= 34.0 and -34.0 <= (_twy - _tt0.y) <= 34.0:
+                dialogue_panel.open(_tt0, player, _main_capital()[0])
+                pygame.mouse.set_visible(True)
+                plog.log("TALK", "opened with", getattr(_tt0, "name", "?"),
+                         "click", "%d,%d" % (int(_twx), int(_twy)),
+                         "him", "%d,%d" % (int(_tt0.x), int(_tt0.y)))
+                return
         stack = inventory.selected_stack()
         item_id = stack.defn.id if stack else None
         # ANYTHING THE VILLAGERS CALL FOOD, THE PLAYER CAN EAT. This was a
@@ -3739,6 +3755,20 @@ def main() -> None:
                 # nearest town -- was a debug tool.
                 map_open = not map_open
                 pygame.mouse.set_visible(map_open)
+            elif dialogue_panel.open_:
+                # THE PANEL TAKES EVERY EVENT WHILE IT IS OPEN. It used to be
+                # handled from the drawing block, where `event` is a leftover
+                # from the last frame -- so a key press could be read twice, at
+                # the wrong time, or not at all.
+                _d = dialogue_panel.handle_event(event)
+                if _d == "close":
+                    pygame.mouse.set_visible(False)
+                elif _d == "trade":
+                    _dn = dialogue_panel.npc
+                    dialogue_panel.close()
+                    pygame.mouse.set_visible(False)
+                    if _dn is not None:
+                        open_trade(_dn)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 # ESC USED TO PAUSE UNCONDITIONALLY, even with a menu already
                 # open -- so a panel that would not close left a man with no
@@ -5527,18 +5557,6 @@ def main() -> None:
                          "brewery": "The brewhouse"}.get(_k, "Work here")
                 hint = font.render("[E]  %s" % _what, True, (240, 232, 200))
                 screen.blit(hint, (vw // 2 - hint.get_width() // 2, int(vh * 0.80)))
-            if dialogue_panel.open_:
-                _d = dialogue_panel.handle_event(event)
-                if _d == "close":
-                    pygame.mouse.set_visible(False)
-                elif _d == "trade":
-                    _dn = dialogue_panel.npc
-                    dialogue_panel.close()
-                    pygame.mouse.set_visible(False)
-                    if _dn is not None:
-                        open_trade(_dn)
-                elif _d:
-                    pass
             if pause_open:
                 pause_menu.draw(screen)
             if map_open:
