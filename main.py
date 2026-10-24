@@ -857,10 +857,13 @@ def main() -> None:
             _truth.max_health = 1_000_000.0
             _truth.health = 1_000_000.0
             _tt_town.npcs.append(_truth)
-            print("TRUTH-TELLER %s of %s, trade %s"
-                  % (_truth.name, _tt_town.name, _truth.job))
+            plog.log("TRUTH", "created", _truth.name, "of", _tt_town.name,
+                     "trade", _truth.job, "at", "%d,%d"
+                     % (int(_truth.x), int(_truth.y)))
     except Exception as _te:
-        print("truth-teller failed: %r" % (_te,))
+        # A WINDOWED BUILD SWALLOWS stdout. If he cannot be made, the reason
+        # must reach a file or nobody will ever know.
+        plog.log("TRUTH-ERROR", repr(_te)[:200])
     if _observe_spot is not None:
         player.god = True
     # A NAME, AND A LETTER WAITING FOR HIM. The name is drawn the same way the
@@ -2098,6 +2101,7 @@ def main() -> None:
         door_cooldown = 0.7
 
     _TRUTH = [None]      # the man who is always beside the player, if any
+    _draws: dict = {}
 
     def draw_exterior(cx, cy, show_names: bool = False, target=None) -> None:
         target = target if target is not None else screen
@@ -2173,8 +2177,16 @@ def main() -> None:
                                        + (npc.y - player.y) ** 2) < 260.0 ** 2
                 items.append((npc.y, lambda n=npc, s=near:
                               n.draw(target, cx, cy, s)))
-        if _TRUTH[0] is not None and not _TRUTH[0].asleep:
+        if _TRUTH[0] is not None:
             _tn = _TRUTH[0]
+            try:
+                _draws["n"] = _draws.get("n", 0) + 1
+                if _draws["n"] % 120 == 1:
+                    plog.log("TRUTH-DRAW", "at", "%d,%d" % (int(_tn.x), int(_tn.y)),
+                             "view", view.collidepoint(_tn.x, _tn.y),
+                             "player", "%d,%d" % (int(player.x), int(player.y)))
+            except Exception:
+                pass
             if view.collidepoint(_tn.x, _tn.y):
                 _tnear = show_names and ((_tn.x - player.x) ** 2
                                          + (_tn.y - player.y) ** 2) < 260.0 ** 2
@@ -5439,6 +5451,18 @@ def main() -> None:
         else:
             cam_x = player.x - vw / 2.0
             cam_y = player.y - vh / 2.0
+        # HE STANDS AT THE PLAYER'S SHOULDER, EVERY FRAME, AWAKE, ALIVE. The pin
+        # and the `_TRUTH` hand-off belong HERE, outside the camera branch --
+        # and `asleep` must be cleared, because an NPC is born asleep at night
+        # and the draw pass used to skip a sleeping man.
+        if _truth is not None:
+            _truth.x = player.x + 44.0
+            _truth.y = player.y
+            _truth.asleep = False
+            _truth.in_interior = False
+            _truth.alive = True
+            _truth.health = _truth.max_health
+            _truth.pause = 1.0
             _TRUTH[0] = _truth
         draw_exterior(cam_x, cam_y, True)
         try:
