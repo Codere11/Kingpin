@@ -52,6 +52,7 @@ import observer
 # ImportError at the moment of a death -- and the except that guards the call
 # would swallow it, and every death would go unrecorded with no sign why.
 import deaths
+import dialogue
 import tournament
 import village as village_mod
 import war
@@ -686,6 +687,17 @@ def main() -> None:
     # ---- THE HUBS IN THE WILD -- not villages; no war can be declared
     # on one, because no one admits it exists.
     hub_world = hubs.Hubs(world, villages)
+    dialogue_panel = dialogue.Dialogue()
+
+    def _main_capital():
+        """The seat: the town whose king is the Dictator."""
+        best = None
+        for _v in villages.villages:
+            if getattr(_v, "king", None) is not None:
+                return (_v,)
+            if best is None and getattr(_v, "is_capital", False):
+                best = _v
+        return (best,)
     hub_world.build_caravans(world)
     # AND NO WOODS IN THE YARD. The trees are staked per VILLAGE, so a hub out
     # in the wild had a forest growing through its crop and its house. They are
@@ -857,6 +869,7 @@ def main() -> None:
             _truth.team = ("nation", _tt_town.nation)
             _truth.max_health = 1_000_000.0
             _truth.health = 1_000_000.0
+            _truth.is_truth_teller = True
             _tt_town.npcs.append(_truth)
             _truth_home[0], _truth_home[1] = _truth.x, _truth.y
             plog.log("TRUTH", "created", _truth.name, "of", _tt_town.name,
@@ -1764,6 +1777,10 @@ def main() -> None:
                       and not getattr(e, "attacked", False)]
             for npc in _folk:
                     if getattr(npc, "alive", True) and math.hypot(npc.x - wx, npc.y - wy) < 22.0:
+                        if getattr(npc, "is_truth_teller", False):
+                            dialogue_panel.open(npc, player, _main_capital()[0])
+                            pygame.mouse.set_visible(True)
+                            return
                         if (getattr(npc, "is_commander", False)
                                 and not getattr(npc, "attacked", False)):
                             confirm.pending = npc
@@ -5392,6 +5409,8 @@ def main() -> None:
                 build_menu.draw(screen)
             if compass_open:
                 compass_menu.draw(screen)
+            if dialogue_panel.open_:
+                dialogue_panel.draw(screen)
             if inventory_open:
                 panel.draw(screen)
             if chest_open:
@@ -5414,6 +5433,18 @@ def main() -> None:
                          "brewery": "The brewhouse"}.get(_k, "Work here")
                 hint = font.render("[E]  %s" % _what, True, (240, 232, 200))
                 screen.blit(hint, (vw // 2 - hint.get_width() // 2, int(vh * 0.80)))
+            if dialogue_panel.open_:
+                _d = dialogue_panel.handle_event(event)
+                if _d == "close":
+                    pygame.mouse.set_visible(False)
+                elif _d == "trade":
+                    _dn = dialogue_panel.npc
+                    dialogue_panel.close()
+                    pygame.mouse.set_visible(False)
+                    if _dn is not None:
+                        open_trade(_dn)
+                elif _d:
+                    pass
             if pause_open:
                 pause_menu.draw(screen)
             if map_open:
