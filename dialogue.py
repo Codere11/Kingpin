@@ -85,7 +85,7 @@ def regard_answer(score: float) -> str:
         return "I like you. You have been straight with me."
     if score <= 40.0:
         return "Fuck off. I know what you are."
-    return "I don't know you well enough to say."
+    return "I don't know."
 
 
 class Dialogue:
