@@ -82,9 +82,9 @@ def dictator_answer(love: float) -> str:
 def regard_answer(score: float) -> str:
     """50 is the middle. Above 60 he likes you; below 40 he does not."""
     if score >= 60.0:
-        return "I like you. You have been straight with me."
+        return "I like you."
     if score <= 40.0:
-        return "Fuck off. I know what you are."
+        return "Fuck off."
     return "I don't know."
 
 
