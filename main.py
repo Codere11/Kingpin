@@ -3494,11 +3494,7 @@ def main() -> None:
             if getattr(_v, "is_hub", False) or getattr(_v, "patrol", None):
                 continue
             _v.patrol = make_village_patrol(_v, 2)
-            # NOT IN `enemies` YET. Seventy-two soldiers stepping, steering and
-            # picking targets every frame -- across a world the player cannot
-            # see -- cost ~1.5 ms a frame for nothing. The patrol exists so the
-            # GATE can search; it joins the simulation the moment its town comes
-            # into the player's bubble (the per-frame guard pass does that).
+            enemies.extend(_v.patrol)
             _v.patrol_timer = 30.0
         print("gate guards raised for %d settlements" % len(villages.villages))
     except Exception as _ge:
