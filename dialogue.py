@@ -52,20 +52,23 @@ def dictator_love(npc) -> float:
 
 
 def player_regard(npc, player) -> float:
-    """-100 = he wants nothing to do with you, +100 = he likes you."""
+    """0..100, and EVERY MAN STARTS AT 50 -- the middle.
+
+    He neither likes nor dislikes you until something has happened between you:
+    every honest bargain moves it up, every man you get killed moves it down.
+    """
+    base = getattr(npc, "player_opinion", None)
+    if base is None:
+        base = 50.0
+        npc.player_opinion = base
     try:
         import economy
         import village as _vm
         op = economy.opinion_of(npc, _vm.PLAYER_ID)
-        stored = float(op.get(_vm.PLAYER_ID, 0.0))       # +1 per honest deal
+        deals = float(op.get(_vm.PLAYER_ID, 0.0))        # +1 per honest deal
     except Exception:
-        stored = 0.0
-    bias = 0.0
-    try:
-        bias = random.Random(str(getattr(npc, "npc_id", "x")) + "me").randint(-35, 20)
-    except Exception:
-        pass
-    return max(-100.0, min(100.0, stored * 8.0 + bias))
+        deals = 0.0
+    return max(0.0, min(100.0, float(base) + deals * 5.0))
 
 
 def dictator_answer(love: float) -> str:
@@ -77,9 +80,10 @@ def dictator_answer(love: float) -> str:
 
 
 def regard_answer(score: float) -> str:
-    if score >= 20.0:
+    """50 is the middle. Above 60 he likes you; below 40 he does not."""
+    if score >= 60.0:
         return "I like you. You have been straight with me."
-    if score <= -20.0:
+    if score <= 40.0:
         return "Fuck off. I know what you are."
     return "I don't know you well enough to say."
 
@@ -93,10 +97,11 @@ class Dialogue:
         self.player = None
         self.answer = ""
         self.who = ""
-        self.font = pygame.font.SysFont("dejavusans", 16, bold=True)
+        self.font = pygame.font.SysFont("dejavusans", 16)
         self.font_small = pygame.font.SysFont("dejavusans", 13)
         self.font_title = pygame.font.SysFont("dejavusans", 18, bold=True)
         self.font_body = pygame.font.SysFont("dejavusans", 15)
+        self.font_hint = pygame.font.SysFont("dejavusans", 13)
         self.rows: list = []          # (rect, key)
         self._rect = None
 
@@ -165,22 +170,21 @@ class Dialogue:
 
     # -- drawing ---------------------------------------------------------
     @staticmethod
-    def spaced(screen, font, text, pos, colour, extra=1):
-        """TEXT WITH LETTER SPACING. pygame renders glyphs flush against one
-        another and a short string set that way looks cramped; each character is
-        drawn a pixel apart and the whole line is measured as it goes."""
-        x, y = pos
-        for ch in text:
-            glyph = font.render(ch, True, colour)
-            screen.blit(glyph, (x, y))
-            x += glyph.get_width() + extra
-        return x
+    def spaced(screen, font, text, pos, colour, extra=0):
+        """PLAIN TEXT, set the way every other panel in the game is set.
+
+        The per-character version put a pixel between every glyph and destroyed
+        the font's kerning -- it looked worse, not better.
+        """
+        img = font.render(text, True, colour)
+        screen.blit(img, pos)
+        return pos[0] + img.get_width()
 
     def _wrap(self, text, font, width) -> list:
         lines, cur = [], ""
         for word in text.split():
             trial = (cur + " " + word).strip()
-            if self.spaced_len(font, trial) > width and cur:
+            if font.size(trial)[0] > width and cur:
                 lines.append(cur)
                 cur = word
             else:
@@ -188,10 +192,6 @@ class Dialogue:
         if cur:
             lines.append(cur)
         return lines
-
-    @staticmethod
-    def spaced_len(font, text) -> int:
-        return sum(font.size(ch)[0] + 1 for ch in text)
 
     def draw(self, screen: pygame.Surface) -> None:
         if not self.open_:
@@ -246,5 +246,5 @@ class Dialogue:
         else:
             self.spaced(screen, self.font_small, "Ask him anything. He does not lie.",
                         (panel.x + 18, ay), (150, 146, 134), 1)
-        self.spaced(screen, self.font_small, "[1] [2] [3]   ESC to walk away",
+        self.spaced(screen, self.font_hint, "[1] [2] [3]    ESC to walk away",
                     (panel.x + 18, panel.bottom - 26), (140, 134, 122), 1)
