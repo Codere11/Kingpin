@@ -864,15 +864,26 @@ class Hubs:
                combat=None, threat_of=None, colliders=()) -> None:
         for hub in self.hubs:
             hub.update(dt, self._world, now, phase, combat, threat_of, colliders)
+        # CARTS AT 10 HZ. Twenty-five of them walked 240 px a second across a
+        # world nobody is looking at; stepping them sixty times a second was
+        # pure cost. A cart does not need frame-perfect motion.
+        self._car_t = getattr(self, "_car_t", 0.0) + dt
+        if self._car_t < 0.1:
+            return
+        _cdt = self._car_t
+        self._car_t = 0.0
         for c in getattr(self, "_caravans", ()):
             try:
-                c.tick(dt, self.hubs, self._villages.villages, now)
+                c.tick(_cdt, self.hubs, self._villages.villages, now)
             except Exception as _e:
                 if not getattr(self, "_car_shown", 0):
                     self._car_shown = 1
                     _note("CARAVAN ERROR %s" % repr(_e)[:150])
         try:
-            self._refill(dt, now)
+            self._ref_t = getattr(self, "_ref_t", 0.0) + dt
+            if self._ref_t >= 2.0:          # every two seconds is plenty
+                self._refill(self._ref_t, now)
+                self._ref_t = 0.0
         except Exception as _e:
             import traceback as _tb
             if not getattr(self, "_refill_shown", 0):
