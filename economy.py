@@ -66,7 +66,8 @@ CRAFT_CONSUME = 1          # leaf per finished good
 MASH = ("wheat", "berries", "agave")             # what goes into the brewing table
 WORT = {"wheat": "wheat_wort", "berries": "berry_wort", "agave": "agave_wort"}
 BREW = {"wheat_wort": "beer", "berry_wort": "liqueur", "agave_wort": "mezcal"}
-LUXURY = FINISHED + tuple(BREW.values())         # everything made, not grown
+LUXURY = FINISHED + tuple(BREW.values()) + ("govbeer",)
+DRINKS = set(BREW.values()) | {"govbeer"}         # everything made, not grown
 WORT_BATCH = 50            # fifty at a time through the table, and the barrel
 WORT_STOCK = 40            # mash a brewer keeps on hand
 BREW_SECONDS = 300.0       # five minutes in the barrel
@@ -82,7 +83,7 @@ TOOLS = ("shovel", "pickaxe", "axe")
 ARMS = ("rifle", "shotgun", "ammo")
 GOODS = (FOOD + LEAF + FINISHED + SEEDS + TOOLS + ARMS
          + ("iron", "wood", "wheat") + tuple(WORT.values())
-         + tuple(BREW.values()))
+         + tuple(BREW.values()) + ("govbeer",))
 WAGE_GOODS = FOOD + LEAF + SEEDS
 
 ITEM_VALUE = {
@@ -92,7 +93,9 @@ ITEM_VALUE = {
     "tobacco": 7, "red_mushroom": 8, "agave": 7,
     "cigar": 20, "dried_mushroom": 22,          # leaf is the input; this is the good
     "wheat": 3, "wheat_wort": 4, "berry_wort": 4, "agave_wort": 4,
-    "beer": 22, "liqueur": 26, "mezcal": 24,    # luxuries: worth many times the mash
+    "beer": 22, "liqueur": 26, "mezcal": 24,
+    # GOVERNMENT BEER IS SOLD AS E-GRADE BEER: 22 x 0.5 = 11 a bottle.
+    "govbeer": 11,    # luxuries: worth many times the mash
     "wheat_seed": 3, "seed_bag": 3,
     "iron": 6, "shovel": 45, "pickaxe": 50, "axe": 40,
     # A log is worth a loaf. At base 1 its floor was 0.55 against bread's 2.20,
@@ -841,9 +844,10 @@ def wants(npc, item: str) -> int:
                 and npc.yearning >= YEARING_BUY):
             return 1
         return 0
-    if item in BREW.values():
-        # A drink is a want of its own, and everybody wants one.
-        if (item == npc.wants_drink
+    if item in DRINKS:
+        # A drink is a want of its own, and everybody wants one. The state's
+        # own beer answers the same thirst as any other.
+        if ((item == npc.wants_drink or item == "govbeer")
                 and npc.yearning >= YEARING_BUY):
             return 1
         return 0
@@ -2030,6 +2034,11 @@ def needs(npc, dt: float) -> bool:
                 stock[drink] -= 1
                 yearning = 0.0
                 npc.use_fx = (drink, USE_FX_SECONDS)
+            elif stock.get("govbeer", 0) > 0:
+                # the state's bottle does the same work
+                stock["govbeer"] -= 1
+                yearning = 0.0
+                npc.use_fx = ("govbeer", USE_FX_SECONDS)
     fx = npc.use_fx
     if fx is not None:
         item, left = fx

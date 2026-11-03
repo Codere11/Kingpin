@@ -1485,6 +1485,11 @@ class NPC:
         if (house is not None
                 and economy.house_wood(house) < economy.STOCK_WOOD):
             needs.append("wood")                 # the woodpile needs topping up
+        _drink = getattr(self, "wants_drink", None)
+        if (_drink and self.stock.get(_drink, 0) <= 0
+                and self.stock.get("govbeer", 0) <= 0
+                and self.yearning >= economy.YEARING_BUY):
+            needs.append("govbeer")          # the cheap bottle on the shelf
         leaf = getattr(self, "leaf_item", None)
         if (leaf and self.yearning >= economy.YEARING_BUY
                 and self.stock.get(leaf, 0) <= 0):
@@ -1498,6 +1503,16 @@ class NPC:
         if not needs:
             self._shop_target = None
             return False
+        # THE STATE'S SHELF IS OPEN. A thirsty man with the coin buys the
+        # government's bottle straight off the ledger -- he does not have to
+        # wait for a neighbour to be selling a drink.
+        if "govbeer" in needs:
+            _have = int(vl.ledger_goods.get("govbeer", 0))
+            if _have > 0:
+                _price = max(1, economy.ledger_value(vl, "govbeer"))
+                if self.coins >= _price:
+                    if economy._settle(vl, "govbeer", _price, 1, None, self):
+                        return True
         # A starving man's need outranks a keeper's reserve -- otherwise an
         # evenly-fed village has no seller at all. See economy.pair_trade.
         desperate = self.hunger >= economy.DOLE_LAST
@@ -2424,7 +2439,8 @@ class NPC:
 
         else:                                        # beer, liqueur, mezcal
             bottle = pygame.Surface((14, 22), pygame.SRCALPHA)
-            colour = {"beer": (168, 112, 40), "liqueur": (150, 60, 96),
+            colour = {"beer": (168, 112, 40), "govbeer": (150, 104, 46),
+                      "liqueur": (150, 60, 96),
                       "mezcal": (198, 190, 150)}.get(item, (168, 112, 40))
             pygame.draw.rect(bottle, colour + (215,), (1, 7, 12, 14), border_radius=3)
             pygame.draw.rect(bottle, (206, 214, 220, 190), (4, 0, 6, 8))

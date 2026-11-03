@@ -68,6 +68,10 @@ REGISTRY: dict[str, ItemDef] = {
     "beer": ItemDef("beer", "Beer",
                     "Dark, honest and strong. Worth far more than the grain it came from.",
                     stackable=True, max_stack=100, quality=True),
+    "govbeer": ItemDef("govbeer", "Govermentskoye",
+                       "State beer, E-grade, and none of the state's business. "
+                       "Cheap, brown, and on every table in the republic.",
+                       stackable=True, max_stack=100),
     "liqueur": ItemDef("liqueur", "Liqueur",
                        "Sweet, potent, and the finest thing a berry can become.",
                        stackable=True, max_stack=100, quality=True),

@@ -6663,6 +6663,13 @@ def main() -> None:
                     plog.log("GULAG-INTRUDER", _n_in, "inside the fence")
             except Exception:
                 pass
+            # ---- THE STATE'S BEER COMES OFF THE TRAIN -------------------
+            try:
+                import govbeer as _govbeer
+                if _TEST_TRAIN[0] is not None:
+                    _govbeer.tick(_TEST_TRAIN[0], villages.villages, dt, now)
+            except Exception as _gbe:
+                plog.log("GOVBEER-ERR", repr(_gbe)[:140])
             # ---- GUNFIRE SCATTERS A CROWD ------------------------------
             try:
                 _panic_t[0] += dt
