@@ -58,6 +58,33 @@ def _hash(tx: int, ty: int, seed: int) -> int:
 
 
 _PLANT: dict = {}          # (world, tx, ty) -> (kind, stage) or None
+def density_at(x: float, y: float) -> float:
+    """WILD FOOD PER THOUSAND TILES, and thinner the further out you go.
+
+    The settled country grows exactly as it always did. Past its edge the
+    ground is frozen waste and the crop falls away to a FIFTIETH of that --
+    nothing like enough to live on, which is the whole point of a border.
+    """
+    try:
+        import gulag as _g
+        if _g.inside(x, y, 140.0):
+            return 0.0                      # NOT ONE MUSHROOM IN THE CAMP
+    except Exception:
+        pass
+    try:
+        import biomes as _b
+        ramp = _b._waste_ramp(x, y)
+        if ramp > 0.0:
+            # A FIFTIETH BY A THIRD OF THE WAY OUT, AND THEN NOTHING AT ALL.
+            # Frozen ground does not grow a mushroom every few paces.
+            if ramp > 0.55:
+                return 0.0
+            return DENSITY * max(1.0 / 50.0, 1.0 - (19.0 / 20.0) * (ramp / 0.55))
+    except Exception:
+        pass
+    return DENSITY
+
+
 def _plant(world, tx: int, ty: int):
     """What grows on this tile, if anything -- CACHED.
 
@@ -70,12 +97,22 @@ def _plant(world, tx: int, ty: int):
         return _PLANT[key]
     got = None
     h = _hash(tx, ty, world.seed)
-    if h % 1000 < DENSITY and world.tile_kind(tx, ty) == "grass":
-        x = tx * TILE + TILE / 2.0
-        y = ty * TILE + TILE / 2.0
+    x = tx * TILE + TILE / 2.0
+    y = ty * TILE + TILE / 2.0
+    # NOTHING TO EAT IN THE WASTE. The settled country grows as it always did;
+    # past its edge the ground thins out to a fiftieth of that, so a man who
+    # walks out of the world finds snow and no dinner.
+    if h % 1000 < density_at(x, y) and world.tile_kind(tx, ty) == "grass":
         food, leaf = biomes.crop_kinds(float(biomes.temperature(x, y, world.seed)),
                                        float(biomes.humidity(x, y, world.seed)))
         got = (leaf if (h >> 8) & 1 else food, (h >> 4) % STAGES)
+        # NOTHING GROWS ON THE PERMANENT WAY.
+        try:
+            import rail
+            if rail.blocked(x, y):
+                got = None
+        except Exception:
+            pass
     _PLANT[key] = got
     return got
 
@@ -106,7 +143,7 @@ def _cell(world, cx: int, cy: int):
     for ty in range(cy * CELL, cy * CELL + CELL):
         for tx in range(cx * CELL, cx * CELL + CELL):
             h = _hash(tx, ty, world.seed)
-            if h % 1000 >= DENSITY:
+            if h % 1000 >= density_at(tx*TILE+TILE/2.0, ty*TILE+TILE/2.0):
                 continue
             if world.tile_kind(tx, ty) != "grass":
                 continue
@@ -205,7 +242,7 @@ def _nearest(world, x: float, y: float, radius: float):
     for ty in range(ty0, ty1 + 1):
         for tx in range(tx0, tx1 + 1):
             h = _hash(tx, ty, world.seed)
-            if h % 1000 >= DENSITY:
+            if h % 1000 >= density_at(tx*TILE+TILE/2.0, ty*TILE+TILE/2.0):
                 continue                            # cheap reject first
             found = at(world, tx, ty)
             if found is None:

@@ -671,3 +671,164 @@ which is a much worse thing to live with.**
   which reads as red without becoming a red screen.
 - **Lightning** is a one-frame white flash at a position — cheap, and it needs no
   new machinery beyond where effects already spawn.
+
+---
+
+# Part II — the two trees (design, not built)
+
+Recorded 29 Oct, from the user. This is a *design*, to be argued with before
+anything is written.
+
+## 16. Peacetime and war are two different games
+
+**The state answers in the register in which it is attacked.**
+
+| | **Peacetime** — the player is building an income | **War** — the player is taking settlements |
+|---|---|---|
+| who answers | the **service**: the chief, his agents, the dossier | the **state**: the crown, the army, the levy |
+| what it is | a **police matter** | a **civil war** |
+| what it looks like | watching, relaying, a dossier, gates, an envoy, a raid on a yard | columns, sieges, requisitions, garrisons, a province in revolt |
+| what can be lost | goods, men, your cover, your stall, a worker turned | ground, towns, the yard, whole squads |
+| the other side's rules | there are rules: warrants, budgets, a chief who must justify men | **everything goes** |
+| how it ends | you are ruined, bought, or you cut the head off the service | you win a province, or the army takes everything |
+
+**The point of the split:** the same crimes should feel *completely different*
+depending on how far the player has pushed. Stealing leaf and selling it is a
+policeman's problem; burning a town's garrison is the army's. A service that
+tries to police a civil war is what makes totalitarian worlds feel silly — and
+an army that intervenes in a smuggling case is what makes them feel cheap.
+
+**What flips it (proposal, for the user to decide):**
+
+* Peacetime → War when the player **takes a settlement** (occupies it, or kills
+  its garrison and holds the gate) — or joins a nation's war with his own men.
+* War → Peacetime when the player is **driven out** (no towns held, no nation
+  backing) and the crown considers the revolt finished. The dossier survives the
+  peace; the war does not erase it.
+* The **service keeps working in war**, but as *military intelligence*: it stops
+  raiding your yard and starts mapping your army — your commanders, your
+  holdings, your supply. Which is the next section.
+
+## 17. The tree — and the one he keeps of you
+
+### The shape
+
+Both sides are a **tree of people**, not a progress bar. The player sees the
+service's tree as far as he has *learned* it; the chief sees the player's
+organisation the same way. Nodes are men, edges are *who reports to whom*:
+
+```
+                    [ ? ]  the chief — identity unknown
+                    /   \
+             [agent]     [agent]
+             /     \         \
+      [agent]     [turned]   [ ? ]     <- an unknown branch: a man you
+                                          have not met, turned or killed
+```
+
+* **A node you have not learned is `[ ? ]`** — a shape on the chart with no name,
+  known to exist only because *someone* reports to it (a courier left a place, a
+  prisoner named a patch).
+* **Learning a node** = interrogating an agent, turning him, or finding his name
+  in another's head (`KNOWERS` already answers "who knows this fact").
+* **The root is the chief**, and his identity is the last thing the tree gives
+  up. You climb by **killing, turning and interrogating** — and by *following*
+  (a courier's route is an edge made visible).
+
+### The chief's tree of you
+
+He starts with nothing but the places your crimes happened. His tree grows by
+the same rules:
+
+* he **knows a place** (the fact names it) — a yard, a town where your men sell;
+* he **knows a man** (a worker of yours, seen at that place; a trader you always
+  deal with);
+* he **knows you** only when enough of your nodes are confirmed — and *that* is
+  what turns the police ladder from "the yard in the wild" into "the man who
+  owns it".
+
+Which gives the game its spine: **two organisations are mapping each other at
+once**, and the first to own the other's root wins — you by killing or turning
+the chief, him by opening the warrant on you (or, in war, by mapping your
+commanders).
+
+### Nodes morph — that is the whole point
+
+The trees are **not static**: every recruitment, every death, every turning
+changes the shape.
+
+* **His side:** a killed agent's patch is **re-assigned**; the tree re-wires, and
+  a gap you thought you had made is filled by a man you have never seen. A
+  **turned** agent shows as *yours* on your chart (and as *his* on his, until he
+  learns otherwise).
+* **Your side:** a new worker, a new hub, a new stall is a new node — and your
+  bitter men can be turned from under you (`turn_the_bitter` already does the
+  first half of this). A man you fire **stays on his tree** as somebody who knows
+  your yard.
+* **A turned node is the strongest thing on either side**: he keeps his post, his
+  patch, and his place in the other tree — so he reports both ways. That is why
+  turning must be **harder than killing** (leverage, not a coin flip) and why it
+  is the reward: one turned agent is worth five dead ones.
+
+### Turning — how it should work (proposal)
+
+Killing an agent is a fight. Turning one is a **negotiation with a man who is
+afraid of his own chief**:
+
+| lever | why he breaks |
+|---|---|
+| money | his wage is 30 a day from a town's purse; you can beat it, once |
+| grudge | he blames the chief for a dead brother, a ruined town, a unpaid month |
+| fear | you know his name and where his family sleeps — *he knows you know* |
+| evidence | you show him the dossier on **himself** — the chief was going to hang him too |
+| faith | in war, the province you hold is the one that pays him now |
+
+And the price of a failed turning must be real: the man walks away and tells the
+chief *everything the conversation revealed* — including that you know his name.
+
+### Misinformation and interrogation — the mental game
+
+**Interrogation (both directions).** A held man talks, and what he says is a
+*fact* in the same system that already exists (`FACTS`/`KNOWERS`):
+
+* **agents interrogate townsmen** — who sold what, where, to whom. (This is how
+  the chief builds *his* tree of you.)
+* **the player and his men interrogate agents** — names, patches, couriers, the
+  shape of the branch above them. `KNOWERS` already knows who holds which fact;
+  the missing thing is the *act* of taking it from a living man.
+
+**Misinformation.** The tree is made of *beliefs*, so it can be poisoned:
+
+* a **false fact** (a forged place, a false name, a planted witness) that the
+  chief acts on: a raid on the wrong yard, a courier sent the wrong way, an
+  agent arrested by his own side;
+* a **false node**: your own man posing as an agent, so a branch of his tree
+  reports to you;
+* and the counter: **verify**. The service should be able to spend men checking
+  a fact — and a player who lies too often should be caught lying, which is
+  worse than being caught smuggling.
+
+**The design rule to keep it honest:** every belief in either tree must be
+traceable to *the head it lives in*. No node exists because the UI says so; it
+exists because a man knows it, and if that man dies, the knowledge dies with him
+(unless he told someone — which is what couriers and interrogations are for).
+
+## 18. Open questions for the user
+
+1. **Who recruits his agents?** The chief alone, or does each agent recruit in his
+   own town (so the tree grows by itself and can be cut branch by branch)?
+2. **What does the player see, on screen?** A chart screen ("the Service") opened
+   from the journal, or a physical thing — a wall in a safehouse, a notebook that
+   fills in as he learns?
+3. **How does a turning begin?** A dialogue option on a man he has beaten or
+   captured (needs the fight), or a conversation with leverage (needs the
+   knowledge first)?
+4. **Can the chief be replaced by his own tree?** If you turn the man *below*
+   him, does that man become the chief when the chief dies — meaning the tree
+   survives decapitation, and you have to turn your way *up* rather than kill
+   your way in?
+5. **War mode and the trees:** in civil war, is the tree the army's chain of
+   command (so killing a colonel breaks a column), or does the service keep its
+   own shadow tree beside it?
+6. **Misinformation's cost:** should a lie cost money, a favour, or a man (a
+   witness who must be produced and can be found out)?

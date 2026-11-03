@@ -13,6 +13,10 @@ class ItemStack:
     defn: items.ItemDef
     count: int = 1
     quality: int | None = None
+    # SOMETHING THIS PARTICULAR STACK CARRIES, for things that are not just a
+    # count: a Secret Folder is one dead agent's messages, and which agent's is
+    # the whole point.
+    payload: object = None
 
 
 class Inventory:

@@ -242,7 +242,8 @@ def summary(slot: int):
 def stack_to_data(stack):
     if stack is None:
         return None
-    return [stack.defn.id, int(stack.count), stack.quality]
+    pay = stack.payload if isinstance(getattr(stack, "payload", None), str) else None
+    return [stack.defn.id, int(stack.count), stack.quality, pay]
 
 
 def data_to_stack(data):
@@ -253,6 +254,9 @@ def data_to_stack(data):
 
     try:
         quality = data[2] if len(data) > 2 else None
-        return ItemStack(items.get(data[0]), int(data[1]), quality)
+        stack = ItemStack(items.get(data[0]), int(data[1]), quality)
+        if len(data) > 3 and data[3]:
+            stack.payload = data[3]
+        return stack
     except Exception:
         return None

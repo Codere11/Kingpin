@@ -18,7 +18,37 @@ BUILDINGS = [
     {"id": "barrel", "name": "Barrel", "wood": 60, "where": "inside"},
     {"id": "fence", "name": "Fence", "wood": 10, "where": "outside"},
     {"id": "gate", "name": "Gate", "wood": 30, "where": "outside"},
+    # THE FOUR TRADES, OUT OF DOORS. A bench, a brewhouse, a forge and a shaft
+    # are things a man puts on his own ground -- not only inside a house.
+    # Only legal in the wilderness or in the player's own hub (see
+    # hubs.land_ok), and in the wild the ground becomes his.
+    # A PLOT IS MARKED, NOT BUILT: no wood, and it is a rectangle he draws.
+    {"id": "plot", "name": "Plot", "wood": 0, "where": "outside"},
+    # ...and the opposite: take something of his down with one click.
+    {"id": "demolish", "name": "Demolish", "wood": 0, "where": "outside"},
+    {"id": "lab", "name": "Artisan's bench", "wood": 150, "where": "outside"},
+    {"id": "brewery", "name": "Brewhouse", "wood": 120, "where": "outside"},
+    # THE PLAYER'S OWN SHOP. It stands inside his hub (main refuses it
+    # anywhere else) and it is the one place his goods may be sold from.
+    {"id": "stall", "name": "Market stall", "wood": 100, "where": "outside"},
+    # THE YARD'S OWN SCHOOL OF ARMS. A soldier works at one of these, and the
+    # post is what makes him better than a man with a gun.
+    {"id": "dummy", "name": "Training dummy", "wood": 40, "where": "outside"},
+    {"id": "target", "name": "Archery target", "wood": 60, "where": "outside"},
+    # A FORGE IS IRON AND A SHAFT IS TIMBER AND IRON -- not wood alone.
+    {"id": "smith", "name": "Forge", "wood": 0,
+     "cost": {"iron": 300}, "where": "outside"},
+    {"id": "mine", "name": "Mine shaft", "wood": 0,
+     "cost": {"iron": 100, "wood": 300}, "where": "outside"},
 ]
+
+
+def build_materials(building_id: str) -> dict:
+    """EVERYTHING IT TAKES, by item. Wood alone was never the whole story."""
+    for b in BUILDINGS:
+        if b["id"] == building_id:
+            return dict(b.get("cost") or {"wood": b.get("wood", 0)})
+    return {}
 
 
 def build_cost(building_id: str) -> int:
@@ -27,9 +57,71 @@ def build_cost(building_id: str) -> int:
             return b["wood"]
     return 0
 
+def stall_icon(size: int = 46) -> pygame.Surface:
+    """A striped awning over a counter -- what a stall looks like from above."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    w, h = size, size
+    for i in range(5):
+        x0 = int(i * w / 5)
+        x1 = int((i + 1) * w / 5)
+        pygame.draw.rect(s, (196, 176, 140) if i % 2 == 0 else (168, 78, 62),
+                         (x0, int(h * 0.10), max(1, x1 - x0 - 1),
+                          int(h * 0.26)))
+    pygame.draw.rect(s, (96, 74, 50), (int(w * 0.08), int(h * 0.58),
+                                       int(w * 0.84), int(h * 0.22)),
+                     border_radius=3)
+    for px in (int(w * 0.10), int(w * 0.86)):
+        pygame.draw.rect(s, (92, 70, 46), (px, int(h * 0.32), max(2, int(w * 0.04)),
+                                           int(h * 0.26)))
+    return s
+
+
+def dummy_icon(size: int = 46) -> pygame.Surface:
+    """A post with a sack head and a crossbar -- a thing to hit."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.rect(s, (110, 78, 48), (int(size * 0.46), int(size * 0.20),
+                                        max(2, int(size * 0.08)),
+                                        int(size * 0.70)))
+    pygame.draw.rect(s, (126, 92, 58), (int(size * 0.22), int(size * 0.34),
+                                        int(size * 0.56), max(2, int(size * 0.08))))
+    pygame.draw.circle(s, (186, 168, 128), (int(size * 0.50), int(size * 0.20)),
+                       int(size * 0.13))
+    pygame.draw.circle(s, (60, 48, 34), (int(size * 0.50), int(size * 0.20)),
+                       int(size * 0.13), 2)
+    # and the axe in it, because that is what it is for
+    pygame.draw.line(s, (70, 54, 36), (int(size * 0.26), int(size * 0.30)),
+                     (int(size * 0.42), int(size * 0.52)), 2)
+    pygame.draw.polygon(s, (176, 180, 186),
+                        [(int(size * 0.40), int(size * 0.46)),
+                         (int(size * 0.52), int(size * 0.54)),
+                         (int(size * 0.46), int(size * 0.62))])
+    return s
+
+
+def target_icon(size: int = 46) -> pygame.Surface:
+    """A straw round on legs: rings, and a few arrows in it."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    cx, cy = int(size * 0.50), int(size * 0.42)
+    for i, (r, col) in enumerate(((int(size * 0.34), (222, 214, 186)),
+                                  (int(size * 0.24), (188, 78, 62)),
+                                  (int(size * 0.14), (222, 214, 186)),
+                                  (int(size * 0.06), (188, 78, 62)))):
+        pygame.draw.circle(s, col, (cx, cy), r)
+    pygame.draw.circle(s, (72, 58, 40), (cx, cy), int(size * 0.34), 2)
+    pygame.draw.line(s, (110, 78, 48), (int(size * 0.34), int(size * 0.74)),
+                     (int(size * 0.30), int(size * 0.94)), 2)
+    pygame.draw.line(s, (110, 78, 48), (int(size * 0.66), int(size * 0.74)),
+                     (int(size * 0.70), int(size * 0.94)), 2)
+    return s
+
+
 _ICON = None
 _WS_ICON = None
 _LAB_ICON = None
+
+
+
+
 
 
 def brew_icon(size: int = 46) -> pygame.Surface:
@@ -172,7 +264,14 @@ class BuildMenu:
         return pygame.Rect(x0, y0, width, height), rows, visible
 
     def affordable(self, index: int) -> bool:
-        return self.free or self.inv.count_of("wood") >= BUILDINGS[index]["wood"]
+        """EVERY MATERIAL, not just wood -- a forge is 300 iron and no wood,
+        and it used to read as affordable with an empty pocket."""
+        if self.free:
+            return True
+        for item, qty in build_materials(BUILDINGS[index]["id"]).items():
+            if self.inv.count_of(item) < qty:
+                return False
+        return True
 
     def handle_event(self, event):
         surface = pygame.display.get_surface()
@@ -218,8 +317,13 @@ class BuildMenu:
             pygame.draw.rect(screen, border, rect, width=2, border_radius=8)
 
             icon_fn = {"house": house_icon, "workshop": workshop_icon,
-                       "lab_table": lab_icon,
+                       "lab_table": lab_icon, "lab": lab_icon,
                        "brew_table": brew_icon, "barrel": barrel_icon,
+                       "brewery": brew_icon, "smith": workshop_icon,
+                       "mine": workshop_icon, "plot": fence_icon,
+                       "stall": stall_icon,
+                       "dummy": dummy_icon, "target": target_icon,
+                       "demolish": fence_icon,
                        "fence": fence_icon, "gate": gate_icon}[building["id"]]
             icon = icon_fn(rect.height - 14)
             screen.blit(icon, (rect.left + 10, rect.centery - icon.get_height() // 2))
@@ -227,7 +331,9 @@ class BuildMenu:
             name = self.font.render(building["name"], True,
                                     (232, 232, 238) if ok else (142, 142, 150))
             screen.blit(name, (rect.left + icon.get_width() + 20, rect.top + 9))
-            cost = self.font_small.render(f"{building['wood']} wood  (have {wood})", True,
+            _mats = build_materials(building["id"])
+            _txt = "  +  ".join("%d %s" % (q, it) for it, q in _mats.items()) or "free"
+            cost = self.font_small.render(f"{_txt}  (have {wood})", True,
                                           (206, 184, 122) if ok else (176, 112, 112))
             screen.blit(cost, (rect.left + icon.get_width() + 20, rect.top + 34))
 

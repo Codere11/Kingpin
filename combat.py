@@ -29,10 +29,11 @@ def segment_circle_hit(x0, y0, x1, y1, cx, cy, r) -> bool:
 class Bullet:
     __slots__ = ("x", "y", "dx", "dy", "travelled", "prev_x", "prev_y",
                  "max_dist", "remove", "owner", "damage", "team",
-                 "origin_x", "origin_y", "shooter")
+                 "origin_x", "origin_y", "shooter", "dart")
 
     def __init__(self, x, y, dx, dy, max_dist, owner, damage, team=None,
-                 shooter=None):
+                 shooter=None, dart=False):
+        self.dart = bool(dart)
         self.shooter = shooter            # who fired it: the killer, for loot
         self.x = x
         self.y = y
@@ -69,12 +70,12 @@ class Combat:
                                  random.uniform(0.14, 0.34), colour])
 
     def fire(self, x, y, angle, distance, owner="player", damage=25, team=None,
-             spread=None, shooter=None) -> None:
+             spread=None, shooter=None, dart=False) -> None:
         dev = BULLET_SPREAD if spread is None else spread
         a = angle + random.uniform(-dev, dev)
         self.bullets.append(Bullet(x, y, math.cos(a), math.sin(a),
                                    max(1.0, distance), owner, damage, team,
-                                   shooter))
+                                   shooter, dart=dart))
         self.flashes.append([x, y, a, FLASH_TIME, owner])
 
     def update(self, dt: float) -> None:

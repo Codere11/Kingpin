@@ -99,11 +99,20 @@ def _gate_steer(entity, px, py, v):
 
 
 def _around_corner(entity, px, py, ux, uy, gx, gy, rect, rad):
-    """Head for the cheapest clear corner of a blocking rect."""
+    """Head for the cheapest clear corner of a blocking rect.
+
+    THE CORNER CHOICE MUST STICK. Standing at a rect's edge, the two corners
+    behind you cost almost exactly the same, and the choice flipped with every
+    frame -- measured, a man alternating between (0.58, -0.82) and
+    (-0.58, 0.82) ten times a second, going nowhere. The corner he chose is
+    held for about a second before he is allowed to change his mind.
+    """
     corners = ((rect.left - rad, rect.top - rad),
                (rect.right + rad, rect.top - rad),
                (rect.left - rad, rect.bottom + rad),
                (rect.right + rad, rect.bottom + rad))
+    held = getattr(entity, "_avoid_corner", None)
+    hold_n = int(getattr(entity, "_avoid_n", 0) or 0)
     best = None
     best_cost = 1e18
     for cx, cy in corners:
@@ -117,13 +126,17 @@ def _around_corner(entity, px, py, ux, uy, gx, gy, rect, rad):
         a2 = math.acos(max(-1.0, min(1.0, (cdx * gdx + cdy * gdy) / (cdist * gdist))))
         cost = a1 + a2
         side = 1 if (cdx * uy - cdy * ux) > 0.0 else -1
-        if getattr(entity, "_avoid_side", 0) == side:
-            cost -= 0.4                    # hysteresis: keep going round one way
+        # NO HYSTERESIS. "Keep going round the same way" was meant to stop a
+        # man dithering between two corners; what it actually did was lock him
+        # into whichever side he first took, so a man whose true best corner
+        # was the other one circled for ever. The cheapest corner, every time.
         if cost < best_cost:
             best_cost = cost
             best = (cx, cy, side)
     cx, cy, side = best
     entity._avoid_side = side
+    entity._avoid_corner = (cx, cy)
+    entity._avoid_n = max(0, hold_n - 1) if (held == (cx, cy) and hold_n) else 16
     ox, oy = cx - rect.centerx, cy - rect.centery
     on = math.hypot(ox, oy) or 1.0
     tx, ty = cx + ox / on * 12.0, cy + oy / on * 12.0
@@ -173,7 +186,7 @@ def steer(entity, gx, gy, rects=(), villages=(), look: float = LOOK):
     for w in villages:                     # fences first: use the gate
         if not hasattr(w, "fence_rect"):
             continue
-        cd = fence.cross_dir(w, px, py, gx, gy)
+        cd = fence.cross_dir(w, px, py, gx, gy, pad=90.0)
         if cd is None:
             continue
         # A marching man aims at HIS rally point outside the gate, not at the
@@ -196,6 +209,31 @@ def steer(entity, gx, gy, rects=(), villages=(), look: float = LOOK):
             best_d = d
             best_dir = cd
     if best_dir is not None:
+        # THE GATE DIRECTION IS NOT EXEMPT FROM WALLS. `cross_dir` aims along
+        # the inside of the fence at the opening -- and the houses, benches and
+        # boards of a town are exactly where that path runs. Returning it
+        # untouched walked men into a house, and the next frame aimed them back
+        # at the fence: a tight orbit on the spot, measured as three samples
+        # 3,951 / 3,956 / 3,954 px from the goal over eighty seconds.
+        gx2, gy2 = best_dir
+        gl = 90.0 + rad
+        if hasattr(rects, "near"):
+            near_ = rects.near(px, py, gl)
+        else:
+            near_ = rects
+        best_rect = None
+        best_t = gl
+        for rect in near_:
+            if (rect.left > px + gl or rect.right < px - gl
+                    or rect.top > py + gl or rect.bottom < py - gl):
+                continue
+            t = _ray_rect(px, py, gx2, gy2, gl, rect, rad)
+            if t is not None and t < best_t:
+                best_t = t
+                best_rect = rect
+        if best_rect is not None:
+            return _around_corner(entity, px, py, gx2, gy2, gx2, gy2,
+                                  best_rect, rad)
         return best_dir
     best_rect = None
     best_t = look

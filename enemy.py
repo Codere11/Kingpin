@@ -8,6 +8,8 @@ sight of the player, he keeps looking for a few seconds, then goes back to it.
 
 from __future__ import annotations
 
+import stats
+
 import math
 import random
 
@@ -73,8 +75,9 @@ class Enemy:
         self.home = (x, y)
         self.team = ("bandits", None)
         self.facing = (1.0, 0.0)
-        self.max_health = 100
-        self.health = 100
+        # THE SAME BODY AS EVERYBODY ELSE (stats.py).
+        self.max_health = stats.PLAYER_MAX_HEALTH
+        self.health = self.max_health
         self.radius = 12
         self.speed = 118.0
         self.preferred = 300.0
@@ -143,13 +146,26 @@ class Enemy:
     hurt_flash: float = 0.0
     attack_flash: float = 0.0
 
-    def take_damage(self, amount: int) -> bool:
+    sleep_t: float = 0.0      # a dart put him down
+
+    def take_damage(self, amount: int, tranq: bool = False) -> bool:
         self.health -= amount
         self.hit_flash = 0.15
         self.hurt_flash = face.HURT_SECONDS
         self.bleed = 6.0
         self.aware = True                # being shot gets his attention
         self.aware_timer = AWARE_MEMORY
+        if tranq and self.health <= 0:
+            # A DART: same damage, but at zero he sleeps -- he does not die.
+            self.health = 1
+            self.sleep_t = 22.0
+            self.bleed = 0.0
+            try:
+                import plog
+                plog.log("TRANQ", getattr(self, "name", "?"), "asleep")
+            except Exception:
+                pass
+            return False
         return self.health <= 0
 
     # -- perception ---------------------------------------------------------
@@ -171,15 +187,18 @@ class Enemy:
         return True
 
     def _shoot(self, combat, x, y, angle, distance, dmg_lo, dmg_hi) -> None:
-        """A shot: one round for a rifle, a spread of pellets for a shotgun."""
+        """A shot: one round for a rifle, a spread of pellets for a shotgun.
+
+        THE SAME ROUND AS THE PLAYER'S: `guns.DAMAGE` and nothing else. The
+        old per-caller numbers (8 to 14) made an armed man a nuisance instead
+        of a threat -- a rifle now takes eighty health off whoever it hits.
+        """
         kind = getattr(self, "gun_kind", guns.RIFLE)
-        if kind == guns.SHOTGUN:
-            dmg_lo = max(2, dmg_lo // 2)
-            dmg_hi = max(3, dmg_hi // 2)
+        _dmg = guns.DAMAGE[kind]
         for _ in range(guns.PELLETS[kind]):
             a = angle + random.uniform(-0.07, 0.07)
             combat.fire(x, y, a, distance, owner="enemy", shooter=self,
-                        damage=random.randint(dmg_lo, dmg_hi), team=self.team)
+                        damage=_dmg, team=self.team)
 
     def _can_see(self, player, occluders, view_scale: float) -> bool:
         dx, dy = player.x - self.x, player.y - self.y
@@ -299,16 +318,24 @@ class Enemy:
         _ammo = getattr(self, "ammo", None)
         if _ammo is not None and _ammo <= 0:
             return
-        if (self.fire_cd <= 0.0 and distance <= 520.0 and visible
-                and not getattr(target, "dead", False) and self._round_ready()):
+        _n = guns.rounds_now(self, dt, self.fire_cd <= 0.0 and distance <= 520.0
+                             and visible
+                             and not getattr(target, "dead", False))
+        for _ in range(_n):
+            if _ammo is not None and _ammo <= 0:
+                break
+            if not self._round_ready():
+                break
             if _ammo is not None:
-                self.ammo = _ammo - 1
-            self.fire_cd = random.uniform(0.5, 0.9)      # ~2x the old rate
+                _ammo -= 1
+                self.ammo = _ammo
+            if self.fire_cd <= 0.0:
+                self.fire_cd = random.uniform(0.5, 0.9)
             angle = math.atan2(dy, dx) + random.uniform(-0.03, 0.03)
             muzzle_x = self.x + ux * 20.0
             muzzle_y = self.y + uy * 20.0
             self._shoot(combat, muzzle_x, muzzle_y, angle, distance + 160.0,
-                        8, 14)
+                        80, 80)
 
     def _patrol(self, dt: float) -> None:
         if self.idle_timer > 0.0:

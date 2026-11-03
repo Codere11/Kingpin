@@ -18,12 +18,15 @@ have a tobacco plot out back. Death brings up a pixelated Game Over screen.
 
 from __future__ import annotations
 
+import stats
+
 import math
 import lanes
 import mine
 import os
 import random
 import sys
+import threading
 import time
 
 import pygame
@@ -35,9 +38,11 @@ import board
 import compass
 import economy
 import items
+import industry
 import quality
 import farm
 import fence
+import gate
 import guns
 import map as mapmod
 import hubs
@@ -53,14 +58,19 @@ import observer
 # would swallow it, and every death would go unrecorded with no sign why.
 import deaths
 import dialogue
-import tournament
 import village as village_mod
 import war
+import work
 import wildcrop
 import world
 import worldmap
+import lanes_mp as workers
 from blood import Blood
-from build import BuildMenu, build_cost
+from build import BuildMenu, build_cost, build_materials
+import stall as stall_mod
+import corpse as corpse_mod
+import folders as folders_mod
+import manhunt
 from combat import Combat, segment_circle_hit
 from creatures import (Patrol, Rabbit, Soldier, Wolf, is_trader,
                        choose_target as
@@ -81,7 +91,8 @@ from skills import Skills
 from trade import TradeMenu
 from workshop import WorkshopMenu
 from trees import Trees
-from ui import ChestPanel, ConfirmMenu, Hotbar, InventoryPanel, PauseMenu
+from ui import (ChestPanel, ConfirmMenu, FolderPanel, Hotbar,
+                InventoryPanel, MarketPanel, PauseMenu)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
                      nation_name, village_center)
@@ -105,8 +116,8 @@ AXE_STRIKES = 3          # hits to fell a tree
 # soldier's 16, and more than triple a villager's 10 -- so every fight in the
 # world was his to lose and nothing could ever threaten him. 16 is
 # creatures.Soldier.melee_damage exactly: the man in the ranks is his equal.
-# Unarmed he does 16 / skills.UNARMED_WEAKNESS = 4, which is what every
-# candidate in the capital's tournament does.
+# Unarmed he does 16 / skills.UNARMED_WEAKNESS = 4, like any man in the
+# street who swings a fist.
 MELEE_DAMAGE = 16         # == a soldier's melee, and a third of a villager's
 BUILD_COST = 100         # wood cost of a house
 BUILD_W = 120
@@ -136,13 +147,17 @@ def draw_crosshair(screen: pygame.Surface, mx: int, my: int) -> None:
                          (mx + dx * 4, my + dy * 4), 1)
 
 
-WORLD_HALF = 100000         # the world runs from -100k to +100k
+CORE_HALF = 100000          # THE SETTLED COUNTRY: unchanged, all of it
+# FIVE TIMES THE LENGTH AND FIVE TIMES THE WIDTH: each side is 1,000,000 px
+# across, the settled country stays where it always was, in the middle of it,
+# and the ring around it is the Siberian waste.
+WORLD_HALF = CORE_HALF * 5
 
 
 def world_cells():
     """Every village cell whose centre lies inside the world."""
     out = []
-    n = int(WORLD_HALF / SPACING) + 1
+    n = int(CORE_HALF / SPACING) + 1
     # ONE RING FURTHER OUT THAN THE WORLD. A village near the edge has
     # neighbours just past it, and the trade route planner peeks at all eight
     # surrounding cells with villages.get() -- which BUILDS the ones that are
@@ -153,9 +168,9 @@ def world_cells():
     for gx in range(-n - 2, n + 2):
         for gy in range(-n - 2, n + 2):
             cx, cy = (gx + 0.5) * SPACING, (gy + 0.5) * SPACING
-            if (-WORLD_HALF - SPACING * 1.5 <= cx <= WORLD_HALF + SPACING * 1.5
-                    and -WORLD_HALF - SPACING * 1.5 <= cy
-                    <= WORLD_HALF + SPACING * 1.5):
+            if (-CORE_HALF - SPACING * 1.5 <= cx <= CORE_HALF + SPACING * 1.5
+                    and -CORE_HALF - SPACING * 1.5 <= cy
+                    <= CORE_HALF + SPACING * 1.5):
                 out.append((gx, gy))
     return out
 
@@ -164,7 +179,18 @@ _STATE_SKIP = {"id", "name", "village", "home_house", "home_door",
                "bond_partner", "workplace", "refuge", "social_target",
                "guards", "patrol", "npcs", "houses", "workplaces", "mayor",
                "king", "registry", "rng", "_rng", "image", "_atlas", "rect",
-               "sight_rect", "slots", "board", "gate_t"}
+               "sight_rect", "slots", "board", "gate_t",
+               # DAY MARKERS ARE NOT STATE. Each one guards "the books have
+               # been done today" INSIDE A RUNNING PROCESS; saved, they say the
+               # day is done before it has begun. A reload mid-day therefore
+               # paid no wages, no mint and no service pay -- and the day's
+               # tally of what a town spent came back with it.
+               "_day", "_log_day", "_phase", "_last_phase", "_seeded",
+               "wage_day", "market_day", "duty_day", "court_day", "_court_day",
+               "_tax_day", "_mayor_day", "_crown_day", "_mint_day",
+               "_agent_day", "_service_day", "_paid_today", "_vote_day",
+               "_births", "_crown_base", "_share_timer", "_market_timer",
+               "_meet_timer", "_farm_timer", "_log_day"}
 
 
 # What actually changes between saves. Everything else on a person -- his
@@ -432,7 +458,7 @@ def world_from_data(villages, blob) -> None:
                                          if o in by_id]
         # A RESTORE MUST NOT UNSEAT A MAYOR IT NEVER KNEW ABOUT. The village
         # chose its own mayor at creation; the record only carries one if a
-        # save was written after an election. Assigning None when the key is
+        # save was written after a town had a mayor. Assigning None when the key is
         # missing threw the government of EVERY town in the world away on
         # load, and left only the one town whose id happened to be in the file
         # still holding a chain -- 1 mayor in 33, which is what the survey
@@ -534,6 +560,50 @@ def load_world(screen, clock, villages, world=None) -> None:
     pygame.display.flip()
 
 
+def _grow_town(v, n: int) -> int:
+    """PUT n MORE PEOPLE IN A TOWN, the way the town was first peopled.
+
+    A save can be thinner than the world it describes: the rosters are
+    restored from a file, and a file written when the world was smaller (or
+    when `rebuild_people` was capping towns at an old capacity) leaves the
+    country half empty for ever. Nothing ever grew a town back, so 1,000
+    people were 883 at the build and 535 after a load.
+    """
+    made = 0
+    rng = getattr(v, "_rng", None) or random.Random(v.code & 0xFFFFFFFF)
+    pool = getattr(v, "_name_pool", None) or list(village_mod.FIRST_NAMES)
+    name_rng = getattr(v, "_name_rng", None) or random.Random(v.code ^ 0x9E3779B9)
+    houses = list(getattr(v, "houses", ()) or ())
+    for _ in range(max(0, int(n))):
+        house = houses[rng.randrange(len(houses))] if houses else None
+        if house is not None:
+            fx, fy = getattr(house, "facing", (0.0, 1.0))
+            door = (house.x + fx * (house.h / 2.0 + 10.0),
+                    house.y + fy * (house.h / 2.0 + 10.0))
+        else:
+            door = (v.x, v.y)
+        v._name_i = int(getattr(v, "_name_i", 0)) + 1
+        name = "%s %s" % (pool[v._name_i % len(pool)],
+                          name_rng.choice(village_mod.LAST_NAMES))
+        try:
+            sx, sy = v.random_point(rng)
+        except Exception:
+            sx, sy = v.x, v.y
+        p = village_mod.NPC(sx, sy, v.code ^ (v._name_i * 83492791), name=name,
+                            npc_id="npc_%d_%d_g%d" % (v.gx, v.gy, v._name_i),
+                            village=v)
+        p.home_house = house
+        p.home_door = door
+        p.wear = getattr(v, "_wear", 1.0)
+        p.nation = v.nation
+        p.team = ("nation", v.nation)
+        if house is not None:
+            house.occupants.append(p)
+        v.npcs.append(p)
+        made += 1
+    return made
+
+
 def set_world_population(villages, target: int = 1000) -> int:
     """The world is a thousand people. Make it exactly so, on either path.
 
@@ -549,6 +619,7 @@ def set_world_population(villages, target: int = 1000) -> int:
     if not towns:
         return 0
     total = sum(len(v.npcs) for v in towns)
+    _born = _cut = 0
     if total != target:
         kept = 0
         for i, v in enumerate(towns):
@@ -560,16 +631,42 @@ def set_world_population(villages, target: int = 1000) -> int:
                 want = max(1, int(round(float(target) * houses
                                         / float(_total_houses(towns)))))
             if len(v.npcs) > want:
+                _cut += len(v.npcs) - want
                 v.npcs[:] = v.npcs[:want]
+            elif len(v.npcs) < want:
+                # A TOWN BELOW ITS SHARE IS FILLED, not left short. Trimming
+                # only ever took people away, so a world built at 883 stayed
+                # at 883 and a save of 535 stayed at 535.
+                _born += _grow_town(v, want - len(v.npcs))
+            # THE CAP MUST COVER THE TOWN BEFORE THE REGISTER IS REBUILT.
+            # `rebuild_people` keeps a town's men only up to its CAPACITY, and
+            # this ran BEFORE the capacity was raised -- so every man just
+            # grown was cut away again in the same call. 883 -> 1000 -> 883.
+            v.capacity = max(int(getattr(v, "capacity", 0)), len(v.npcs))
             kept += len(v.npcs)
         village_mod.rebuild_people(villages)
     # THE CAP IS SET WHETHER OR NOT ANYTHING WAS TRIMMED. Leaving it out when
     # the count already equalled the target is how a world of exactly 1,000
     # people grew to 1,032 inside one day: the towns still held a capacity from
     # the build, and a town grows back to its capacity.
+    # THE CAP IS THE TOWN'S SHARE, NOT ITS LUCK. A town whose capacity is
+    # exactly what it holds can never take a birth back after a hard winter;
+    # its SHARE is what it is allowed to grow to.
+    houses_all = float(_total_houses(towns))
     for v in towns:
-        v.capacity = len(v.npcs)
-    return sum(len(v.npcs) for v in villages.villages)
+        share = int(round(float(target) * max(1, len(getattr(v, "houses", ())))
+                          / houses_all))
+        # THE CAP IS THE SHARE -- not the old capacity, which came from a
+        # smaller world and let the sum of ceilings reach 1,119.
+        v.capacity = max(share, len(v.npcs))
+    _fin = sum(len(v.npcs) for v in villages.villages)
+    try:
+        plog.log("POP", "entry", total, "target", target, "grown", _born,
+                 "cut", _cut, "final", _fin,
+                 "capacities", sum(int(getattr(v, "capacity", 0)) for v in towns))
+    except Exception:
+        pass
+    return _fin
 
 
 def _total_houses(towns) -> int:
@@ -687,6 +784,12 @@ def main() -> None:
     # ---- THE HUBS IN THE WILD -- not villages; no war can be declared
     # on one, because no one admits it exists.
     hub_world = hubs.Hubs(world, villages)
+    # A HANDLE FOR TOOLS AND TESTS, like village.PLAYER: the hub registry is a
+    # local, so nothing outside main() could ever see the player's own yard.
+    try:
+        village_mod.HUBS = hub_world
+    except Exception:
+        pass
     dialogue_panel = dialogue.Dialogue()
 
     def _main_capital():
@@ -699,19 +802,34 @@ def main() -> None:
                 best = _v
         return (best,)
     hub_world.build_caravans(world)
-    # AND NO WOODS IN THE YARD. The trees are staked per VILLAGE, so a hub out
-    # in the wild had a forest growing through its crop and its house. They are
-    # marked felled directly rather than cut, because cutting leaves a stump
-    # that regrows in three minutes.
+    # NO TREE THROUGH A ROOF -- BUT THE WOODS STILL GROW IN THE YARD.
+    #
+    # This used to mark EVERY tree inside a hub's fence as felled, directly
+    # and for ever: not cut (cutting leaves a stump that regrows), just marked.
+    # The result was a hub environment where trees never grew back and every
+    # stump that was there before simply stayed a stump -- or, after a reload,
+    # vanished. What the yard needs is only this: no tree standing in a HOUSE
+    # or a WORKPLACE. Everything else is woods, and woods grow.
     for _h in hub_world.hubs:
-        _fr = getattr(_h, "fence_rect", None)
-        if _fr is None:
+        _built = []
+        for _b in list(getattr(_h, "houses", ()) or ()):
+            _br = getattr(_b, "rect", None)
+            if _br is not None:
+                _built.append(_br.inflate(40, 40))
+        for _b in list(getattr(_h, "workplaces", ()) or ()):
+            _br = getattr(_b, "rect", None)
+            if _br is not None:
+                _built.append(_br.inflate(40, 40))
+        if not _built:
             continue
-        for _t in trees.visible(_fr.x - 200, _fr.y - 200,
-                                _fr.w + 400, _fr.h + 400):
-            if _fr.collidepoint(_t.x, _t.y):
+        for _t in trees.visible(min(r.x for r in _built) - 200,
+                                min(r.y for r in _built) - 200,
+                                max(r.right for r in _built) + 200
+                                - min(r.x for r in _built),
+                                max(r.bottom for r in _built) + 200
+                                - min(r.y for r in _built)):
+            if any(r.collidepoint(_t.x, _t.y) for r in _built):
                 _t.felled = True
-            pass
 
     # ---- A THOUSAND PEOPLE, AND A THOUSAND CAP, ALWAYS ------------------
     #
@@ -728,6 +846,7 @@ def main() -> None:
     else:
         print("population set to %d over %d towns"
               % (_pop, len(list(villages.villages))))
+
 
     # ---- BUILD THE GROUND UNDER THE PLAYER **INSIDE THE LOADING SCREEN** ----
     #
@@ -790,13 +909,44 @@ def main() -> None:
             _spot = type("P", (), {"x": _tx * 32 + 16, "y": _ty * 32 + 16})()
         if _spot is not None:
             _hx, _hy = _spot.x, _spot.y + 64.0
-    # SOMEWHERE AT RANDOM, IN THE WILD. He begins wherever the country puts him
-    # -- not at the gate of a settlement and not at the middle of the world.
+    # HE WAKES IN THE WILDERNESS, SOMEWHERE NEW EVERY WORLD.
+    #
+    # A man with an axe and nothing else, in open country, with the nearest
+    # town a walk away -- not standing in a square he did not choose. The spot
+    # is drawn from the world's own seed, so the same save always wakes in the
+    # same place, and no town's fence, no hut's yard is within sight of him.
     try:
-        _hx = random.uniform(-WORLD_HALF * 0.35, WORLD_HALF * 0.35)
-        _hy = random.uniform(-WORLD_HALF * 0.35, WORLD_HALF * 0.35)
+        _towns_all = [v for v in villages.villages
+                      if not getattr(v, "is_hub", False)]
     except Exception:
-        pass
+        _towns_all = []
+    _spawn_rng = random.Random((int(_save.get("seed", 20240501)) ^ 0xA11CE5EED)
+                               & 0xFFFFFFFF)
+    _start = None
+    _hx, _hy = 0.0, 0.0
+    for _try in range(600):
+        _sx = _spawn_rng.uniform(-65000.0, 65000.0)
+        _sy = _spawn_rng.uniform(-65000.0, 65000.0)
+        if any((v.x - _sx) ** 2 + (v.y - _sy) ** 2 < 1500.0 ** 2
+               for v in _towns_all):
+            continue
+        if any(getattr(_h, "fence_rect", None) is not None
+               and _h.fence_rect.inflate(900, 900).collidepoint(_sx, _sy)
+               for _h in getattr(hub_world, "hubs", ()) or ()):
+            continue
+        _hx, _hy = _sx, _sy
+        break
+    # THE PLAYER STARTS IN THE CAMP. Not in the wilderness, not beside a
+    # village: inside the fence of the gulag, two settlement-widths from the
+    # corner of the world, with the guards already looking at him.
+    try:
+        import gulag as _gulag_spawn
+        _gx, _gy = _gulag_spawn.middle()
+        _hx, _hy = _gx + 220.0, _gy + 260.0
+        print("GULAG SPAWN  %.0f,%.0f" % (_hx, _hy))
+    except Exception as _se:
+        print("WILDERNESS SPAWN  %.0f,%.0f" % (_hx, _hy))
+        plog.log("SPAWN-ERROR", repr(_se)[:120])
     # ---- OBSERVE MODE ------------------------------------------------------
     # KINGPIN_OBSERVE=1 runs a real instance -- real window, real frame, real
     # world -- with the player standing invincible in open ground while
@@ -845,6 +995,13 @@ def main() -> None:
 
     _TRUTH = [None]      # the man who is always beside the player, if any
     player = Player(_hx, _hy)
+    # HE WAKES UP INSIDE THE TOWN, not climbing into it (see the wall-crossing
+    # check further down): the first frame must not read as an unsearched
+    # entry, or the whole square is at his throat before he takes a step.
+    if _start is not None:
+        player.was_inside_v = _start
+        player.waved_by = None
+        player.aggro_village = None
     # ---- THE TRUTH-TELLER -----------------------------------------------
     # One man who stands beside the player from the first frame and never
     # leaves. He is a REAL NPC -- a real name, a real settlement, a real trade,
@@ -856,7 +1013,10 @@ def main() -> None:
         _towns_t = [v for v in villages.villages
                     if getattr(v, "fence_rect", None) is not None
                     and not getattr(v, "is_hub", False)]
-        _tt_town = random.choice(_towns_t) if _towns_t else None
+        # THE SAME TOWN YOU WAKE IN, so the man beside you is one of its own.
+        _tt_town = (_origin_town
+                    if getattr(_origin_town, "fence_rect", None) is not None
+                    else (random.choice(_towns_t) if _towns_t else None))
         if _tt_town is not None:
             _truth = village_mod.NPC(
                 player.x + 44.0, player.y, random.randrange(1 << 30),
@@ -868,8 +1028,8 @@ def main() -> None:
                  "lab", "brewery", "hand"])
             _truth.nation = _tt_town.nation
             _truth.team = ("nation", _tt_town.nation)
-            _truth.max_health = 1_000_000.0
-            _truth.health = 1_000_000.0
+            _truth.max_health = stats.PLAYER_MAX_HEALTH
+            _truth.health = stats.PLAYER_MAX_HEALTH
             _truth.is_truth_teller = True
             _tt_town.npcs.append(_truth)
             _TRUTH[0] = _truth      # from the moment he exists, he is clickable
@@ -904,7 +1064,7 @@ def main() -> None:
     player.debt_paid = 0
     player.god = test_mode
     # THE TOWNS CAN NOW SEE HIM. One assignment, so a village can put the
-    # player in an election or in a ring without every caller passing him down.
+    # player in a town's own books without every caller passing him down.
     village_mod.PLAYER = player
 
     cam_x = player.x - WIDTH / (2.0 * ZOOM)
@@ -923,10 +1083,19 @@ def main() -> None:
         "farmer":  (("wheat_seed", 12), ("seed_bag", 4), ("shovel", 1),
                     ("watering_can", 1)),
         "logger":  (("axe", 1),),
-        "idle":    (),
     }
     for _item, _qty in KITS.get(origin, ()):
         inventory.add(_item, _qty)
+    # EVERY MAN IN THE WOODS HAS AN AXE. "idle" was written twice in that
+    # table -- the second entry, empty, won -- so the one start with nothing
+    # was also the one start that could not cut a tree for its first coin.
+    if inventory.count_of("axe") <= 0:
+        inventory.add("axe", 1)
+    # THE PACK ON THE MAN. Dialogue and the yard's work need to move things
+    # into and out of it, and neither is handed the local `inventory`; the
+    # player is the one object they both already have.
+    player.pack = inventory
+    player.hub_chest = None
     hotbar = Hotbar(inventory, visible=8)
     panel = InventoryPanel(inventory)
     board_panel = board.BoardPanel()
@@ -949,6 +1118,25 @@ def main() -> None:
     skills = Skills(is_player=True)   # the player's own road, see skills.py
 
     enemies: list[Enemy] = []          # nation soldiers and wolves
+
+    # ---- THE TEST ENGINE, running the whole network once ----------------
+    _TEST_TRAIN = [None]
+    try:
+        import train as _train_mod
+        import rail as _rail_t
+        _rail_t.ensure(villages.villages)
+        _rt = _rail_t.tour()
+        if _rt:
+            _TEST_TRAIN[0] = _train_mod.Train(_rt)
+            plog.log("TRAIN-START", len(_rt), "route points,",
+                     int(_rail_t.count()[1]), "px of track")
+    except Exception as _te:
+        plog.log("TRAIN-ERROR", repr(_te)[:160])
+    try:
+        import rail as _rail0
+        _rail0.ensure(villages.villages)
+    except Exception as _re0:
+        plog.log("RAIL-ERROR", repr(_re0)[:120])
     armies: list = []                  # columns on the march, this campaign
     world.enemies = enemies            # so villagers can spot a predator
     rabbits: list[Rabbit] = []
@@ -962,7 +1150,7 @@ def main() -> None:
     nav = None
     nav_timer = 0.0
 
-    def make_village_patrol(village, count=2):
+    def make_village_patrol(village, count=4):
         """THE MEN AT THE GATE. Standing still, armed, thirty rounds each.
 
         Pivot.md S2: two guards, one at each gate, who DO NOT WALK AWAY. One gate
@@ -974,9 +1162,39 @@ def main() -> None:
         """
         squad = []
         for gi, (_side, gx, gy) in enumerate(fence.gate_list(village)[:count]):
-            s = Soldier(gx, gy + 26.0, village.nation, melee=False,
+            # HE STANDS BESIDE THE TRACK, NOT ON IT. The rail runs in through
+            # the middle of the opening; a guard on the permanent way would be
+            # shot for standing where the sleepers are.
+            _ox, _oy = fence.OUTWARD.get(_side, (0.0, 1.0))
+            _ax, _ay = -_oy, _ox                    # along the wall
+            # WELL CLEAR OF THE PERMANENT WAY: a guard standing at 52 px was
+            # inside the engine's sweep as it came through the gate.
+            _shift = 130.0 if gi % 2 == 0 else -130.0
+            _px = gx + _ax * _shift + _ox * 26.0
+            _py = gy + _ay * _shift + _oy * 26.0
+            # ...and if the line still runs through him, step further out
+            try:
+                import rail as _r
+                _tries = 0
+                while _r.blocked(_px, _py, 26.0) and _tries < 6:
+                    _px += _ox * 34.0
+                    _py += _oy * 34.0
+                    _tries += 1
+            except Exception:
+                pass
+            s = Soldier(_px, _py, village.nation, melee=False,
                         seed=random.randint(0, 2 ** 31),
                         color=nation_color(village.nation))
+            s.is_militia = True       # the Narodna militsiya hold the gates
+            # A MILITIAMAN CARRIES A RIFLE, one dart a squeeze. A shotgun's
+            # twelve pellets would put a man down before the magazine was dry.
+            try:
+                import guns as _guns
+                s.weapon = "rifle"
+                s.gun_kind = _guns.RIFLE
+                s.mag = _guns.MAG[_guns.RIFLE]
+            except Exception:
+                pass
             s.gate_village = village
             # AND `guard_village`, which is the name the TARGETING reads. He had
             # only `gate_village`, so choose_target fell through every branch it
@@ -987,7 +1205,7 @@ def main() -> None:
             s.guard_village = village
             s.name = "the guard of %s" % getattr(village, "name", "the gate")
             s.gate_index = gi            # 0 is the way in, 1 the way out
-            s.gate_post = (gx, gy + 26.0)
+            s.gate_post = (_px, _py)
             s.home = s.gate_post
             s.target = s.gate_post
             s.patrol_center = None       # not a territory patrol: he STANDS
@@ -1087,6 +1305,18 @@ def main() -> None:
     inventory_open = False
     chest_open = False
     chest_panel = None
+    # A HIRED MAN'S PACK, OPENED THE WAY A CHEST IS.
+    worker_panel_open = False
+    worker_panel = None
+    # THE MARKET STALL: the player's counter, its prices, and its purse.
+    stall_open = False
+    stall_panel = None
+    # A BODY ON THE GROUND, OPENED LIKE A CHEST.
+    body_open = False
+    body_panel = None
+    # A DEAD AGENT'S MAIL, OPENED BY EQUIPPING HIS FOLDER AND CLICKING.
+    folder_open = False
+    folder_panel = None
     trade_open = False
     trade_menu = None
     build_menu_open = False
@@ -1117,12 +1347,111 @@ def main() -> None:
                  if test_mode else None)
     placing = None
     built_houses: list[House] = []
+    placed_work: list = []          # the four trades, out of doors, on his land
+    built_plots: list = []          # plots he has drawn on his own ground
+    plot_start = [None]             # where the plot drag began
     built_fences: list = []
+    # THE CAMP'S WALL IS NOT THE PLAYER'S FENCE. Kept out of `built_fences`
+    # (which the axe may chop and the save file remembers) and drawn and
+    # collided with separately: a wall you can hack a hole in is not a prison.
+    camp_walls: list = []
+
+    # THE GULAG IS BUILT WITH THE WORLD, and its guards are raised with it.
+    # (Laid out here, before anything asks what may grow where, so the railway
+    # corridor is clear ground from the first frame.)
+    try:
+        import gulag as _gulag
+        _gulag.build()
+
+        def _camp_guard(px, py, nation):
+            return Soldier(px, py, nation, melee=False,
+                           seed=random.randint(0, 2 ** 31))
+        _camp_men = _gulag.make_guards(_camp_guard, nation=1)
+        # THE CAMP GUARDS ARE NOT IN THE GENERAL ENEMY LIST AT ALL.
+        #
+        # Twenty men put into `enemies` means twenty men running the full
+        # soldier brain every frame -- target acquisition, steering over every
+        # collider in the world, line-of-sight against thirty mine buildings and
+        # two houses -- to stand still on a post. That was the stutter at the
+        # gate, and it was also why they wanted the player but never fired:
+        # they were "in combat" without a clean shot. They are driven by the
+        # camp itself now (gulag.tick), which makes them cheap AND certain.
+        # REAL BUILDINGS AND A REAL FENCE: the game's own lists, so they
+        # collide, block sight, are drawn by the fence and house code, and the
+        # two buildings can be walked into like any other house.
+        built_houses.extend(_gulag.houses())
+        # THE BARN IS A WORKPLACE, ENTERED LIKE A MINE (E at the door).
+        _barn = _gulag.prison()
+        if _barn is not None and _barn not in placed_work:
+            placed_work.append(_barn)
+        # A HOLDING CELL BY EACH SETTLEMENT'S RAILWAY.
+        try:
+            import holding as _holding
+            _holding.build(villages.villages)
+            for _c in _holding.cells():
+                if _c not in placed_work:
+                    placed_work.append(_c)
+        except Exception as _hce:
+            plog.log("CELLS-ERROR", repr(_hce)[:140])
+
+        def _attach_camp() -> None:
+            """PUT THE CAMP BACK AFTER A SAVE HAS CLEARED THE YARD.
+
+            load_now() empties placed_work and refills it from the save -- so a
+            barn (and thirty mines) attached at world build were thrown away a
+            moment later, which is why pressing E at the barn door did nothing.
+            Called from both places; it will not double up.
+            """
+            try:
+                import gulag as _g
+                for _objs, _lst in ((_g.works(), placed_work),
+                                    (_g.houses(), built_houses),
+                                    (_g.walls(), camp_walls)):
+                    for _o in _objs:
+                        if _o not in _lst:
+                            _lst.append(_o)
+                _p = _g.prison()
+                if _p is not None and _p not in placed_work:
+                    placed_work.append(_p)
+            except Exception:
+                pass
+        _gulag.plant_trees(trees)          # fifty REAL trees, in rows
+        # WARM THE CAMP BEFORE ANYBODY WALKS IN. Ground, scatter, tree cells and
+        # wild-plant cells round the gate are composed and cached at load, so
+        # the first approach costs nothing: the hitch at the entrance was every
+        # one of these being made on demand, one region at a time.
+        try:
+            import world as _world_mod
+            _cx, _cy = _gulag.SITE
+            for _dx in (-2600, 0, 2600):
+                for _dy in (-1600, 0, 1600):
+                    static_layer.warm(_cx + _dx, _cy + _dy, 1600, 900)
+            trees.visible(_cx - 4000.0, _cy - 4000.0, 8000.0, 8000.0)
+            try:
+                import wildcrop as _wc
+                _wc.visible(world, villages.villages, _cx - 4000.0,
+                            _cy - 4000.0, 8000.0, 8000.0)
+            except Exception:
+                pass
+            plog.log("WARM", "camp ground, trees and wild cells prepared")
+        except Exception as _we:
+            plog.log("WARM-ERROR", repr(_we)[:140])
+        placed_work.extend(_gulag.works())
+        camp_walls.extend(_gulag.walls())
+        plog.log("GULAG", "built at %d,%d | guards %d | houses %d | mines %d "
+                 "| walls %d | pines %d"
+                 % (int(_gulag.SITE[0]), int(_gulag.SITE[1]), len(_camp_men),
+                    len(_gulag.houses()), len(_gulag.works()),
+                    len(_gulag.walls()), len(_gulag.tree_spots())))
+    except Exception as _ge:
+        plog.log("GULAG-ERROR", repr(_ge)[:160])
     built_gates: list = []
     fence_horizontal = True
     inside_house = None
     door_cooldown = 0.0
-    backdrop = None
+    backdrop = None            # the frozen outdoors behind a house's windows
+    backdrop_for = None        # which house it belongs to
+    backdrop_age = [0]         # how many frames it has been up
     kills = 0
     now = 0.0
     toast_text = ""
@@ -1149,6 +1478,13 @@ def main() -> None:
         nonlocal toast_text, toast_time
         toast_text = message
         toast_time = 1.6
+        # WHAT HE WAS JUST TOLD, IN THE LOG. A refusal on screen that leaves no
+        # trace is a refusal nobody can ever diagnose -- "it would not build"
+        # cost an evening more than once.
+        try:
+            plog.log("TOAST", message)
+        except Exception:
+            pass
 
     def clamp_world() -> None:
         """The world is finite, and the loading screen builds all of it.
@@ -1348,15 +1684,27 @@ def main() -> None:
         toast("Searched clean   (smuggling %.1f)" % player.smuggling)
 
     def open_trade(npc) -> None:
+        """CLICK A MAN AND TALK TO HIM. EVERY MAN, not only the truth-teller.
+
+        The four questions are the same for everybody -- what he thinks of the
+        Dictator, what he thinks of you, what he is craving, and whether he
+        wants to trade -- because every man has the fields they read. "Wanna
+        trade?" is what opens the counter (see open_trade_menu), so the trade
+        menu is now a thing you ask for, not the first thing a click does.
+        """
+        try:
+            npc = make_tradeable(npc)
+        except Exception:
+            pass
+        dialogue_panel.open(npc, player, _main_capital()[0])
+        pygame.mouse.set_visible(True)
+        plog.log("TALK", "opened with", getattr(npc, "name", "?"),
+                 "job", getattr(npc, "job", None),
+                 "truth", getattr(npc, "is_truth_teller", False))
+
+    def open_trade_menu(npc) -> None:
+        """THE COUNTER, when he asks for it."""
         nonlocal trade_open, trade_menu
-        # THE MAN WHO ANSWERS QUESTIONS. He comes through the very same click
-        # that opens a villager's trade menu -- and here it becomes a
-        # conversation instead of a counter.
-        if getattr(npc, "is_truth_teller", False):
-            dialogue_panel.open(npc, player, _main_capital()[0])
-            pygame.mouse.set_visible(True)
-            plog.log("TALK", "opened with", getattr(npc, "name", "?"))
-            return
         try:
             npc = make_tradeable(npc)
         except Exception:
@@ -1370,6 +1718,7 @@ def main() -> None:
         trade_menu = TradeMenu(inventory, npc, player)
         trade_open = True
         pygame.mouse.set_visible(True)
+        plog.log("TRADE", "opened with", getattr(npc, "name", "?"))
 
     def nearest_hostile(npc):
         """WHAT THIS MAN CAN SEE TO FIGHT, and his own business.
@@ -1379,38 +1728,30 @@ def main() -> None:
         threat it could not see, and why an off-screen town needed a special
         case to stop it hunting the player from two hundred kilometres away.
         A man with eyes uses them.
+
+        ONE STATE, SO THE ONLY HOSTILE IS THE PLAYER. This used to scan a
+        soldiers' grid for "any soldier of another nation inside 900 px", and
+        in this world that question has no answer but "nobody":
+        `nations.nation_index()` is one nation everywhere, a hub's guard is
+        six kilometres from any town, and the wolves are not soldiers. It cost
+        11.5 million `.alive` property reads a run to say it -- and the grid it
+        read is gone with it.
         """
         reach = 900.0
-        best, bd = None, reach * reach
         # THE PLAYER IS ONLY A TARGET IF SOMEBODY HAS A REASON. This handed
         # every man in the world the player as his enemy the moment he came
         # within nine hundred pixels -- so a hub's gate guard, a farmer in his
         # rows, anybody, took a shot at a stranger walking past. A man fights
-        # the player if he has been provoked, if the player is wanted, or if he
-        # is a soldier of a nation at war with his.
+        # the player if he has been provoked, if the player is wanted, if his
+        # town is up in arms, or if he is a defender of it.
         _reason = (getattr(npc, "hostile", False)
                    or getattr(player, "wanted", False)
                    or getattr(getattr(npc, "village", None), "provoked", False)
                    or getattr(npc, "defender", False))
-        if not player.dead and _reason:
-            d = (player.x - npc.x) ** 2 + (player.y - npc.y) ** 2
-            if d < bd:
-                bd, best = d, player
-                # (The TARGET log lived here and wrote a line per man per
-                # frame -- 305 KB in six minutes, from the hottest function in
-                # the game. It answered its question; it is gone.)
-        # NO SOLDIER MUSTERED ANYWHERE is the common case, and it costs one
-        # truth test rather than a neighbourhood assembled to answer "nobody".
-        if not soldier_grid.buckets:
-            return best
-        nat = getattr(npc, "nation", None)
-        for e in soldier_grid.near(npc.x, npc.y, reach):
-            if not e.alive or getattr(e, "nation", None) == nat:
-                continue
-            d = (e.x - npc.x) ** 2 + (e.y - npc.y) ** 2
-            if d < bd:
-                bd, best = d, e
-        return best
+        if player.dead or not _reason:
+            return None
+        d = (player.x - npc.x) ** 2 + (player.y - npc.y) ** 2
+        return player if d < reach * reach else None
 
     def commit_crime(where=None) -> None:
         """THE TOWN TURNS ON HIM. One call, one town, nothing else.
@@ -1435,6 +1776,7 @@ def main() -> None:
             # second line the town is merely angry; nobody remembers.
             town.provoke()
             town.learn_killers((village_mod.PLAYER_ID,), now)
+            _WORK.crime(town, (village_mod.PLAYER_ID,))
             for _w in town.npcs:                 # and the men who saw it
                 if _w.alive and math.hypot(_w.x - player.x,
                                            _w.y - player.y) <= WITNESS_PX:
@@ -1559,12 +1901,7 @@ def main() -> None:
         # BARE HANDS. The same swing and the same skill whether or not the axe
         # is in the pack -- a fist simply is not an axe. See
         # skills.UNARMED_WEAKNESS: he hits for a quarter, and can still fight.
-        # ...AND IN THE RING EVERYBODY IS UNARMED, THE PLAYER INCLUDED. The
-        # Test of Strengths is fought with bare hands by the King's own rule,
-        # and a man who brought an axe to it would be breaking that rule and
-        # killing his rivals into the bargain.
-        _ring = getattr(player, "duel_tournament", None) is not None
-        _armed = inventory.count_of("axe") > 0 and not _ring
+        _armed = inventory.count_of("axe") > 0
         melee = ((MELEE_DAMAGE if _armed
                   else MELEE_DAMAGE / skills.UNARMED_WEAKNESS)
                  * skills.axe_damage_scale())
@@ -1580,7 +1917,23 @@ def main() -> None:
 
         for enemy in enemies:
             if enemy.alive and in_arc(enemy.x, enemy.y, enemy.radius):
+                _was_alive = getattr(enemy, "alive", True)
+                if (getattr(enemy, "is_militia", False)
+                        or getattr(enemy, "militia", False)):
+                    try:
+                        import detain as _da
+                        _da.militia_attacked(player, enemy, list(enemies),
+                                             list(village_mod.PEOPLE))
+                    except Exception:
+                        pass
                 enemy.take_damage(melee)
+                if _was_alive and not getattr(enemy, "alive", True):
+                    try:
+                        import detain as _dk
+                        _dk.militia_killed(player, enemy, list(enemies),
+                                           list(village_mod.PEOPLE))
+                    except Exception:
+                        pass
                 blood.spawn(enemy.x, enemy.y, 8, 14.0)
                 if (player.nation is not None
                         and getattr(enemy, "nation", None) == player.nation):
@@ -1593,22 +1946,32 @@ def main() -> None:
                     amount = random.randint(1, 2)
                     inventory.add("raw_meat", amount)
                     toast(f"Caught a rabbit   +{amount} raw meat")
-        for village in visible_villages:
-            for npc in village.npcs:
-                if npc.alive and in_arc(npc.x, npc.y, npc.radius):
-                    died = npc.take_damage(melee)
+        # EVERY MAN THE BLADE REACHES IS CUT -- once each.
+        #
+        # This walked only the towns in view, so the men of a criminal hut and
+        # every traveller on the road stood inside the arc of a swing that
+        # could not see them; and a man listed in two towns was cut twice for
+        # one blow. One list, from every register in the world, deduplicated.
+        _folk = []
+        _seen = set()
+
+        def _add_man(_n):
+            if _n is None or id(_n) in _seen:
+                return
+            _seen.add(id(_n))
+            _folk.append(_n)
+
+        for _n in list(village_mod.PEOPLE) + list(village_mod.TRAVELLERS):
+            _add_man(_n)
+        for _h in (getattr(hub_world, "hubs", None) or ()):
+            for _n in (getattr(_h, "npcs", None) or ()):
+                _add_man(_n)
+        _add_man(_TRUTH[0])
+        for npc in _folk:
+            if npc.alive and in_arc(npc.x, npc.y, npc.radius):
+                    died = npc.take_damage(melee, record=False)
+                    _WORK.damage(npc, melee)
                     blood.spawn(npc.x, npc.y, 18 if died else 8, 22.0 if died else 14.0)
-                    # A CONTEST IS NOT A CRIME. Two men in the ring at the
-                    # capital are fighting by the realm's OWN law, in front of
-                    # the whole town, for the crown -- and before this the crowd
-                    # would turn hostile and the player would be banished from
-                    # his own nation for trading a blow with the man he was
-                    # DRAWN AGAINST. Nobody in that square sees an assault;
-                    # they see the Test of Strengths, which is the point of it.
-                    if (getattr(player, "duel_tournament", None) is not None
-                            and getattr(npc, "duel_tournament", None)
-                            is player.duel_tournament):
-                        continue
                     # SELF-DEFENCE IS NOT A MURDER. A man who came at you with
                     # an axe and lost is not a crime, and his neighbours know
                     # it -- so nothing here counts against you.
@@ -1621,6 +1984,7 @@ def main() -> None:
                             # only the men who SAW it will never forget.
                             npc.village.learn_killers(
                                 (village_mod.PLAYER_ID,), now)
+                            _WORK.crime(npc.village, (village_mod.PLAYER_ID,))
                             _see_murder(npc)
                     if player.nation is not None and npc.nation == player.nation:
                         banish(player.nation)
@@ -1740,7 +2104,7 @@ def main() -> None:
     EAT_RESTORE = 35.0      # any food fills the same belly, as it does for
                             # every villager: one item, one meal.
 
-    def click_a_man() -> bool:
+    def click_a_man(at=None) -> bool:
         """CLICK A MAN, OPEN THAT MAN. Nothing else.
 
         The nearest living man to the point you clicked, within 48 px. If he is
@@ -1750,9 +2114,27 @@ def main() -> None:
         man in the world is a candidate, because a man you can see is a man in
         a village's list.
         """
-        mx, my = pygame.mouse.get_pos()
+        # THE CLICK'S OWN POSITION. The event carries it; the cursor is only a
+        # fallback, because a click is where it happened, not where the pointer
+        # happens to be when the frame reads it.
+        if at is not None:
+            mx, my = at
+        else:
+            mx, my = pygame.mouse.get_pos()
         wx = cam_x + mx / ZOOM
         wy = cam_y + my / ZOOM
+        # A BODY FIRST: it is not a man you can talk to, and `open_trade` on a
+        # corpse would be nonsense -- but a body is what you loot.
+        _body = corpse_mod.nearest(wx, wy)
+        if _body is not None:
+            nonlocal body_open, body_panel
+            body_panel = ChestPanel(inventory, _body.pack,
+                                    top_label=getattr(_body, "name", "a body"))
+            body_open = True
+            pygame.mouse.set_visible(True)
+            plog.log("BODY-OPEN", getattr(_body, "name", "?"), "at",
+                     int(math.hypot(_body.x - player.x, _body.y - player.y)), "px")
+            return True
         best, bd = None, 1e18
         # HIM FIRST AND ALWAYS. He is a village's man, but a village's list can
         # be rebuilt at load -- so he is a candidate in his own right.
@@ -1777,17 +2159,12 @@ def main() -> None:
         # and you click, that click is for him -- no distance arithmetic, no
         # camera/zoom to get wrong, nothing left to fail.
         if best is None or bd > 48.0:
-            _tt = _TRUTH[0]
-            if _tt is not None:
-                _pd = math.hypot(_tt.x - player.x, _tt.y - player.y)
-                plog.log("PICK-NONE", "nearest", int(bd) if best is not None else -1,
-                         "player_to_him", int(_pd))
-                if _pd <= 140.0:
-                    dialogue_panel.open(_tt, player, _main_capital()[0])
-                    toast("%s looks at you." % getattr(_tt, "name", "He"))
-                    pygame.mouse.set_visible(True)
-                    plog.log("PICK", getattr(_tt, "name", "?"), "by", "proximity")
-                    return True
+            # NOTHING WAS CLICKED. This used to open the truth-teller whenever
+            # he happened to be within 140 px OF THE PLAYER -- a third of the
+            # screen -- so a click on empty ground across the square opened a
+            # conversation. A man is opened by clicking HIM.
+            plog.log("PICK-NONE", "nearest",
+                     int(bd) if best is not None else -1)
             return False
         if getattr(best, "is_truth_teller", False):
             dialogue_panel.open(best, player, _main_capital()[0])
@@ -1835,9 +2212,10 @@ def main() -> None:
             plog.log("CLICK-HIM", "click", "%d,%d" % (int(_twx), int(_twy)),
                      "him", "%d,%d" % (int(_tt0.x), int(_tt0.y)),
                      "d", "%d,%d" % (int(_tdx), int(_tdy)))
-            # SIXTY PIXELS, AND NOTHING ELSE IN FRONT OF IT. He is one man on
-            # screen; a click within two body-widths of him is a click on him.
-            if abs(_tdx) <= 60.0 and abs(_tdy) <= 60.0:
+            # HIS BODY, AND NOT A SQUARE AROUND HIS FEET. The cutout is drawn
+            # above the anchor, so the box is the same one every other man is
+            # hit with: about his width across, and up to his head.
+            if abs(_tdx) <= 26.0 and -64.0 < _tdy < 22.0:
                 dialogue_panel.open(_tt0, player, _main_capital()[0])
                 pygame.mouse.set_visible(True)
                 plog.log("TALK", "opened with", getattr(_tt0, "name", "?"),
@@ -2009,6 +2387,11 @@ def main() -> None:
             if farm.harvest(world, inventory, plot, now, toast, grade,
                             skill=skills.farming,
                             tx=tx, ty=ty, share=pay_share):
+                # LEAF IS ILLEGAL. Any agent close enough to have watched it
+                # now knows it, and says so to the next one he meets.
+                nemesis.note_offence_seen(player, "grew",
+                                          crop.LEAF_ITEM.get(plot.kind,
+                                                             plot.kind))
                 # The same rate the farmers get. At the old default (0.12) the
                 # player reached skill 8 in ~67 harvests -- SSS tobacco by day
                 # two, against three weeks for the men who do it for a living.
@@ -2028,6 +2411,9 @@ def main() -> None:
         if wild is not None:
             wildcrop.harvest(world, tx, ty, wild[0], wild[1], inventory, toast,
                              share=pay_share)
+            if wild[0] in crop.LEAF_KINDS:
+                nemesis.note_offence_seen(player, "grew",
+                                          crop.LEAF_ITEM.get(wild[0], wild[0]))
             skills.gain_farming(0.02)      # wild or sown, the hand learns alike
             return
 
@@ -2036,8 +2422,13 @@ def main() -> None:
         elif item_id == "watering_can":
             farm.water(world, ground, tx, ty, toast)
         elif item_id in crop.SEED_CROP:
-            farm.plant(world, ground, inventory, tx, ty, now, toast, item_id,
-                       skills.farming)
+            _sown = farm.plant(world, ground, inventory, tx, ty, now, toast,
+                               item_id, skills.farming)
+            if _sown and tile_is_mine(tx, ty):
+                # A PLOT OF HIS OWN, and what a hired farmer can be put to.
+                if not isinstance(getattr(player, "plots", None), set):
+                    player.plots = set()
+                player.plots.add((tx, ty))
 
     # -- building placement -------------------------------------------------
     def placement_pos():
@@ -2050,6 +2441,22 @@ def main() -> None:
                 round((cam_y + my) / 8.0) * 8.0)
 
     def placement_box(x, y):
+        # THE FOUR TRADES OUT OF DOORS, at the size of the thing itself (the
+        # same rects industry.Workplace builds, without building one every
+        # frame to ask).
+        _sizes = {"lab": (96, 66), "brewery": (116, 78),
+                  "smith": (122, 110), "mine": (136, 112),
+                  "stall": (96, 64)}
+        if placing in _sizes:
+            _w, _h = _sizes[placing]
+            rect = pygame.Rect(int(x - _w / 2), int(y - _h / 2), _w, _h)
+            return (0.0, -1.0), rect, rect.inflate(70, 70)
+        if placing == "plot":
+            rect = pygame.Rect(int(x - 40), int(y - 40), 80, 80)
+            return (0.0, -1.0), rect, rect.inflate(8, 8)
+        if placing == "demolish":
+            rect = pygame.Rect(int(x - 12), int(y - 12), 24, 24)
+            return (0.0, -1.0), rect, rect
         if placing in ("fence", "gate"):
             w, h = (60, 16) if placing == "gate" else (140, 16)
             if not fence_horizontal:
@@ -2104,13 +2511,209 @@ def main() -> None:
                 return False
         return True
 
+    def _own_things():
+        """Everything of HIS a click could take down, smallest first."""
+        out = []
+        for _r in built_plots:
+            out.append((_r, "plot", _r))
+        for _wp in placed_work:
+            out.append((_wp.rect, "station", _wp))
+        for _r in built_gates:
+            out.append((_r, "gate", _r))
+        for _r in built_fences:
+            out.append((_r, "fence", _r))
+        for _h in built_houses:
+            out.append((_h.rect, "house", _h))
+        return out
+
+    def demolish_at(wx: float, wy: float) -> str:
+        """ONE CLICK TAKES ONE THING OF HIS DOWN -- the smallest under it."""
+        hits = [(r.w * r.h, kind, r, obj) for (r, kind, obj) in _own_things()
+                if r.collidepoint(wx, wy)]
+        if not hits:
+            return ""
+        hits.sort(key=lambda h: h[0])
+        _area, kind, rect, obj = hits[0]
+        if kind == "plot":
+            if rect in built_plots:
+                built_plots.remove(rect)
+            if isinstance(getattr(player, "plots", None), set):
+                player.plots.discard(tuple(rect.topleft))
+            mark_dirty()
+            return "Plot cleared"
+        if kind == "station":
+            if obj in placed_work:
+                placed_work.remove(obj)
+            if obj in (getattr(player, "workplaces", ()) or ()):
+                player.workplaces.remove(obj)
+            if getattr(obj, "is_stall", False):
+                # A STALL TAKEN DOWN IS GONE: its goods and its purse come
+                # back to the player rather than vanishing with the timber.
+                _back = int(getattr(obj, "coins", 0) or 0)
+                for _s in list(getattr(obj, "stock", None).slots
+                               if getattr(obj, "stock", None) else ()):
+                    if _s is not None:
+                        inventory.add(_s.defn.id, _s.count, _s.quality)
+                if _back:
+                    inventory.add("coin", _back)
+                if obj in stall_mod.stalls_of(player):
+                    stall_mod.stalls_of(player).remove(obj)
+                for _n in (getattr(player, "workers", ()) or ()):
+                    if getattr(_n, "to_market", False):
+                        _n.to_market = False
+                mark_dirty()
+                return "Stall taken down -- goods and %d coin returned" % _back
+            mark_dirty()
+            return "Stations taken down"
+        if kind == "gate" and rect in built_gates:
+            built_gates.remove(rect)
+            mark_dirty()
+            return "Gate taken down"
+        if kind == "fence" and rect in built_fences:
+            built_fences.remove(rect)
+            mark_dirty()
+            return "Fence taken down"
+        if kind == "house" and obj in built_houses:
+            built_houses.remove(obj)
+            mark_dirty()
+            return "House taken down"
+        return ""
+
+    def salary_chest():
+        """WHERE THE MEN ARE PAID FROM: a chest in a house of his, in his hub.
+
+        The salary is not carried in his pack -- he has to PUT IT IN THE CHEST,
+        the way a man with a yard and hands would. No chest in the hub, or an
+        empty one, and the day is missed.
+        """
+        for _h in built_houses:
+            _in = getattr(_h, "interior", None)
+            if _in is None or getattr(_in, "chest", None) is None:
+                continue
+            if hubs.in_player_hub(_h.rect, hub_world.hubs):
+                return _in.chest
+        return None
+
+    def hub_stall():
+        """THE PLAYER'S STALL: the one in his own hub, or his only one."""
+        try:
+            _mine = stall_mod.in_hub(player, getattr(player, "hub", None))
+            if _mine is not None:
+                return _mine
+            _all = stall_mod.stalls_of(player)
+            return _all[0] if _all else None
+        except Exception:
+            return None
+
+    def near_stall():
+        """The stall he is standing at -- the building, not its middle."""
+        for _st in stall_mod.stalls_of(player):
+            if _st.rect.inflate(150, 150).collidepoint(player.x, player.y):
+                return _st
+        return None
+
+    def _town_price_for(item, grade):
+        """WHAT A CART COULD RESELL THIS LOT FOR AT THE NEAREST TOWN.
+
+        The panel shows it beside the player's own price: it is the ceiling he
+        is undercutting, and without it "price it cheap" is a guess.
+        """
+        try:
+            _best, _bd = None, 1e18
+            for _v in visible_villages:
+                if getattr(_v, "is_hub", False):
+                    continue
+                _d = (_v.x - player.x) ** 2 + (_v.y - player.y) ** 2
+                if _d < _bd:
+                    _best, _bd = _v, _d
+            if _best is None:
+                return 0
+            return int(economy.prospect(_best, item, int(grade)))
+        except Exception:
+            return 0
+
+    def _on_stall_sales(sales) -> None:
+        """WHAT A CART BOUGHT, applied here, where the goods and the coin are."""
+        _st = hub_stall()
+        for rec in sales or ():
+            try:
+                item, grade, qty, coins = rec
+            except Exception:
+                continue
+            if _st is None:
+                break
+            if _st.sold(item, qty, coins, "free trader", grade=int(grade)):
+                try:
+                    import quality as _q
+                    _g = _q.letter(int(grade))
+                except Exception:
+                    _g = "?"
+                toast("Sold %d %s (%s) -- %d coin in the stall"
+                      % (int(qty), str(item).replace("_", " "), _g, int(coins)))
+
+    def _commit_plot() -> None:
+        """A PLOT IS A RECTANGLE HE DRAWS: no cost, no bench, just ground."""
+        nonlocal placing
+        start = plot_start[0]
+        plot_start[0] = None
+        if start is None:
+            return
+        x2, y2 = placement_pos()
+        x1, y1 = start
+        rect = pygame.Rect(int(min(x1, x2)), int(min(y1, y2)),
+                           int(abs(x2 - x1)), int(abs(y2 - y1)))
+        if rect.w < 32 or rect.h < 32:
+            toast("Too small for a plot")
+            return
+        if not hubs.land_ok(rect, villages.villages, hub_world.hubs,
+                           player.x, player.y):
+            toast("Not your land -- the wild, or your own hub")
+            return
+        built_plots.append(rect)
+        if not isinstance(getattr(player, "plots", None), set):
+            player.plots = set()
+        player.plots.add(tuple(rect.topleft))
+        player.yard_plots = [tuple(_r) for _r in built_plots]
+        mark_dirty()
+        if hubs.in_player_hub(rect, hub_world.hubs):
+            toast("Plot staked on your own ground")
+        else:
+            _h = hub_world.add_player_hub(player, rect.inflate(120, 120).copy(),
+                                          [], [])
+            if _h is not None:
+                nemesis.PLACES.append(_h)
+                player.work_post = (_h.x, _h.y + 40)
+                player.hub = _h
+                plog.log("PHASE-HUB", _h.name, "at",
+                         "%d,%d" % (int(_h.x), int(_h.y)),
+                         "post", player.work_post)
+                toast("Plot staked -- this is your hub now:   %s" % _h.name)
+            else:
+                toast("Plot staked")
+        placing = None
+        pygame.mouse.set_visible(False)
+
     def try_place() -> None:
         nonlocal placing
         x, y = placement_pos()
+        if placing == "demolish":
+            _wm = cam_x + (pygame.mouse.get_pos()[0] / ZOOM)
+            _wm2 = cam_y + (pygame.mouse.get_pos()[1] / ZOOM)
+            _said = demolish_at(_wm, _wm2)
+            toast(_said or "Nothing of yours there")
+            placing = None
+            pygame.mouse.set_visible(False)
+            return
+        if placing == "plot":
+            return                      # a plot is drawn, not clicked (see below)
         facing, rect, sight = placement_box(x, y)
         if placing in ("fence", "gate"):
             if not can_place(rect, sight):
                 toast("Can't build there")
+                return
+            if not hubs.land_ok(rect, villages.villages, hub_world.hubs,
+                               player.x, player.y):
+                toast("Not your land -- the wild, or your own hub")
                 return
             cost = 30 if placing == "gate" else 10
             name = "Gate" if placing == "gate" else "Fence"
@@ -2122,8 +2725,128 @@ def main() -> None:
                     return
                 inventory.consume("wood", cost)
             (built_gates if placing == "gate" else built_fences).append(rect)
+            # A YARD HE HAS CLOSED IN THE WILD IS HIS HUB. Checked each time he
+            # sets a piece down -- the flood fill is a few thousand cells and it
+            # only ever runs while he is building.
+            try:
+                _yard, _ring = fence.enclosure(built_fences + built_gates,
+                                               player.x, player.y)
+                if _yard is not None:
+                    _wild = True
+                    for _v in (list(villages.villages)
+                               + list(getattr(hub_world, "hubs", ()))):
+                        _fr = getattr(_v, "fence_rect", None)
+                        if _fr is not None and _fr.colliderect(
+                                _yard.inflate(600, 600)):
+                            _wild = False
+                            break
+                    if _wild:
+                        _h = hub_world.add_player_hub(player, _yard, _ring,
+                                                      built_gates)
+                        if _h is not None:
+                            nemesis.PLACES.append(_h)
+                            toast("This is your hub now:   %s" % _h.name)
+                            plog.log("HUB", "fenced", _h.name, "at",
+                                     "%d,%d" % (int(_h.x), int(_h.y)),
+                                     "%dx%d" % (_yard.w, _yard.h))
+            except Exception as _he:
+                plog.log("HUB-ERROR", repr(_he)[:200])
             mark_dirty()
             toast(f"{name} built" if test_mode else f"{name} built   -{cost} wood")
+            placing = None
+            pygame.mouse.set_visible(False)
+            return
+        if placing == "stall":
+            # A STALL STANDS IN HIS HUB AND NOWHERE ELSE. The land question is
+            # asked first, so a man who tries to put one in the open is told
+            # why and does not lose the timber.
+            if not hubs.in_player_hub(rect, hub_world.hubs):
+                toast("A stall must stand inside your own hub")
+                placing = None
+                pygame.mouse.set_visible(False)
+                return
+            if not can_place(rect, sight):
+                toast("No clear ground here")
+                return
+            _hub = next((h for h in hub_world.hubs
+                         if getattr(h, "is_player_hub", False)
+                         and h.fence_rect.colliderect(rect)), None)
+            if _hub is None:
+                toast("A stall must stand inside your own hub")
+                placing = None
+                pygame.mouse.set_visible(False)
+                return
+            if stall_mod.in_hub(player, _hub) is not None:
+                toast("You already have a stall in this hub")
+                placing = None
+                pygame.mouse.set_visible(False)
+                return
+            _cost = build_materials("stall")
+            if not test_mode:
+                for _it, _q in _cost.items():
+                    if inventory.count_of(_it) < _q:
+                        toast("Need %d %s" % (_q, _it))
+                        placing = None
+                        pygame.mouse.set_visible(False)
+                        return
+                for _it, _q in _cost.items():
+                    inventory.consume(_it, _q)
+            _st = stall_mod.add(player, _hub, x, y)
+            if _st is None:
+                toast("A stall must stand inside your own hub")
+                placing = None
+                pygame.mouse.set_visible(False)
+                return
+            placed_work.append(_st)
+            mark_dirty()
+            toast("Market stall built   -%d wood" % int(_cost.get("wood", 0)))
+            placing = None
+            pygame.mouse.set_visible(False)
+            return
+        if placing in ("lab", "brewery", "smith", "mine", "dummy", "target"):
+            _wp = industry.Workplace(placing, x, y, random.randrange(1 << 30))
+            if not hubs.land_ok(_wp.rect, villages.villages, hub_world.hubs,
+                               player.x, player.y):
+                toast("Not your land -- the wild, or your own hub")
+                return
+            if not can_place(_wp.rect, _wp.rect.inflate(70, 70)):
+                toast("No clear ground here")
+                return
+            _cost = build_materials(placing)
+            if not test_mode:
+                for _it, _q in _cost.items():
+                    if inventory.count_of(_it) < _q:
+                        toast("Need %d %s" % (_q, _it))
+                        placing = None
+                        pygame.mouse.set_visible(False)
+                        return
+                for _it, _q in _cost.items():
+                    inventory.consume(_it, _q)
+            _wp.worker = None
+            _wp.owner = player
+            placed_work.append(_wp)
+            if not isinstance(getattr(player, "workplaces", None), list):
+                player.workplaces = []
+            player.workplaces.append(_wp)          # he can put a man to it
+            mark_dirty()
+            _land = hubs.in_player_hub(_wp.rect, hub_world.hubs)
+            if not _land:
+                # THE WILD IS HIS NOW. A bench, a forge or a shaft on open
+                # ground is a claim: the yard around it is his hub.
+                _yard = _wp.rect.inflate(320, 320).copy()
+                _h = hub_world.add_player_hub(player, _yard, [], [])
+                if _h is not None:
+                    nemesis.PLACES.append(_h)
+                    player.work_post = (_h.x, _h.y + 40)
+                    player.hub = _h
+                    plog.log("PHASE-HUB", _h.name, "at",
+                             "%d,%d" % (int(_h.x), int(_h.y)),
+                             "post", player.work_post)
+                    toast("Built -- this is your hub now:   %s" % _h.name)
+                else:
+                    toast("Built")
+            else:
+                toast("Built on your own ground")
             placing = None
             pygame.mouse.set_visible(False)
             return
@@ -2231,6 +2954,25 @@ def main() -> None:
         hint_text = "Click to place   ·   right-click to cancel"
         if placing in ("fence", "gate"):
             hint_text = "Click to place   ·   R to rotate   ·   right-click to cancel"
+        elif placing == "plot":
+            hint_text = "Drag a rectangle   ·   right-click to cancel"
+        elif placing == "demolish":
+            hint_text = "Click a thing of yours to take it down   ·   right-click to cancel"
+        if placing == "plot" and plot_start[0] is not None:
+            # THE RECTANGLE HE IS DRAWING, live under the mouse.
+            _sx, _sy = plot_start[0]
+            _ex, _ey = px_, py_
+            _drag = pygame.Rect(int(min(_sx, _ex)), int(min(_sy, _ey)),
+                                int(abs(_ex - _sx)), int(abs(_ey - _sy)))
+            _ok = hubs.land_ok(_drag, villages.villages, hub_world.hubs,
+                               player.x, player.y)
+            _col = (126, 224, 148) if _ok else (226, 96, 84)
+            _dr = pygame.Rect(_drag.x - cam_x, _drag.y - cam_y,
+                              _drag.w, _drag.h)
+            _df = pygame.Surface((max(1, _dr.w), max(1, _dr.h)), pygame.SRCALPHA)
+            _df.fill((_col[0], _col[1], _col[2], 48))
+            screen.blit(_df, _dr.topleft)
+            pygame.draw.rect(screen, _col, _dr, 2)
         hint = font.render(hint_text, True, (236, 236, 240))
         screen.blit(hint, (vw // 2 - hint.get_width() // 2, int(vh * 0.82)))
 
@@ -2259,6 +3001,21 @@ def main() -> None:
         interior = getattr(house, "interior", None)
         if interior is None:
             return
+        # BAKE THE ROOM ON THE WAY IN, not on the first frame indoors: a
+        # room's art never changes, so it is painted once and then it is one
+        # blit a frame. This is why a mine is instant; now a house is too.
+        try:
+            interior.bake()
+        except AttributeError:
+            pass
+        try:
+            player.world_xy = (float(player.x), float(player.y))
+        except Exception:
+            pass
+        plog.log("ENTER-HOUSE", getattr(house, "name", "?"),
+                 "from", int(player.x), int(player.y),
+                 "-> spawn", int(interior.spawn[0]), int(interior.spawn[1]),
+                 "room", interior.W, interior.H)
         inside_house = house
         player.x, player.y = interior.spawn
         player.bleed = 0.0
@@ -2308,6 +3065,7 @@ def main() -> None:
         fx, fy = house.facing
         player.x = house.x + fx * (house.h / 2.0 + 30.0)
         player.y = house.y + fy * (house.h / 2.0 + 30.0)
+        plog.log("EXIT-HOUSE", "out to", int(player.x), int(player.y))
         inside_house = None
         door_cooldown = 0.7
 
@@ -2326,10 +3084,45 @@ def main() -> None:
         for rect in built_fences:
             if view.colliderect(rect):
                 fence.draw_segment(target, cx, cy, rect)
+        for rect in camp_walls:
+            if view.colliderect(rect):
+                fence.draw_segment(target, cx, cy, rect)
         for rect in built_gates:
             if view.colliderect(rect):
                 fence.draw_gate(target, cx, cy, rect)
+        # THE TEST TRAIN, on the rails.
+        try:
+            _TEST_TRAIN[0].draw(target, cx, cy)
+            _TEST_TRAIN[0].draw_knocked(target, cx, cy)
+        except Exception:
+            pass
+        # THE CAMP, drawn on the ground.
+        try:
+            import gulag as _gulag_d
+            _gulag_d.draw(target, cx, cy, view)
+        except Exception as _ge2:
+            if not getattr(main, "_ge2_seen", False):
+                main._ge2_seen = True
+                import traceback as _tb2
+                plog.log("GULAG-DRAW-ERROR", repr(_ge2)[:120])
+                plog.log("GULAG-TRACE", _tb2.format_exc()[:900])
+        # THE RAILWAY, on the ground under everything that stands on it.
+        try:
+            import rail as _rail
+            _rail.ensure(villages.villages)
+            _rail.draw(target, cx, cy, vw, vh)
+        except Exception as _re:
+            plog.log("RAIL-ERROR", repr(_re)[:120])
         items = []
+        # THE DEAD ARE ON THE GROUND. Bodies are sorted into the same painter's
+        # list as the living, so a man walking in front of a corpse stands in
+        # front of it and one behind it does not. Nothing ever called
+        # corpse.draw: a body could be clicked and looted and was never ONCE
+        # put on the screen.
+        for _c in corpse_mod.CORPSES:
+            if not view.collidepoint(_c.x, _c.y):
+                continue
+            items.append((_c.y, lambda c=_c: c.draw(target, cx, cy, now)))
         for (x, y, planted_at, kind, biome) in crop.visible_plants(world, cx, cy,
                                                                    vw, vh):
             if not view.collidepoint(x, y):
@@ -2543,48 +3336,6 @@ def main() -> None:
         lab.set_alpha(int(255 * fade))
         surf.blit(lab, (bx + pad, by + pad))
 
-    def buy_vote(voter: Any) -> None:
-        """THE PLAYER BUYS A VOTE: same price, same one-sale rule.
-
-        The going rate is ELECTION_BRIBE and it is the same for him as for a
-        mayor or a rich man -- there is one market and one price in it. A vote
-        already sold is already sold, to whoever got there first, and it is
-        whoever else wants it that loses.
-        """
-        if not getattr(voter, "alive", False):
-            return
-        if getattr(voter, "is_mayor", False) or getattr(voter, "is_king", False):
-            toast("%s is standing himself" % voter.name)
-            return
-        if not economy.vote_buyable(voter, _wd):
-            toast("%s has already sold his vote" % voter.name)
-            return
-        if inventory.count_of("coin") < economy.ELECTION_BRIBE:
-            toast("Not enough coin   (%d needed)" % economy.ELECTION_BRIBE)
-            return
-        inventory.consume("coin", economy.ELECTION_BRIBE)
-        voter.coins += economy.ELECTION_BRIBE
-        voter.vote_sold = int(_wd)
-        voter.vote_for = "player"
-        toast("%s takes your coin and your side   (%d)"
-              % (voter.name, economy.ELECTION_BRIBE))
-
-    def nearest_voter():
-        """A man in his own square, close enough to talk to, whose vote is
-        still going. You cannot buy a vote across a field."""
-        best = None
-        bestd = REACH + 40.0
-        for v in villages.visible(player.x - 320.0, player.y - 320.0, 640, 640):
-            for n in v.npcs:
-                if not n.alive or n.asleep or n.in_interior:
-                    continue
-                if getattr(n, "is_king", False):
-                    continue
-                d = math.hypot(n.x - player.x, n.y - player.y)
-                if d < bestd:
-                    bestd, best = d, n
-        return best
-
     def pay_share(item: str, gained: int) -> int:
         """THE PLAYER PAYS WHAT EVERYBODY ELSE PAYS: A FIFTH, IN KIND.
 
@@ -2672,6 +3423,7 @@ def main() -> None:
                 hands = skills.leaf_grade(8)
                 g = quality.clamp(int(round((hands + given) / 2.0)))
                 inventory.add(out, count, g)
+                nemesis.note_offence_seen(player, "made", out)   # drugs, broached
                 skills.gain_farming(0.02 * min(count, 10))
                 toast("%d %s  (%s)" % (count, items.get(out).name, quality.letter(g)))
             return
@@ -2717,6 +3469,7 @@ def main() -> None:
             if stack.count <= 0:
                 inventory.slots[idx] = None
             inventory.add(out, 1, g)
+            nemesis.note_offence_seen(player, "made", out)   # drugs, at a bench
             skills.gain_farming(0.02)          # you learn at the bench too
             toast("Made a %s  (%s)" % (items.get(out).name, quality.letter(g)))
             return
@@ -2734,10 +3487,23 @@ def main() -> None:
         so a radius measured from the middle left a man standing at the doorway
         outside it -- pressing E at the pit head did nothing at all.
         """
+        for _wp in placed_work:
+            if _wp.rect.inflate(170, 170).collidepoint(player.x, player.y):
+                return _wp
         for _v in visible_villages:
             for _wp in _v.workplaces:
                 if _wp.rect.inflate(170, 170).collidepoint(player.x, player.y):
                     return _wp
+        # THE CAMP BARN IS NOT IN A VILLAGE AND ITS LIST BOOKKEEPING IS NOT
+        # WORTH TRUSTING: asked for by name, every frame, at the doorway.
+        try:
+            import gulag as _g
+            _p = _g.prison()
+            if _p is not None and _p.rect.inflate(170, 170).collidepoint(player.x,
+                                                                      player.y):
+                return _p
+        except Exception:
+            pass
         return None
 
     def work_action(key: str) -> str:
@@ -2866,13 +3632,10 @@ def main() -> None:
     LOOK_REACH = 1000.0
     enemy_grid = TeamGrid(200.0)
     folk_grid = TeamGrid(260.0)
-    # A SECOND GRID, FOR THE ONE QUESTION A VILLAGER ASKS. He wants to know
-    # only about SOLDIERS -- the all-creatures grid is mostly wolves, and he
-    # threw every one of them away. Worse, its 200-px cells meant a 900-px
-    # look assembled a hundred cells per man per tick, and no two men shared
-    # an answer. Cell = reach, so the look is nine cells, and the men of one
-    # village nearly always want the same nine -- they share it.
-    soldier_grid = TeamGrid(900.0)
+    # (A SECOND GRID STOOD HERE, FOR A QUESTION NOBODY ASKS ANY MORE. It held
+    # only soldiers, because a villager looking for "a soldier of another
+    # nation" threw the wolves away -- and with one nation in the world the
+    # answer was always nobody. See nearest_hostile.)
 
     class _Watcher:
         """In test mode the armies do not see the player.
@@ -3067,6 +3830,12 @@ def main() -> None:
     def save_now() -> None:
         houses = []
         for house in built_houses:
+            # THE CAMP IS REBUILT FROM THE SEED, NOT FROM THE SAVE. Its barn
+            # carries a prison hall, whose floor is a pygame Surface -- writing
+            # that into a save is what froze the game on entering (the autosave
+            # caught it a moment later).
+            if getattr(house, "camp", False):
+                continue
             interior = getattr(house, "interior", None)
             chest = getattr(interior, "chest", None) if interior is not None else None
             houses.append({
@@ -3102,7 +3871,14 @@ def main() -> None:
             "seed": world.seed,
             "houses": houses,
             "player": {
-                "x": player.x, "y": player.y,
+                # A SAVE MADE INDOORS MUST NOT STORE INTERIOR COORDINATES.
+                # The room's coordinates are (750, 732)-ish, which in the world
+                # is the middle of the map: that is exactly how the player got
+                # "teleported to the centre" on the next load. Standing inside a
+                # house saves him at that house's door.
+                "x": (inside_house.x if inside_house is not None else player.x),
+                "y": ((inside_house.y + inside_house.h / 2.0 + 20.0)
+                      if inside_house is not None else player.y),
                 "health": player.health, "hunger": player.hunger,
                 "stamina": player.stamina, "bleed": player.bleed,
                 "nation": (int(player.nation) if player.nation is not None
@@ -3118,6 +3894,19 @@ def main() -> None:
             "plots": [[tx, ty, plot.kind, plot.planted_at]
                       for (tx, ty), plot in world.plots.items()],
             "wild": [[tx, ty] for (tx, ty) in world.wild_removed],
+            # PICKED PLANTS KEEP THEIR CLOCK. Wild food comes back on the crop
+            # clock (wildcrop.taken), and that clock was runtime-only, so every
+            # relaunch handed the player a forest of plants he had already
+            # picked -- or, read the other way, nothing in the woods ever had
+            # to grow back at all.
+            "wild_eaten": [[tx, ty, float(when)]
+                           for (tx, ty), when in
+                           (getattr(world, "wild_eaten", {}) or {}).items()],
+            # THE STUMPS. A felled tree was runtime-only, so every relaunch
+            # stood it back up and every stump the player had made vanished --
+            # and a stump is a promise: it grows back in three minutes.
+            "stumps": [[round(t.x, 1), round(t.y, 1), float(t.felled_at)]
+                       for t in trees.stumps()],
             "compass_home": (list(compass_state.home)
                              if compass_state.home is not None else None),
             "ore": [[cx, cy] for (cx, cy) in ore_field.mined],
@@ -3126,6 +3915,36 @@ def main() -> None:
             "squad": squad,
             "fences": [[r.x, r.y, r.w, r.h] for r in built_fences],
             "gates": [[r.x, r.y, r.w, r.h] for r in built_gates],
+            # THE YARD: his plots, his benches, and the hub they make of his
+            # ground. Numbers only -- every one of them is rebuilt on load.
+            "yard_plots": [[r.x, r.y, r.w, r.h] for r in built_plots],
+            "yard_work": [[wp.kind, wp.x, wp.y] for wp in placed_work
+                          if not getattr(wp, "is_stall", False)
+                          and not getattr(wp, "camp", False)
+                          and abs(getattr(wp, "x", 0.0)) < 400000.0
+                          and abs(getattr(wp, "y", 0.0)) < 400000.0],
+            # THE MARKET STALL: goods, prices, purse, switch. Not a Workplace,
+            # so not in yard_work.
+            "stalls": stall_mod.to_data(player),
+            "corpses": corpse_mod.to_data(),
+            "folders": folders_mod.to_data(),
+            "market_workers": [getattr(n, "id", None)
+                               for n in (getattr(player, "workers", ()) or ())
+                               if getattr(n, "to_market", False)],
+            # ...AND WHAT EACH MAN HAS BEEN TOLD NOT TO MAKE.
+            "worker_no_make": {str(getattr(n, "id", "")): sorted(work.banned(n))
+                               for n in (getattr(player, "workers", ()) or ())
+                               if work.banned(n)},
+            "worker_no_sell": {str(getattr(n, "id", "")): sorted(work.not_sold(n))
+                               for n in (getattr(player, "workers", ()) or ())
+                               if work.not_sold(n)},
+            "yard_hub": [[h.fence_rect.x, h.fence_rect.y,
+                          h.fence_rect.w, h.fence_rect.h]
+                         for h in hub_world.hubs
+                         if getattr(h, "is_player_hub", False)],
+            "workers": [getattr(n, "id", None)
+                        for n in (getattr(player, "workers", ()) or ())
+                        if getattr(n, "alive", False)],
             "world": world_to_data(villages),
         }
         if not persist.write_binary(_payload):
@@ -3163,6 +3982,12 @@ def main() -> None:
                 enemies.append(_sol)
         for entry in data.get("houses", []):
             try:
+                # A CAMP BUILDING IN THE SAVE IS NOT HIS: the camp is rebuilt
+                # from the seed, so an older save's copy of the barn or its
+                # barracks would stand there twice.
+                if (abs(float(entry.get("x", 0.0))) > 400000.0
+                        or abs(float(entry.get("y", 0.0))) > 400000.0):
+                    continue
                 house = House(entry["x"], entry["y"], entry["w"], entry["h"],
                               tuple(entry["roof"]), tuple(entry["facing"]),
                               entry["seed"])
@@ -3186,6 +4011,20 @@ def main() -> None:
         if p:
             player.x = float(p.get("x", player.x))
             player.y = float(p.get("y", player.y))
+            # A SAVE FROM AN OLDER BUILD may hold room coordinates (700,700)
+            # -- which in the world is the middle of the map. Those are not a
+            # world position at all, so he is put back at the camp instead.
+            _sx = float(p.get("x", player.x))
+            _sy = float(p.get("y", player.y))
+            if abs(_sx) < 5000.0 and abs(_sy) < 5000.0:
+                try:
+                    import gulag as _gl
+                    _sx, _sy = _gl.middle()[0] + 220.0, _gl.middle()[1] + 260.0
+                    plog.log("SAVE-POS-FIX", "interior coordinates in the save;"
+                             " restored at the camp")
+                except Exception:
+                    pass
+            player.x, player.y = _sx, _sy
             player.health = max(1.0, float(p.get("health", player.health)))
             player.hunger = float(p.get("hunger", player.hunger))
             player.stamina = float(p.get("stamina", player.stamina))
@@ -3205,6 +4044,117 @@ def main() -> None:
             built_fences.append(pygame.Rect(int(fx0), int(fy0), int(fw), int(fh)))
         for gx0, gy0, gw, gh in data.get("gates", []):
             built_gates.append(pygame.Rect(int(gx0), int(gy0), int(gw), int(gh)))
+        # ---- THE YARD, BACK ----
+        # Plots, benches and the hub they make of his ground, plus the men he
+        # pays. Everything is cleared first, so loading twice in one session
+        # does not double the yard.
+        built_plots.clear()
+        placed_work.clear()
+        player.workplaces = []
+        player.plots = set()
+        player.workers = []
+        hub_world.hubs[:] = [h for h in hub_world.hubs
+                             if not getattr(h, "is_player_hub", False)]
+        nemesis.PLACES[:] = [p for p in nemesis.PLACES
+                             if not getattr(p, "is_player_hub", False)]
+        for _rec in data.get("yard_plots", []):
+            _r = pygame.Rect(*[int(v) for v in _rec])
+            built_plots.append(_r)
+            player.plots.add((_r.x, _r.y))
+            player.yard_plots = [tuple(_rp) for _rp in built_plots]
+        for _rec in data.get("yard_work", []):
+            try:
+                _kind, _x, _y = _rec
+                if abs(float(_x)) > 400000.0 or abs(float(_y)) > 400000.0:
+                    continue          # the camp is rebuilt, never restored
+                if _kind == "stall":
+                    continue                 # restored from `stalls`, below
+                _wp = industry.Workplace(_kind, float(_x), float(_y),
+                                         abs(hash((_kind, _x, _y)))
+                                         & 0x7FFFFFFF)
+                _wp.worker = None
+                _wp.owner = player
+                placed_work.append(_wp)
+                player.workplaces.append(_wp)
+            except Exception as _we:
+                plog.log("YARD-WORK-ERROR", repr(_we)[:160])
+        # THE CAMP, PUT BACK AFTER THE SAVE HAS CLEARED THE YARD.
+        try:
+            import gulag as _g2
+            for _o in _g2.works():
+                if _o not in placed_work:
+                    placed_work.append(_o)
+            _b2 = _g2.prison()
+            if _b2 is not None and _b2 not in placed_work:
+                placed_work.append(_b2)
+            for _o in _g2.houses():
+                if _o not in built_houses:
+                    built_houses.append(_o)
+            for _o in _g2.walls():
+                if _o not in camp_walls:
+                    camp_walls.append(_o)
+            try:
+                import holding as _h2
+                for _c in _h2.cells():
+                    if _c not in placed_work:
+                        placed_work.append(_c)
+            except Exception:
+                pass
+        except Exception as _ae:
+            plog.log("CAMP-ATTACH-ERR", repr(_ae)[:140])
+        for _rec in data.get("yard_hub", []):
+            _h = hub_world.add_player_hub(
+                player, pygame.Rect(*[int(v) for v in _rec]), [], [])
+            if _h is not None:
+                nemesis.PLACES.append(_h)
+                player.work_post = (_h.x, _h.y + 40)
+                player.hub = _h
+        # THE STALLS, after the hubs (a stall looks for its yard).
+        try:
+            player.stalls = []
+            for _st in stall_mod.from_data(player, data.get("stalls"),
+                                           hub_world.hubs):
+                _hub = getattr(_st, "hub", None)
+                if (_hub is None
+                        or not _hub.fence_rect.colliderect(_st.rect)):
+                    plog.log("STALL-DROPPED", "at",
+                             "%d,%d" % (int(_st.x), int(_st.y)),
+                             "-- not inside a hub of his")
+                    stall_mod.stalls_of(player).remove(_st)
+                    continue
+                placed_work.append(_st)
+        except Exception as _se:
+            plog.log("STALL-RESTORE-ERROR", repr(_se)[:200])
+        # THE DEAD, BACK WHERE THEY FELL. Aged as they were: a man three days
+        # dead comes back as a body two days old, not a fresh one.
+        try:
+            corpse_mod.from_data(data.get("corpses"))
+            folders_mod.from_data(data.get("folders"))
+        except Exception as _ce:
+            plog.log("CORPSE-RESTORE-ERROR", repr(_ce)[:160])
+        _want_workers = set(data.get("workers", ()) or ())
+        if _want_workers:
+            for _v in list(villages._cache.values()):
+                for _n in _v.npcs:
+                    if getattr(_n, "id", None) in _want_workers and _n.alive:
+                        player.workers.append(_n)
+                        # ...and they march to the yard they were hired for.
+                        _n.work_post = getattr(player, "work_post", None)
+        _market = set(data.get("market_workers", ()) or ())
+        _nomake = data.get("worker_no_make", {}) or {}
+        _nosell = data.get("worker_no_sell", {}) or {}
+        for _n in (getattr(player, "workers", ()) or ()):
+            if getattr(_n, "id", None) in _market:
+                _n.to_market = True
+            for _it in _nomake.get(str(getattr(_n, "id", "")), ()) or ():
+                work.set_banned(_n, _it, True)
+            for _it in _nosell.get(str(getattr(_n, "id", "")), ()) or ():
+                work.set_not_sold(_n, _it, True)
+        plog.log("YARD", "plots", len(built_plots), "work", len(placed_work),
+                 "hubs", len([h for h in hub_world.hubs
+                              if getattr(h, "is_player_hub", False)]),
+                 "workers", len(player.workers),
+                 "stalls", len(stall_mod.stalls_of(player)))
         if data.get("skills"):
             sk = data["skills"]
             skills.farming = float(sk.get("farming", 0.0))
@@ -3218,6 +4168,27 @@ def main() -> None:
                            None if planted is None else float(planted))
         for tx, ty in data.get("wild", []):
             world.wild_removed.add((int(tx), int(ty)))
+        for _rec in (data.get("wild_eaten", ()) or ()):
+            try:
+                world.wild_eaten[(int(_rec[0]), int(_rec[1]))] = float(_rec[2])
+            except Exception:
+                continue
+        # ...and the stumps that were standing when he left: same trees, same
+        # age, so the clock that brings them back has not been reset.
+        _stumps = data.get("stumps", ()) or ()
+        for _rec in _stumps:
+            try:
+                _sx, _sy, _at = float(_rec[0]), float(_rec[1]), float(_rec[2])
+            except Exception:
+                continue
+            _t = next((_c for _c in trees.near(_sx, _sy, 60.0)
+                       if abs(_c.x - _sx) < 1.0 and abs(_c.y - _sy) < 1.0), None)
+            if _t is not None and not _t.felled:
+                _t.felled = True
+                _t.felled_at = _at
+                trees.remember_stump(_t)
+        if _stumps:
+            plog.log("STUMPS", "restored", len(_stumps))
         ch = data.get("compass_home")
         if ch:
             compass_state.home = (float(ch[0]), float(ch[1]))
@@ -3261,7 +4232,15 @@ def main() -> None:
                 if st.get("gaps"):
                     v.fence_gaps = [(int(s), float(c), float(hw))
                                     for s, c, hw in st["gaps"]]
+                # EVERY TOWN'S FENCE IS RE-CUT ON LOAD. The walls are
+                # precomputed rectangles, and a save or cache written when a
+                # town had TWO openings kept two openings for ever -- the
+                # extra gates existed in gate_list and in the code and were
+                # walled shut on screen.
+                try:
                     fence.rebuild(v)
+                except Exception:
+                    pass
                 if v.conquered:
                     for npc in v.npcs:
                         npc.nation = v.nation
@@ -3302,34 +4281,6 @@ def main() -> None:
 
     visible_villages: list = []
     world_accum = 0.0
-    # [the running Test of Strengths, has one been started this game]
-    # [the running Test of Strengths, THE DAY THE LAST ONE BEGAN]
-    # -1, not False: `False != 0` is False in Python, so a flag initialised to
-    # False can never differ from day zero and the first tournament of the
-    # world was silently never held.
-    _tourney = [None, -1]
-    _nem = [None]          # the Nemesis -- see Nemesis.md
-
-    def tick_nemesis(now: float) -> None:
-        """THE NEMESIS TICKS A DAY AT A TIME, WHEREVER THE PLAYER IS.
-
-        This lived in the EXTERIOR branch of the frame -- and `now += dt`
-        happens in the interior branch too. So the moment the player was inside
-        a house the world's clock kept running and the nemesis simply stopped:
-        one report, then silence, for as long as the player stayed indoors.
-        A world that only exists while you are looking at it is not a world.
-        """
-        kd = int(now / economy.DAY_LENGTH)
-        if _nem[0] is None:
-            _nem[0] = nemesis.NemesisWorld(villages, villages, player)
-            _nem[0].seed(kd)
-            return
-        if _nem[0].active is None and kd - _nem[0].dead_day >= 40:
-            _nem[0].seed(kd)
-        for _ln in _nem[0].tick(kd, now):
-            if _ln:
-                toast(_ln)
-                break
     sleep_timer = 0.0
     save_timer = 20.0
     save_dirty = False
@@ -3342,6 +4293,117 @@ def main() -> None:
     player.settled_at = None
     player.job = None
     load_now()
+    # AN AXE IN HIS HAND, ONCE THE SAVE HAS HAD ITS SAY. The starting kit is
+    # added before the save is read -- so a restored pack overwrote it and a
+    # man who loaded a game had no axe at all. Anyone with nothing to cut with
+    # gets one; a man who already has a tool keeps his own.
+    if (inventory.count_of("axe") <= 0
+            and inventory.count_of("pickaxe") <= 0):
+        inventory.add("axe", 1)
+        mark_dirty()
+
+    # ...AND THE WORLD IS A THOUSAND PEOPLE AFTER THE LOAD, TOO. The save is
+    # laid over the rosters and can only make them smaller; this is the one
+    # place that says how big the country is, whatever a file remembers.
+    try:
+        _pop2 = set_world_population(villages)
+        plog.log("WORLD", "population after the load:", _pop2)
+    except Exception as _pe:
+        plog.log("WORLD-ERROR", repr(_pe)[:200])
+
+    # THE MAN WHO ANSWERS QUESTIONS IS NOT A CASUALTY OF A SAVE LOAD.
+    # `load_now` rebuilds every town's roll up to its capacity, and he is the
+    # LAST man appended to his town -- so the cap dropped him, and he survived
+    # only as a handle: clickable, but off the roster and therefore not drawn.
+    # He is put back, with the room to hold him.
+    if _truth is not None:
+        _home_town = getattr(_truth, "village", None)
+        if _home_town is not None:
+            if _truth not in _home_town.npcs:
+                _home_town.npcs.append(_truth)
+            _home_town.capacity = max(int(getattr(_home_town, "capacity", 0)),
+                                      len(_home_town.npcs))
+        if _truth not in village_mod.PEOPLE:
+            village_mod.PEOPLE.append(_truth)
+        _TRUTH[0] = _truth
+
+    # ---- THE SERVICE: ITS CHIEF, AND HIS MEN ------------------------------
+    # Planted AFTER the save has been laid over the world and BEFORE the lanes
+    # fork, so that every process holds the same marked men. The chief is
+    # chosen here for the same reason: he must exist, with his mark, in the
+    # process that draws him and in the one that walks him.
+    #
+    # MARKS ONLY, for now: nothing reads them and nothing changes because of
+    # them. Three agents in every settlement, one in three hubs in ten, and one
+    # chief in a labourer's clothes somewhere far off.
+    # ---- NO LABS AND NO BREWHOUSES IN A SETTLEMENT -----------------------
+    # The law has said so since the pivot: the trade moved to the huts in the
+    # wild. But a SAVE remembers a man's trade, and men traded as `lab` and
+    # `brewery` before the law (the register carried 14 labs and 12 brewers in
+    # towns that no longer have a bench). A post whose station does not exist
+    # is not a post: they are made idle, and the board will offer them honest
+    # work. The huts keep their bench -- that is the whole point of a hut.
+    _retraded = 0
+    try:
+        for _v in villages.villages:
+            if getattr(_v, "is_hub", False):
+                continue
+            _v.workplaces = [wp for wp in getattr(_v, "workplaces", ())
+                             if getattr(wp, "kind", None) not in ("lab", "brewery")]
+            _v.lab = None
+            _v.brewery = None
+            for _n in getattr(_v, "npcs", ()):
+                if getattr(_n, "job", None) in ("lab", "brewery"):
+                    _n.job = None
+                    _n.workplace = None
+                    _retraded += 1
+        if _retraded:
+            plog.log("TRADES", "made idle in settlements:", _retraded,
+                     "(no lab or brewhouse by law)")
+    except Exception as _te:
+        plog.log("TRADES-ERROR", repr(_te)[:200])
+
+    try:
+        _ta, _ha = nemesis.plant(villages, hub_world, world.seed)
+        nemesis.seed_chief(villages, player, world.seed)
+        nemesis.issue()          # secret news: who is told what, and nobody else
+        nemesis.set_places(villages, hub_world)   # for naming where a crime was
+        plog.log("SERVICE", nemesis.summary(villages, hub_world),
+                 "| planted", _ta, "town /", _ha, "hub")
+        plog.log("SERVICE", nemesis.secret_summary())
+    except Exception as _se:
+        plog.log("SERVICE-ERROR", repr(_se)[:200])
+
+    # ---- WHAT THE LANES SAW ----------------------------------------------
+    # A lane notices an offence and sends the offender's id, the verb, the
+    # goods, where he stood and which of its agents were close enough to watch.
+    # The facts live HERE, in one process, so there is one answer to "who
+    # knows what" -- and no lane can invent a fact or forget one.
+    _BY_ID: dict = {}
+    try:
+        for _v in villages.villages:
+            for _n in _v.npcs:
+                _BY_ID[str(getattr(_n, "id", ""))] = _n
+        for _h in hub_world.hubs:
+            for _n in _h.npcs:
+                _BY_ID[str(getattr(_n, "id", ""))] = _n
+        for _c in getattr(hub_world, "_caravans", ()):
+            _BY_ID[str(getattr(_c.npc, "id", ""))] = _c.npc
+    except Exception:
+        pass
+
+    def _on_offences(events) -> None:
+        for _ev in events:
+            try:
+                _aid, _verb, _item, _x, _y, _wids = _ev
+                _actor = _BY_ID.get(str(_aid))
+                _ws = [_BY_ID.get(str(_i)) for _i in _wids]
+                nemesis.note_offence(_actor, _verb, _item, _x, _y,
+                                     [w for w in _ws if w is not None])
+            except Exception:
+                pass
+
+    # (the sink is attached once the lanes exist -- see below)
 
     if os.environ.get("KP_AUTO_RAID"):        # headless raid self-test hook
         _cand = villages.visible(player.x - 4000.0, player.y - 4000.0, 8000, 8000)
@@ -3364,6 +4426,9 @@ def main() -> None:
     # loop), the MEN (the NPC loop), and everything between and after them --
     # houses, settling, the draw. This is a measurement, not a feature.
     _PH = {"v": 0.0, "m": 0.0, "n": 0.0, "f": 0, "t": time.time()}
+    _IVIS = [None, None]        # the room's light mask, and what it was made for
+    _HF = [0, time.perf_counter()]      # indoor frame counter, for the log
+    prison_cd = 0.0                     # the barn's doorway, just after leaving
     _watched_last = None      # the man being watched, so a change can rebuild
 
     # ---- THE LANES: the world cut so more than one core can hold it -------
@@ -3419,9 +4484,14 @@ def main() -> None:
         always be a way out, and this is it.
         """
         nonlocal inventory_open, trade_open, board_open, chest_open
+        nonlocal worker_panel_open, stall_open, body_open, folder_open
         nonlocal smith_open, workshop_open, confirm_open, map_open
         nonlocal pause_open, build_menu_open, placing
         inventory_open = trade_open = board_open = chest_open = False
+        worker_panel_open = False
+        stall_open = False
+        body_open = False
+        folder_open = False
         smith_open = workshop_open = confirm_open = map_open = False
         pause_open = build_menu_open = False
         placing = None
@@ -3493,14 +4563,116 @@ def main() -> None:
         for _v in villages.villages:
             if getattr(_v, "is_hub", False) or getattr(_v, "patrol", None):
                 continue
-            _v.patrol = make_village_patrol(_v, 2)
+            _v.patrol = make_village_patrol(_v, 4)
             enemies.extend(_v.patrol)
             _v.patrol_timer = 30.0
         print("gate guards raised for %d settlements" % len(villages.villages))
     except Exception as _ge:
         print("gate guard pass failed: %r" % (_ge,))
 
+    # ---- THE LANES: THE FRAME, THE HUBS, THE SETTLEMENTS -----------------
+    # Two forked processes (see workers.py): process 1 owns the hubs, their
+    # people and the free traders; process 2 owns the settlements, their books
+    # and their people. THIS process keeps the player, the soldiers, the
+    # bullets, the terrain and every pixel. Falls back to stepping everything
+    # here if the fork cannot be made.
+    _WORK = workers.start(world, villages, hub_world, player)
+    _W_ON = _WORK.ok()
+    # WHAT THE LANES SAW, and how often agents pass it on.
+    _posted: dict = {}
+    _walk_log: dict = {}
+    _WORK.offence_sink = _on_offences
+    _WORK.stall_sink = _on_stall_sales
+
+    # A SEARCH THAT FOUND SOMETHING: the agents of THAT settlement know.
+    _SETTLE_TOWNS = [v for v in villages.villages
+                     if not getattr(v, "is_hub", False)]
+
+    def _on_caught(events) -> None:
+        for _ev in events:
+            try:
+                _aid, _ti, _units = _ev
+                _actor = _BY_ID.get(str(_aid))
+                _ti = int(_ti)
+                _town = _SETTLE_TOWNS[_ti] if 0 <= _ti < len(_SETTLE_TOWNS) else None
+                nemesis.note_caught(_actor, _town, int(_units))
+            except Exception:
+                pass
+
+    _WORK.caught_sink = _on_caught
+    _tell_timer = 0.0
+
+    class _BoardAPI:
+        """THE NOTICE BOARD, ACROSS THE FENCE.
+
+        The board is drawn in the frame; the town that answers it is simulated
+        in another process. So a hire and a sale are REQUESTS: the town does
+        them, the frame is told what happened and moves the player's own pack
+        and purse. Nothing is faked and nothing goes stale -- the posts it
+        offers and the prices it pays arrive with the tick (see _WORK.watch).
+        """
+
+        def hire(self, town, kind, cb) -> None:
+            def done(res):
+                if res and res.get("hired"):
+                    player.job = res.get("job") or player.job
+                    player.wage = int(res.get("wage") or 0)
+                    player.farm_plot = res.get("farm_plot")
+                    if res.get("nation") is not None:
+                        player.nation = res["nation"]
+                    player.settled_at = town
+                    player.village = town
+                    player._pay_day = -1
+                cb(res)
+
+            _WORK.hire(town, kind, done)
+
+        def sell(self, town, offers, cb) -> None:
+            def done(res):
+                if res and res.get("sold"):
+                    for item, n in (res.get("taken") or {}).items():
+                        inventory.consume(item, int(n))
+                        nemesis.note_offence_seen(player, "sold", item)
+                    if res.get("coin"):
+                        inventory.add("coin", int(res["coin"]))
+                cb(res)
+
+            _WORK.sell(town, offers, done)
+
+    _BOARD_API = _BoardAPI()
+
+    # ---- THE HANG WATCHDOG ------------------------------------------------
+    # A freeze leaves no traceback: the process is alive and nothing is
+    # written. This thread watches a heartbeat the frame sets, and when the
+    # frame has not moved for six seconds it dumps EVERY thread's stack into
+    # saves/hang.log -- so a freeze names its own line instead of costing an
+    # evening of guessing.
+    _HEART = [time.time()]
+
+    def _watchdog() -> None:
+        import faulthandler
+        while True:
+            time.sleep(2.0)
+            if time.time() - _HEART[0] < 6.0:
+                continue
+            try:
+                path_ = os.path.join(persist.DIR, "hang.log")
+                os.makedirs(persist.DIR, exist_ok=True)
+                with open(path_, "a") as fh:
+                    fh.write("\n==== HANG  %.0f  (no frame for %.1fs) ====\n"
+                             % (time.time(), time.time() - _HEART[0]))
+                    faulthandler.dump_traceback(file=fh)
+            except Exception:
+                pass
+            _HEART[0] = time.time()
+
+    try:
+        threading.Thread(target=_watchdog, daemon=True).start()
+    except Exception:
+        pass
+
     while running:
+        _HEART[0] = time.time()
         _boot_t0 = pygame.time.get_ticks()
         # THE FLAG COMES DOWN WHEN A FRAME WAS QUICK. Measure the PREVIOUS one:
         # at the top of a frame you cannot know how long this one will take.
@@ -3524,6 +4696,22 @@ def main() -> None:
         vw, vh = screen.get_size()
         mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
         wmouse_x, wmouse_y = mouse_x / ZOOM, mouse_y / ZOOM  # world space
+
+        # THE LANES HAVE FINISHED A TICK: take their state before anything
+        # reads a man or draws one. Never blocks -- a lane that is late is one
+        # tick of latency, not a stall.
+        dialogue.set_now(now)
+        try:
+            import trade as _trade_mod
+            _trade_mod.set_now(now)
+        except Exception:
+            pass
+        _WORK.apply(world, combat)
+        if (_PH["f"] & 15) == 0:
+            _W_ON = _WORK.ok()
+            if _WORK.enabled and not _W_ON:
+                _WORK.stop()          # one lane died: step both here again
+                _WORK.enabled = False
 
         _had_event = False
         for event in pygame.event.get():
@@ -3644,6 +4832,36 @@ def main() -> None:
                     pygame.mouse.set_visible(False)
                 else:
                     panel.handle_event(event)
+            elif stall_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                                                                  pygame.K_ESCAPE):
+                    stall_open = False
+                    mark_dirty()
+                    save_now()
+                    pygame.mouse.set_visible(False)
+                else:
+                    stall_panel.handle_event(event)
+            elif folder_open:
+                if folder_panel.handle_event(event):
+                    folder_open = False
+                    pygame.mouse.set_visible(False)
+            elif body_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                                                                  pygame.K_ESCAPE):
+                    body_panel.close()
+                    body_open = False
+                    mark_dirty()
+                    pygame.mouse.set_visible(False)
+                else:
+                    body_panel.handle_event(event)
+            elif worker_panel_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                                                                  pygame.K_ESCAPE):
+                    worker_panel.close()
+                    worker_panel_open = False
+                    pygame.mouse.set_visible(False)
+                else:
+                    worker_panel.handle_event(event)
             elif chest_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
@@ -3753,21 +4971,49 @@ def main() -> None:
                     fence_horizontal = not fence_horizontal
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
                     placing = None
+                    plot_start[0] = None
                     pygame.mouse.set_visible(False)
+                elif (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                      and placing == "plot"):
+                    plot_start[0] = placement_pos()      # one corner
+                elif (event.type == pygame.MOUSEBUTTONUP and event.button == 1
+                      and placing == "plot"):
+                    _commit_plot()                        # ...and the other
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     try_place()
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_v:
-                _vt = nearest_voter()
-                if _vt is None:
-                    toast("No one here is selling a vote")
-                else:
-                    buy_vote(_vt)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_e:
+                plog.log("E-KEY", "board", near_board() is not None,
+                         "stall", near_stall() is not None,
+                         "chest", near_chest() is not None,
+                         "work", getattr(near_workplace(), "kind", None),
+                         "house", inside_house is not None,
+                         "at", int(player.x), int(player.y))
+                if (near_workplace() is not None
+                      and getattr(near_workplace(), "kind", None) in ("mine", "prison")):
+                    plog.log("ENTER-TRY", getattr(near_workplace(), "kind", "?"),
+                             "door", getattr(near_workplace(), "door", None),
+                             "player", int(player.x), int(player.y))
+                    _wp = near_workplace()
+                    if getattr(_wp, "room", None) is None:
+                        _wp.room = mine.MineRoom(world.seed ^ id(_wp))
+                    mine_out = (player.x, player.y)
+                    inside_mine = _wp
+                    player._mine_latch = True      # let go of E first
+                    player.x, player.y = inside_mine.room.W / 2.0, \
+                        inside_mine.room.H - 70.0
+                    cam_x = player.x - vw / 2.0
+                    cam_y = player.y - vh / 2.0
+                    pygame.mouse.set_visible(False)
                 _bv = near_board()
                 if _bv is not None:
                     board_village = _bv
                     board_open = True
                     board_panel.scroll = 0
+                    pygame.mouse.set_visible(True)
+                elif near_stall() is not None:
+                    # THE COUNTER IS A CHEST, AND WHATEVER IS IN IT IS FOR SALE.
+                    stall_open = True
+                    stall_panel = MarketPanel(inventory, near_stall())
                     pygame.mouse.set_visible(True)
                 elif near_chest():
                     chest_open = True
@@ -3781,19 +5027,6 @@ def main() -> None:
                     use_barrel()              # fill it, or draw what it made
                 elif near_lab():
                     craft_at_table()          # one article a press, and you learn
-                elif (near_workplace() is not None
-                      and near_workplace().kind == "mine"):
-                    _wp = near_workplace()
-                    if getattr(_wp, "room", None) is None:
-                        _wp.room = mine.MineRoom(world.seed ^ id(_wp))
-                    mine_out = (player.x, player.y)
-                    inside_mine = _wp
-                    player._mine_latch = True      # let go of E first
-                    player.x, player.y = inside_mine.room.W / 2.0, \
-                        inside_mine.room.H - 70.0
-                    cam_x = player.x - vw / 2.0
-                    cam_y = player.y - vh / 2.0
-                    pygame.mouse.set_visible(False)
                 elif near_workplace() is not None:
                     smith_shop = near_workplace()
                     smith_open = True
@@ -3827,6 +5060,25 @@ def main() -> None:
                         toast("Reloading\u2026")
                     else:
                         toast("No ammo to reload with")
+            elif (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
+                  and not (inventory_open or trade_open or board_open
+                           or chest_open or stall_open or worker_panel_open
+                           or workshop_open or smith_open or confirm_open
+                           or map_open or pause_open or build_menu_open
+                           or dialogue_panel.open_ or placing is not None)):
+                # SPACE: LUNGE. A quarter of the wind, in the way he is holding
+                # -- a step he cannot take twice in a breath.
+                if player.lunge(pygame.key.get_pressed()):
+                    try:
+                        _lx, _ly = player.lunge_dir
+                        combat.spawn_impact(player.x - _lx * 18.0,
+                                            player.y - _ly * 18.0,
+                                            (206, 196, 168))
+                    except Exception:
+                        pass
+                else:
+                    toast("No wind for a lunge" if player.lunge_cd <= 0.0
+                          else "Not yet")
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_m
                   and not inventory_open and not trade_open and not board_open):
                 # FOR EVERYBODY. The chart was test-mode only, which meant the
@@ -3837,9 +5089,14 @@ def main() -> None:
             elif (dialogue_panel.open_
                   and ((event.type == pygame.KEYDOWN
                         and event.key in (pygame.K_1, pygame.K_2, pygame.K_3,
+                                          pygame.K_4, pygame.K_5, pygame.K_6,
+                                          pygame.K_7, pygame.K_8, pygame.K_9,
                                           pygame.K_KP1, pygame.K_KP2,
-                                          pygame.K_KP3, pygame.K_ESCAPE,
-                                          pygame.K_q))
+                                          pygame.K_KP3, pygame.K_KP4,
+                                          pygame.K_KP5, pygame.K_KP6,
+                                          pygame.K_KP7, pygame.K_KP8,
+                                          pygame.K_KP9,
+                                          pygame.K_ESCAPE, pygame.K_q))
                        or (event.type == pygame.MOUSEBUTTONDOWN
                            and event.button == 1
                            and dialogue_panel.hit(event.pos)))):
@@ -3851,18 +5108,28 @@ def main() -> None:
                 _d = dialogue_panel.handle_event(event)
                 if _d == "close":
                     pygame.mouse.set_visible(False)
+                elif _d == "pack":
+                    _wn = dialogue_panel.npc
+                    if _wn is not None and getattr(_wn, "pack", None) is not None:
+                        worker_panel = ChestPanel(
+                            inventory, work.bag(_wn),
+                            top_rows=4, top_label=getattr(_wn, "name", "PACK"))
+                        worker_panel_open = True
+                        pygame.mouse.set_visible(True)
                 elif _d == "trade":
                     _dn = dialogue_panel.npc
                     dialogue_panel.close()
                     pygame.mouse.set_visible(False)
                     if _dn is not None:
-                        open_trade(_dn)
+                        open_trade_menu(_dn)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 # ESC USED TO PAUSE UNCONDITIONALLY, even with a menu already
                 # open -- so a panel that would not close left a man with no
                 # way out at all. ESC now closes what is open, and only opens
                 # the pause menu when nothing is.
                 if (inventory_open or trade_open or board_open or chest_open
+                        or worker_panel_open or stall_open or body_open
+                        or folder_open
                         or smith_open or workshop_open or confirm_open
                         or map_open or build_menu_open or placing is not None):
                     close_modals()
@@ -3897,9 +5164,31 @@ def main() -> None:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     _held = inventory.selected_stack()
                     _held_id = _held.defn.id if _held else None
+                    if _held_id == "secret_folder":
+                        # A DEAD AGENT'S MAIL, OPENED BY A CLICK IN THE HAND.
+                        _pay = getattr(_held, "payload", None)
+                        if _pay:
+                            folder_panel = FolderPanel(_pay)
+                            folder_open = True
+                            pygame.mouse.set_visible(True)
+                            plog.log("FOLDER-OPEN", _pay)
+                            break
+                    # A BODY IS LOOTED, NOT SWUNG AT. Whatever is in his hand
+                    # -- axe included -- a click on a corpse opens the corpse.
+                    _bw = (cam_x + event.pos[0] / ZOOM,
+                           cam_y + event.pos[1] / ZOOM)
+                    _body = corpse_mod.nearest(_bw[0], _bw[1])
+                    if _body is not None:
+                        body_panel = ChestPanel(
+                            inventory, _body.pack,
+                            top_label=getattr(_body, "name", "a body"))
+                        body_open = True
+                        pygame.mouse.set_visible(True)
+                        plog.log("BODY-OPEN", getattr(_body, "name", "?"))
+                        break
                     # A WEAPON IS AN ATTACK, NOT A CONVERSATION.
                     if _held_id not in ("axe", "pickaxe", "rifle", "shotgun"):
-                        if click_a_man():
+                        if click_a_man(event.pos):
                             break
                 consumed = hotbar.handle_event(event)
                 if (not consumed and event.type == pygame.MOUSEBUTTONDOWN
@@ -3955,11 +5244,16 @@ def main() -> None:
         else:
             _blk = 0.0
 
-        if (inside_house is not None and not game_over and not inventory_open
-                and not build_menu_open and not chest_open and not trade_open
-                and not workshop_open and not confirm_open and not pause_open
-                and not map_open and placing is None):
+        if (inside_house is not None and not game_over and not pause_open
+                and not map_open and not confirm_open
+                and not build_menu_open and placing is None):
             _branch = 'house'
+            _HF[0] += 1
+            _now_hf = time.perf_counter()
+            if _now_hf - _HF[1] >= 2.0:
+                plog.log("HOUSE-FPS", "%.1f fps indoors"
+                         % (_HF[0] / max(1e-6, _now_hf - _HF[1])))
+                _HF[0], _HF[1] = 0, _now_hf
             keys = pygame.key.get_pressed()
             if board_open or smith_open:                       # reading the board: stand still
                 keys = _NO_KEYS
@@ -3994,7 +5288,6 @@ def main() -> None:
             else:
                 # Keep the outside world alive, so the window view is live.
                 now += dt
-                tick_nemesis(now)
                 # LOCKED ON: the player IS the camera, and he stands where the
                 # watched man stands. Every existing line that reads player.x
                 # then follows the target -- the camera, the visible villages,
@@ -4010,22 +5303,25 @@ def main() -> None:
                 creatures_set_time(now)
                 wildcrop.set_time(now)
                 wildcrop.set_world(world)
+                # A ROOM IS NOT THE WORLD. Standing in a house used to re-cut
+                # the visible villages, re-collect every collider and step the
+                # whole neighbourhood every frame -- exactly what a mine does
+                # not do, which is why a mine never stutters and a doorway did.
+                # The world is stepped in its own lanes; from indoors it is
+                # only the clock that has to keep running.
                 night = night_factor() > 0.38
-                wx = house.x - vw / 2.0
-                wy = house.y - vh / 2.0
-                sim_villages = villages.visible(wx, wy, vw, vh)
-                sim_colliders = [vhouse.rect for village in sim_villages
-                                 for vhouse in village.houses]
-                sim_colliders += [tree.trunk_rect
-                                  for tree in trees.visible(wx, wy, vw, vh)
-                                  if not tree.felled]
+                sim_villages = []
+                sim_colliders = []
                 world_accum += dt
                 world_tick = world_accum >= WORLD_STEP
                 if world_tick:
                     world_dt = world_accum
                     world_accum = 0.0
+                    if _W_ON:
+                        _WORK.tick(now, world_dt, day_phase(), night, player,
+                                   enemies)
                 for village in sim_villages:
-                    if not world_tick:
+                    if not world_tick or _W_ON:
                         break
                     # THE BUBBLE, NOT THE VIEW. `visible()` is a DRAWING cull --
                 # a fence is big, so it returns every town whose wall is
@@ -4062,14 +5358,22 @@ def main() -> None:
                             enemy.x, enemy.y, enemy.radius, sim_colliders)
                 combat.update(dt)
                 blood.update(dt)
-                ground.update(4, wx, wy, vw, vh)      # worker builds them
-        elif (not game_over and not inventory_open and not build_menu_open
+                # the ground worker still keeps the house's own chunks ready
+                ground.update(4, house.x - vw / 2.0, house.y - vh / 2.0, vw, vh)
+        elif (inside_house is None and inside_mine is None
+              and not game_over and not inventory_open and not build_menu_open
               and not chest_open and not trade_open and not workshop_open
               and not confirm_open and not pause_open and not map_open
               and placing is None):
             _branch = 'world'
+            if abs(player.x) < 3000.0 and abs(player.y) < 3000.0:
+                # He is standing on room coordinates in the open world.
+                _wx, _wy = getattr(player, "world_xy", (0.0, 0.0))
+                if _wx or _wy:
+                    player.x, player.y = _wx, _wy
+                    plog.log("WORLD-POS-FIX", "room coordinates in the world;"
+                             " put back at", int(_wx), int(_wy))
             now += dt
-            tick_nemesis(now)
             creatures_set_time(now)
             wildcrop.set_time(now)
             wildcrop.set_world(world)
@@ -4098,7 +5402,60 @@ def main() -> None:
                          "dt", round(dt, 3), "board", board_open,
                          "dead", player.dead,
                          "hp", int(player.health))
+            if getattr(player, "aboard", False):
+                _tr = _TEST_TRAIN[0]
+                if _tr is not None:
+                    player.x, player.y = _tr.x, _tr.y
+                    cam_x = player.x - vw / 2.0
+                    cam_y = player.y - vh / 2.0
+                    try:
+                        import gulag as _gl_end
+                        if ((_tr.x - _gl_end.gate_point()[0]) ** 2
+                                + (_tr.y - _gl_end.gate_point()[1]) ** 2) < 600.0 ** 2:
+                            # THE END OF THE LINE IS THE CAMP
+                            _detain_release = True
+                            try:
+                                import detain as _dr
+                                _dr.release_kit(player, None)
+                                plog.log("DROP-OFF", "the player is put down at the camp",
+                                         "with the other", len(getattr(_tr, "aboard", []) or []),
+                                         "prisoners")
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+            if getattr(player, "sleep_t", 0.0) > 0.0:
+                player.sleep_t = max(0.0, player.sleep_t - dt)
+                keys = _NO_KEYS
             player.update(dt, keys, aim, 1.0 - 0.25 * foliage)
+            if getattr(player, "aboard", False):
+                _tr = _TEST_TRAIN[0]
+                if _tr is not None:
+                    player.x, player.y = _tr.x, _tr.y
+                    cam_x = player.x - vw / 2.0
+                    cam_y = player.y - vh / 2.0
+                    try:
+                        import gulag as _gl_end
+                        if ((_tr.x - _gl_end.gate_point()[0]) ** 2
+                                + (_tr.y - _gl_end.gate_point()[1]) ** 2) < 600.0 ** 2:
+                            # THE END OF THE LINE IS THE CAMP
+                            _detain_release = True
+                            try:
+                                import detain as _dr
+                                _dr.release_kit(player, None)
+                                plog.log("DROP-OFF", "the player is put down at the camp",
+                                         "with the other", len(getattr(_tr, "aboard", []) or []),
+                                         "prisoners")
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+            if getattr(player, "sleep_t", 0.0) > 0.0:
+                try:
+                    _z = font.render("Zzz", True, (232, 232, 240))
+                    screen.blit(_z, (vw // 2 + 14, vh // 2 - 44))
+                except Exception:
+                    pass
             if _chain is not None:
                 try:
                     if _chain["hub"] is None:
@@ -4295,19 +5652,25 @@ def main() -> None:
                     village.guards = guards
                     enemies.extend(guards)
                 # ... plus a 3-soldier patrol of the whole territory border.
+                # HIS YARD IS NOT A GARRISON. No patrol, no roster, no duty:
+                # the whole block below is the town's standing watch, and a
+                # hub he built has no watch. (This is what crashed the game on
+                # the first plot: `patrol_timer` on a PlayerHub.)
                 squad = getattr(village, "patrol", None)
+                if getattr(village, "is_player_hub", False):
+                    continue
                 if squad is None:
                     if math.hypot(village.x - player.x,
                                   village.y - player.y) < 30000.0:
                         village.patrol = make_village_patrol(
-                            village, 1 if getattr(village, "is_hub", False) else 2)
+                            village, 2 if getattr(village, "is_hub", False) else 4)
                         village.patrol_timer = 30.0
                         enemies.extend(village.patrol)
                 elif not any(s.alive for s in squad):
                     village.patrol_timer -= dt
                     if village.patrol_timer <= 0.0:      # squad wiped: respawn
                         village.patrol = make_village_patrol(
-                            village, 1 if getattr(village, "is_hub", False) else 2)
+                            village, 2 if getattr(village, "is_hub", False) else 4)
                         village.patrol_timer = 30.0
                         enemies.extend(village.patrol)
                 village._assign_duty_bodies()
@@ -4317,21 +5680,30 @@ def main() -> None:
             house_colliders += [w for village in visible_villages
                                 for w in village.fence_walls]
             house_colliders += built_fences
+            house_colliders += camp_walls
             house_colliders += [v.board for v in visible_villages]
             house_colliders += [wp.rect for v in visible_villages
                                 for wp in v.workplaces]
+            house_colliders += [wp.rect for wp in placed_work]
             house_colliders += [c.rect for c in view_ore]
             colliders = house_colliders + [tree.trunk_rect for tree in view_trees
                                            if not tree.felled]
-            # THE HUBS, EVERY FRAME. This was inside the visible-village loop,
-            # so a hub stepped only when a TOWN happened to be on screen -- out
-            # in the wild it never ran at all, and its people starved between
-            # visits. A settlement's day does not depend on being watched.
-            try:
-                hub_world.update(world_dt, now, day_phase(), combat,
-                                 nearest_hostile)
-            except Exception:
-                pass
+            # THE CARTS, EVERY FRAME AND AT THE FRAME'S OWN PACE. A cart is a
+            # vehicle: at 240 px/s it moves four pixels a frame, which is
+            # smooth; on the 20 Hz world tick it would move twelve at a time --
+            # the "jumping" the throttled build was reverted for. What made it
+            # expensive was never the clock, it was the empty-shelf scan (see
+            # caravans.Caravan), and that is gated by a retry clock now.
+            #
+            # AND `dt`, NOT `world_dt`. `world_dt` is only ever assigned on the
+            # world tick, so every frame was handed the same 0.05 s step: the
+            # carts walked at 720 px/s instead of SPEED = 240. See Hubs.update
+            # for the hubs themselves, which now keep the world's clock.
+            if not _W_ON:
+                try:
+                    hub_world.drive_carts(dt, now)
+                except Exception:
+                    pass
             grid_timer -= dt
             if grid is None or grid_timer <= 0.0:
                 grid_timer = 0.12
@@ -4344,9 +5716,18 @@ def main() -> None:
                     grid.add(village.board)
                     for wp in village.workplaces:
                         grid.add(wp.rect)
+                for wp in placed_work:
+                    grid.add(wp.rect)
                 for house in built_houses:
                     grid.add(house.rect)
                 for rect in built_fences:
+                    grid.add(rect)
+                # THE CAMP WALL, IN THE GRID THE PLAYER IS PUSHED OUT OF.
+                # It was in the collider *list* and not in this grid, and the
+                # player's movement is resolved against the grid -- so the wall
+                # was drawn, stood in the list, and could be walked straight
+                # through like paint on the floor.
+                for rect in camp_walls:
                     grid.add(rect)
                 for tree in view_trees:
                     if not tree.felled:
@@ -4359,6 +5740,7 @@ def main() -> None:
             solids += [(w, (140, 104, 60)) for village in visible_villages
                        for w in village.fence_walls]
             solids += [(rect, (140, 104, 60)) for rect in built_fences]
+            solids += [(rect, (140, 104, 60)) for rect in camp_walls]
             # Fence walls a bullet may pass over when fired from right beside them.
             fence_ids = {id(w) for village in visible_villages
                          for w in village.fence_walls}
@@ -4381,6 +5763,7 @@ def main() -> None:
             solids += [(v.board, (120, 86, 52)) for v in visible_villages]
             solids += [(wp.rect, (96, 92, 88)) for v in visible_villages
                        for wp in v.workplaces]
+            solids += [(wp.rect, (96, 92, 88)) for wp in placed_work]
             if not player.dead:
                 player.x, player.y = resolve_circle_rects(
                     player.x, player.y, player.radius,
@@ -4401,9 +5784,6 @@ def main() -> None:
             for rabbit in rabbits:
                 rabbit.update(dt, None if player.dead else player, grid)
             enemy_grid.build([e for e in enemies if e.alive])
-            soldier_grid.build([e for e in enemies
-                                if e.alive
-                                and getattr(e, "kind", "") == "soldier"])
             # THE BEASTS, PICKED OUT ONCE A FRAME. _predator_near() used to walk
             # the whole enemy list -- every wolf AND every soldier -- per man,
             # per tick, to find one wolf inside 420 px. A plain list, not a
@@ -4429,37 +5809,15 @@ def main() -> None:
             if _TRUTH[0] is not None and _TRUTH[0] not in _folk_list:
                 _folk_list.append(_TRUTH[0])    # shootable, healable, seen
             folk_grid.build(_folk_list)
-            # THE WORLD KNOWS YOUR FACE. Once word of a murderer has reached a
-            # man -- by refugee, by trader, by the army at his gate -- he does
-            # one of two things when he lays eyes on him, and nothing else:
-            # with a gun or an axe he comes for you, and without one he runs.
-            # This is deliberately unsubtle. A world that has been told does not
-            # need to be provoked again by every fresh crime.
-            for _n in list(folk_grid.near(player.x, player.y, 760.0)) + list(
-                    village_mod.TRAVELLERS):
-                if not getattr(_n, "alive", False):
-                    continue
-                if village_mod.PLAYER_ID not in getattr(_n, "knows", ()):
-                    continue
-                if (village_mod.story_cold(village_mod.PLAYER_ID, now)
-                        and not getattr(_n, "witness_to", None)):
-                    continue          # a dead rumour -- unless he saw it himself
-                if math.hypot(_n.x - player.x, _n.y - player.y) > 760.0:
-                    continue
-                if _n.weapon is None:
-                    _n.weapon = _n.arm()
-                if _n.weapon:
-                    plog.log("KNOWS-AGGRO", getattr(_n, "job", "?"),
-                             getattr(_n, "name", "?"), "nation",
-                             getattr(_n, "nation", None),
-                             "dist", int(math.hypot(_n.x - player.x, _n.y - player.y)),
-                             "weapon", getattr(_n.weapon, "kind", _n.weapon))
-                    _n.aggro = True
-                    _n.panic = 0.0
-                else:
-                    _n.panic = max(_n.panic, 6.0)
-                    _n.aggro = False
-
+            # THE WORLD KNOWS YOUR FACE -- AND LEARNS IT ONCE.
+            #
+            # This pass used to walk every man within 760 px, EVERY FRAME, set
+            # `aggro = True` on each of them again, and write a log line for
+            # each: 88,283 lines in one session (89,394 in the whole file), 350
+            # file writes a second, and a man who could never calm down while
+            # the player was in sight. The learning lives in the lane now
+            # (`threat_of`): a man who knows the face adds him to his own list
+            # of feuds ONCE, and the list is what he fights.
             # THE LIST THE WORLD WALKS, assembled HERE, at the loop, out of
             # the armies themselves. An army that is merely *meant* to be in
             # some shared roster is an army that does not shoot and is not
@@ -4618,6 +5976,26 @@ def main() -> None:
             if world_tick:
                 world_dt = world_accum
                 world_accum = 0.0
+                # THE HUBS, ON THE WORLD TICK -- the same clock, and the same
+                # step, as every man in every town (see the _LANE_PEOPLE loop
+                # below). `hub_world.update` used to be called EVERY FRAME
+                # with `world_dt`, a value only this branch ever assigns: so
+                # twenty-five hubs, three men each and a whole ledger ran on
+                # every rendered frame with a 0.05 s step -- 2 to 3 times their
+                # own speed, and the largest single block left in the frame
+                # (12.3 ms/f profiled). A settlement's day does not depend on
+                # being watched; it depends on the world's clock.
+                if _W_ON:
+                    # THE TWO LANES TAKE THE TICK: the hubs to process 1, the
+                    # settlements to process 2 (workers.tick hands it over).
+                    _WORK.tick(now, world_dt, day_phase(), night, player,
+                               enemies)
+                else:
+                    try:
+                        hub_world.update(world_dt, now, day_phase(), combat,
+                                         nearest_hostile)
+                    except Exception:
+                        pass
                 # The crown's wars. A capital whose purse is deep enough calls
                 # up its nation's idle men once a day; the column then marches,
                 # fights, and either takes the village or comes home.
@@ -4631,63 +6009,14 @@ def main() -> None:
                 # list the world walks, every tick, no matter which path put him
                 # there. Trusting a single extend() at muster time meant the
                 # whole war could sit in a field and never be simulated at all.
-                _arr, _die = village_mod.refugees_on_the_road(now, enemies)
+                _arr, _die = ((0, 0) if _W_ON else
+                              village_mod.refugees_on_the_road(now, enemies))
 
                 # THE TEST OF STRENGTHS. The King and the mayors fight for the
                 # crown in the capital, unarmed, in front of the town. One at a
                 # time, on the day, and the winner wears it.
-                # MAYOR ELECTIONS ARE TOMORROW. A notice, the day before, in
-                # the place a man already looks for "too far away" -- a village
-                # keeps its own calendar and there is no other way to know.
-                if int(now / economy.DAY_LENGTH) != getattr(player, "_elec_warn", -2):
-                    player._elec_warn = int(now / economy.DAY_LENGTH)
-                    for _v in villages.visible(player.x - 640.0, player.y - 640.0,
-                                               1280, 1280):
-                        if economy.election_tomorrow(_v, int(now / economy.DAY_LENGTH)):
-                            toast("%s votes for a mayor TOMORROW" % _v.name)
-                            break
                 hear_news()                     # the news arrives where you are
                 tick_news(dt)
-                _kday = int(now / economy.DAY_LENGTH)
-                _cap = next((v for v in villages.villages
-                             if getattr(v, "is_capital", False)
-                             and (player.nation is None
-                                  or getattr(v, "nation", None) == player.nation)),
-                            None)
-                if _tourney[0] is not None:
-                    _tourney[0].tick(world_dt, combat)
-                    if _tourney[0].done:
-                        player.duel_tournament = None
-                        _tourney[0] = None
-                if _cap is not None and _tourney[1] != _kday:
-                    # THE CROWN'S CALENDAR -- every KING_ELECTION_DAYS, and a
-                    # test game holds one at once so it can be watched.
-                    _due = (_kday - _cap.code) % economy.KING_ELECTION_DAYS == 0
-                    # `_tourney[1] < 0`, not `not _tourney[1]`: the day
-                    # counter is -1 before the first one, and `not -1` is
-                    # False -- so the test hook was dead the moment I stopped
-                    # using a boolean for a day number.
-                    if _due or (test_mode and _tourney[1] < 0):
-                        _cands = _cap.candidates_for_crown()
-                        # A MAYOR FIGHTS FOR THE CROWN. He is not an NPC, so he
-                        # is put in the field by hand and marked as the man the
-                        # tournament must not drive -- his own hands do that.
-                        _me_in = getattr(player, "job", None) == "mayor"
-                        if _me_in:
-                            _cands.append(player)
-                        if len(_cands) >= 2:
-                            _tourney[1] = _kday
-                            _tourney[0] = tournament.Tournament(_cap, _cands)
-                            _tourney[0].player = player if _me_in else None
-                # THE DAY BEFORE. A mayor is told, because a mayor has a stake:
-                # the crown is fought for tomorrow and he may be in the ring.
-                if (getattr(player, "job", None) == "mayor" and _cap is not None
-                        and getattr(player, "_k_warn", -2) != _kday):
-                    player._k_warn = _kday
-                    if (_kday + 1 - _cap.code) % economy.KING_ELECTION_DAYS == 0:
-                        toast("The tournament for the next king will commence "
-                              "tomorrow, in the capital")
-
 
                 # TAXES -- AND ONLY THE PLAYER PAYS THEM THIS WAY. The
                 # villagers have their own books (economy.tax_day) and are
@@ -4821,7 +6150,7 @@ def main() -> None:
             # This read `visible_villages + sieges`, and the comment above it
             # admitted the consequence out loud: "a village that nobody is
             # looking at does not tick." So wages, tax, the granary, the
-            # elections, the daily census and the births ran only in the three
+            # the daily census and the births ran only in the three
             # or four towns inside the camera -- while EVERY MAN in the world
             # ticked (see the PEOPLE loop below). The people were alive and
             # their towns were frozen: prices never moved, nobody was paid,
@@ -4840,7 +6169,7 @@ def main() -> None:
             # loan path has to be fixed first or the world starves of it.
             _pt0 = time.perf_counter()
             for village in _LANE_TOWNS:
-                if not world_tick:
+                if not world_tick or _W_ON:
                     break
                 if village in sieges:
                     world.enemies = enemies
@@ -4990,11 +6319,16 @@ def main() -> None:
                                 and npc.nation == player.nation)
                 if on_screen:
                     active.append(npc)
-            resolve_circle_pairs(active, NPC_SPACING)
-            for npc in active:
-                npc.x, npc.y = resolve_circle_rects(
-                    npc.x, npc.y, npc.radius,
-                    grid.near(npc.x, npc.y, npc.radius + 6.0))
+            if _W_ON:
+                # A LANE OWNS THE MEN'S POSITIONS. Resolving their collisions
+                # here as well would be two writers to one fact.
+                active = []
+            else:
+                resolve_circle_pairs(active, NPC_SPACING)
+                for npc in active:
+                    npc.x, npc.y = resolve_circle_rects(
+                        npc.x, npc.y, npc.radius,
+                        grid.near(npc.x, npc.y, npc.radius + 6.0))
             for enemy in enemies:
                 if enemy.alive:
                     resolve_circle_out_of(enemy, active)
@@ -5061,11 +6395,35 @@ def main() -> None:
                                      "aggro", getattr(_sh, "aggro", None),
                                      "dist", int(math.hypot(_sh.x - player.x,
                                                             _sh.y - player.y)))
-                        player.take_damage(bullet.damage)
+                        if getattr(bullet, "dart", False):
+                            # AT ZERO, NOT BEFORE: he takes the damage, and
+                            # only a hit that would have killed him puts him
+                            # down instead.
+                            _left = player.health - bullet.damage
+                            player.take_damage(bullet.damage)
+                            if _left <= 0:
+                                player.health = 1
+                                player.dead = False
+                                player.tranq()
+                        else:
+                            player.take_damage(bullet.damage)
                         blood.spawn(player.x, player.y, 7, 14.0)
                         bullet.remove = True
                         break
-                    died = obj.take_damage(bullet.damage)
+                    if (bullet.shooter is player
+                            and (getattr(obj, "is_militia", False)
+                                 or getattr(obj, "militia", False))):
+                        try:
+                            import detain as _db
+                            _db.militia_attacked(player, obj, list(enemies),
+                                                 list(village_mod.PEOPLE))
+                        except Exception:
+                            pass
+                    _dart = (getattr(bullet, "dart", False)
+                             and getattr(obj, "kind", "") not in ("wolf", "rabbit"))
+                    died = obj.take_damage(bullet.damage, tranq=_dart)
+                    if getattr(obj, "kind", "") == "villager":
+                        _WORK.damage(obj, bullet.damage)
                     if died:
                         _loot(bullet.shooter, obj)
                     blood.spawn(obj.x, obj.y,
@@ -5167,7 +6525,7 @@ def main() -> None:
                 _pt2 = time.perf_counter()
                 _PH["m"] += _pt2 - _pt1
                 _phase = day_phase()
-                for _n in _LANE_PEOPLE:
+                for _n in (_LANE_PEOPLE if not _W_ON else ()):
                     if not _n.alive:
                         _dead_here = True
                         continue
@@ -5217,10 +6575,243 @@ def main() -> None:
                 for _h in list(village_mod.HOUSES):
                     _h.tick(1.0)
 
+            # AGENTS TELL EACH OTHER. Twice a second is enough for a meeting
+            # in a square; the test is a distance, not a line of sight.
+            _tell_timer -= dt
+            if _tell_timer <= 0.0:
+                _tell_timer = 0.5
+                nemesis.spread_on_contact()
+
+            # WHERE THE MEN WALK TO. The frame owns the yard; the lane owns
+            # the men, so the post is relayed -- and cleared when one is let go.
+            _wp = getattr(player, "work_post", None)
+            _now_held = {id(n): n for n in (getattr(player, "workers", ()) or ())}
+            for _k, _n in list(_posted.items()):
+                if _k not in _now_held:
+                    _WORK.post(_n, None)
+                    _posted.pop(_k, None)
+            for _k, _n in _now_held.items():
+                if _posted.get(_k, "unset") != _wp:
+                    _WORK.post(_n, _wp)
+                    _posted[_k] = _wp
+            # ---- THE WALK, PHASE BY PHASE -------------------------------
+            # A hired man is a man in a town who then has to WALK to the yard.
+            # This is the whole journey in the log: he starts, he is a
+            # measured distance from the post every twenty seconds, and he
+            # arrives -- so "did he actually come?" is never a guess.
+            if _wp is not None:
+                for _k, _n in _now_held.items():
+                    if not getattr(_n, "alive", True):
+                        _walk_log.pop(_k, None)
+                        continue
+                    _d = math.hypot(_n.x - _wp[0], _n.y - _wp[1])
+                    _seen = _walk_log.get(_k)
+                    if _d <= 40.0:
+                        if _seen is not None:
+                            # _seen is [first_seen, last_logged] -- a list, and
+                            # subtracting it crashed the frame on the very
+                            # arrival it was written to celebrate.
+                            plog.log("PHASE-ARRIVED", getattr(_n, "name", "?"),
+                                     "after", int(now - _seen[0]), "s", "at",
+                                     "%d,%d" % (int(_n.x), int(_n.y)))
+                            _walk_log.pop(_k, None)
+                    elif _seen is None:
+                        _walk_log[_k] = [now, now]
+                        plog.log("PHASE-WALK", getattr(_n, "name", "?"),
+                                 "starts", int(_d), "px from the post")
+                    elif now - _seen[1] >= 20.0:
+                        _seen[1] = now
+                        plog.log("PHASE-WALK", getattr(_n, "name", "?"),
+                                 "distance", int(_d), "px after",
+                                 int(now - _seen[0]), "s")
+
+            try:
+                nemesis.set_now(now)
+            except Exception:
+                pass
+            # ---- ANYBODY OVER THE CAMP FENCE IS SHOT --------------------
+            try:
+                import gulag as _gulag_t
+                _n_in = _gulag_t.tick(player, enemies, village_mod.PEOPLE,
+                                      combat=combat, dt=dt)
+                if _n_in and int(now) - int(getattr(_gulag_t, "_said", -99)) >= 3:
+                    _gulag_t._said = now
+                    plog.log("GULAG-INTRUDER", _n_in, "inside the fence")
+            except Exception:
+                pass
+            # ---- ARREST AND DETENTION -----------------------------------
+            try:
+                import detain as _detain
+                # a tranquilised player is carried in by the nearest militia
+                if getattr(player, "sleep_t", 0.0) > 0.0 and not getattr(player, "aboard", False):
+                    _pc = _detain.player_cell()
+                    if _pc is None:
+                        _near = _detain._militia_near(player, enemies,
+                                                      village_mod.PEOPLE,
+                                                      player.x, player.y, 900.0)
+                        _cell = _detain._nearest_cell(player.x, player.y)
+                        if _near and _cell is not None:
+                            _detain.arrest_player(player, _cell)
+                _detain.player_tick(player, _TEST_TRAIN[0], dt)
+                # the train plans its calls where people are actually waiting
+                if int(now * 2) != int(getattr(_detain, "_plan_at", -1)):
+                    _detain._plan_at = now * 2
+                    _detain.pickup_order(_TEST_TRAIN[0])
+                _detain.tick(player, enemies, village_mod.PEOPLE, dt, now)
+                _tr0 = _TEST_TRAIN[0]
+                if _tr0 is not None and not _tr0.done:
+                    _detain.board_train(_tr0, player, now)
+            except Exception as _de:
+                plog.log("DETAIN-ERROR", repr(_de)[:140])
+            # ---- THE TEST TRAIN -----------------------------------------
+            try:
+                _tr = _TEST_TRAIN[0]
+                if _tr is not None and not _tr.done:
+                    _tr.update(world_dt if world_tick else dt)
+                    try:
+                        import train as _tm2
+                        _tm2.KNOCK[:] = [k for k in _tm2.KNOCK
+                                         if not k.settled or k.life < 8.0]
+                        for _k in _tm2.KNOCK:
+                            _k.update(dt, blood, corpse_mod)
+                        _tr.hit_people(list(village_mod.PEOPLE), list(enemies),
+                                       player, blood)
+                    except Exception as _ke:
+                        plog.log("TRAIN-KILL-ERR", repr(_ke)[:120])
+                    if int(now * 4) != int(getattr(_tr, "_ck", -1)):
+                        _tr._ck = now * 4
+                        _towns_near = [v for v in villages.villages
+                                       if abs(v.x - _tr.x) < 9000.0
+                                       and abs(v.y - _tr.y) < 9000.0]
+                        _tr.check(world, _towns_near, built_houses,
+                                  placed_work, camp_walls)
+            except Exception as _te2:
+                plog.log("TRAIN-ERROR", repr(_te2)[:160])
+            # ---- THE CROWN ANSWERS THE NAME -----------------------------
+            try:
+                _lead = nemesis.FACTS.get(nemesis.LEADER_ID)
+                if _lead is not None:
+                    if not manhunt.SENT:
+                        manhunt.dispatch(player, _lead.get("at"), now=now,
+                                         enemies=enemies,
+                                         villages=villages.villages)
+                    manhunt.tick(player, enemies, now)
+                    if int(now) - int(getattr(manhunt, "_said", -999)) >= 5:
+                        manhunt._said = now
+                        plog.log("MANHUNT-STATE",
+                                 "standing", manhunt.any_standing(enemies),
+                                 "of", len(enemies), "soldiers",
+                                 "| at", int(player.x), int(player.y))
+            except Exception as _exc:
+                plog.log("MANHUNT-ERR", repr(_exc))
+            if int(now) % 60 == 0:
+                try:
+                    folders_mod.prune(now)
+                except Exception:
+                    pass
+
+            # ---- THE DEAD STAY WHERE THEY FALL --------------------------
+            _last_death = getattr(_WORK, "_last_death", None)
+            for _rec in _WORK.take_deaths():
+                _rec = tuple(_rec) + (False, [], False, [])
+                (_dx, _dy, _who, _pack, _grade, _cloth, _agent, _facts,
+                 _worker, _bag) = _rec[:10]
+                _fid = None
+                if _agent:
+                    # THE FOLDER IN HIS POCKET: everything the service told him.
+                    _fid = folders_mod.new_folder(_who, _facts, now)
+                    plog.log("FOLDER", _who, "carried",
+                             len(folders_mod.FOLDERS[_fid]["msgs"]), "message(s)")
+                corpse_mod.spawn(_dx, _dy, _who, now, _cloth,
+                                 _bag or _pack, _grade, folder=_fid)
+                plog.log("CORPSE", _who, "fell at",
+                         "%d,%d" % (int(_dx), int(_dy)),
+                         "carrying", len(_bag) or len(_pack))
+                if _worker:
+                    # A BODY IS EVIDENCE. An agent who comes upon one of the
+                    # player's dead learns that the yard has a leader.
+                    try:
+                        for _a in nemesis.agents():
+                            if not getattr(_a, "alive", True):
+                                continue
+                            if ((_a.x - _dx) ** 2 + (_a.y - _dy) ** 2
+                                    > nemesis.SEEN_PX ** 2):
+                                continue
+                            if nemesis.note_leader(_a, at=(_dx, _dy)):
+                                plog.log("LEADER", getattr(_a, "name", "?"),
+                                         "saw the body of", _who,
+                                         "and learned who leads the yard")
+                            break
+                    except Exception:
+                        pass
+            for _gone in corpse_mod.update(now):
+                plog.log("CORPSE", _gone.name, "is bones and gone")
+
+            # THE STALL GOES ACROSS THE FENCE, once a second: the carts that
+            # might walk to it are in the hub lane, and a counter they cannot
+            # see is a counter nobody comes to.
+            _stall_now = hub_stall()
+            player.hub_stall = _stall_now
+            player.town_price_for = _town_price_for
+            _WORK.stall = (_stall_now.relay()
+                           if _stall_now is not None else None)
+
+            # THE MEN WORK THE POST THEY WALKED TO. The frame owns the yard
+            # and its chest, so the work -- and what is made, and what will
+            # not fit -- happens here, where the chest is.
+            _chest = salary_chest()
+            player.hub_chest = _chest
+            # `dt`, NOT `world_dt`: the men work once per FRAME, and
+            # `world_dt` is the step of the world tick that is about to run --
+            # the last one, five times a frame's length. Every trade was
+            # therefore working about three times faster than a day says.
+            for _kind, _man, _what in work.produce(
+                    player, _chest, dt, world=world, ground=ground,
+                    plots=(getattr(player, "yard_plots", None)
+                           or [tuple(r) for r in built_plots]), now=now):
+                if _kind == "made":
+                    plog.log("WORK", getattr(_man, "name", "?"),
+                             getattr(_man, "job", "?"), "made", _what)
+                elif _kind == "full":
+                    plog.log("WORK", getattr(_man, "name", "?"),
+                             "chest FULL, kept", _what)
+                    toast("%s: nowhere to put the %s"
+                          % (getattr(_man, "name", "he"),
+                             ", ".join(i.replace("_", " ") for i in _what)))
+                elif _kind == "idle":
+                    plog.log("WORK", getattr(_man, "name", "?"),
+                             "has nothing to work with")
+                elif _kind == "stopped":
+                    plog.log("WORK", getattr(_man, "name", "?"),
+                             "told to leave off", _what)
+                elif _kind == "farm":
+                    plog.log("FARM", getattr(_man, "name", "?"), _what,
+                             "at", "%d,%d" % (int(_man.x), int(_man.y)))
+                elif _kind == "nochess":
+                    plog.log("WORK", getattr(_man, "name", "?"),
+                             "made", _what, "-- NO CHEST in the hub")
+
+            # HIS OWN MEN ARE PAID OUT OF THE CHEST IN HIS HUB, once a day.
+            _pay = work.payroll(player, int(now / DAY_LENGTH), salary_chest(),
+                                hub_stall())
+            for _q in _pay.get("unpaid", ()):
+                toast("%s was not paid.   He remembers it." % getattr(_q, "name", "he"))
+            for _q in _pay.get("quit", ()):
+                toast("%s was not paid.   He walks."
+                      % getattr(_q, "name", "He"))
+            for _who, _has in (_pay.get("seeds") or {}).items():
+                if not _has:
+                    toast("%s has no seed to sow -- put some in the chest" % _who)
+            # AND A BITTER ONE IS NOT SACKED: he stays on the payroll, and the
+            # first service man to come near him turns him. Nothing is said to
+            # the player -- that is the point of it.
+            work.turn_the_bitter(player, nemesis.agents())
+
             settle_timer -= dt
             if settle_timer <= 0.0:
                 settle_timer = 12.0
-                villages.send_idle(now)
+                if not _W_ON:
+                    villages.send_idle(now)
             # A CARAVAN AND A COLUMN. Traders work the same roads the armies
             # march on, and the free-trade policy is the only thing that lets
             # them cross a war unshot -- so this is where word of a campaign
@@ -5254,8 +6845,15 @@ def main() -> None:
                         war.post_demand(_v, armies, now)   # a lapsed offer is
                         # replaced: the crown asks again, and again, until it
                         # is told. Without this it asked once and went quiet.
+            # A HUNTING PARTY IS NEVER CULLED BY DISTANCE. It is sent to a
+            # place, not to the player: it stands there until it is met or
+            # killed. Without this line the ten men were created, logged, and
+            # deleted in the same frame whenever the player was not already
+            # within 6.5 km of the spot the crown picked.
             enemies[:] = [e for e in enemies
                           if getattr(e, "follow", False)
+                          or getattr(e, "manhunt", False)
+                          or getattr(e, "gulag", False)
                           or getattr(e, "guard_village", None) is not None
                           or getattr(e, "patrol_center", None) is not None
                           or math.hypot(e.x - player.x, e.y - player.y) < 6500.0]
@@ -5356,6 +6954,59 @@ def main() -> None:
             ground.update(6, cam_x, cam_y, vw, vh)   # worker builds ahead of us
             trees.update(now)                        # stumps grow back
 
+            # THE BARN IS ENTERED BY WALKING THROUGH ITS DOOR, the way a house
+            # is -- and lands in the mine's own room branch, so the drawing and
+            # the way out are the mine's.
+            prison_cd = max(0.0, prison_cd - dt)
+            if inside_house is None and inside_mine is None and prison_cd <= 0.0:
+                try:
+                    import gulag as _gbar
+                    _bar = _gbar.prison()
+                except Exception:
+                    _bar = None
+                _doors = []
+                if _bar is not None:
+                    _doors.append(_bar)
+                try:
+                    import holding as _hwalk
+                    _doors.extend(_hwalk.cells())
+                except Exception:
+                    pass
+                _hit = None
+                for _d in _doors:
+                    _dx2 = player.x - _d.door[0]
+                    _dy2 = player.y - _d.door[1]
+                    if _dx2 * _dx2 + _dy2 * _dy2 < 26.0 * 26.0:
+                        _hit = _d
+                        break
+                if _hit is not None:
+                    mine_out = (player.x, player.y)
+                    inside_mine = _hit
+                    player._mine_latch = True
+                    player.x = _hit.room.W / 2.0
+                    player.y = _hit.room.H - 70.0
+                    cam_x = player.x - vw / 2.0
+                    cam_y = player.y - vh / 2.0
+                    pygame.mouse.set_visible(True)
+                    plog.log("ENTER-CELL", getattr(_hit, "kind", "?"), "at",
+                             int(_hit.x), int(_hit.y))
+                    continue
+                if _bar is not None:
+                    _ddx = player.x - _bar.door[0]
+                    _ddy = player.y - _bar.door[1]
+                    if _ddx * _ddx + _ddy * _ddy < 26.0 * 26.0:
+                        mine_out = (player.x, player.y)
+                        inside_mine = _bar
+                        player._mine_latch = True
+                        player.x = _bar.room.W / 2.0
+                        player.y = _bar.room.H - 90.0
+                        cam_x = player.x - vw / 2.0
+                        cam_y = player.y - vh / 2.0
+                        pygame.mouse.set_visible(True)   # the cursor stays
+                        plog.log("ENTER-BARN", "through the door at",
+                                 int(_bar.door[0]), int(_bar.door[1]))
+                        continue
+
             if door_cooldown <= 0.0:
                 candidates = list(built_houses)
                 for village in visible_villages:
@@ -5394,12 +7045,24 @@ def main() -> None:
             # flash and a wiggle, then back in the daylight. Every other menu
             # in the game uses KEYDOWN, which fires once; this one waits for
             # the finger to come off E before it will listen to it again.
+            # THE WAY OUT IS THE WAY IN: walk back into the doorway.
+            if getattr(_room, "is_prison", False):
+                _dr = getattr(_room, "door_rect", None)
+                if (_dr is not None and _dr.colliderect(
+                        pygame.Rect(int(player.x) - 8, int(player.y) - 8, 16, 16))):
+                    inside_mine = None
+                    player.x, player.y = mine_out
+                    prison_cd = 1.0
+                    pygame.mouse.set_visible(False)
+                    continue
             if getattr(player, "_mine_latch", False):
                 if not _keys[pygame.K_e]:
                     player._mine_latch = False
             elif _keys[pygame.K_e] or _keys[pygame.K_ESCAPE]:
                 inside_mine = None                 # back up the shaft
                 player.x, player.y = mine_out
+                prison_cd = 1.0                    # step off the threshold first
+                pygame.mouse.set_visible(False)
                 continue
             _aim = (mouse_x - (player.x - cam_x), mouse_y - (player.y - cam_y))
             player.skill_speed = skills.move_scale()
@@ -5420,7 +7083,8 @@ def main() -> None:
             cam_y = _room.H / 2.0 - vh / 2.0
             # SWING AT THE FACE. Fifteen of these to the open seam's three,
             # and it is still there afterwards -- the seam never runs out.
-            if pygame.mouse.get_pressed()[0] and mine_cd <= 0.0:
+            if (pygame.mouse.get_pressed()[0] and mine_cd <= 0.0
+                    and not getattr(_room, "is_prison", False)):
                 mine_cd = 0.35
                 _hold = inventory.selected_stack()
                 if _hold is None or _hold.defn.id != "pickaxe":
@@ -5443,6 +7107,14 @@ def main() -> None:
                         pay_share("iron", _got)
                         toast("Broke out %d iron" % _got)
             _room.draw(screen, cam_x, cam_y, vw, vh)
+            if getattr(_room, "is_prison", False):
+                # SIMPLY DARK: one flat veil over the room, nothing else. No
+                # hole to follow the man, no rectangles to leave edges.
+                try:
+                    import gulag as _gdark
+                    _gdark.darken(screen)
+                except Exception:
+                    pass
             _sel = inventory.selected_stack()
             player.draw(screen, cam_x, cam_y, _sel.defn.id if _sel else None)
             observer_.draw(screen)
@@ -5487,40 +7159,53 @@ def main() -> None:
             # middle of it. Borrow the view for the room -- the walls, the
             # window, the people, the man -- and hand the window back for the
             # HUD, exactly as the outdoors does.
-            scr_w, scr_h = vw, vh
-            vw, vh = max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM))
-            if view_surf is None or view_surf.get_size() != (vw, vh):
-                view_surf = pygame.Surface((vw, vh))
+            # THE ROOM IS DRAWN AT 1:1, STRAIGHT TO THE SCREEN, LIKE A MINE.
+            # It used to be rendered into a 4/9 surface and smooth-scaled back
+            # up every frame: a full-window resample per frame for a picture
+            # that never changes.
             real_screen = screen
-            screen = view_surf
-            cam_x = player.x - vw / 2.0
-            cam_y = player.y - vh / 2.0
-            world_surface = pygame.Surface((vw, vh))
-            draw_exterior(inside_house.x - vw / 2.0, inside_house.y - vh / 2.0,
-                          False, world_surface)
-            screen.blit(world_surface, (0, 0))
-            interior.draw(screen, cam_x, cam_y)
-            # (The live outdoors is already behind the room, so the windows open
-            # onto the real world and it continues past the walls.)
+            cam_x = min(max(player.x - vw / 2.0, 0.0),
+                        max(0.0, interior.W - vw))
+            cam_y = min(max(player.y - vh / 2.0, 0.0),
+                        max(0.0, interior.H - vh))
+            # INSIDE A HOUSE THERE IS NO OUTSIDE. Black beyond the walls --
+            # not a painted world. The room, the furniture, the chest, the
+            # workshop, the residents and the vision mask are all exactly as
+            # they were; only the view out of the windows is gone, and with it
+            # the only reason this branch ever touched the world outside.
+            screen.fill((0, 0, 0))
+            # ONE BLIT OF A ROOM PAINTED ONCE -- exactly how a mine does it.
+            try:
+                interior.draw_baked(screen, cam_x, cam_y)
+            except AttributeError:
+                interior.draw(screen, cam_x, cam_y)
             eye_x = player.x - cam_x + player.facing[0] * 5.0
             eye_y = player.y - cam_y + player.facing[1] * 5.0
+            if not getattr(interior, "windows", True):
+                # A WINDOWLESS HALL: nothing to look through, so no cone to
+                # rasterise and no dark to lay over it.
+                draw_below = False
             inside_occluders = [pygame.Rect(r.x - cam_x, r.y - cam_y, r.w, r.h)
                                 for r in interior.occluders]
-            mask = interior_vision.build(vw, vh, eye_x, eye_y, player.facing_angle,
-                                         inside_occluders, None, 1.3)
-            if mask is not None and mask.get_size() != screen.get_size():
-                mask = pygame.transform.smoothscale(mask, screen.get_size())
+            # THE ROOM'S LIGHT CONE IS NOT REBUILT EVERY FRAME. `build` walks
+            # the occluders and rasterises a mask -- and it was being done sixty
+            # times a second while the eye moved by a pixel, which is the hitch
+            # going into any building. Same mask while the eye is in the same
+            # eighth-of-a-metre cell and the head has not turned.
+            _ivk = (int(interior.W // 8), int(eye_x / 8), int(eye_y / 8),
+                    int(player.facing_angle * 12), vw, vh)
+            if _IVIS[0] != _ivk or _IVIS[1] is None:
+                _m = interior_vision.build(vw, vh, eye_x, eye_y,
+                                           player.facing_angle,
+                                           inside_occluders, None, 1.3)
+                if _m is not None and _m.get_size() != screen.get_size():
+                    _m = pygame.transform.smoothscale(_m, screen.get_size())
+                _IVIS[0], _IVIS[1] = _ivk, _m
+            mask = _IVIS[1] if getattr(interior, "windows", True) else None
             if mask is not None:
                 screen.blit(mask, (0, 0))
-            # Show the live outdoors clearly through every window and the door.
-            for opening in interior.window_rects + [interior.door_rect]:
-                sr = pygame.Rect(int(round(opening.x - cam_x)),
-                                 int(round(opening.y - cam_y)),
-                                 opening.w, opening.h)
-                inner = sr.inflate(-4, -4)
-                if inner.w > 0 and inner.h > 0:
-                    screen.blit(world_surface, inner, inner)
-            draw_night()
+            if getattr(interior, "windows", True):
+                draw_night()
             selected = inventory.selected_stack()
             for npc in getattr(inside_house, "occupants", ()):
                 if npc.alive and npc.in_interior:      # residents move about
@@ -5550,8 +7235,6 @@ def main() -> None:
             draw_placing()
             # ...and back to the window for everything that is not the room.
             screen = real_screen
-            _present(screen, view_surf, scr_w, scr_h)
-            vw, vh = scr_w, scr_h
             draw_hunger_gray()
             if not inventory_open:
                 draw_crosshair(screen, mouse_x, mouse_y)
@@ -5619,6 +7302,9 @@ def main() -> None:
                                 (_r.x + 14, _r.bottom - 46))
             if board_open and board_village is not None:
                 board_panel.player = player
+                board_panel.town_api = _BOARD_API if _W_ON else None
+                if _W_ON:
+                    _WORK.watch(board_panel._nearest(board_village, 3))
                 board_panel.inv = inventory
                 board_panel.chest = (inside_house.interior.chest
                                      if inside_house is not None
@@ -5641,6 +7327,16 @@ def main() -> None:
                     _tb.print_exc()
             if inventory_open:
                 panel.draw(screen)
+            if folder_open:
+                folder_panel.draw(screen)
+                plog.log("FOLDER-DRAW", "panel", int(folder_panel.page),
+                         "at", int(screen.get_width()))
+            if body_open:
+                body_panel.draw(screen)
+            if stall_open:
+                stall_panel.draw(screen)
+            if worker_panel_open:
+                worker_panel.draw(screen)
             if chest_open:
                 chest_panel.draw(screen)
             if workshop_open:
@@ -5670,7 +7366,8 @@ def main() -> None:
                         _wh += _e.y
                     mapmod.handle_input(dt, player, wheel=_wh)
                     mapmod.draw(screen, world, player, _nearest_town(),
-                                hub_world.hubs)
+                                hub_world.hubs,
+                                settlements=list(villages.villages))
                 except Exception:
                     import traceback as _tb; _tb.print_exc()
             pygame.display.flip()
@@ -5684,12 +7381,24 @@ def main() -> None:
         # the vision mask, blood -- lands in the smaller frame without one of
         # them being rewritten. They are handed back before the HUD, which
         # belongs at the window's own size.
-        scr_w, scr_h = vw, vh
-        vw, vh = max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM))
-        if view_surf is None or view_surf.get_size() != (vw, vh):
-            view_surf = pygame.Surface((vw, vh))
-        real_screen = screen
-        screen = view_surf
+        # INDOORS THE ROOM IS THE FRAME. The world's zoom borrow exists to
+        # compose the outdoors in a smaller surface -- and its `_present` call
+        # at the end of the frame scaled that (stale, black) surface back over
+        # the window, wiping the room that had just been drawn. That is the
+        # empty void: a correct room, painted over.
+        _inside_now = inside_house is not None or inside_mine is not None
+        if _inside_now:
+            scr_w, scr_h = vw, vh
+            real_screen = screen
+            vw, vh = vw, vh
+        else:
+            scr_w, scr_h = vw, vh
+        vw, vh = max(2, int(scr_w / ZOOM)), max(2, int(scr_h / ZOOM)) if not _inside_now else (scr_w, scr_h)
+        if not _inside_now:
+            if view_surf is None or view_surf.get_size() != (vw, vh):
+                view_surf = pygame.Surface((vw, vh))
+            real_screen = screen
+            screen = view_surf
         # THE CAMERA FOLLOWS THE MAN BEING WATCHED, NOT THE PLAYER.
         #
         # It followed player.x/player.y, and watching had been implemented by
@@ -5722,17 +7431,45 @@ def main() -> None:
             _truth.health = _truth.max_health
             _truth.pause = 1.0
             _TRUTH[0] = _truth
-        draw_exterior(cam_x, cam_y, True)
+        # THE WORLD IS NOT DRAWN WHILE HE IS INDOORS OR UNDERGROUND. This call
+        # painted the wilderness over the room's frame -- which is why entering
+        # the barn showed the middle of the map instead of the hall.
+        if not _inside_now:
+            draw_exterior(cam_x, cam_y, True)
         try:
-            hub_world.draw(screen, cam_x, cam_y, vw, vh)
+            # HIS OWN BENCHES, FORGES AND SHAFTS. A village's workplaces are
+            # part of its ground; his are his, and have to be drawn.
+            for _wp in (() if _inside_now else placed_work):
+                _wp.draw(screen, cam_x, cam_y)
+            # HIS PLOTS ARE ALWAYS MARKED, and while the build menu is open or
+            # he is placing something they are LIT -- so he can see the ground
+            # he has already staked before he stakes more.
+            _lit = build_menu_open or placing is not None
+            for _r in (() if _inside_now else built_plots):
+                _sr = pygame.Rect(int(_r.x - cam_x), int(_r.y - cam_y),
+                                  _r.w, _r.h)
+                if _lit:
+                    _glow = pygame.Surface((max(1, _sr.w), max(1, _sr.h)),
+                                           pygame.SRCALPHA)
+                    _glow.fill((248, 206, 96, 54))
+                    screen.blit(_glow, _sr.topleft)
+                    pygame.draw.rect(screen, (250, 214, 110), _sr, 3)
+                else:
+                    pygame.draw.rect(screen, (92, 72, 42), _sr, 2)
         except Exception:
             pass
-        draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
+        try:
+            if not _inside_now:
+                hub_world.draw(screen, cam_x, cam_y, vw, vh)
+        except Exception:
+            pass
+        if not _inside_now:
+            draw_news(screen, cam_x, cam_y, vw, vh)   # the bubble, over his head
         draw_villages = villages.visible(cam_x, cam_y, vw, vh,
                                          extra=hub_world.hubs)
         # THE BAR UNDER THE GUARD, for the man HE is searching -- ten seconds
         # on the same bar the axe swing uses.
-        for _v2 in draw_villages:
+        for _v2 in (() if _inside_now else draw_villages):
             _sq = getattr(_v2, "search_now", None)
             if _sq is None:
                 continue
@@ -5749,14 +7486,18 @@ def main() -> None:
         # only reports what the module decided.
         try:
             import gate as gate_mod
-            _res = gate_mod.tick(dt, player, villages.villages, inventory)
+            _res = (None if _inside_now else
+                    gate_mod.tick(dt, player, villages.villages, inventory))
             if _res is not None:
                 _kind, _town, _units = _res
                 plog.log("SEARCHED", _kind, "units", _units,
                          "town", getattr(_town, "name", "?"))
                 if _kind == "caught":
+                    # HE MAKES SPACE, THEN SHOOTS: the toast is the player
+                    # being told, and the town only erupts when the round goes.
                     toast("Searched. %d found. Run." % _units)
-                    commit_crime(_town)
+                    nemesis.note_caught(player, _town, _units)
+                    gate_mod.begin_caught(player, _town, _units)
                 elif _kind == "fled":
                     toast("You broke away from the guard. He shouts.")
                     commit_crime(_town)
@@ -5764,6 +7505,10 @@ def main() -> None:
                     toast("Searched clean   (smuggling %.1f)" % player.smuggling)
                 else:
                     toast("Searched and waved through")
+            if gate_mod.tick_caught(dt, player) == "shot":
+                gate_mod.fire_shot(player, combat)
+                commit_crime(_town)
+                gate_mod.caught_over()
             _pg = gate_mod.progress()
             if _pg > 0.0 and gate_mod.guard_of() is not None:
                 _gg = gate_mod.guard_of()
@@ -5772,19 +7517,39 @@ def main() -> None:
             import traceback as _tb
             _tb.print_exc()
 
-        # CROSSING A WALL WITHOUT BEING WAVED THROUGH IS AGGRO.
+        # CROSSING A WALL WITHOUT BEING WAVED THROUGH IS AGGRO -- and the crime
+        # is the CROSSING, not standing inside. This read "he is inside the
+        # fence and not waved by", so a game that now BEGINS in a square
+        # convicted the player on his first frame: every armed man in the town
+        # was aggro before he had taken a step. A man who wakes up inside is
+        # inside; a man who steps over the line without a pass is a criminal.
         try:
+            _here = None
             for _v in villages.villages:
                 _fr = getattr(_v, "fence_rect", None)
                 if _fr is None or getattr(_v, "is_hub", False):
                     continue
                 if _fr.collidepoint(player.x, player.y):
-                    if getattr(player, "waved_by", None) is not _v:
-                        if getattr(player, "aggro_village", None) is not _v:
-                            player.aggro_village = _v
-                            toast("You crossed the wall unsearched. The street turns.")
-                            commit_crime(_v)
+                    _here = _v
                     break
+            _was = getattr(player, "was_inside_v", None)
+            player.was_inside_v = _here
+            if _here is None:
+                # A PASS LASTS WHILE HE IS AT THE GATE. Clearing it the moment
+                # he stepped outside the wall searched him again on the way
+                # back in, and again -- three times a minute at one gate. The
+                # guard remembers him until he has actually GONE AWAY: out of
+                # the town's reach, when he is a stranger again.
+                _pass = _was or getattr(player, "waved_by", None)
+                if _pass is not None and gate.pass_expired(player, _pass):
+                    player.waved_by = None
+                    player.aggro_village = None
+            elif _here is not _was:
+                if getattr(player, "waved_by", None) is not _here:
+                    if getattr(player, "aggro_village", None) is not _here:
+                        player.aggro_village = _here
+                        toast("You crossed the wall unsearched. The street turns.")
+                        commit_crime(_here)
         except Exception:
             pass
 
@@ -5860,7 +7625,8 @@ def main() -> None:
             # kept the last frame it had. That is what "it freezes instead of
             # showing a game over screen" was: a correct panel, drawn offscreen.
             screen = real_screen
-            _present(screen, view_surf, scr_w, scr_h)
+            if not _inside_now:
+                _present(screen, view_surf, scr_w, scr_h)
             overlay.draw(screen, [
                 f"Kills: {kills}",
                 f"Tobacco: {inventory.count_of('tobacco')}",
@@ -5888,7 +7654,8 @@ def main() -> None:
 
             # ---- ...and back to the window ---------------------------------
             screen = real_screen
-            _present(screen, view_surf, scr_w, scr_h)
+            if not _inside_now:
+                _present(screen, view_surf, scr_w, scr_h)
             vw, vh = scr_w, scr_h
             hotbar.draw(screen)
             # THE INSPECTOR IS DRAWN ABOVE GROUND TOO.
@@ -5968,6 +7735,9 @@ def main() -> None:
                                 (_r.x + 14, _r.bottom - 46))
             if board_open and board_village is not None:
                 board_panel.player = player
+                board_panel.town_api = _BOARD_API if _W_ON else None
+                if _W_ON:
+                    _WORK.watch(board_panel._nearest(board_village, 3))
                 board_panel.inv = inventory
                 board_panel.chest = (inside_house.interior.chest
                                      if inside_house is not None
@@ -5993,6 +7763,20 @@ def main() -> None:
             panel.draw(screen)
         if confirm_open:
             confirm.draw(screen)
+        # THE CONTAINERS AND THE DEAD MAN'S MAIL, OUTDOORS. Every one of these
+        # was drawn only inside the house branch, so above ground a chest, a
+        # hired man's pack, a stall, a body or a folder opened to a state
+        # change and NOTHING ON SCREEN.
+        if chest_open:
+            chest_panel.draw(screen)
+        if worker_panel_open:
+            worker_panel.draw(screen)
+        if stall_open:
+            stall_panel.draw(screen)
+        if body_open:
+            body_panel.draw(screen)
+        if folder_open:
+            folder_panel.draw(screen)
         if compass_open:
             compass_menu.draw(screen)
         if pause_open:
@@ -6004,7 +7788,8 @@ def main() -> None:
                     _wh2 += _e.y
                 mapmod.handle_input(dt, player, wheel=_wh2)
                 mapmod.draw(screen, world, player, _nearest_town(),
-                            hub_world.hubs)
+                            hub_world.hubs,
+                            settlements=list(villages.villages))
             except Exception:
                 pass
 
@@ -6079,6 +7864,7 @@ def main() -> None:
             pass
         pygame.display.flip()
 
+    _WORK.stop()
     pygame.mouse.set_visible(True)
     save_now()
     pygame.quit()

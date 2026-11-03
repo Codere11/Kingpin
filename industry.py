@@ -496,7 +496,13 @@ class Workplace:
         self.w, self.h = ((136, 112) if kind == "mine"
                           else (96, 66) if kind == "lab"
                           else (116, 78) if kind == "brewery"
+                          else (38, 62) if kind == "dummy"
+                          else (44, 60) if kind == "target"
                           else (122, 110))
+        # WHAT A POST LOOKS LIKE WHILE IT IS BEING WORKED: the dummy takes a
+        # blow, the target takes a round. Both are timers the frame drains.
+        self.train_flash = 0.0
+        self.shot_flash = 0.0
         self.rect = pygame.Rect(int(x - self.w / 2), int(y - self.h / 2),
                                 self.w, self.h)
         self.base_y = y + self.h / 2.0
@@ -515,6 +521,10 @@ class Workplace:
             return self._render_lab()
         if self.kind == "brewery":
             return self._render_brewery()
+        if self.kind == "dummy":
+            return self._render_dummy()
+        if self.kind == "target":
+            return self._render_target()
         return self._render_smith()
 
     @property
@@ -575,6 +585,47 @@ class Workplace:
             ry = oy + h + 2 + i * 5
             pygame.draw.line(surf, TIMBER_D, (mx - 12, ry), (mx + mw + 12, ry), 2)
         return surf
+
+    def _render_dummy(self) -> pygame.Surface:
+        """A POST WITH A SACK FOR A HEAD AND A CROSSBAR FOR ARMS.
+
+        Nothing is stored in it and nothing comes out of it: a man hits it
+        until his arms know what they are doing.
+        """
+        img = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        cx = self.w // 2
+        # the post
+        pygame.draw.rect(img, (104, 74, 44), (cx - 3, 10, 7, self.h - 12))
+        pygame.draw.rect(img, (72, 50, 30), (cx - 3, 10, 7, self.h - 12), 1)
+        # the arms
+        pygame.draw.rect(img, (126, 92, 58), (cx - 13, 24, 27, 5))
+        # the head, a straw sack
+        pygame.draw.circle(img, (196, 176, 132), (cx, 12), 9)
+        pygame.draw.circle(img, (96, 72, 44), (cx, 12), 9, 1)
+        pygame.draw.line(img, (96, 72, 44), (cx - 6, 8), (cx + 6, 8), 1)
+        # the body, tied round
+        pygame.draw.rect(img, (176, 152, 112), (cx - 9, 30, 19, 18))
+        pygame.draw.rect(img, (96, 72, 44), (cx - 9, 30, 19, 18), 1)
+        pygame.draw.line(img, (96, 72, 44), (cx - 9, 36), (cx + 9, 36), 1)
+        # a base so it stands
+        pygame.draw.rect(img, (86, 60, 36), (cx - 11, self.h - 8, 23, 6))
+        return img
+
+    def _render_target(self) -> pygame.Surface:
+        """A STRAW ROUND ON TWO LEGS, with rings and the last arrows in it."""
+        img = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        cx = self.w // 2
+        pygame.draw.line(img, (110, 78, 48), (cx - 9, 30), (cx - 13, self.h - 2), 3)
+        pygame.draw.line(img, (110, 78, 48), (cx + 9, 30), (cx + 13, self.h - 2), 3)
+        cy = 20
+        for r, col in ((15, (222, 214, 186)), (11, (188, 78, 62)),
+                       (7, (222, 214, 186)), (3, (188, 78, 62))):
+            pygame.draw.circle(img, col, (cx, cy), r)
+        pygame.draw.circle(img, (72, 58, 40), (cx, cy), 15, 1)
+        # arrows already in the straw
+        for (ax, ay) in ((cx - 5, cy - 4), (cx + 4, cy + 3)):
+            pygame.draw.line(img, (168, 146, 96), (ax - 6, ay - 8), (ax, ay), 1)
+        return img
 
     def _render_brewery(self) -> pygame.Surface:
         """A brewing table with barrels racked beside it."""
@@ -652,3 +703,30 @@ class Workplace:
         image = self.image
         screen.blit(image, (self.x - cam_x - image.get_width() / 2,
                             self.y - cam_y - image.get_height() / 2))
+        sx = self.x - cam_x
+        sy = self.y - cam_y
+        if self.kind == "dummy" and self.train_flash > 0.0:
+            # A BLOW LANDING: the axe bites into the post and the straw jumps.
+            import math as _m
+            k = min(1.0, self.train_flash / 0.18)
+            px = sx + self.w * 0.5 - 10.0
+            py = sy - 4.0
+            pygame.draw.line(screen, (70, 54, 36), (px - 16 - 6 * k, py + 8 + 4 * k),
+                             (px, py), 2)
+            pygame.draw.polygon(screen, (208, 212, 218),
+                                [(px - 4, py - 4), (px + 6, py + 2),
+                                 (px + 2, py + 8)])
+            for i in range(3):
+                a = _m.pi * (0.2 + 0.25 * i)
+                d = 8.0 + 10.0 * (1.0 - k)
+                pygame.draw.circle(screen, (214, 196, 140),
+                                   (int(px + _m.cos(a) * d), int(py + _m.sin(a) * d)),
+                                   1)
+        if self.kind == "target" and self.shot_flash > 0.0:
+            # A ROUND LANDING: dust off the straw and a spark at the rings.
+            k = min(1.0, self.shot_flash / 0.25)
+            cx, cy = sx, sy - 10.0
+            pygame.draw.circle(screen, (150, 120, 76), (int(cx), int(cy)),
+                               max(1, int(3 + 7 * (1.0 - k))), 1)
+            pygame.draw.circle(screen, (242, 226, 150), (int(cx), int(cy)),
+                               max(1, int(1 + 3 * k)))

@@ -899,6 +899,123 @@ def wants(npc, item: str) -> int:
 
 
 # -- settlement ---------------------------------------------------------------
+MINT_FLOOR = 500           # coin a town mints OVER what its day needs
+
+
+# THE SERVICE IS PAID LIKE ANY OTHER TRADE -- and not out of the same purse.
+# A settlement pays its OWN agents; the crown pays the men no town employs:
+# the free traders, and the chief.
+AGENT_WAGE = 30            # a day, for being the service's man
+CHIEF_WAGE = 50            # ...and for running it
+
+
+def pay_agents(village, day: int) -> int:
+    """EACH SETTLEMENT PAYS ITS OWN AGENTS, out of its own ledger."""
+    if getattr(village, "_agent_day", -1) == day:
+        return 0
+    village._agent_day = day
+    paid = 0
+    for n in village.npcs:
+        if not getattr(n, "secret_police", False):
+            continue
+        if not getattr(n, "alive", False):
+            continue
+        if float(village.ledger_coins) < AGENT_WAGE:
+            break
+        village.ledger_coins -= AGENT_WAGE
+        n.coins = int(getattr(n, "coins", 0) or 0) + AGENT_WAGE
+        paid += AGENT_WAGE
+    if paid:
+        flow(village, 'pay_agents', -paid)
+        # ON TOP OF THE TRADE'S OWN WAGE, always: this is the service's money,
+        # not a replacement for the man's living. The line says both halves so
+        # the arithmetic is in the log and not in an argument.
+        for n in village.npcs:
+            if getattr(n, "secret_police", False) and getattr(n, "alive", False):
+                _note("day %4d  %-14s SERVICE  %-16s (%s) trade %d + service %d"
+                      % (day, village.name, getattr(n, "name", "?"),
+                         getattr(n, "job", None)
+                         or ("farm" if getattr(n, "farm_plot", None) is not None
+                             else "idler"),
+                         trade_wage(n), AGENT_WAGE))
+    return paid
+
+
+def pay_service_state(village, day: int, carts: int) -> int:
+    """THE CROWN PAYS THE CHIEF AND THE TRADERS NO TOWN EMPLOYS.
+
+    `carts` is counted by village.service_carts() -- the free traders on the
+    road. Their coin is not touched here: this is the crown's ledger paying,
+    and the lane that owns those men is sent a relay to hand it over (see
+    village._relay and lanes_mp).
+    """
+    if getattr(village, "_service_day", -1) == day:
+        return 0
+    village._service_day = day
+    # THE CHIEF IS PAID WHERE HE LIVES, not where the crown sits: he is one
+    # man in one far town, and the seat does not hold him. The lane that owns
+    # him hands over the 50 out of this ledger (see lanes_mp, which also gets
+    # the traders' stipend).
+    paid = 0
+    per = 0
+    if carts > 0:
+        per = AGENT_WAGE
+        if float(village.ledger_coins) < per * carts:
+            per = int(float(village.ledger_coins) // max(1, carts))
+        if per > 0:
+            village.ledger_coins -= per * carts
+            paid += per * carts
+            village._relay = ("stipend", per, CHIEF_WAGE, day)
+    if paid:
+        flow(village, 'pay_service', -paid)
+        _note("day %4d  %-14s SERVICE  crown paid %d to %d AGENT traders "
+              "at %d (the chief is paid separately)" %
+              (day, village.name, paid, carts, per))
+    return paid
+
+
+def mint_day(village, day: int) -> int:
+    """THE TOWN COINS ITS OWN FIREWOOD TO MEET THE DAY -- AND A LITTLE MORE.
+
+    Nothing was minting: `monetize` has been here since the beginning and no
+    caller existed, so every coin the towns had came from the tax they took
+    off their own people, and a town paid its wages out of a purse that could
+    only shrink.
+
+    What it mints is what its BOOKS say it paid yesterday -- wages, the
+    crown's share, the mayor -- plus MINT_FLOOR, and only as far as the
+    granary's logs go: one log, one coin, above the thousand the hearths are
+    lit from. A town with no wood to spare mints nothing, and the log says so.
+    """
+    if getattr(village, "_mint_day", -1) == day:
+        return 0
+    village._mint_day = day
+    if getattr(village, "is_hub", False):
+        return 0                       # a hut is not on the books
+    paid = float(getattr(village, "_paid_today", 0.0))
+    village._paid_today = 0.0
+    # WHAT THE DAY COST, AND FIVE HUNDRED ON TOP OF IT. Not a top-up: the
+    # town COINS this every day, so the money it needs to pay its people is
+    # minted into existence against its own firewood rather than taken from
+    # the people it is paying.
+    need = int(round(paid))
+    want = need + MINT_FLOOR
+    if want <= 0:
+        return 0
+    left = monetize(village, want)     # 1 log -> 1 coin, above the reserve
+    made = want - left
+    if made > 0:
+        flow(village, 'mint', made)
+    # A TOWN WITH NO WOOD TO SPARE SAYS SO. It used to be silent, which read
+    # as "every town minted" when two thirds of them could not raise a coin.
+    _note("MINT day %4d  %-14s needs %6d + %d  minted %6d logs "
+          "-> ledger %6d%s"
+          % (day, village.name, need, MINT_FLOOR, made,
+             int(village.ledger_coins),
+             ("" if left <= 0 else "  (NO WOOD for %d)" % left)))
+    return made
+
+
 def monetize(village, amount: int) -> int:
     """Coin the granary's firewood, one coin the log.
 
@@ -1321,6 +1438,7 @@ def crown_dues(village, day: int) -> int:
     if cap is None or cap is village:
         return 0
     flow(village, 'crown_dues', -(due))
+    village._paid_today = float(getattr(village, "_paid_today", 0.0)) + due
     village.ledger_coins -= due
     flow(cap, 'crown_dues', (due))
     cap.ledger_coins += due
@@ -1578,17 +1696,6 @@ def crown_arms_order(village, day: int) -> int:
     return got
 
 
-# -- ELECTIONS --------------------------------------------------------------
-# SOCIAL MOBILITY, MADE MECHANICAL. A mayor was handed the chair at world
-# creation and held it for ever; there was no way up and no way out. Now the
-# village CHOOSES, every ELECTION_DAYS, and the choice is made of the two
-# things that decide such things everywhere: who a man knows, and who is
-# willing to pay him.
-ELECTION_DAYS = 15          # the village chooses its mayor this often
-ELECTION_BRIBE = 50         # coin a candidate pays a voter for his vote
-ELECTION_KEEP = 50          # ...and he stops buying before he is left with less
-KING_ELECTION_DAYS = 50     # the throne changes hands this rarely
-
 # THE MAYOR'S ROUND. Ten days of business at court, ten days of business at
 # home, and the road between them -- which is why it is "roughly" ten: the
 # journey is real, he WALKS it, and the days it costs are days he is neither
@@ -1682,165 +1789,6 @@ def regard(a, b) -> float:
     return min(OPINION_MAX, score)
 
 
-def election_tomorrow(village, day: int) -> bool:
-    """Does this town vote tomorrow? The calendar is Village.update's."""
-    return (day + 1 > 0 and (day + 1 - village.code) % ELECTION_DAYS == 0)
-
-
-def vote_buyable(voter, day: int) -> bool:
-    """A VOTE MAY BE SOLD ONCE. Once a man has taken coin for it the matter is
-    settled -- he cannot sell the same vote to two purses, which is the only
-    thing that makes buying an election cost anything at all."""
-    return int(getattr(voter, "vote_sold", -1)) != int(day)
-
-
-def sell_vote(voter, buyer, day: int) -> bool:
-    """ONE VOTE, ONE SALE, ONE PRICE.
-
-    Every bribe in the world goes through here -- a mayor's, a rich man's and
-    the player's alike -- so the going rate is the going rate and nobody can be
-    bought twice. Returns False if the vote is gone, the buyer is the voter, or
-    the buyer cannot afford it without being left short.
-    """
-    if voter is buyer or not getattr(voter, "alive", False):
-        return False
-    # A CANDIDATE IS NOT FOR SALE. He is standing, not voting -- and the rule
-    # belongs HERE, in the one function every purse in the world pays through,
-    # not in the loop that happens to call it. It was in hold_election only, so
-    # the player's own path could buy a mayor's vote while the town's could not.
-    if getattr(voter, "is_mayor", False) or getattr(voter, "is_king", False):
-        return False
-    if not vote_buyable(voter, day):
-        return False
-    if buyer.coins - ELECTION_BRIBE < ELECTION_KEEP:
-        return False
-    buyer.coins -= ELECTION_BRIBE
-    voter.coins += ELECTION_BRIBE
-    voter.vote_sold = int(day)
-    voter.vote_for = getattr(buyer, "id", None)
-    return True
-
-
-def election_candidates(village, player=None) -> list:
-    """WHO MAY STAND: the player, and the three richest men in the town.
-
-    NOT the sitting mayor. He holds the chair, he does not own it -- if he
-    wants another term he must be one of the three richest men and take his
-    chances with everybody else. Standing is what you get for being rich, and
-    keeping it is what you get for being better at it than the other three.
-
-    THE PLAYER STANDS BY BEING THERE. He does not apply, register or declare:
-    he is a man in the square with a purse, which is the whole qualification,
-    and he is in the field for as long as he is inside the fence.
-    """
-    out: list = []
-    seen: set = set()
-    if player is not None:
-        near = ((player.x - village.x) ** 2
-                + (player.y - village.y) ** 2) ** 0.5
-        if near <= village.radius + 140.0:
-            out.append(player)
-            seen.add(id(player))
-    rich = sorted((n for n in village.npcs
-                   if getattr(n, "alive", False) and id(n) not in seen
-                   and not getattr(n, "is_king", False)
-                   and not getattr(n, "is_commander", False)),
-                  key=lambda n: n.coins, reverse=True)
-    return out + rich[:3]
-
-
-def hold_election(village, day: int, player=None) -> Any:
-    """THE VILLAGE CHOOSES, AND THE CROWN MERELY PAYS HIM.
-
-    Every voter picks whoever he knows best -- see regard. A candidate may then
-    BRIBES him for that vote at ELECTION_BRIBE, and a bribe overrides the vote,
-    because that is what a bribe is. The richest candidate bids first, so the
-    deepest purse wins the votes it wants; but no man beggars himself for a
-    chair, and a candidate stops buying before he is left with less than
-    ELECTION_KEEP.
-    """
-    if village.is_capital or getattr(village, "_vote_day", -1) == day:
-        return None
-    village._vote_day = day
-    voters = [n for n in village.npcs
-              if getattr(n, "alive", False)
-              and not getattr(n, "is_king", False)
-              and not getattr(n, "is_commander", False)]
-    if len(voters) < 3:
-        return None
-    cands = election_candidates(village, player)
-    if not cands:
-        return None
-    # The purse decides the ORDER of bidding, not the outcome: richest first.
-    # A MAN WITHOUT A PURSE CANNOT BID, AND A PLAYER'S COIN IS IN HIS PACK.
-    # He buys his votes in the square with his own hands (see main.buy_vote),
-    # not through this loop -- so he takes no part in the bidding, but his
-    # bought votes count like any others.
-    buyers = sorted((n for n in cands if getattr(n, "coins", None) is not None),
-                    key=lambda n: n.coins, reverse=True)
-    tally: dict = {id(c): 0 for c in cands}
-    spent: dict = {id(c): 0 for c in cands}
-    by_id = {id(c): c for c in cands}
-    # WHAT IT TAKES TO WIN. A majority of the votes cast; no man buys more
-    # than that, because a vote he does not need is coin thrown away.
-    need = len(voters) // 2 + 1
-    for voter in voters:
-        # 1. HIS OWN CHOICE: whoever he knows best.
-        pick = max(cands, key=lambda c: regard(voter, c))
-        # 2. THE PURSE. A CANDIDATE IS NOT A CUSTOMER -- nobody buys a rival's
-        # vote, and nobody sells his own (a man in the field does not vote for
-        # sale). The vote goes to the first candidate who can afford it AND
-        # still wants it: the fastest purse wins the race, and the vote is then
-        # GONE (see sell_vote), so no other purse can take it.
-        if voter in cands:
-            # A CANDIDATE VOTES FOR HIMSELF. Always -- regard(a, a) is the top
-            # of the scale, so it is what he would choose anyway, and it means
-            # no purse can talk him out of his own name.
-            tally[id(voter)] = tally.get(id(voter), 0) + 1
-            continue
-        for buyer in buyers:
-            if buyer is voter:
-                break
-            if tally[id(buyer)] >= need:
-                continue                   # he has what it takes to win
-            if sell_vote(voter, buyer, day):
-                spent[id(buyer)] += ELECTION_BRIBE
-                pick = buyer
-                break
-        tally[id(pick)] = tally.get(id(pick), 0) + 1
-    win = max(cands, key=lambda c: (tally[id(c)],
-                                    getattr(c, "coins", 0)))
-    if not hasattr(win, "coins"):
-        # THE PLAYER HAS WON THE CHAIR. He is not an NPC: pay_mayor reads a
-        # villager's purse and books, so the town is left with no NPC mayor at
-        # all (and the crown pays him nothing) -- the office is his, and its
-        # income is whatever the town's trade brings him.
-        old = getattr(village, "mayor", None)
-        if old is not None and old is not win and getattr(old, "alive", True):
-            old.is_mayor = False
-            old.role = None
-            old.plaza = None
-            if getattr(old, "job", None) == "mayor":
-                old.job = None
-                village.free_post(old)
-        village.mayor = None
-        win.is_mayor = True
-        win.job = "mayor"
-        win.settled_at = village
-        win.village = village
-        if getattr(village, "nation", None) is not None:
-            win.nation = village.nation
-        village.mayor_is_player = True
-        _note("day %.2f  ELECTION  THE PLAYER takes %s (%d votes)"
-              % (day, village.name, tally.get(id(win), 0)))
-        return win
-    village.mayor_is_player = False
-    install_mayor(village, win)
-    _note("day %.2f  ELECTION  %-16s mayor (votes %d of %d, spent %d)"
-          % (day, win.name, tally[id(win)], len(voters), spent[id(win)]))
-    return win
-
-
 def install_mayor(village, npc) -> None:
     """Put the chain on him, and take it off the man who had it.
 
@@ -1913,6 +1861,7 @@ def pay_mayor(village, day: int) -> int:
     mayor.coins += paid
     mayor.book_in = getattr(mayor, "book_in", 0.0) + paid
     flow(village, 'pay_mayor', -(paid))
+    village._paid_today = float(getattr(village, "_paid_today", 0.0)) + paid
     village.ledger_coins -= paid
     return paid
 
@@ -1967,6 +1916,26 @@ def tax_day(village, day: int) -> None:
         n.book_out = 0.0
 
 
+def trade_wage(npc) -> int:
+    """WHAT HIS OWN TRADE PAYS HIM -- one rule, used by the payroll and by the
+    service's own pay, so nobody can be paid twice for one trade or once for
+    two."""
+    if not getattr(npc, "alive", True):
+        return 0
+    if is_watch(npc):
+        return WAGE
+    job = getattr(npc, "job", None)
+    if job == "logger":
+        return LOGGER_WAGE
+    if job == "smith":
+        return SMITH_WAGE
+    if getattr(npc, "farm_plot", None) is not None:
+        return LOGGER_WAGE
+    if getattr(getattr(npc, "workplace", None), "kind", None) == "mine":
+        return LOGGER_WAGE
+    return 0
+
+
 def pay_wages(village, day: int) -> None:
     """A day's wage for the watch -- and for the woodsmen the town employs."""
     if day == village.wage_day:
@@ -1975,22 +1944,11 @@ def pay_wages(village, day: int) -> None:
     for npc in village.npcs:
         if not npc.alive:
             continue
-        if is_watch(npc):
-            wage = WAGE
-        elif getattr(npc, "job", None) == "logger":
-            wage = LOGGER_WAGE          # the woods are the town's payroll now
-        elif getattr(npc, "job", None) == "smith":
-            wage = SMITH_WAGE           # and so is the forge
-        elif getattr(npc, "farm_plot", None) is not None:
-            wage = LOGGER_WAGE          # A FARMER IS AN EMPLOYEE TOO. He reaps
-                                        # for the town and keeps a ration of
-                                        # it; without the wage he could never
-                                        # buy the shovel he wears out.
-        elif getattr(getattr(npc, "workplace", None), "kind", None) == "mine":
-            wage = LOGGER_WAGE          # and the pit is the town's work as well
-        else:
+        wage = trade_wage(npc)
+        if wage <= 0:
             continue
         paid = min(wage, village.ledger_coins)
+        village._paid_today = float(getattr(village, "_paid_today", 0.0)) + paid
         npc.coins += paid
         npc.book_in = npc.book_in + paid   # wages are income
         flow(village, 'pay_wages', -(paid))

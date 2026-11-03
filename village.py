@@ -11,6 +11,8 @@ Each house stores two world rectangles:
 
 from __future__ import annotations
 
+import stats
+
 import colorsys
 import functools
 import math
@@ -24,6 +26,20 @@ import face
 from palette import rich, dim
 
 import os as _os
+
+
+def service_carts() -> int:
+    """THE SERVICE'S OWN FREE TRADERS -- and nobody else's.
+
+    Nationless traders on the road who are TAGGED AS AGENTS. The rest of the
+    trade is just criminals: the crown does not pay a man for smuggling, and
+    it never did.
+    """
+    return sum(1 for n in TRAVELLERS
+               if getattr(n, "job", None) == "trader"
+               and getattr(n, "nation", None) is None
+               and getattr(n, "secret_police", False)
+               and getattr(n, "alive", True))
 
 
 def _note(message: str) -> None:
@@ -151,7 +167,10 @@ LOGGERS_PER_VILLAGE = 2    # hands in the woods (see the quota in offer_post)
 # the burn would have been two answers to one question.
 FELL_LOGS_MIN = 10            # as it always was
 FELL_LOGS_MAX = 30            # as it always was
-WORLD_POP_CAP = 1000       # HARD CAP on living people in the whole world
+WORLD_POP_CAP = 1200       # HARD CAP on living people in the whole world
+                           # (1000 in the towns + the huts' people and
+                           # the free traders: a thousand was excluding
+                           # the births it was meant to allow)
 TRADERS_PER_VILLAGE = 3    # caravans a village keeps on the road
 _FOREST = None             # set once by main, so villages can find their woods
 _TRADE_GRID = None         # allocated once, rebuilt per village per step
@@ -159,18 +178,47 @@ LOG_CHOP_SECONDS = 3.0    # how long a logger takes to drop one tree
 BIRTH_BOND = 18.0                    # seconds of evening friendship before a child
 PEACE_DELAY = 30.0                   # no children until this long after a death
 
+# THE PEOPLE OF THE REPUBLIC.
+#
+# One country, four tongues: Russian, Ukrainian, Georgian and Polish, mixed in
+# the same villages the way a Soviet republic really was. Given names are
+# transliterated into plain letters -- no diacritics -- because a missing glyph
+# in a bitmap font is a box, and a man whose name draws as a box is not a man
+# with a name.
 FIRST_NAMES = [
-    "Cletus", "Cooter", "Earl", "Earlene", "Merle", "Darlene", "Waylon",
-    "Loretta", "Clyde", "Bessie", "Otis", "Verna", "Rufus", "Maybelle",
-    "Jethro", "Hank", "Sue Ellen", "Bubba", "Josiah", "Wyatt", "Chester",
-    "Orville", "Wilbur", "Tammy", "Junior", "Lurlene", "Hollis", "Pearl",
-    "Grover", "Minnie", "Elwood", "Clovis", "Faye", "Boyd", "Nadine",
-    "Ray", "Delma", "Homer", "Opal", "Curtis", "Bonnie", "Dewey",
+    # Russian
+    "Ivan", "Dmitri", "Sergei", "Nikolai", "Pavel", "Mikhail", "Boris",
+    "Yuri", "Andrei", "Grigori", "Fyodor", "Vasily", "Pyotr", "Lev",
+    "Arkady", "Stepan", "Konstantin", "Vladimir", "Alexei", "Igor",
+    "Vera", "Nadya", "Irina", "Olga", "Tatiana", "Zoya", "Galina", "Larisa",
+    # Ukrainian
+    "Taras", "Bohdan", "Ostap", "Mykola", "Petro", "Dmytro", "Vasyl",
+    "Yurii", "Andriy", "Serhiy", "Oksana", "Kateryna", "Halyna", "Olena",
+    "Nadiya", "Svitlana",
+    # Georgian
+    "Giorgi", "Davit", "Levan", "Zurab", "Irakli", "Vakhtang", "Nodar",
+    "Otar", "Shota", "Tengiz", "Nino", "Tamar", "Ketevan", "Manana", "Lela",
+    # Polish
+    "Stanislaw", "Kazimierz", "Wladyslaw", "Zbigniew", "Tadeusz", "Jerzy",
+    "Marek", "Piotr", "Krzysztof", "Andrzej", "Jakub", "Tomasz", "Ryszard",
+    "Halina", "Jadwiga", "Krystyna", "Zofia", "Danuta", "Ewa",
 ]
 LAST_NAMES = [
-    "Tucker", "Boone", "Callahan", "Sizemore", "Pruitt", "Lassiter",
-    "Barlow", "Crowder", "Mercer", "Hollis", "Dalton", "Vance",
-    "Whitaker", "Riggins", "Sparrow", "Beaumont", "Kincaid", "Mosley",
+    # Russian
+    "Volkov", "Sokolov", "Morozov", "Orlov", "Medvedev", "Kuznetsov",
+    "Petrov", "Zaitsev", "Komarov", "Lebedev", "Novikov", "Yegorov",
+    "Barsukov", "Zimin", "Karpov",
+    # Ukrainian
+    "Shevchenko", "Bondarenko", "Kovalenko", "Tkachenko", "Melnyk",
+    "Kravchenko", "Oliynyk", "Savchenko", "Rudenko", "Marchenko",
+    "Lysenko", "Hrytsenko", "Bondar", "Tkachuk",
+    # Georgian
+    "Beridze", "Kapanadze", "Giorgadze", "Tsiklauri", "Gelashvili",
+    "Abashidze", "Japaridze", "Mgeladze", "Dolidze", "Chkheidze",
+    # Polish
+    "Kowalski", "Nowak", "Wisniewski", "Wojcik", "Kaminski", "Lewandowski",
+    "Zielinski", "Szymanski", "Wozniak", "Dabrowski", "Kozlowski", "Mazur",
+    "Krawczyk", "Piotrowski",
 ]
 # THE FLAVOUR TITLES ARE GONE.
 #
@@ -199,6 +247,28 @@ def village_name(gx: int, gy: int, seed: int = 0) -> str:
             ^ (seed * 2654435761)) & 0xFFFFFFFF
     return (NATION_PREFIX[code % len(NATION_PREFIX)] + " "
             + NATION_SUFFIX[(code // len(NATION_PREFIX)) % len(NATION_SUFFIX)])
+
+
+def is_military(npc) -> bool:
+    """DOES THIS MAN WEAR THE CAP?
+
+    Levied soldiers, the town's defenders, anybody on duty with a weapon, and
+    the crown's standing army. An agent of the secret service is NOT military
+    for this purpose -- unless he is also one of the above.
+    """
+    if npc is None:
+        return False
+    if getattr(npc, "is_soldier", False):
+        return True
+    if getattr(npc, "defender", False):
+        return True
+    if getattr(npc, "on_duty", False):
+        return True
+    if getattr(npc, "kind", "") == "soldier":
+        return True
+    if getattr(npc, "role", "") == "Defender":
+        return True
+    return False
 
 
 def nation_name(nation: int) -> str:
@@ -343,6 +413,51 @@ class NPC:
     social_cap: Any = 3.0
     is_mayor: Any = False
     levied: Any = False
+    # THE SECRET POLICE. A man can be the chief's, or the chief himself. These
+    # are MARKS and nothing more: nothing in the game reads them yet. They are
+    # class defaults for the usual reason -- an unpickled save never runs
+    # __init__, so a field that is only set in __init__ is a field that is
+    # missing after a load.
+    secret_police: Any = False
+    secret_police_chief: Any = False
+    # THE OLD MAN HIMSELF. A mark the drawing reads: grey hair and the
+    # moustache. Class default, like every other field here, so a man restored
+    # from a save is never missing it.
+    is_stalin: Any = False
+    # THE FORCES. `militia` is the Narodna militsiya: blue cap, dart rifle.
+    # `sleep_t` is a tranquilised man -- on the ground, eyes shut, no death.
+    militia: Any = False
+    sleep_t: Any = 0.0
+    shackled: Any = False
+    # A MAN CAN BE WANTED BY A TOWN (the gate search writes this). Class
+    # default, because a search that never caught anybody would otherwise
+    # leave the field absent and the first reader would raise.
+    wanted: Any = False
+    # A MAN HIRED BY THE PLAYER: his trade, his wage, and whose he is.
+    player_worker: Any = False
+    aggro_at: Any = None
+    attacked_flash: Any = 0.0
+    # WHAT THE PLAYER TOLD *HIM*: the id of every order and handoff he holds.
+    # A list, so it saves; secret by construction -- nobody else is given it.
+    player_orders: Any = None
+    _gate_try: Any = 0
+    _stuck_t: Any = 0.0
+    _detour: Any = None
+    wage: Any = 0
+    # WHERE HIS WORK IS: a point in the player's yard. A man hired by the
+    # player walks to it and stays there -- he has left his town's day behind.
+    work_post: Any = None
+    # his work at the player's post: what he carries, how far his batch has
+    # got, and the last thing he would tell the player about it
+    stock: Any = None
+    say: Any = None
+    work_timer: Any = 0.0
+    said_none: Any = False
+    made_guns: Any = 0
+    # SECRET NEWS. A list of fact ids he has been trusted with (see
+    # nemesis.issue). A list, not a set: the save writer only carries simple
+    # values, and a set is not one -- it would be silently dropped on load.
+    secret_news: Any = None
     refuge: Any = None
     refuge_eta: Any = 0.0
     # DEFAULTS AS CLASS ATTRIBUTES -- IMMUTABLE ONES ONLY.
@@ -381,9 +496,6 @@ class NPC:
     # until he is worth remembering. See economy.grow_opinion.
     opinion: Any = None
     at_court: Any = False        # a mayor: at the capital, or at home
-    duel_tournament: Any = None  # the Test of Strengths is driving him
-    vote_sold: Any = -1          # the day he last took coin for his vote
-    vote_for: Any = None         # ...and who bought it
 
     # -- WHAT A MAN IS, WRITTEN DOWN --------------------------------------
     # One plain dict: every compiled field and everything in __dict__. The
@@ -414,6 +526,14 @@ class NPC:
             state.update(_slots)
         for _name, _value in state.items():
             setattr(self, _name, _value)
+        # ONE BODY FOR EVERYBODY, INCLUDING MEN ALREADY IN AN OLD SAVE. Their
+        # bodies were written down when a villager had forty health; the extra
+        # body is added to what is left of them, so a wounded man stays wounded.
+        _cap = stats.PLAYER_MAX_HEALTH
+        _old = getattr(self, "max_health", _cap) or _cap
+        if _old != _cap:
+            self.health = min(_cap, float(getattr(self, "health", _cap)) + (_cap - _old))
+            self.max_health = _cap
 
 
     def __init__(self, x: float, y: float, seed: int, name: str = "",
@@ -460,8 +580,9 @@ class NPC:
             (150, 110, 70), (118, 92, 150), (92, 132, 112), (176, 142, 92),
         ])
         self.kind = "villager"
-        self.max_health = 40
-        self.health = 40
+        # THE PLAYER'S BODY IS THE STANDARD (see stats.py).
+        self.max_health = stats.PLAYER_MAX_HEALTH
+        self.health = self.max_health
         self.alive = True
         self.hit_flash = 0.0
         self.work_flash = 0.0
@@ -522,6 +643,15 @@ class NPC:
         self._interior_rect = None
         self._interior_colliders = ()
         self.aggro = False
+        # A BURST OF SPEED AT A DECISION, not a reflex: seconds of lunge left,
+        # and the clock on the next one. Same name as the wolf's, so a man
+        # facing a lunge can react to it (`target.lunging` in _fight).
+        self.lunging = 0.0
+        self.lunge_cd = 0.0
+        self.attacked_flash = 0.0     # he swung a moment ago
+        # THE MEN HE IS FIGHTING, BY NAME: id(man) -> the man. A feud is with
+        # a person, not with "whatever is nearest".
+        self.aggro_at: dict = {}
         self.attack_cd = self.rng.uniform(0.3, 0.8)
         self.combat_speed = self.rng.uniform(120.0, 160.0)
         self.strafe_dir = self.rng.choice((-1.0, 1.0))
@@ -545,15 +675,91 @@ class NPC:
         return True
 
     def _shoot(self, combat, x, y, angle, distance, dmg_lo, dmg_hi) -> None:
-        if self.gun_kind == guns.SHOTGUN:
-            dmg_lo = max(2, dmg_lo // 2)
-            dmg_hi = max(3, dmg_hi // 2)
+        """A villager's round is a soldier's round: `guns.DAMAGE`, 80."""
+        _dmg = guns.DAMAGE[self.gun_kind]
         for _ in range(guns.PELLETS[self.gun_kind]):
             a = angle + self.rng.uniform(-0.07, 0.07)
             combat.fire(x, y, a, distance, owner="enemy",
-                        damage=self.rng.randint(dmg_lo, dmg_hi), team=self.team)
+                        damage=_dmg, team=self.team)
 
-    def take_damage(self, amount: int) -> bool:
+    def add_threat(self, who) -> bool:
+        """HE KNOWS WHO HIT HIM. One entry per man, added ONCE.
+
+        Returns True when this is a new enemy, so the caller can log the start
+        of a feud rather than repeating it sixty times a second.
+        """
+        if who is None or who is self:
+            return False
+        if not isinstance(getattr(self, "aggro_at", None), dict):
+            self.aggro_at = {}
+        key = id(who)
+        if key in self.aggro_at:
+            return False
+        self.aggro_at[key] = who
+        self.aggro = True
+        self.panic = 0.0
+        return True
+
+    def drop_threat(self, who) -> None:
+        """THE FEUD IS OVER when that specific man is dead or gone."""
+        d = getattr(self, "aggro_at", None)
+        if isinstance(d, dict):
+            d.pop(id(who), None)
+        self.aggro = bool(d)
+
+    def threat_list(self) -> list:
+        """The men he is actually fighting -- dead ones dropped as they go."""
+        d = getattr(self, "aggro_at", None)
+        if not isinstance(d, dict):
+            self.aggro = False
+            return []
+        for key, who in list(d.items()):
+            if who is None or not getattr(who, "alive", True):
+                d.pop(key, None)
+        self.aggro = bool(d)
+        return list(d.values())
+
+    def _body_follows_skill(self) -> None:
+        """A man who has learned his trade has the body to show for it."""
+        try:
+            stats.apply_body(self)
+        except Exception:
+            pass
+
+    def tranq(self, seconds: float = 22.0) -> None:
+        """A DART, NOT A BULLET: he does not die, he lies down."""
+        self.sleep_t = float(seconds)
+        self.health = max(1, int(self.health))
+        self.bleed = 0.0
+        self.panic = 0.0
+        self.attacked = False
+        try:
+            import plog
+            plog.log("TRANQ", getattr(self, "name", "?"), "asleep")
+        except Exception:
+            pass
+
+    def take_damage(self, amount: int, record: bool = True,
+                    tranq: bool = False) -> bool:
+        # THE TRUTH-TELLER DOES NOT BLEED. He used to hold a million
+        # health to stand in for that, which made one villager's body a
+        # lie; the rule is here instead.
+        if getattr(self, "is_truth_teller", False):
+            return False
+        if tranq:
+            # SAME DAMAGE, SAME ARITHMETIC -- only the last point differs: a
+            # dart that would have killed him puts him to sleep instead.
+            self.health = int(self.health) - int(amount)
+            if self.health <= 0:
+                self.health = 1
+                self.tranq()
+            return False
+        # A DEAD MAN IS NOT KILLED AGAIN. Without this every further blow on a
+        # body re-ran the death branch: the same man was "SLAIN" over and over
+        # (measured: 487 lines for a handful of people) and `die()` was called
+        # as many times.
+        if not getattr(self, "alive", True) or getattr(self, "dead", False):
+            return True
         self.health -= amount
         self.hit_flash = 0.15
         self.hurt_flash = face.HURT_SECONDS   # and his face says so
@@ -568,6 +774,12 @@ class NPC:
             # world lost four hundred people in two days and the log showed
             # only the starved and the rank-and-file, which is why a massacre
             # looked like a famine for a whole evening.
+            if not record:
+                # THE FRAME'S COPY DIES TOO, and it used to write a second
+                # SLAIN line for the same man on the same blow -- the lane's
+                # copy is the one that keeps the record.
+                self.die()
+                return not self.alive
             try:
                 import economy as _e
                 _e._note("SLAIN    %-16s of %-14s by %d damage (health %d)"
@@ -762,16 +974,23 @@ class NPC:
     def update(self, dt: float, threat=None, colliders=None, combat=None,
                night: bool = False, world=None, now: float = 0.0,
                phase: str = "home") -> None:
+        if getattr(self, "sleep_t", 0.0) > 0.0:
+            self.sleep_t = max(0.0, self.sleep_t - dt)
+            self.moving = False
+            return
+        # THE BODY GROWS WITH THE SKILL, checked once a second and not once a
+        # frame: a thousand men a tick is not where a float compare belongs.
+        self._body_t = getattr(self, "_body_t", 0.0) - dt
+        if self._body_t <= 0.0:
+            self._body_t = 1.0
+            try:
+                stats.apply_body(self)
+            except Exception:
+                pass
         try:
             self.gate_tick(dt, now)
         except Exception:
             pass
-        # THE TEST OF STRENGTHS OUTRANKS EVERYTHING. A man in the ring at the
-        # capital is not running a caravan, not moseying round a square and
-        # not going home at night: the tournament is fighting him (see
-        # tournament.Tournament.tick), so nothing else may.
-        if self.duel_tournament is not None:
-            return
         if self.known_since:              # ONLY A MAN WHO HAS BEEN TOLD
             self.forget(now)              # anything has anything to forget.
         self.speed = self.base_speed * self.skills.move_scale()   # practice tells
@@ -798,6 +1017,44 @@ class NPC:
                 if self.trade_demand == 0:
                     self.restock_timer = 600.0                # try again later
         if not self.alive:
+            return
+        # A MAN HIRED BY THE PLAYER HAS ONE ERRAND: THE YARD. Before sleep,
+        # before the watch, before a trade run -- a trader hired mid-run would
+        # otherwise go on trading, and a man asleep would sleep through his
+        # own hiring. He wakes, he comes indoors no more, and he walks there.
+        _post = getattr(self, "work_post", None)
+        # THE POST ALONE IS THE SIGNAL. `player_worker` is set in the process
+        # that hires him; the lane that walks him is only told where the work
+        # is, so requiring both meant he never moved at all.
+        if _post is not None:
+            self.asleep = False
+            self.in_interior = False
+            # STRAIGHT AT THE POST -- `steering.steer` already knows how to
+            # leave a fenced town by its gate (`fence.cross_dir`). The extra
+            # waypoint this used to compute aimed 140 px outside the gate and
+            # then treated being within 22 px of THAT as arrival, so he stood
+            # 22 px short of it and started again: an orbit on the spot.
+            _d = math.hypot(_post[0] - self.x, _post[1] - self.y)
+            if _d > 22.0:
+                _nav = getattr(self, "_nav", None)
+                if _nav is not None:
+                    # A PLAN, NOT A NUDGE. The lane gives him an A* window built
+                    # by pathfind.build; follow it. Straight-line steering is
+                    # the fallback for when there is no plan yet.
+                    try:
+                        import pathfind as _pf
+                        _ux, _uy = _pf.steer(self, _nav, _post[0], _post[1])
+                        self.x += _ux * self.speed * dt
+                        self.y += _uy * self.speed * dt
+                        self.facing = (_ux, _uy)
+                        self.skills.gain_movement(self.speed * dt)
+                    except Exception:
+                        self._step_toward(_post[0], _post[1], dt)
+                else:
+                    self._step_toward(_post[0], _post[1], dt)
+            else:
+                self.pause = 1.0
+                self.target = (_post[0], _post[1])
             return
         if self.on_duty:                           # represented by a soldier
             return
@@ -1053,8 +1310,13 @@ class NPC:
 
         Longer than his own swing, so a fight keeps it lit and the peace takes
         it away -- rather than it blinking on and off between swings.
+
+        `attacked_flash` is the same news for the OTHER side of the fight: the
+        man in front of him can see the blow going up, and that is the whole
+        trigger for throwing himself backwards out of it.
         """
         self.attack_flash = face.WAR_SECONDS
+        self.attacked_flash = 0.30
 
     def _swing_tool(self, item: str = "shovel") -> bool:
         """Wear the tool in hand, taking a spare from the crate when it breaks.
@@ -1066,18 +1328,16 @@ class NPC:
         # would go on reading "plenty left" for a pickaxe he has never owned.
         # Written here, at the swing, because this is where a tool is picked up.
         self.tool_kind = item
+        # TOOLS DO NOT WEAR OUT, FOR ANYBODY, FOR NOW. A man picks up a tool
+        # and it is his until he loses it: no uses ticked down, nothing to
+        # replace, no trip to the smith to buy one. What still runs out is
+        # AMMUNITION -- a rifle spends rounds exactly as it did before (that is
+        # guns.py and _round_ready, untouched).
         if self.tool_uses <= 0:
             if self.stock.get(item, 0) <= 0:
                 return False
-            self.stock[item] -= 1
             g = economy.grade_of(self, item)
             self.tool_uses = max(1, int(economy.TOOL_USES * economy.tool_dur_mult(g)))
-        # INDESTRUCTIBLE TOOLS, FOR THE HUB FOLK. The criminal nation works
-        # outside the town economy entirely -- no smith to buy an axe from, no
-        # wage to buy one with -- so their tools do not wear out while we watch
-        # what they do. Remove the guard and they are like everybody else.
-        if getattr(self, "nation", None) != 1:
-            self.tool_uses -= 1
         return True
 
     def _find_tree(self, home, forest=None):
@@ -1530,19 +1790,46 @@ class NPC:
                 self.stock["wood"] = self.stock.get("wood", 0) + 1
 
     def _trade_buy(self, village, item: str, want: int) -> int:
-        """Fill the cart at the village ledger -- the wholesale house, which
-        sells to foreign traders only, at its own fixed price -- and top up
-        from whatever the villagers themselves will part with."""
+        """FILL THE CART AT THE VILLAGE LEDGER, LOT BY LOT, BY ITS GRADE.
+
+        The granary used to ask one price -- the blend of everyone's grades --
+        while handing over the WORST lot first (economy.store_take takes the
+        poor leaf before the good). A trader paid good-leaf money and carried
+        floor sweepings. Each lot is now priced at its own grade and taken in
+        the same order it is priced, and the grade comes aboard with it.
+        """
         got = 0
-        price = max(1, economy.ledger_value(village, item))
-        have = village.ledger_goods.get(item, 0)
-        qty = int(min(want, have, self.coins // max(0.05, price)))
-        if qty > 0:
-            economy.store_take(village, item, qty)
-            village.ledger_coins += qty * price
-            self.coins -= qty * price
-            self.stock[item] = self.stock.get(item, 0) + qty
-            got += qty
+        book = getattr(village, "ledger_lots", None) or {}
+        lots = book.get(item) or {}
+        if not lots:
+            # A shelf with no lot book (an old save): one grade, the shelf's.
+            grade = int((getattr(village, "ledger_grade", None) or {}).get(item, 3))
+            lots = {grade: int((getattr(village, "ledger_goods", None) or {}).get(item, 0))}
+        for grade in sorted(int(g) for g in lots):
+            if got >= want:
+                break
+            have_lot = int(lots.get(grade, 0) or 0)
+            if have_lot <= 0:
+                continue
+            price = max(1, int(round(economy.prospect(village, item, grade))))
+            take = int(min(have_lot, want - got,
+                           self.coins // max(0.05, price)))
+            if take <= 0:
+                continue
+            economy.store_take(village, item, take)
+            village.ledger_coins += take * price
+            self.coins -= take * price
+            held = int(self.stock.get(item, 0))
+            self.stock[item] = held + take
+            try:
+                import quality as _q
+                if not isinstance(getattr(self, "grade", None), dict):
+                    self.grade = {}
+                self.grade[item] = _q.merge(int(self.grade.get(item, 3)),
+                                            held, grade, take)
+            except Exception:
+                pass
+            got += take
         return got
 
     def _trade_sell(self, village, item: str, want: int) -> int:
@@ -1850,11 +2137,64 @@ class NPC:
             return "axe"
         return None
 
+    LUNGE_SECONDS = 0.20
+    LUNGE_MULT = 3.0
+    LUNGE_COST = 0.25          # of his own full stamina
+    LUNGE_CD = 2.4
+
+    def _wants_lunge_away(self, target, distance: float) -> bool:
+        """THE ONE RULE: AN ENEMY IS ATTACKING, CLOSE ENOUGH, AND HE HAS WIND.
+
+        Not a plan and not a dice roll. If the man in front of him has just
+        swung (or is coming in), and he is inside that man's reach, and there is
+        at least a quarter of his wind left, he throws himself backwards out of
+        it. That is the whole of it.
+        """
+        if getattr(target, "dead", False) or not getattr(target, "alive", True):
+            return False
+        if distance > 64.0:
+            return False                      # not in his reach: nothing to dodge
+        if self.stamina < self.max_stamina * self.LUNGE_COST:
+            return False                      # too spent to move
+        coming = (getattr(target, "swing_anim", 0.0) > 0.0      # the player
+                  or getattr(target, "attacked_flash", 0.0) > 0.0  # a man
+                  or getattr(target, "lunging", 0.0) > 0.0)        # a lunge
+        return bool(coming)
+
     def _fight(self, dt: float, target, combat) -> None:
         dx, dy = target.x - self.x, target.y - self.y
+        self._foe_last = (target.x, target.y)
         distance = math.hypot(dx, dy) or 1.0
         ux, uy = dx / distance, dy / distance
         self.facing = (ux, uy)
+        self.attacked_flash = max(0.0, self.attacked_flash - dt)
+
+        # THE DODGE. One rule: the man in front of him is attacking, he is
+        # inside that man's reach, and he has the wind -- so he throws himself
+        # backwards out of it. A fifth of a second at three times his walk, a
+        # quarter of his stamina, and then two and a half seconds before he can
+        # do it again (a man cannot dodge twice in one breath).
+        if self.lunging > 0.0:
+            self.lunging = max(0.0, self.lunging - dt)
+            self.x -= ux * self.combat_speed * self.LUNGE_MULT * dt
+            self.y -= uy * self.combat_speed * self.LUNGE_MULT * dt
+            return
+        self.lunge_cd = max(0.0, self.lunge_cd - dt)
+        if self.lunge_cd <= 0.0 and self._wants_lunge_away(target, distance):
+            self.lunging = self.LUNGE_SECONDS
+            self.lunge_cd = self.LUNGE_CD
+            self.stamina = max(0.0, self.stamina
+                               - self.max_stamina * self.LUNGE_COST)
+            try:
+                import plog
+                plog.log("LUNGE", getattr(self, "name", "?"), "away from",
+                         getattr(target, "name", "?"), "dist", int(distance),
+                         "stamina", int(self.stamina))
+            except Exception:
+                pass
+            self.x -= ux * self.combat_speed * self.LUNGE_MULT * dt
+            self.y -= uy * self.combat_speed * self.LUNGE_MULT * dt
+            return
         if self.weapon == "rifle":
             preferred = 220.0
             if distance > preferred + 40.0:
@@ -1867,7 +2207,9 @@ class NPC:
                 self.x += -uy * self.strafe_dir * self.combat_speed * 0.5 * dt
                 self.y += ux * self.strafe_dir * self.combat_speed * 0.5 * dt
             self.attack_cd -= dt
-            if self.attack_cd <= 0.0 and combat is not None and distance <= 460.0:
+            _n = guns.rounds_now(self, dt, self.attack_cd <= 0.0
+                                 and combat is not None and distance <= 460.0)
+            for _ in range(_n):
                 angle = math.atan2(dy, dx) + random.uniform(-0.03, 0.03)
                 mx, my = self.x + ux * 16.0, self.y + uy * 16.0
                 ex = mx + math.cos(angle) * (distance + 120.0)
@@ -1876,9 +2218,10 @@ class NPC:
                                         getattr(self, "_soldiers", ()),
                                         getattr(self, "_player", None), self.nation):
                     if self._round_ready():
-                        self.attack_cd = random.uniform(0.5, 0.9)
+                        if self.attack_cd <= 0.0:
+                            self.attack_cd = random.uniform(0.5, 0.9)
                         self._did_attack()
-                        self._shoot(combat, mx, my, angle, distance + 120.0, 6, 12)
+                        self._shoot(combat, mx, my, angle, distance + 120.0, 80, 80)
         else:
             # Axe work. Hold the range where the axe reaches and the teeth do
             # not: a wolf bites at 30, so dance at 33 to 40 and let him wear
@@ -1942,6 +2285,9 @@ class NPC:
         # coat. The wear is still recorded on the man (biomes.npc_wear still
         # sets it) in case it is wanted again; it is simply not drawn.
         body = (242, 232, 232) if flash else self.clothing
+        # THE OLD MAN WEARS A PLAIN TUNIC, and his hair is grey under the face.
+        if getattr(self, "is_stalin", False):
+            body = (74, 78, 76) if not flash else (242, 232, 232)
         pygame.draw.circle(screen, body, (int(sx), int(sy)), 10)
         pygame.draw.circle(screen, (44, 40, 36), (int(sx), int(sy)), 10, 2)
         pygame.draw.circle(screen, (216, 172, 132), (int(hx), int(hy)), 8)
@@ -1962,6 +2308,22 @@ class NPC:
         # together -- drawn UNDER the mood, so a veteran keeps his beard.
         vet = face.vet_tier(self.skills.axe, self.skills.shooting)
         face.draw(screen, hx, hy, head_r, fx, fy, mood, vet=vet)
+        if getattr(self, "is_stalin", False):
+            # THE DICTATOR: the walrus moustache, and the cap in the
+            # republic's own red with a gold star.
+            face.moustache(screen, hx, hy, head_r)
+            face.cap(screen, hx, hy, head_r, fx, fy, red=True)
+        elif is_military(self):
+            # MILITIA WEAR THE DARK BLUE CAP; soldiers the olive one.
+            face.cap(screen, hx, hy, head_r, fx, fy,
+                     blue=bool(getattr(self, "militia", False)))
+        if getattr(self, "sleep_t", 0.0) > 0.0:
+            try:
+                fnt = pygame.font.SysFont("dejavusans", 12, bold=True)
+                z = fnt.render("Zzz", True, (226, 226, 236))
+                screen.blit(z, (hx + 6, hy - 20))
+            except Exception:
+                pass
         # AND THE TOP HAT, IF HE IS THE MAYOR. It goes ON, not under: the
         # monocle had to go underneath because its rim cut across an eye, but a
         # hat is above the head and covers nothing but the head's own top row,
@@ -2703,8 +3065,8 @@ class Village:
             guard.defender = True
             guard.role = "Defender"
             guard.weapon = "rifle" if rng.random() < 0.5 else "axe"
-            guard.max_health = 70
-            guard.health = 70
+            guard.max_health = stats.PLAYER_MAX_HEALTH
+            guard.health = stats.PLAYER_MAX_HEALTH
             if guard.weapon == "rifle" and rng.random() < 0.25:
                 guard.gun_kind = guns.SHOTGUN
                 guard.mag = guns.MAG[guns.SHOTGUN]
@@ -3011,6 +3373,28 @@ class Village:
     # for the rest of the save, with no way to live it down.
     PROVOKE_SECONDS = 120.0
 
+    def calm(self) -> None:
+        """TWO MINUTES UP IN ARMS, THEN THE TOWN GOES BACK TO ITS BUSINESS.
+
+        PROVOKE_SECONDS has been set here since the beginning and NOTHING EVER
+        COUNTED IT DOWN: one crime, and the town was hostile for the rest of
+        the save -- every guard made in it, for ever, with no way to live it
+        down. The men who were TOLD what you are keep their grudge (`knows`,
+        and main's KNOWS-AGGRO pass re-arms them every frame); the street, and
+        everyone who only heard the alarm, go back to work.
+        """
+        self.provoked = False
+        self.provoked_t = 0.0
+        for npc in self.npcs:
+            if not npc.alive:
+                continue
+            npc.aggro = False
+            npc.panic = 0.0
+        for g in (getattr(self, "guards", None) or ()):
+            if getattr(g, "alive", False):
+                g.hostile = False
+                g.aware = False
+
     # THE GATE IS PHYSICAL. A man queues because he is five tiles from the guard
     # on that gate and his road runs to the other side of the wall -- and the
     # line he stands in is spaced out behind it.
@@ -3093,6 +3477,11 @@ class Village:
         # court, the garrison and the market of the whole town, which is what
         # made a ten-second search cost a quarter of a second a frame.)
         self.forget_killers(now)
+        # THE ALARM RUNS OUT. See calm().
+        if self.provoked:
+            self.provoked_t = float(getattr(self, "provoked_t", 0.0)) - dt
+            if self.provoked_t <= 0.0:
+                self.calm()
         day = int(now / economy.DAY_LENGTH)
         self._day = now / economy.DAY_LENGTH
         if day != getattr(self, "_log_day", -1):
@@ -3109,7 +3498,8 @@ class Village:
                 % (day, self.name, len(self.npcs), self.capacity,
                    sum(economy.food_of(n) for n in self.npcs),
                    sum(self.ledger_goods.get(k, 0) for k in economy.FOOD),
-                   sum(n.stock.get("wood", 0) for n in self.npcs),
+                   sum(n.stock.get("wood", 0) for n in self.npcs)
+                   + int(self.ledger_goods.get("wood", 0)),
                    sum(1 for h in self.houses if getattr(h, "warmth", 1.0) <= 0.0),
                    len(self.houses), self.ledger_coins,
                    sum(1 for n in self.npcs if n.farm_plot is not None),
@@ -3146,18 +3536,17 @@ class Village:
         economy.pay_crown(self, day)   # and the capital pays its King
         economy.tithe_food(self, day)  # a third of the food gain goes up too
         economy.pay_mayor(self, day)   # and the nation pays its mayor
-        # EACH TOWN ELECTS ON ITS OWN DAY, EVERY ELECTION_DAYS.
-        # `day % ELECTION_DAYS == 0` made EVERY village in the world vote inside
-        # the same world tick -- thirty elections, one after another, in a
-        # single frame. Each voter costs four regard() calls, so the tick paid
-        # for all of them at once and the game hitched once a fortnight. The
-        # village's own code shifts its day, so the work spreads across the
-        # fortnight and no tick carries more than two or three towns.
-        if day > 0 and (day - self.code) % economy.ELECTION_DAYS == 0:
-            economy.hold_election(self, day, PLAYER)   # the town chooses, player included
         self.court_day(day)                    # ten days at court, ten at home
         economy.crown_arms_order(self, day)   # and buys the arms for its war
         economy.pay_garrison(self, day)       # the standing army is paid daily
+        # THE SERVICE'S OWN PAY. Each settlement pays its agents; the seat
+        # pays the chief and the men no town employs.
+        economy.pay_agents(self, day)
+        if getattr(self, "king", None) is not None:
+            economy.pay_service_state(self, day, service_carts())
+        # AND THE MINT, LAST: what the books paid today, plus a floor, coined
+        # out of the granary's own firewood. See economy.mint_day.
+        economy.mint_day(self, day)
         # (the houses share their own larders now, from their own register)
 
         # NO LOOP OVER THE PEOPLE. This used to drive every citizen from here --
@@ -3199,46 +3588,6 @@ class Village:
         npc.workplace = None
         npc.farm_plot = None
         npc.farm_plots = []
-
-    def candidates_for_crown(self) -> list:
-        """WHO MAY FIGHT FOR THE CROWN: the sitting King and the nation's mayors.
-
-        Office is the entry ticket. That is what makes a mayoral election the
-        first rung of the ladder rather than the whole of it -- win your town
-        and you have the right to stand against the King himself.
-        """
-        out: list = []
-        king = getattr(self, "king", None)
-        if king is not None and getattr(king, "alive", False):
-            out.append(king)
-        reg = getattr(self, "registry", None)
-        for v in getattr(reg, "villages", ()) or ():
-            if getattr(v, "nation", None) != getattr(self, "nation", None):
-                continue
-            m = getattr(v, "mayor", None)
-            if (m is not None and getattr(m, "alive", False)
-                    and m not in out):
-                out.append(m)
-        return out
-
-    def crown(self, npc) -> None:
-        """Put the crown on him, and take it off whoever held it.
-
-        The old King is not exiled -- he is a noble again, and may stand at the
-        next Test. The crown was never his; the winning of it was.
-        """
-        old = getattr(self, "king", None)
-        if old is not None and old is not npc and getattr(old, "alive", True):
-            old.is_king = False
-            old.role = None
-            if getattr(old, "job", None) == "king":
-                old.job = None
-                self.free_post(old)
-        npc.is_king = True
-        npc.role = "King"
-        npc.job = "king"
-        npc.plaza = (self.x, self.y)
-        self.king = npc
 
     def court_day(self, day: int) -> None:
         """WHERE THE MAYOR IS SUPPOSED TO BE.
@@ -3883,6 +4232,12 @@ class Villages:
         # the census -- hears the same answer without being told.
         for v in list(extra) + list(getattr(self, "offlattice", ())):
             if v is None:
+                continue
+            # HIS OWN YARD IS NOT A SETTLEMENT. It is not culled, not drawn,
+            # not stepped, not garrisoned -- his fences and his houses are
+            # already the world's, and handing his yard to every system that
+            # walks visible_villages crashed the frame (no gx, no patrol).
+            if getattr(v, "is_player_hub", False):
                 continue
             r = float(getattr(v, "radius", 0.0)) + slack
             if abs(v.x - cx) <= r and abs(v.y - cy) <= r and v not in out:

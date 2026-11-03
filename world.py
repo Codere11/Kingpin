@@ -525,6 +525,29 @@ class StaticLayer:
         self.rect = None
         self.surf = None
         self.version = None
+        # MORE THAN ONE REGION KEPT. One cached region meant that walking out
+        # of it recomposed the ground and the scatter from scratch -- which is
+        # the hitch you feel when you come somewhere new, the camp gate most of
+        # all, because every region round it is new.
+        self.keep = 1
+        self._regions = {}
+
+    def warm(self, x: float, y: float, vw: float, vh: float) -> None:
+        """COMPOSE A REGION NOW, so walking into it does not cost a frame."""
+        m_x = int(vw * self.margin)
+        m_y = int(vh * self.margin)
+        need = pygame.Rect(int(x) - m_x, int(y) - m_y, int(vw) + 2 * m_x,
+                           int(vh) + 2 * m_y)
+        key = (need.x, need.y, need.w, need.h)
+        if key in self._regions:
+            return
+        surf = pygame.Surface((need.w, need.h))
+        self.ground.draw(surf, need.x, need.y, need.w, need.h)
+        self.scatter.draw(surf, need.x, need.y, need.w, need.h)
+        # ...and make it the live region, so the frame it is for is free
+        self.surf = surf
+        self.rect = need
+        self.version = getattr(self.ground, "_version", 0)
 
     def draw(self, screen, cam_x, cam_y, vw, vh, statics_fn=None,
              entity_band=None) -> None:

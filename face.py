@@ -25,6 +25,12 @@ WHITE = (246, 246, 250)     # NEUTRAL-COOL, not warm. It was (243,240,234),
                             # eye looked yellow. A cool white is the contrast.
 EYE = (38, 30, 26)          # the pupil, near-black so it reads at one pixel
 BROW = (96, 66, 46)         # a shade under the hair
+# THE OLD MAN OF THE REPUBLIC. Iron grey, swept back off the forehead, and a
+# moustache thick enough to be the first thing anybody remembers about him.
+HAIR_GREY = (150, 152, 156)
+HAIR_GREY_LIGHT = (186, 188, 192)
+MOUSTACHE = (176, 178, 182)
+MOUSTACHE_DARK = (132, 134, 138)
 NOSE = (182, 144, 110)   # LIGHTER than the head's outline (150,112,82),
                             # which it was the same colour as -- an invisible nose
 MOUTH = (128, 82, 66)
@@ -167,6 +173,36 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
     angry = (mood == "angry")
     hurt = (mood == "hurt")
     sly = (mood == "sly")
+
+    if mood == "dead":
+        # THE DEAD FACE. The same head as ever -- ONE X across the middle,
+        # where the eyes were, and his tongue out. No brows, no pupils, no
+        # looking: nothing in it is alive.
+        # A PROPER X. Two strokes, two pixels thick, square (as wide as it is
+        # tall), crossing in a solid block at the middle of the face and ending
+        # a pixel inside the head's rim. A one-pixel X on a head this small
+        # pinches to nothing at the crossing and its ends read as whiskers; a
+        # flat one reads as goggles. This is the ratio that reads.
+        _h = max(3, r // 2)                      # half-size: 4 at r=8 -> 10x10
+        _lim = (r - 1) * (r - 1)
+
+        def _stroke(_sx, _sy) -> None:
+            for _i in range(-_h, _h + 1):
+                for _j in (0, 1):                # the second row: thickness
+                    _px = ix + _i * _sx
+                    _py = iy + _i * _sy + _j
+                    if (_px - ix) ** 2 + (_py - iy) ** 2 <= _lim:
+                        screen.set_at((_px, _py), EYE)
+
+        _stroke(1, 1)
+        _stroke(1, -1)
+        my = int(round(hy + r * MOUTH_DOWN))
+        pygame.draw.line(screen, MOUTH, (ix - max(2, r // 3), my),
+                         (ix + max(2, r // 3), my), 1)
+        # the tongue, hanging out of it
+        pygame.draw.ellipse(screen, TONGUE,
+                            (ix - 2, my, max(4, r // 2), max(4, int(r * 0.7))))
+        return
 
     # -- WHAT A FIGHTER EARNS, AND THE ORDER IT GOES ON IN -----------------
     #
@@ -593,6 +629,115 @@ def warm(radii=(8, 9), dirs=DIRS,
                     sprite(r, d, m, v)
                     n += 1
     return n
+
+
+CAP_BAND = (58, 62, 52)          # the cap's band: dark olive
+CAP_CROWN = (74, 80, 66)         # ...the crown, a shade lighter on top
+CAP_DARK = (34, 36, 30)          # its edge, and the peak
+STAR_RED = (176, 34, 30)         # the star, and nothing else in the world is red
+STAR_LIGHT = (214, 62, 52)
+# THE DICTATOR'S CAP IS THE REPUBLIC'S OWN RED. Same cap, same star -- the
+# colour is the rank.
+# THE MILITIA'S CAP IS DARK BLUE, and the star on it is the same star.
+CAP_NAVY_BAND = (34, 46, 92)
+CAP_NAVY_CROWN = (44, 58, 112)
+CAP_NAVY_DARK = (20, 26, 54)
+CAP_RED_BAND = (150, 30, 28)
+CAP_RED_CROWN = (176, 42, 36)
+CAP_RED_DARK = (92, 18, 18)
+STAR_GOLD = (232, 196, 84)
+
+
+def _star(screen, cx: float, cy: float, r_out: float,
+          colour=STAR_RED, colour2=STAR_LIGHT) -> None:
+    """A FIVE-POINTED STAR, big enough to be unmistakable at four pixels."""
+    import math as _m
+    pts = []
+    for i in range(10):
+        ang = -_m.pi / 2.0 + i * _m.pi / 5.0
+        r = r_out if i % 2 == 0 else r_out * 0.45
+        pts.append((cx + _m.cos(ang) * r, cy + _m.sin(ang) * r + 0.4))
+    pygame.draw.polygon(screen, colour, pts)
+    pygame.draw.polygon(screen, colour2, pts, 1)
+
+
+def cap(screen, hx: float, hy: float, r: int, fx: float = 0.0,
+        fy: float = 0.0, red: bool = False, blue: bool = False) -> None:
+    """A PEAKED CAP OF THE REPUBLIC, WITH THE STAR ON THE FRONT.
+
+    It sits ON the skull: the crown and band above the eye line, the black peak
+    jutting out over the brow, and the red star on the band in front -- high
+    enough that it never covers an eye.
+    """
+    try:
+        r = int(r)
+        hx, hy = float(hx), float(hy)
+        n = (fx * fx + fy * fy) ** 0.5 or 1.0
+        ux = fx / n
+        if red:
+            band_col, crown_col, dark_col = CAP_RED_BAND, CAP_RED_CROWN, CAP_RED_DARK
+        elif blue:
+            band_col, crown_col, dark_col = CAP_NAVY_BAND, CAP_NAVY_CROWN, CAP_NAVY_DARK
+        else:
+            band_col, crown_col, dark_col = CAP_BAND, CAP_CROWN, CAP_DARK
+        band_top = hy - r * 0.95
+        band_h = max(3, int(round(r * 0.45)))
+        half = r + 1
+        # crown, flared, above the band
+        crown = pygame.Rect(int(hx - half - 1), int(band_top - r * 0.62),
+                            int((half + 1) * 2), int(r * 0.75))
+        pygame.draw.ellipse(screen, crown_col, crown)
+        pygame.draw.ellipse(screen, dark_col, crown, 1)
+        # the band
+        band = pygame.Rect(int(hx - half), int(band_top), int(half * 2), band_h)
+        pygame.draw.rect(screen, band_col, band)
+        pygame.draw.rect(screen, dark_col, band, 1)
+        # the peak: a dark line under the band, forward of it
+        py = band.bottom - 1
+        pygame.draw.line(screen, dark_col, (int(hx - half + 1), py),
+                         (int(hx + half - 1), py), 1)
+        pygame.draw.line(screen, dark_col,
+                         (int(hx - half + 2 + ux * 2), py + 1),
+                         (int(hx + half - 2 + ux * 2), py + 1), 1)
+        # THE STAR, ON THE FRONT OF THE BAND -- above the eyes, never on them
+        sx = hx + ux * half * 0.55
+        sy = band_top + band_h * 0.5
+        if red:
+            _star(screen, sx, sy, max(1.9, r * 0.26), STAR_GOLD, (255, 232, 140))
+        else:
+            _star(screen, sx, sy, max(1.9, r * 0.26))
+    except Exception:
+        pass
+
+
+def moustache(screen, hx: float, hy: float, r: int) -> None:
+    """STALIN'S MOUSTACHE: a broad walrus, thicker at the wings than the middle.
+
+    It starts under the nose, runs wider than the mouth on both sides, and the
+    ends hang below the line of the lip. Drawn in two greys so the thickness
+    reads at eight pixels of head.
+    """
+    try:
+        r = int(r)
+        hx, hy = int(round(hx)), int(round(hy))
+        half = max(4, int(round(r * 0.85)))
+        top = hy + max(1, int(round(r * 0.10)))
+        # ONE SOLID MASS: every column is drawn from its own top down to a flat
+        # bottom, so the wings hang lower than the middle and there is no hole
+        # in it -- a moustache with a gap in the middle is a moustache with a
+        # hole in it.
+        for i in range(-half, half + 1):
+            droop = int(round(0.32 * abs(i)))
+            px = hx + i
+            pygame.draw.line(screen, MOUSTACHE, (px, top + droop),
+                             (px, top + 2 + droop))
+        # a dark edge along the underside, so it sits on the lip as a shape
+        for i in range(-half, half + 1):
+            droop = int(round(0.32 * abs(i)))
+            pygame.draw.line(screen, MOUSTACHE_DARK,
+                             (hx + i, top + 2 + droop), (hx + i, top + 2 + droop))
+    except Exception:
+        pass
 
 
 def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,

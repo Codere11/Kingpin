@@ -12,6 +12,8 @@ march, and the reckoning afterwards: who came home, who did not, and who owns
 the village now.
 """
 
+import stats
+
 import math
 import random
 
@@ -798,7 +800,7 @@ def muster(registry, capital, target):
         soldier.march_target = (target.x, target.y)
         soldier.march_village = target
         soldier.hostile = True
-        soldier.max_health = soldier.health = 95
+        soldier.max_health = soldier.health = stats.PLAYER_MAX_HEALTH
         soldier.rally_off = (random.uniform(-72.0, 72.0), random.uniform(230.0, 470.0))
         soldier.in_army = True
         issue_rations(capital, soldier)
@@ -1044,7 +1046,7 @@ def reinforce(registry, army, now: float) -> list:
         soldier.march_target = (army.target.x, army.target.y)
         soldier.march_village = army.target
         soldier.hostile = True
-        soldier.max_health = soldier.health = 95
+        soldier.max_health = soldier.health = stats.PLAYER_MAX_HEALTH
         soldier.rally_off = (random.uniform(-72.0, 72.0), random.uniform(230.0, 470.0))
         soldier.in_army = True
         issue_rations(army.capital, soldier)

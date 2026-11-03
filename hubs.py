@@ -56,6 +56,33 @@ NAMES = ("Stillwater", "Cinder Creek", "Hollow Ash", "Bitter Wells",
          "Hard Scratch", "Poor Farm", "Nine Mile")
 
 
+def in_player_hub(rect, hubs) -> bool:
+    """Is this ground inside a yard of the player's own?"""
+    for h in hubs:
+        if getattr(h, "is_player_hub", False) and h.fence_rect.colliderect(rect):
+            return True
+    return False
+
+
+def land_ok(rect, villages, hubs, px: float, py: float, clearance=140.0) -> bool:
+    """HIS OWN GROUND, OR OPEN COUNTRY -- NEVER SOMEBODY ELSE'S.
+
+    A settlement's fence and a hut's fence are both closed to him: the law is
+    the gate, and a man does not build a forge in another man's town. What is
+    allowed is the wild, and any yard he has already closed himself.
+    """
+    if in_player_hub(rect, hubs):
+        return True
+    for v in list(villages or ()) + list(hubs or ()):
+        fr = getattr(v, "fence_rect", None)
+        if fr is not None and fr.inflate(clearance, clearance).colliderect(rect):
+            return False
+        if math.hypot(getattr(v, "x", 0.0) - px,
+                      getattr(v, "y", 0.0) - py) < float(getattr(v, "radius", 0.0)) + 260.0:
+            return False
+    return True
+
+
 def _note(message: str) -> None:
     try:
         with open(os.path.expanduser("~/.kingpin_saves/village.log"), "a") as fh:
@@ -236,6 +263,13 @@ class Hub(village_mod.Village):
                 "%08x%02x" % (seed & 0xFFFFFFFF, k), "Criminal", self))
         for k, (n, job) in enumerate(zip(self.npcs,
                                          ("soldier", "farm", "lab"))):
+            # A HUT'S MAN NEEDS A NAME OF HIS OWN. These three came out of
+            # `Village.__init__`, which numbers its people by LATTICE CELL
+            # ("npc_{-2}_{-2}_0"), and two huts can stand in the same cell --
+            # so two different men were minted with the same id. The save
+            # files key on that id, and so does every register of who is who.
+            # The hut's own position is unique; use it.
+            n.id = "hub_%d_%d_%d" % (int(self.x), int(self.y), k)
             n.job = job
             n.role = "Criminal"
             n.village = self
@@ -594,8 +628,16 @@ class Hub(village_mod.Village):
                     self.ledger_goods[item] = 0
                     taken += qty
             if taken:
-                _note("HANDOFF  shelf -> %s  %d leaf"
-                      % (getattr(artisan, "name", "artisan"), taken))
+                # ONCE A MINUTE, NOT ONCE A TICK. This wrote 175,773 lines into
+                # village.log in one session -- every tick the bench took its
+                # five leaf, every tick it said so.
+                _key = (id(artisan), taken)
+                if getattr(self, "_handoff_note", None) != _key or \
+                        getattr(self, "_handoff_t", -1e9) + 60.0 <= now:
+                    self._handoff_note = _key
+                    self._handoff_t = now
+                    _note("HANDOFF  shelf -> %s  %d leaf"
+                          % (getattr(artisan, "name", "artisan"), taken))
         # THE BENCH KEEPS TWENTY, AND THE REST IS FOR SALE. Every leaf the hut
         # grows was going straight into the artisan's pack, so a passing trader
         # had nothing to buy until the bench had finished with it -- and the
@@ -773,6 +815,139 @@ class Hub(village_mod.Village):
                 n.draw(screen, cam_x, cam_y, False)
 
 
+class PlayerHub:
+    """THE PLAYER'S OWN HUB: a yard he closed in the wild, and his.
+
+    Not a criminal camp -- no men, no bench, no field. What makes it a hub is
+    that HE fenced it: the walls are his own fences, already drawn and already
+    solid, and this object is the name the world can point at -- "his hub" for
+    the service, for a place in a sentence, for whatever comes next.
+    """
+    is_hub = True
+    is_player_hub = True
+    is_capital = False
+
+    def __init__(self, owner, yard, ring, gates) -> None:
+        self.owner = owner
+        self.fence_rect = pygame.Rect(yard)
+        self.fence_walls = list(ring)
+        self.gates = list(gates)
+        self.x = float(yard.centerx)
+        self.y = float(yard.centery)
+        self.radius = max(yard.w, yard.h) / 2.0
+        first = (getattr(owner, "name", "") or "The player").split()[0]
+        self.name = "%s's hold" % first
+        self.houses: list = []
+        self.workplaces: list = []
+        self.npcs: list = []
+        self.farm_plots: list = []
+        self.farm_tiles: dict = {}
+        self.ledger_coins = 0
+        self.ledger_goods: dict = {}
+        self.ledger_grade: dict = {}
+        self.ledger_lots: dict = {}
+        self.prices: dict = {}
+        self.nation = None
+        self.provoked = False
+        self.battle = False
+        self.chaos = 0.0
+        self.conquered = False
+        self.search_queue: list = []
+        self.search_now = None
+        self.search_t = 0.0
+        self.board = pygame.Rect(-10 ** 7, -10 ** 7, 0, 0)
+
+    # -- what the rest of the world asks a settlement, answered honestly ----
+    # A yard has no watch, no roster, no board, no trade and no crown. These
+    # are the questions other systems ask a Village; a hub that pretended to
+    # be one crashed the frame on the first plot (patrol_timer).
+    patrol: tuple = ()
+    guards: list = []
+    patrol_timer: float = 0.0
+    capacity: int = 0
+    last_death: float = -1e9
+    killers: set = set()
+    news: list = []
+    demand: object = None
+    mayor: object = None
+    king: object = None
+    commander: object = None
+    _armed: list = []
+    farm_plots: list = []
+    farm_tiles: dict
+    gate_side: int = 0
+    gate_side2: int = 2
+
+    def gate_list(self):
+        return [(0, g.centerx, g.centery) for g in self.gates]
+
+    def update(self, *a, **k):
+        return None
+
+    def draw(self, *a, **k):
+        return None
+
+    def _assign_duty_bodies(self):
+        return None
+
+    def _rotate_duty(self, day):
+        return None
+
+    def _seed_fields(self, world, now):
+        return None
+
+    def draw_board(self, *a, **k):
+        return None
+
+    def defenders(self):
+        return []
+
+    def provoke(self):
+        return None
+
+    def learn_killers(self, ids, now, teller=None):
+        return False
+
+    def forget_killers(self, now):
+        return False
+
+    def free_post(self, npc):
+        return None
+
+    def offer_post(self, npc):
+        return False
+
+    def open_posts(self):
+        return []
+
+    def staffing(self):
+        return []
+
+    def vacancies(self):
+        return 0
+
+    def woodlot(self):
+        return []
+
+    def capital(self):
+        return None
+
+    def trade_routes(self):
+        return []
+
+    def stone_chunks(self):
+        return {}
+
+    def random_point(self, rng):
+        return (self.x, self.y)
+
+    def can_grow(self, now):
+        return False
+
+    def birth(self, parent):
+        return None
+
+
 class Hubs:
     """The hubs, and nothing else. Not a registry: the crown cannot see them."""
 
@@ -786,6 +961,9 @@ class Hubs:
         # ATTACHED TO THE REGISTRY, so every system that asks the registry
         # which settlements are near a point gets the hubs too.
         villages.offlattice = self.hubs
+        # (and the registry keeps the book, so a test -- or a later system --
+        # can reach this one object without hunting for it)
+        villages._hubs = self
         rng = random.Random(int(world.seed) ^ 0x0C0FFEE)
         towns = list(getattr(villages, "villages", ()) or ())
         tries = 0
@@ -863,14 +1041,9 @@ class Hubs:
     def update(self, dt: float, now: float, phase: str = "home",
                combat=None, threat_of=None, colliders=()) -> None:
         for hub in self.hubs:
+            if getattr(hub, "is_player_hub", False):
+                continue                        # his yard has no men to step
             hub.update(dt, self._world, now, phase, combat, threat_of, colliders)
-        for c in getattr(self, "_caravans", ()):
-            try:
-                c.tick(dt, self.hubs, self._villages.villages, now)
-            except Exception as _e:
-                if not getattr(self, "_car_shown", 0):
-                    self._car_shown = 1
-                    _note("CARAVAN ERROR %s" % repr(_e)[:150])
         try:
             self._refill(dt, now)
         except Exception as _e:
@@ -879,6 +1052,29 @@ class Hubs:
                 self._refill_shown = 1
                 _note("REFILL ERROR %s" % repr(_e)[:160])
                 _tb.print_exc()
+
+    def drive_carts(self, dt: float, now: float) -> None:
+        """THE FREE TRADERS, EVERY FRAME, ON THE FRAME'S OWN CLOCK.
+
+        A cart is a vehicle and is drawn every frame: 240 px/s is four pixels
+        a frame. Stepping it on the 20 Hz world tick would move it twelve at a
+        time -- the "jumping" the throttled build was reverted for -- so it
+        keeps the frame clock. And it is handed `dt`, the real frame time, so
+        its speed is its own SPEED again: it used to be handed `world_dt`,
+        which only the world tick assigns, so a cart was given the same 0.05 s
+        step on every rendered frame and walked at three times its pace.
+
+        It is cheap enough to drive every frame now, because a cart with
+        nothing to buy waits on a clock instead of re-scanning every hut in the
+        world sixty times a second (see Caravan._pick_hub).
+        """
+        for c in getattr(self, "_caravans", ()):
+            try:
+                c.tick(dt, self.hubs, self._villages.villages, now)
+            except Exception as _e:
+                if not getattr(self, "_car_shown", 0):
+                    self._car_shown = 1
+                    _note("CARAVAN ERROR %s" % repr(_e)[:150])
 
     def _refill(self, dt: float, now: float) -> None:
         """A HUT THAT LOSES A MAN TAKES ANOTHER.
@@ -891,6 +1087,8 @@ class Hubs:
         """
         need_row = ("soldier", "farm", "lab")
         for hub in self.hubs:
+            if getattr(hub, "is_player_hub", False):
+                continue              # his yard is staffed by him, or by nobody
             have = {n.job for n in hub.npcs if n.alive}
             missing = [j for j in need_row if j not in have]
             if not missing:
@@ -928,6 +1126,26 @@ class Hubs:
                 _note("HUB      %s takes %s from %s as %s"
                       % (hub.name, getattr(cand, "name", "?"), town.name, want))
                 break
+
+    def add_player_hub(self, owner, yard, ring, gates=()):
+        """THE YARD HE CLOSED BECOMES HIS HUB, once, and by name."""
+        for h in self.hubs:
+            if getattr(h, "is_player_hub", False):
+                if h.fence_rect.colliderect(yard.inflate(300, 300)):
+                    return None                 # that ground is already his
+        hub = PlayerHub(owner, yard, ring, gates)
+        self.hubs.append(hub)
+        reg = getattr(self, "_villages", None)
+        if reg is not None:
+            # HIS YARD IS NOT IN THE WORLD'S LIST OF SETTLEMENTS. The criminal
+            # huts must be there (nothing else knows where they are); his is
+            # not: his fences and his houses are already drawn and already
+            # solid, and a yard pretending to be a town crashed the frame.
+            reg.offlattice = [h for h in self.hubs
+                              if not getattr(h, "is_player_hub", False)]
+        _note("PLAYER HUB  %s  at (%.0f,%.0f)  %dx%d" %
+              (hub.name, hub.x, hub.y, yard.w, yard.h))
+        return hub
 
     def draw(self, screen, cam_x: float, cam_y: float, vw: int, vh: int) -> None:
         view = pygame.Rect(int(cam_x) - 300, int(cam_y) - 300, vw + 600, vh + 600)

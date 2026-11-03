@@ -4,6 +4,8 @@ holds whatever inventory item is selected.
 
 from __future__ import annotations
 
+import stats
+
 import math
 
 import pygame
@@ -42,6 +44,12 @@ SWING_COOLDOWN = 1.5
 SWING_ANIM = 0.32
 
 
+LUNGE_COST = 0.25          # a fourth of full stamina
+LUNGE_SECONDS = 0.20       # how long the burst lasts
+LUNGE_SPEED_MULT = 3.6     # times his walking speed while it lasts
+LUNGE_COOLDOWN = 0.35      # so a lunge cannot be spammed
+
+
 class Player:
     # THE GATE. `searched_village` is the last township that has had its hands
     # in his pack; `search_progress` is the ten seconds it takes; `search_village`
@@ -76,7 +84,18 @@ class Player:
     debt_paid = 0
     farm_plot = None        # his OWN field, by index into his town's list
     smuggling = 0.0
-    social = 0.0            # his ceiling is 10 -- the only man who can reach it         # 0 to 10. What the state does not find is what
+    social = 0.0
+    # WHAT HE HAS BUILT AND WHOM HE PAYS. Class defaults: a player restored
+    # from a save never runs __init__, and every one of these is read before
+    # it is written (work.slots, work.payroll, the plot and station lists).
+    workplaces: Any = None
+    workers: Any = None
+    plots: Any = None
+    _payroll_day: Any = -1
+    work_post: Any = None          # where his hired men walk to
+    yard_plots: Any = None         # the rects of the land he has staked
+    hub_stall: Any = None          # the counter in his hub, for the dialogue
+    town_price_for: Any = None     # what a cart could resell a lot for            # his ceiling is 10 -- the only man who can reach it         # 0 to 10. What the state does not find is what
                             # teaches a man how to carry it.
     def __init__(self, x: float, y: float, speed: float = 240.0) -> None:
         self.x = x
@@ -87,7 +106,7 @@ class Player:
         # THE SAME BODY AS THE MAN IN THE RANKS. creatures.Soldier has 115;
         # the player had 100, so he was both the strongest blow in the world
         # and the frailest body that threw one. One standard, applied.
-        self.max_health = 115
+        self.max_health = stats.PLAYER_MAX_HEALTH
         self.health = 100
         self.heal_rate = 1.5           # hp/s while well fed (hunger = satiety)
         self.radius = 12
@@ -96,6 +115,10 @@ class Player:
         self.death_timer = 0.0
         self.bleed = 0.0
         self.sprint_speed = speed * 1.7
+        # SPACE: A BURST OF SPEED FOR A QUARTER OF THE WIND.
+        self.lunge_t = 0.0             # seconds of burst left
+        self.lunge_dir = (1.0, 0.0)
+        self.lunge_cd = 0.0
         self.max_stamina = 30.0        # seconds of sprinting (base)
         self.base_stamina = 30.0
         self.stamina = 30.0
@@ -160,6 +183,20 @@ class Player:
             return 0.0
         return 1.0 - self.swing_anim / SWING_ANIM
 
+    sleep_t: float = 0.0          # a dart put him down
+    shackled: bool = False        # held in a cell
+
+    def tranq(self, seconds: float = 25.0) -> None:
+        """A DART IN THE PLAYER: he goes down, he does not die."""
+        self.sleep_t = float(seconds)
+        self.moving = False
+        self.health = max(1, int(self.health))
+        try:
+            import plog
+            plog.log("TRANQ", "the player is asleep")
+        except Exception:
+            pass
+
     def take_damage(self, amount: int) -> None:
         if self.dead or self.god:
             return
@@ -192,6 +229,8 @@ class Player:
             self.level_flash = max(0.0, self.level_flash - dt)
         if self.gun_cd > 0.0:
             self.gun_cd = max(0.0, self.gun_cd - dt)
+        # HIS BODY GROWS WITH HIS SKILL, the same rule as every other man.
+        stats.apply_body(self)
         if self.reloading > 0.0:
             self.reloading = max(0.0, self.reloading - dt)
             if self.reloading == 0.0:
@@ -230,6 +269,15 @@ class Player:
             self.x += dx * speed * dt
             self.y += dy * speed * dt
 
+        # THE LUNGE ITSELF: a hard shove on top of the walk, for a fifth of a
+        # second. It goes through the same collision pass as every step.
+        self.lunge_cd = max(0.0, self.lunge_cd - dt)
+        if self.lunge_t > 0.0:
+            self.lunge_t = max(0.0, self.lunge_t - dt)
+            _boost = self.speed * LUNGE_SPEED_MULT * speed_scale
+            self.x += self.lunge_dir[0] * _boost * dt
+            self.y += self.lunge_dir[1] * _boost * dt
+
         # 30 s of sprinting empties stamina; 20 s of rest refills it. Once
         # emptied, he is winded until it is completely full again.
         if sprinting and not self.god:
@@ -247,6 +295,36 @@ class Player:
             length = math.hypot(aim[0], aim[1])
             if length > 1e-4:
                 self.facing = (aim[0] / length, aim[1] / length)
+
+    def lunge(self, keys) -> bool:
+        """SPACE -- A QUARTER OF THE WIND FOR ONE BURST.
+
+        He throws himself the way he is HOLDING (WASD), or the way he is
+        LOOKING if no direction key is down. It costs a fourth of full
+        stamina, and a man with less than that in him does not go -- which is
+        the whole trade: the lunge is a move you cannot make twice.
+        """
+        if self.dead or self.lunge_cd > 0.0:
+            return False
+        cost = self.max_stamina * LUNGE_COST
+        if not self.god and self.stamina < cost:
+            return False
+        dx = (float(any(keys[k] for k in KEY_RIGHT))
+              - float(any(keys[k] for k in KEY_LEFT)))
+        dy = (float(any(keys[k] for k in KEY_DOWN))
+              - float(any(keys[k] for k in KEY_UP)))
+        if dx or dy:
+            n = math.hypot(dx, dy)
+            self.lunge_dir = (dx / n, dy / n)
+        else:
+            self.lunge_dir = (float(self.facing[0]), float(self.facing[1]))
+        if not self.god:
+            self.stamina = max(0.0, self.stamina - cost)
+            if self.stamina <= 0.0:
+                self.exhausted = True
+        self.lunge_t = LUNGE_SECONDS
+        self.lunge_cd = LUNGE_COOLDOWN
+        return True
 
     @property
     def facing_angle(self) -> float:

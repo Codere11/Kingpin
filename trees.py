@@ -442,6 +442,17 @@ class Trees:
         tree.strikes = 0
         self._stumps.append(tree)
 
+    def stumps(self) -> list:
+        """The felled trees waiting to come back -- what a save must keep."""
+        return [t for t in self._stumps if getattr(t, "felled", False)]
+
+    def remember_stump(self, tree) -> None:
+        """A tree that was already a stump when the world was loaded."""
+        if tree is None or not getattr(tree, "felled", False):
+            return
+        if tree not in self._stumps:
+            self._stumps.append(tree)
+
     def update(self, now: float) -> None:
         """Put the woods back: any stump older than REGROW_SECONDS sprouts."""
         if not self._stumps:
@@ -507,12 +518,40 @@ class Trees:
     def tree(self, cx: int, cy: int) -> Tree | None:
         key = (cx, cy)
         if key in self._cache:
-            return self._cache[key]
+            got = self._cache[key]
+            # CACHED TREES TOO. The forest is built long before the railway is
+            # laid out, so every tree on the corridor was already in this cache
+            # -- and a cache hit walked straight past the check below.
+            if got is not None:
+                try:
+                    import rail
+                    if rail.blocked(got.x, got.y, 52.0):
+                        return None
+                except Exception:
+                    pass
+            return got
         here = self._position(cx, cy)
         if here is None:
             self._cache[key] = None
             return None
         x, y, code, species, snowy = here
+        # ...AND NO TREE STANDS ON IT EITHER.
+        try:
+            import rail
+            if rail.blocked(x, y, 52.0):
+                self._cache[key] = None
+                return None
+        except Exception:
+            pass
+        # AND NOT ONE WILD TREE INSIDE THE CAMP: the only trees there are the
+        # fifty the warders planted, in their rows.
+        try:
+            import gulag
+            if gulag.inside(x, y, 30.0):
+                self._cache[key] = None
+                return None
+        except Exception:
+            pass
 
         # Nearest neighbouring tree: the 8 cells around this one are enough,
         # because two trees two cells apart (>= ~324 px) can never overlap
@@ -544,6 +583,29 @@ class Trees:
         return result
 
     # -- queries ------------------------------------------------------------
+    def plant(self, x: float, y: float, radius: float = 74.0,
+              variant: int = 0, species: str = "conifer",
+              snowy: bool = True) -> "Tree":
+        """A TREE PUT THERE BY HAND, in the game's own tree list.
+
+        It has a trunk you cannot walk through, it stands in `visible()` and
+        `near()` like any other, and an axe fells it like any other. This is how
+        the camp's fifty are planted: real trees, in rows, not painted pines.
+        """
+        t = Tree(x, y, radius, variant % 4, bool(variant & 1), self._atlas,
+                 species, snowy)
+        if not hasattr(self, "_planted") or self._planted is None:
+            self._planted = []
+        self._planted.append(t)
+        return t
+
+    def _planted_near(self, x0, y0, x1, y1):
+        out = []
+        for t in getattr(self, "_planted", ()) or ():
+            if x0 <= t.x <= x1 and y0 <= t.y <= y1:
+                out.append(t)
+        return out
+
     def visible(self, cam_x: float, cam_y: float, vw: int, vh: int,
                 margin: float = 95.0) -> list[Tree]:
         x0 = int(math.floor((cam_x - margin) / CELL))
@@ -556,6 +618,8 @@ class Trees:
                 tree = self.tree(cx, cy)
                 if tree is not None:
                     out.append(tree)
+        out.extend(self._planted_near(cam_x - margin, cam_y - margin,
+                                      cam_x + vw + margin, cam_y + vh + margin))
         return out
 
     def near(self, x: float, y: float, radius: float) -> list[Tree]:
@@ -570,6 +634,19 @@ class Trees:
                 if tree is not None:
                     if math.hypot(tree.x - x, tree.y - y) <= radius + tree.canopy_r:
                         out.append(tree)
+        # ...AND THE PLANTED ONES. `near()` is what the axe asks, and it only
+        # walked the procedural cells, so the camp's fifty trees were real,
+        # solid, drawn -- and impossible to chop.
+        for t in getattr(self, "_planted", ()) or ():
+            if math.hypot(t.x - x, t.y - y) <= radius + t.canopy_r:
+                out.append(t)
+        # THE LAST WORD ON THE PERMANENT WAY: nothing on the corridor is ever
+        # returned, whatever cached it or planted it.
+        try:
+            import rail as _rail
+            out = [t for t in out if not _rail.blocked(t.x, t.y, 52.0)]
+        except Exception:
+            pass
         return out
 
     def foliage(self, x: float, y: float) -> float:

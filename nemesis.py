@@ -1,571 +1,692 @@
-"""THE NEMESIS.
+"""nemesis.py -- THE SERVICE: one chief, and his men.
 
-One man in the world wants what the player wants, and he is NOT SPECIAL.
+MARKS, AND NOTHING ELSE, for now. This file does not make anybody climb,
+scheme, send omens or come for you in the dark: all of that is gone. What it
+does is decide -- once, deterministically -- WHO IS WHO, so that the work that
+comes later can find them:
 
-He is an ordinary citizen with an ambition and a rank table. He obeys every law
-the player obeys: he takes a post the way anybody does, buys a vote through
-economy.sell_vote, stands in the ring through tournament.Tournament, and is
-levied by war.levy_pool. He cannot do one thing the player cannot do.
+  * ONE CHIEF of the secret police: in a settlement (never in a hub -- a hut is
+    not on any map, and the service is part of the state it serves), wearing a
+    LABOURER'S trade as his cover (never a trader: a trade that leaves town
+    every week is not a cover, it is an absence), and never one of his own
+    agents.
+  * THREE AGENTS in every settlement -- and never a trader, because the trade
+    has its own quota below.
+  * THIRTY AGENTS AMONG THE TRADERS, drawn from the WHOLE trade: the men a
+    town employs and the free carts alike. A trader walks in and out of every
+    gate in the country and belongs to nobody, which is what an agent is for.
+  * NOBODY INSIDE THE HUBS. The huts are the trade's, not the service's.
 
-Everything in this file is from Nemesis.md. The section numbers are given so
-the code and the design can be read against each other.
-
-THE THREE THINGS HE HAS THAT NOBODY ELSE HAS
---------------------------------------------
-1.  A RANK TABLE (S3). He thinks some trades are better than others, and he
-    only ever moves UP.
-2.  THE REFUSAL (S3). He can decline a post below him and hold out for one
-    above -- everyone else takes what the town offers.
-3.  SCHEMING (S3). He may take a post from the man holding it. The displaced
-    man goes idle and, importantly, REMEMBERS -- he is a grudge, and a grudge
-    is a source of clues.
-
-WHAT HE DELIBERATELY DOES NOT HAVE
-----------------------------------
-No buff. No extra coin. No omniscience. He knows what a man in his position
-could know and nothing else (S4, S5).
+Nothing in the game reads `secret_police` or `secret_police_chief` yet. They
+are there to be found, counted, and used later.
 """
 
 from __future__ import annotations
 
-import math
 import random
 
+import economy
 
-# -- S3: WHAT A TRADE IS WORTH, WORST TO BEST ---------------------------------
-# As HE sees it: the money it pays now, and what it opens next. He does not
-# follow a script, he follows this order -- which is why two of him in two
-# games take different roads. They start at different rungs.
-# THE ONE NEMESIS, reachable from outside main() so a long-run simulation can
-# watch him without reaching into the game's guts. Set by NemesisWorld.__init__.
-WORLD = None
+AGENTS_PER_TOWN = 3
+AGENT_TRADERS = 30          # spread over the WHOLE trade, cart and townsman
+CHIEF = None                 # the man, once seed_chief() has run
+CHIEF_PLACE = None           # the settlement he works from
+AGENTS: list = []            # [{"npc", "place", "rank", "hub"}] -- the roster
 
-RANK = {
-    None: 0,
-    "logger": 1, "farm": 2, "mine": 3, "smith": 4, "brewery": 5, "lab": 6,
-    "trader": 7, "soldier": 8, "mayor": 9, "king": 10,
-}
-
-# HE DOES NOT WAIT FOR A MASTER'S HANDS. Three hundred days is a career, and a
-# man who spent his whole life in one trade would never climb at all. He moves
-# on when the trade has taught him ENOUGH TO BE GOOD AT IT -- a quarter of the
-# road, sixty or seventy days -- and leaves the last of it to the man who stays.
-# THE LADDER IN ORDER, derived from RANK so the two can never disagree.
-_RUNGS = [None] * (max(RANK.values()) + 1)
-for _k, _v in RANK.items():
-    _RUNGS[_v] = _k
-RUNGS = tuple(_RUNGS)
-
-SCHEME_MAX = RANK["trader"]      # above this a post is not his to take:
-                                 # a soldier enlists, a mayor is elected, a
-                                 # king is fought for.
-
-MASTERED = 0.25          # of the way to the cap, not of the way to mastery
+# -- SECRET NEWS -------------------------------------------------------------
+# A SECOND KIND OF NEWS, and the opposite of the first. Regular news is
+# CARRIED: anybody can be told, and tells the next man (NPC.knows, NPC.news).
+# Secret news is ISSUED: it is planted in named heads and goes no further, and
+# most people never hold any of it at all.
+#
+# THE FIRST KIND IS LOCATION -- who is operating where:
+#
+#   * every AGENT knows every agent's PLACE (his own included), and who the
+#     chief is. He does not know the others' names.
+#   * the CHIEF knows the ROSTER: each agent's name, his place, and his rank
+#     (his standing in that town -- the trade that is his cover).
+#   * NOBODY ELSE KNOWS ANY OF IT.
+#
+# A fact is held by a man as an ID in `NPC.secret_news` (a list, so it saves),
+# and the fact itself lives here. Both directions are therefore answerable:
+# what does this man know, and who knows this fact.
+NOW = [0.0]                  # the game clock, set by the frame
 
 
-def rank_of(npc) -> int:
-    """Where he stands, by office first and trade second."""
-    if getattr(npc, "is_king", False):
-        return RANK["king"]
-    if getattr(npc, "is_mayor", False):
-        return RANK["mayor"]
-    if getattr(npc, "is_soldier", False) or getattr(npc, "levied", False):
-        return RANK["soldier"]
-    return RANK.get(getattr(npc, "job", None), 0) if npc.farm_plot is None \
-        else max(RANK["farm"], RANK.get(getattr(npc, "job", None), 0))
+def set_now(t: float) -> None:
+    NOW[0] = float(t)
 
 
-def trade_mastered(npc, kind) -> bool:
-    """HAS THIS TRADE TAUGHT HIM ALL IT CAN? (S3)
+FACTS: dict = {}             # fact id -> the fact
+KNOWERS: dict = {}           # fact id -> [man ids]
+# WHO TOLD WHOM. A folder looted off a dead agent has to say a NAME -- "an
+# agent at Ash Valley" is not a person you can go and find. `(fact, holder) ->
+# the name of the man who told him`, or None if he learned it himself.
+TOLD: dict = {}
 
-    Not time served -- SKILL SATURATED. A logger learns everything a logger can
-    know in eight swings' worth of the scale, and then he is standing still.
-    Trades that teach nothing (the pit, the smithy) are never mastered: they
-    pay a wage, and a man leaves them for the money, not for the ceiling.
+
+def _fact(fid: str, kind: str, **data) -> dict:
+    # WHEN IT WAS LEARNED. A message dies after three days, so every fact has to
+    # know its own age -- without this a folder looted from an old body would
+    # read like this morning's post.
+    fact = dict(data, kind=kind, id=fid, t=float(NOW[0]))
+    FACTS[fid] = fact
+    return fact
+
+
+def _give(npc, fid: str, frm: str | None = None) -> None:
+    """One fact, into one head. Nobody else is told -- and WHO told him.
+    The first man to hold a fact is its author, and his name is what the fact
+    says it came from unless somebody else passed it on."""
+    if npc is None:
+        return
+    held = getattr(npc, "secret_news", None)
+    if held is None:
+        held = []
+        npc.secret_news = held
+    if fid not in held:
+        held.append(fid)
+        KNOWERS.setdefault(fid, []).append(getattr(npc, "id", "?"))
+        fact = FACTS.get(fid)
+        if fact is not None:
+            fact.setdefault("by", getattr(npc, "name", "?"))
+        TOLD[(fid, id(npc))] = frm
+        # A TURNED AGENT WHO HAS HEARD THE YARD'S ORDERS KNOWS WHOSE YARD IT IS.
+        # The moment the service's own news includes the player's orders, the
+        # man holding it can put a name to the leader -- and the network is told.
+        if fact is not None and fact.get("kind") == "playerorder":
+            note_leader(npc, at=(float(getattr(npc, "x", 0.0)),
+                                 float(getattr(npc, "y", 0.0))))
+
+
+# -- THE SECOND KIND OF SECRET: THE OFFENCE ----------------------------------
+# An agent who WITNESSES something illegal knows it, and it is a fact like any
+# other -- held in a named head, not broadcast. It moves only when one agent
+# meets another, and then to that man and to whoever else is standing with
+# them. It ends with agents and the chief: no townsman ever holds one.
+#
+# A MAN HAS ONE COUNT OF A THING. See the same hub farmer turn the same leaf
+# three times or thirty, and it is one fact, not thirty. Do two different
+# things -- grow it, then sell it -- and he has both, because they are two.
+SEEN_PX = 260.0         # close enough to have watched it happen
+TELL_PX = 160.0         # close enough to tell a man -- and whoever is with him
+ILLEGAL_LEAF = ("tobacco", "red_mushroom", "agave")
+ILLEGAL_DRUGS = ("cigar", "dried_mushroom", "beer", "liqueur", "mezcal")
+OFFENCE_VERB = {"grew": "GREW", "made": "MADE", "sold": "SOLD"}
+PLACES: list = []       # every settlement and hut, for naming where it happened
+
+
+def set_places(villages, hub_world) -> None:
+    """Every place a crime can happen near: the settlements, and the huts."""
+    PLACES[:] = (list(getattr(villages, "villages", ()) or ())
+                 + list(getattr(hub_world, "hubs", ()) or ()))
+
+
+def place_at(x: float, y: float):
+    best, bd = None, 1e18
+    for v in PLACES:
+        d = (v.x - x) ** 2 + (v.y - y) ** 2
+        if d < bd:
+            best, bd = v, d
+    return best
+
+
+def is_service(npc) -> bool:
+    return bool(getattr(npc, "secret_police", False)
+                or getattr(npc, "secret_police_chief", False))
+
+
+def witnesses_at(x: float, y: float, agents, radius: float = SEEN_PX) -> list:
+    r2 = radius * radius
+    return [a for a in agents
+            if getattr(a, "alive", True)
+            and ((a.x - x) ** 2 + (a.y - y) ** 2) <= r2]
+
+
+def _item_name(item: str) -> str:
+    return str(item).replace("_", " ")
+
+
+def note_offence(actor, verb: str, item: str, x: float, y: float,
+                 witnesses=()):
+    """ONE FACT PER MAN PER KIND. Returns it, or None if it is not news.
+
+    NOT NEWS WHEN THE MAN IS OURS: an agent's own work is operations, and
+    operations are not written down anywhere -- not even in the log.
     """
-    sk = getattr(npc, "skills", None)
-    if sk is None:
-        return False
-    if kind == "farm" or kind in ("brewery", "lab"):
-        return sk.farming >= 8.0 * MASTERED
-    if kind == "logger":
-        return sk.axe >= 1.0 * MASTERED
-    if kind == "trader":
-        return sk.movement >= 1.0 * MASTERED
-    return False
-
-
-def _far_towns(registry, villages, player, count: int = 1) -> list:
-    """A small village A LONG WAY OFF (S2, S14).
-
-    Not the player's home and not next door: the point is that the two lives
-    run in parallel and cross by accident, never by arrangement.
-    """
-    towns = [v for v in getattr(registry, "villages", ()) or ()
-             if 3 <= len(getattr(v, "npcs", ())) and not v.is_capital]
-    if not towns:
-        return []
-    px, py = getattr(player, "x", 0.0), getattr(player, "y", 0.0)
-    towns.sort(key=lambda v: -((v.x - px) ** 2 + (v.y - py) ** 2))
-    # From the far half, prefer the SMALL ones: fewer voters is a cheaper
-    # election, and a cheap ladder is strategy, not a buff.
-    far = towns[:max(1, len(towns) // 2)]
-    far.sort(key=lambda v: len(v.npcs))
-    return far[:count]
-
-
-class Nemesis:
-    """One man, with a plan he never tells anybody about."""
-
-    def __init__(self, npc, town):
-        self.npc = npc
-        self.town = town
-        self.born_day = -1
-        # WHAT HE HAS TRIED, AND WHETHER IT WORKED (S3, S14). This is the whole
-        # of his "learning": in-world, save-able, and cheap. No nets.
-        self.attempts: dict = {}          # strategy -> [tries, wins]
-        self.days_in_trade = 0            # how long he has stood on this rung
-        self.grudges: dict = {}           # name -> what they did to him
-        # WHAT HE KNOWS (S4, S5). Names, not flags: a man learns a NAME.
-        self.knows_player = False
-        self.player_name = None
-        self._clue_at = -999.0
-        self._last_rung = rank_of(npc)
-        # S7: THE OMEN AND THE ATTEMPT.
-        self.omen_day = -1                # the day a warning was spoken
-        self.strike_day = -1              # the day chosen for it
-        self.strikes = 0                  # how many attempts have landed
-
-    # -- S3: the climb -------------------------------------------------------
-    def target_rank(self) -> int:
-        """The next rung he wants, and it is always exactly one up."""
-        return min(RANK["king"], self._last_rung + 1)
-
-    def wants_out(self) -> bool:
-        """He has learned all this trade can teach him (S3)."""
-        npc = self.npc
-        if getattr(npc, "is_king", False) or getattr(npc, "is_mayor", False):
-            return False
-        kind = "farm" if npc.farm_plot is not None else getattr(npc, "job", None)
-        if kind is None:
-            return True                   # idle: anything is better
-        if kind in ("mine", "smith"):
-            # THE PIT AND THE SMITHY TEACH NOTHING (S3). They pay a wage, and a
-            # man leaves them FOR THE MONEY -- ten days of it is the reason.
-            # Without this he would never leave at all, because a trade that
-            # teaches nothing can never be "mastered".
-            return self.days_in_trade >= 10
-        return trade_mastered(npc, kind)
-
-    def would_take(self, kind: str) -> bool:
-        """Is this rung an UPGRADE? He never moves down (S3)."""
-        return RANK.get(kind, 0) > self._last_rung
-
-    def cushion(self) -> bool:
-        """He only holds out if he can afford to (S3, open question 1).
-
-        A man who refuses every post starves and stops being anything. He
-        accepts what he is offered when his purse is thin, and holds out only
-        when he can pay for the wait.
-        """
-        return getattr(self.npc, "coins", 0) >= 120
-
-    def can_scheme(self, kind: str) -> bool:
-        """S3: one rung at a time. A logger scheming into a smithy is a story;
-        a logger scheming straight into the mayoralty is a joke."""
-        return self.would_take(kind) and kind in ("farm", "logger", "mine",
-                                                  "smith", "brewery", "lab",
-                                                  "trader")
-
-    # -- S4/S5: what he knows ------------------------------------------------
-    def learn_of_player(self, name: str) -> None:
-        """He has the player's NAME. That is the only fact that matters: you
-        cannot hunt a profession (S4)."""
-        if not self.knows_player:
-            self.knows_player = True
-            self.player_name = name
-
-    def clue(self, day: float, player_rank: int) -> str | None:
-        """WHAT THE PLAYER HEARS, AND IN WHAT DETAIL (S4, S5).
-
-        THE NAME IS KNOWLEDGE OF THE LEADER. The trailer is anonymous. So if
-        the player is ahead he gets a trade and no name -- he cannot act on it,
-        which is the point: the powerful do not notice the climber.
-        """
-        mine = rank_of(self.npc)
-        who = self.npc.name.split()[0]
-        kind = self.npc.job or ("farm" if self.npc.farm_plot is not None
-                                else "no trade")
-        if mine > player_rank:
-            # HE IS AHEAD: he is famous, and the player gets everything.
-            return random.choice([
-                "%s. He is a %s now, and he is going higher." % (who, kind),
-                "They say %s is rising fast -- a %s, and not for long." % (who, kind),
-                "%s. A %s, and the ambitious kind." % (who, kind),
-            ])
-        if mine == player_rank:
-            return random.choice([
-                "There is a %s somewhere, going up in the world." % kind,
-                "A %s, they say, who will not stay one." % kind,
-            ])
-        # THE PLAYER IS AHEAD: trade only, no name, no place. A nobody.
-        return random.choice([
-            "There is a man rising fast in the world.",
-            "They say a %s out east is making a name for himself." % kind,
-            "A man who means to go far -- nobody knows his name yet.",
-        ])
-
-    # -- S7: the omen --------------------------------------------------------
-    def schedule_strike(self, day: int, rng: random.Random) -> None:
-        """S7: a random day in the next ten. Sometimes tomorrow, sometimes
-        day nine -- and the player is never told which."""
-        self.omen_day = day
-        self.strike_day = day + rng.randint(1, 10)
-
-
-# -- S7: THE OMENS ------------------------------------------------------------
-# ALWAYS GIVEN, NEVER NECESSARILY HEARD. The warning is always spoken; whether
-# it reaches the player depends on who he is standing near -- exactly like the
-# news and the clues. Not so he can always detect it: so that when he dies he
-# can find the five omens he ignored.
-REAL_OMENS = (
-    "I had a bad dream last night... A lion has killed another lion while he was asleep.",
-    "Careless kings do not last long in this world.",
-    "Some men rise, and then they stop rising. All at once.",
-    "I knew a man who was somebody. He slept badly, at the end.",
-)
-CROWN_OMENS = (
-    "The King is cracking down on potential enemies... Finally some order.",
-    "They say the King has a list. Nobody has seen it.",
-    "Men have gone quiet lately. Important men.",
-)
-# THE DRUNK IS NOT PLAYING DICE (S7). A true omen and a drunk's ravings are
-# INDISTINGUISHABLE, and that is deliberate: a distinguishable omen is a puzzle,
-# and puzzles get solved. The uncertainty is not noise around the signal --
-# the uncertainty IS the content.
-DRUNK_OMENS = (
-    "Careless kingsss do not last long... in this world...",
-    "A lion! A LION, I tell you!",
-    "Everythingends. Everything. Mark me.",
-    "The King. The King and his... list. List of... what was I saying.",
-)
-# S7: THE RATE DRIFTS WITH HIM. Early, almost every omen is a drunk and the
-# player learns to shrug. Late, the omens are frequent AND real, because the
-# man has stopped guessing and started hunting.
-DRUNK_ODDS = (0.85, 0.70, 0.50, 0.30)
-
-
-def _player_rank(player) -> int:
-    """Where the PLAYER stands, by the same table (S4)."""
-    if getattr(player, "job", None) == "king":
-        return RANK["king"]
-    if getattr(player, "job", None) == "mayor":
-        return RANK["mayor"]
-    return RANK.get(getattr(player, "job", None), 0)
-
-
-class NemesisWorld:
-    """The one nemesis, and everything that keeps him climbing."""
-
-    def __init__(self, registry, villages, player):
-        self.rng = random.Random(0x4E3E5155)
-        self.player = player
-        self.registry = registry
-        self.villages = villages
-        self.active = None
-        self.dead_day = -999
-        self.last_clue_day = -999
-        self.lines: list = []          # things the player is told, in order
-        self._last_day = -1            # the game day he last ticked -- a clock
-                                       # the simulation outside can read
-        global WORLD
-        WORLD = self
-
-    def _note(self, text: str) -> None:
-        try:
-            import economy
-            economy._note(text)
-        except Exception:
-            pass
-
-    # -- birth (S2, S8, S14) -------------------------------------------------
-    def seed(self, day: int) -> bool:
-        """AN ORDINARY MAN, A LONG WAY OFF, IN A SMALL TOWN.
-
-        Small because fewer voters is a cheaper election -- choosing a good
-        starting position is strategy, not a buff. A long way off because the
-        two lives must cross by accident and never by arrangement.
-        """
-        towns = _far_towns(self.registry, self.villages, self.player, 1)
-        if not towns:
-            return False
-        town = towns[0]
-        men = [n for n in town.npcs
-               if getattr(n, "alive", False)
-               and not getattr(n, "is_mayor", False)
-               and not getattr(n, "is_king", False)
-               and not getattr(n, "is_commander", False)]
-        if not men:
-            return False
-        man = self.rng.choice(men)
-        self.active = Nemesis(man, town)
-        # THE NEMESIS LEARNS FASTER THAN THE WORLD (5% against 1%). It is the
-        # one advantage he has, and it is small -- but it is what lets a man
-        # with no head start be worth watching.
-        try:
-            man.skills.luck = 5 * 0.01
-        except Exception:
-            pass
-        self.active.born_day = day
-        # S8: he knows the man AHEAD of him. If the player is already somebody,
-        # the new one has heard of him -- no briefing, just the rule.
-        if _player_rank(self.player) >= RANK["mayor"]:
-            self.active.learn_of_player("the player")
-        self._note("NEMESIS BORN   %s, a %s of %s"
-                   % (man.name, getattr(man, "job", None) or "idler", town.name))
-        return True
-
-    # -- the day -------------------------------------------------------------
-    def tick(self, day: int, now: float) -> list:
-        """Returns any lines the player is told today."""
-        self.lines = []
-        if day == self._last_day:
-            return self.lines
-        self._last_day = day
-        nm = self.active
-        if nm is None:
-            return self.lines
-        man = nm.npc
-        if not getattr(man, "alive", False):
-            # S8: the world progresses as normal, UNTIL ANOTHER ONE IS BORN.
-            self._note("NEMESIS DEAD   %s" % man.name)
-            self.active = None
-            self.dead_day = day
-            return self.lines
-        nm.days_in_trade += 1
-        self._climb(nm)
-        self._word(nm, day)
-        self._strike(nm, day, now)
-        return self.lines
-
-    # -- S3: the climb -------------------------------------------------------
-    def _climb(self, nm) -> None:
-        man, town = nm.npc, nm.town
-        if not nm.wants_out():
-            return
-        # A BETTER POST, BEFORE THE TOWN OFFERS HIM A WORSE ONE. He does not
-        # take what he is given; he takes what he wants and the man holding it
-        # becomes idle. That is what scheming is.
-        # AN OCCUPIED POST IS THE POINT. This asked `k in town.open_posts()`,
-        # and open_posts() returns VACANCIES -- so he could only ever scheme
-        # into a post that was already empty, which is not scheming at all. The
-        # whole privilege is that the DISPLACED MAN GOES IDLE: he takes a post
-        # off the man holding it. In a fully-staffed village -- which is most
-        # of them -- the old test could never find anything, and he stood still
-        # for ever. The sim found this on day one.
-        # ONE RUNG AT A TIME, AND THE NEXT ONE -- NOT THE BEST ONE HE CAN
-        # SEE. The old search walked the list from the top down and took the
-        # first thing above him, so a farmer went straight to a caravan post:
-        # he never learned the axe in the woods, the iron at the bench or the
-        # mash in the tun. He climbs IN ORDER and gathers the trade of each
-        # rung on the way up (S3).
-        #
-        # AND HE WALKS UP UNTIL HE FINDS A RUNG THIS TOWN HAS. A village with no
-        # mine has no mine post to take, and a man who insists on the next rung
-        # by name stands idle in the square for ever waiting for a trade that
-        # does not exist here. Asking for the next one BY NAME broke his very
-        # first move, which the sim caught inside a minute.
-        kind = None
-        holder = None
-        vacancy = False
-        for rung in range(nm.target_rank(), min(len(RUNGS), SCHEME_MAX + 1)):
-            k = RUNGS[rung]
-            if k is None or RANK.get(k, 0) > SCHEME_MAX:
-                continue
-            h = self._holder(town, k)
-            if h is None and k not in town.open_posts():
-                continue                    # this town has no such trade at all
-            kind, holder = k, h
-            vacancy = (h is None)
-            break
-        if kind is None:
-            return                          # nothing above him exists here yet
-        if holder is man:
-            return
-        if vacancy:
-            # nothing to scheme: the rung is simply empty
-            # AND THE TOOLS OF THE TRADE, WHICHEVER WAY HE GETS THE POST.
-            #
-            # This trusted `town.offer_post(man)` to hand them over -- and when
-            # it returned False, the `else` set job="logger" and gave him
-            # NOTHING. He then stood at a tree for days with empty hands:
-            # _swing_tool("axe") found no axe and no spare, _work_woods
-            # returned, he never felled, never gained a point of axe, and could
-            # never master logging to leave the rung. The whole climb was stuck
-            # on rung one and the log cheerfully said "takes the logger post".
-            self._take_post(man, town, kind)
-            nm._last_rung = RANK.get(kind, nm._last_rung)
-            nm.days_in_trade = 0
-            self._note("NEMESIS RISES  %s takes the vacant %s post in %s"
-                       % (man.name, kind, town.name))
-            return
-        holder = self._holder(town, kind)
-        if holder is man:
-            return
-        if holder is None:
-            # nothing to scheme: the rung is simply empty
-            self._take_post(man, town, kind)
-            nm._last_rung = RANK.get(kind, nm._last_rung)
-            self._note("NEMESIS RISES  %s takes the vacant %s post in %s"
-                       % (man.name, kind, town.name))
-            return
-        # THE DISPLACED MAN GOES IDLE -- AND REMEMBERS (S3). Every rung leaves
-        # one more man in the world who can sell him out.
-        town.free_post(holder)
-        held = getattr(holder, "name", "?")
-        nm.grudges[held] = "put out of the %s" % kind
-        self._take_post(man, town, kind)
-        nm._last_rung = RANK.get(kind, nm._last_rung)
-        nm.days_in_trade = 0
-        self._note("NEMESIS RISES  %s takes the %s post from %s in %s"
-                   % (man.name, kind, held, town.name))
-
-    @staticmethod
-    def _take_post(man, town, kind) -> None:
-        """GIVE HIM THE POST HE TOOK, AND EVERYTHING THE POST OF NEEDS.
-
-        The nemesis is a THIEF, so he is always already holding a trade when he
-        takes the next one -- and every path here handed the post over through
-        `town.offer_post(man)`, whose first line refuses any man with a job, a
-        plot or a bench. So he fell into the `else`, was given the job TITLE,
-        and nothing else: no shovel, no axe, no pickaxe, and no workplace at
-        all. _work_woods found no axe and returned, _work_place sat down in the
-        square because `self.workplace` was None, and he stood there for ever
-        with a trade he could not work.
-
-        It is why the climb stalled on its first rung in every clean run: one
-        post taken, no skill gained, no coin earned, and a man going quietly
-        broke. The log said "takes the mine post from Delma Boone" the whole
-        time. A title is not a living.
-        """
-        import economy
-        town.free_post(man)                     # one man, one post
-        man.job = kind
-        if kind == "farm":
-            taken = {n.farm_plot for n in getattr(town, "npcs", ())
-                     if n is not man and n.farm_plot is not None}
-            for i in range(len(town.farm_plots)):
-                if i not in taken:
-                    man.farm_plot = i
-                    man.leaf_farmer = True     # dual culture: leaf too
-                    break
-            man.stock["shovel"] = 1
-            man.grade["shovel"] = 0
-            man.tool_uses = economy.TOOL_USES
-            return
-        if kind == "logger":
-            man.stock["axe"] = 1
-            man.grade["axe"] = 0
-            man.tool_uses = economy.TOOL_USES
-            return
-        if kind == "trader":
-            man.trade_state = "none"
-            return
-        # THE PIT AND THE BENCH: he needs somewhere TO BE. offer_post sets
-        # `workplace`; the old else never did, so the man had a trade and no
-        # door to turn up at.
-        wp = next((w for w in getattr(town, "workplaces", ())
-                   if getattr(w, "kind", None) == kind
-                   and (w.worker is None
-                        or not getattr(w.worker, "alive", False)
-                        or w.worker is man)), None)
-        if wp is not None:
-            man.workplace = wp
-            wp.worker = man
-        if kind == "smith":
-            man.stock["iron"] = economy.IRON_STOCK // 4
-        if kind == "mine":
-            man.stock["pickaxe"] = 1
-            man.grade["pickaxe"] = 0
-            man.tool_uses = economy.TOOL_USES
-
-    @staticmethod
-    def _holder(town, kind):
-        for n in getattr(town, "npcs", ()):
-            if not getattr(n, "alive", False) or n is None:
-                continue
-            if kind == "trader" and n.job == "trader":
-                return n
-            if kind == "logger" and n.job == "logger":
-                return n
-            if kind == "farm" and n.farm_plot is not None:
-                return n
-            if getattr(n, "workplace", None) is not None \
-                    and getattr(n.workplace, "kind", None) == kind:
-                return n
+    if actor is None:
         return None
-
-    # -- S5, S6: word of him -------------------------------------------------
-    def _word(self, nm, day: int) -> None:
-        """CLUES DRIP, DO NOT POUR. One every so often, and the detail is set
-        by who is ahead -- see Nemesis.clue."""
-        if day - self.last_clue_day < 6:
-            return
-        self.last_clue_day = day
-        pr = _player_rank(self.player)
-        # S6: MISINFORMATION. Rare, random, and unreliable -- a rumour is not a
-        # status update. Sometimes the man he names is a plain old NPC.
-        if self.rng.random() < 0.20:
-            others = [n for n in self.villages.villages
-                      if n is not nm.town and len(getattr(n, "npcs", ()))]
-            if others:
-                t = self.rng.choice(others)
-                men = [n for n in t.npcs if getattr(n, "alive", False)]
-                if men:
-                    m = self.rng.choice(men)
-                    self.lines.append(
-                        "%s is a really ambitious man. He is a %s now!"
-                        % (m.name, getattr(m, "job", None) or "nobody much"))
-                    return
-        text = nm.clue(day, pr)
-        if text:
-            self.lines.append(text)
-
-    # -- S7: the omen, and the attempt ---------------------------------------
-    def _strike(self, nm, day: int, now: float) -> None:
-        man, player = nm.npc, self.player
-        mine, theirs = rank_of(man), _player_rank(player)
-        # He only comes for somebody worth being. A nobody is not worth a
-        # bullet, and he does not yet know the player's name.
-        if not nm.knows_player and mine <= theirs:
-            if mine > RANK["farm"]:
-                nm.learn_of_player("the player")
-            return
-        if nm.strike_day < 0:
-            if self.rng.random() < 0.02:          # rare
-                nm.schedule_strike(day, self.rng)
-                crown = _player_rank(player) >= RANK["mayor"]
-                pool = CROWN_OMENS if crown else REAL_OMENS
-                self._note("NEMESIS OMEN   spoken on day %d, strike day %d"
-                           % (day, nm.strike_day))
-                self.lines.append(self.rng.choice(pool))
-            elif self.rng.random() < 0.05:
-                # THE DRUNK (S7). Indistinguishable, and nothing happens.
-                self.lines.append(self.rng.choice(DRUNK_OMENS))
-            return
-        if day < nm.strike_day:
-            return
-        # THE DAY. He only comes if the player is EXPOSED -- asleep, or alone.
-        nm.strike_day = -1
-        asleep = getattr(player, "asleep", False)
-        far = math.hypot(man.x - player.x, man.y - player.y)
-        if not asleep and far > 900.0:
-            self._note("NEMESIS ABORTS  player was not exposed")
-            return
-        nm.strikes += 1
-        self._note("NEMESIS STRIKE  attempt %d on %s" % (nm.strikes, man.name))
-        self.lines.append("Something wakes you in the dark.")
+    if is_service(actor):
+        return None                    # operations, not news -- and not logged
+    seen = [w for w in witnesses
+            if w is not actor and is_service(w)
+            and getattr(w, "alive", True)]
+    if not seen:
+        return None                    # NOBODY SAW IT: there is nothing to know
+    aid = str(getattr(actor, "id", "") or getattr(actor, "name", "?"))
+    fid = "offence:%s:%s" % (verb, aid)
+    fact = FACTS.get(fid)
+    if fact is None:
+        place = place_at(x, y)
+        where = getattr(place, "name", "somewhere")
+        name = getattr(actor, "name", "somebody")
+        fact = _fact(fid, "offence", actor=aid, name=name, verb=verb,
+                     item=item,
+                     text="%s %s %s IN %s"
+                          % (name, OFFENCE_VERB.get(verb, verb.upper()),
+                             _item_name(item), where),
+                     place=where, x=round(float(x), 1), y=round(float(y), 1))
         try:
-            player.take_damage(30)
+            import plog
+            plog.log("OFFENCE", fact["text"], "| witnesses", len(seen),
+                     "| place", fact["place"])
         except Exception:
-            player.health = getattr(player, "health", 100) - 30
+            pass
+    # ONLY THE MEN WHO SAW IT start with it. The chief is not told from here:
+    # he hears it when one of them tells him (spread_on_contact), exactly like
+    # everybody else in the service.
+    for w in seen:
+        _give(w, fid)
+    return fact
+
+
+# WHAT THE MEETINGS ACTUALLY DID -- read by tests, and logged when a fact moves.
+STATS = {"calls": 0, "meetings": 0, "told": 0, "lonely": 0}
+
+
+AT_PLACE_PAD = 220.0    # at the gate counts as at the place (a cart
+                        # stops 70-140 px outside the wall)
+
+
+def place_of(npc):
+    """THE PLACE HE IS STANDING IN -- a settlement, or a hut, or nowhere.
+
+    An agent at a gate is AT that town: the fence is inflated by a little more
+    than the standoff a cart keeps, so a trader stopped outside the wall and a
+    townsman inside it are in the same place.
+    """
+    x, y = getattr(npc, "x", 0.0), getattr(npc, "y", 0.0)
+    for p in PLACES:
+        r = getattr(p, "fence_rect", None)
+        if r is None:
+            continue
+        if r.inflate(2 * AT_PLACE_PAD, 2 * AT_PLACE_PAD).collidepoint(x, y):
+            return p
+    return None
+
+
+def note_caught(actor, town, units: int):
+    """CAUGHT AT THE GATE: THE AGENTS OF THAT SETTLEMENT KNOW IT.
+
+    Not a witness -- the men whose town it is. A search that finds something
+    is a fact about the man who was carrying it, and the service keeps it: the
+    agents operating out of that settlement, wherever inside it they stand.
+    """
+    if actor is None or town is None:
+        return None
+    key = str(getattr(actor, "id", "") or getattr(actor, "name", "?"))
+    fid = "caught:" + key
+    fact = FACTS.get(fid)
+    if fact is None:
+        name = getattr(actor, "name", "somebody")
+        fact = _fact(fid, "caught", actor=key, name=name,
+                     place=getattr(town, "name", "?"),
+                     text="%s CAUGHT AT THE GATE OF %s WITH %d"
+                          % (name, getattr(town, "name", "?"), int(units)))
+        try:
+            import plog
+            plog.log("CAUGHT", fact["text"])
+        except Exception:
+            pass
+    # THE AGENTS OF THAT SETTLEMENT: those standing in it, and those whose
+    # patch it is -- they are the ones who work there.
+    ids = {id(a["npc"]) for a in AGENTS
+           if getattr(a, "place", None) is town}
+    for a in agents():
+        if id(a) in ids or place_of(a) is town:
+            _give(a, fid)
+    return fact
+
+
+def spread_on_contact(agents=None) -> int:
+    """AGENTS AT THE SAME PLACE TELL EACH OTHER -- all of it, both ways.
+
+    Not a speaking distance: a PLACE. Two of the service standing in the same
+    settlement, or the same hut, at the same tick, tell each other everything
+    they know about offences -- and since the whole group is there, everyone in
+    it ends up knowing. Nothing is broadcast: a man 10 px outside the wall is
+    not in the town, and a man in the next town is not told.
+    """
+    live = [a for a in (agents if agents is not None
+                        else [x["npc"] for x in AGENTS])
+            if getattr(a, "alive", True)]
+    STATS["calls"] += 1
+    groups: dict = {}
+    for a in live:
+        p = place_of(a)
+        if p is not None:
+            groups.setdefault(id(p), []).append(a)
+    told = 0
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        STATS["meetings"] += len(group)
+        # EVERY OFFENCE ANY OF THEM HOLDS, TO EVERY ONE OF THEM. Location facts
+        # and the roster of names are ISSUED and never pass from hand to hand:
+        # otherwise an agent would learn every other agent's name by shaking
+        # the chief's hand, and the chief's one advantage would be everybody's.
+        known = set()
+        for a in group:
+            known.update(f for f in (getattr(a, "secret_news", None) or ())
+                         if f in FACTS and FACTS[f].get("kind") == "offence")
+        if not known:
+            continue
+        # WHO TELLS WHOM: the first man in the group holding the fact is the
+        # one who says it out loud. That name goes in the folder of every man
+        # who hears it.
+        first_holder = {}
+        for a in group:
+            for fid in (getattr(a, "secret_news", None) or ()):
+                first_holder.setdefault(fid, a)
+        for a in group:
+            held = getattr(a, "secret_news", None) or ()
+            for fid in known:
+                if fid not in held:
+                    _from = first_holder.get(fid, a)
+                    _give(a, fid, frm=getattr(_from, "name", None))
+                    told += 1
+    if told:
+        STATS["told"] += told
+        try:
+            import plog
+            plog.log("SECRET", "a place told", told, "facts",
+                     "| agents present", sum(len(g) for g in groups.values()))
+        except Exception:
+            pass
+    return told
+
+
+def agents() -> list:
+    """Every agent and the chief, as they stand in THIS process right now."""
+    out = [a["npc"] for a in AGENTS if getattr(a["npc"], "alive", True)]
+    if CHIEF is not None and getattr(CHIEF, "alive", True):
+        out.append(CHIEF)
+    return out
+
+
+def note_offence_seen(actor, verb: str, item: str):
+    """A crime committed in THIS process (the player's own hands): the agents
+    close enough to have watched it are told, and nobody else."""
+    if actor is None:
+        return None
+    x = float(getattr(actor, "x", 0.0))
+    y = float(getattr(actor, "y", 0.0))
+    return note_offence(actor, verb, item, x, y, witnesses_at(x, y, agents()))
+
+
+def turn(npc, place=None):
+    """THE SERVICE TURNS HIM, WHERE HE STANDS.
+
+    A man who has come to hate the player is not sent away -- he is recruited.
+    He goes on working in the player's yard, and everything he sees from now on
+    is the service's. He is told what an agent is told: where the others
+    operate, and who the chief is.
+    """
+    if npc is None or not getattr(npc, "alive", True) or is_service(npc):
+        return None
+    npc.secret_police = True
+    npc.secret_police_chief = False
+    if place is None:
+        place = place_of(npc) or getattr(npc, "village", None)
+    if not any(a["npc"] is npc for a in AGENTS):
+        AGENTS.append({"npc": npc, "place": place,
+                       "rank": getattr(npc, "job", None) or "idler",
+                       "hub": bool(getattr(place, "is_hub", False))})
+    cid = ("chief:" + str(getattr(CHIEF, "id", "?"))
+           if CHIEF is not None else None)
+    for fid, fact in FACTS.items():
+        if fact.get("kind") == "place" or (cid and fid == cid):
+            _give(npc, fid)
+    try:
+        import plog
+        plog.log("TURNED", getattr(npc, "name", "?"),
+                 "in", getattr(place, "name", "?"),
+                 "| working for the player:", bool(getattr(npc, "player_worker", False)))
+    except Exception:
+        pass
+    return npc
+
+
+def offences_of(npc) -> list:
+    return [FACTS[f] for f in (getattr(npc, "secret_news", None) or ())
+            if f in FACTS and FACTS[f].get("kind") == "offence"]
+
+
+def knows(npc, fid: str) -> bool:
+    return fid in (getattr(npc, "secret_news", None) or ())
+
+
+def facts_of(npc) -> list:
+    return [FACTS[f] for f in (getattr(npc, "secret_news", None) or ())
+            if f in FACTS]
+
+
+def who_knows(fid: str) -> list:
+    return list(KNOWERS.get(fid, ()))
+
+
+def _people(town):
+    """Who in a town can be the service's: a living commoner."""
+    return [n for n in getattr(town, "npcs", ())
+            if getattr(n, "alive", False)
+            and not getattr(n, "is_mayor", False)
+            and not getattr(n, "is_king", False)
+            and not getattr(n, "is_commander", False)
+            and not getattr(n, "is_truth_teller", False)]
+
+
+def _every_man(villages, hub_world):
+    for v in list(getattr(villages, "villages", ()) or ()):
+        for n in getattr(v, "npcs", ()):
+            yield n
+    for h in getattr(hub_world, "hubs", ()) or ():
+        for n in getattr(h, "npcs", ()):
+            yield n
+    for c in getattr(hub_world, "_caravans", ()) or ():
+        if getattr(c, "npc", None) is not None:
+            yield c.npc
+
+
+def clear(villages, hub_world) -> None:
+    """Take every mark off -- and every secret with it.
+
+    `secret_news` is SAVED (it is a list of plain strings), and the facts it
+    names are rebuilt from scratch each launch. A man who kept yesterday's ids
+    would be holding facts that no longer exist, or that belong to men who are
+    no longer in the service: a leak of nothing, but still a leak. Re-issuing
+    starts from an empty head.
+    """
+    for n in _every_man(villages, hub_world):
+        n.secret_police = False
+        n.secret_police_chief = False
+        n.secret_news = None
+
+
+def plant(villages, hub_world, seed: int = 20240501):
+    """THREE IN EVERY SETTLEMENT (never a trader), AND THIRTY OF THE TRADE.
+
+    Deterministic: the same world always has the same agents, because the seed
+    is the world's own and the lists are walked in the order they were built.
+    Re-running it is therefore harmless, which matters because the marks must
+    also exist in a save written before they did.
+    """
+    global CHIEF, CHIEF_PLACE
+    CHIEF, CHIEF_PLACE = None, None
+    del AGENTS[:]
+    FACTS.clear()
+    KNOWERS.clear()
+    clear(villages, hub_world)
+    rng = random.Random(0x5EC3E7 ^ int(seed))
+    towns = [v for v in getattr(villages, "villages", ()) or ()
+             if not getattr(v, "is_hub", False)]
+    town_agents = 0
+    short = []
+    for v in towns:
+        pool = [n for n in _people(v) if getattr(n, "job", None) != "trader"]
+        rng.shuffle(pool)
+        take = pool[:AGENTS_PER_TOWN]
+        if len(take) < AGENTS_PER_TOWN:
+            short.append("%s(%d)" % (v.name, len(take)))
+        for n in take:
+            n.secret_police = True
+            AGENTS.append({"npc": n, "place": v,
+                           "rank": getattr(n, "job", None) or "idler",
+                           "hub": False})
+            town_agents += 1
+    # THIRTY OF THE TRADE, FROM THE WHOLE TRADE. Not only the free carts: a
+    # town's own trader carries goods between towns on the same roads, sleeps
+    # in the same squares, and is asked the same questions at the gate. The
+    # draw is over every working trader in the world -- the men a town employs
+    # and the carts that belong to nobody -- and it stops at thirty.
+    carts = list(getattr(hub_world, "_caravans", ()) or ())
+    trade = []
+    for t in towns:
+        for n in getattr(t, "npcs", ()):
+            if (getattr(n, "alive", False)
+                    and getattr(n, "job", None) == "trader"
+                    and not getattr(n, "secret_police_chief", False)):
+                trade.append((n, t, False))          # a town's trader
+    for c in carts:
+        n = getattr(c, "npc", None)
+        if n is not None and getattr(n, "alive", False):
+            trade.append((n, getattr(c, "hub", None), True))   # a free cart
+    rng.shuffle(trade)
+    traders = carts_taken = 0
+    for n, place, is_cart in trade[:AGENT_TRADERS]:
+        n.secret_police = True
+        AGENTS.append({"npc": n, "place": place, "rank": "trader",
+                       "hub": bool(is_cart)})
+        traders += 1
+        carts_taken += 1 if is_cart else 0
+    try:
+        economy._note("SERVICE   %d agents in %d settlements (up to %d each, "
+                      "never a trader); %d of %d traders are agents "
+                      "(%d town, %d cart)"
+                      % (town_agents, len(towns), AGENTS_PER_TOWN, traders,
+                         len(trade), traders - carts_taken, carts_taken))
+    except Exception:
+        pass
+    if short:
+        try:
+            economy._note("SERVICE   thin in: " + ", ".join(short[:8]))
+        except Exception:
+            pass
+    return town_agents, traders
+
+
+def seed_chief(villages, player, seed: int = 20240501):
+    """THE ONE. A settlement, a labourer's trade, and never one of his own."""
+    global CHIEF, CHIEF_PLACE
+    rng = random.Random(0x4E3E5155 ^ int(seed))
+    px = float(getattr(player, "x", 0.0))
+    py = float(getattr(player, "y", 0.0))
+    best = None
+    best_d = -1.0
+    for v in getattr(villages, "villages", ()) or ():
+        if getattr(v, "is_hub", False) or getattr(v, "is_capital", False):
+            continue
+        men = [n for n in _people(v)
+               if not getattr(n, "secret_police", False)
+               and getattr(n, "job", None) != "trader"
+               and getattr(n, "trade_state", "none") == "none"]
+        if not men:
+            continue
+        d = (v.x - px) ** 2 + (v.y - py) ** 2
+        if d > best_d:                     # a long way off, never next door
+            best, best_d = (v, men), d
+    if best is None:
+        return None
+    town, men = best
+    man = rng.choice(men)
+    man.secret_police = False
+    man.secret_police_chief = True
+    CHIEF, CHIEF_PLACE = man, town
+    try:
+        economy._note("SERVICE   chief: %s, a %s of %s  (never a hut, never a "
+                      "trader, never one of his own)"
+                      % (man.name, getattr(man, "job", None) or "idler", town.name))
+    except Exception:
+        pass
+    return man
+
+
+def issue() -> dict:
+    """PLANT THE SECRET NEWS. Once, after plant() and seed_chief()."""
+    FACTS.clear()
+    KNOWERS.clear()
+    if CHIEF is None:
+        return {"place": 0, "roster": 0, "chief": 0}
+    cid = "chief:" + str(getattr(CHIEF, "id", "?"))
+    _fact(cid, "chief", agent=CHIEF.id,
+          name=getattr(CHIEF, "name", "?"),
+          place=getattr(CHIEF_PLACE, "name", "?"),
+          rank=getattr(CHIEF, "job", None) or "idler",
+          text="THE CHIEF OF THE SERVICE IS %s, in %s."
+               % (str(getattr(CHIEF, "name", "?")).upper(),
+                  getattr(CHIEF_PLACE, "name", "?")))
+    places, rosters = [], []
+    for a in AGENTS:
+        n = a["npc"]
+        where = getattr(a["place"], "name", "?")
+        pid = "place:" + str(getattr(n, "id", "?"))
+        _fact(pid, "place", agent=n.id, place=where,
+              hub=bool(a.get("hub")),
+              text="THE SERVICE OPERATES IN %s -- I am posted there."
+                   % str(where).upper())
+        rid = "roster:" + str(getattr(n, "id", "?"))
+        _fact(rid, "roster", agent=n.id, name=getattr(n, "name", "?"),
+              place=where, rank=a.get("rank") or "idler",
+              hub=bool(a.get("hub")),
+              text="%s, %s, %s -- one of ours."
+                   % (str(getattr(n, "name", "?")).upper(), where,
+                      a.get("rank") or "idler"))
+        places.append(pid)
+        rosters.append(rid)
+    # EVERY AGENT: every place (his own included), and who the chief is.
+    _chief_name = getattr(CHIEF, "name", "the chief")
+    for pid in places:
+        _fact(pid, "place", **{k: v for k, v in FACTS[pid].items()
+                               if k not in ("id", "kind", "t")})
+        FACTS[pid]["by"] = _chief_name
+    for rid in rosters:
+        FACTS[rid]["by"] = _chief_name
+    FACTS[cid]["by"] = _chief_name
+    for a in AGENTS:
+        for pid in places:
+            _give(a["npc"], pid, frm=_chief_name)
+        _give(a["npc"], cid, frm=_chief_name)
+    # THE CHIEF: the roster -- names, places and ranks -- and himself.
+    for rid in rosters:
+        _give(CHIEF, rid)
+    _give(CHIEF, cid)
+    # NOBODY ELSE. That is the whole of the rule: no other man is given any of
+    # these ids, so he can neither repeat them nor be tricked into confirming.
+    return {"place": len(places), "roster": len(rosters), "chief": 1}
+
+
+def secret_summary() -> str:
+    """What the service knows, and who holds it -- counted from the marks."""
+    n_agents = len(AGENTS)
+    agent_holds = [len(getattr(a["npc"], "secret_news", None) or ())
+                   for a in AGENTS]
+    chief_holds = len(getattr(CHIEF, "secret_news", None) or ()) if CHIEF else 0
+    by_kind: dict = {}
+    for f in FACTS.values():
+        by_kind[f["kind"]] = by_kind.get(f["kind"], 0) + 1
+    dupes = len(AGENTS) - len({str(getattr(a["npc"], "id", "?")) for a in AGENTS})
+    return ("secret news: %d facts (%d place, %d roster, %d chief); "
+            "each of %d agents holds %s; chief holds %d; nobody else holds any%s"
+            % (len(FACTS), by_kind.get("place", 0), by_kind.get("roster", 0),
+               by_kind.get("chief", 0), n_agents,
+               sorted(set(agent_holds)), chief_holds,
+               ("; DUPLICATE NPC IDS AMONG AGENTS: %d" % dupes) if dupes else ""))
+
+
+LEADER_ID = "leader:identified"
+LEADER = "the Kingpin"          # what the service calls the man behind the yard
+
+
+def note_leader(agent, player=None, at=None) -> str | None:
+    """THE SERVICE LEARNS WHO THE LEADER IS -- ONCE, AND ALL AT ONCE.
+
+    Two things can put a name to the organisation: a dead worker of the
+    player's seen by an agent (the body is the evidence), and a turned agent
+    who has heard the player's own orders. When either happens the fact is
+    written down, signed by the man who found it, and **given to every agent in
+    the network** -- this is not gossip that has to travel from mouth to mouth,
+    it is the service's own conclusion, and it goes everywhere the service is.
+    """
+    if agent is None:
+        return None
+    if LEADER_ID in FACTS:
+        return None                      # it is already known
+    who = getattr(player, "name", None) or LEADER
+    text = ("THE LEADER OF THE CRIMINAL ORGANISATION IS %s -- "
+            "the man whose yard the workers answer to." % str(who).upper())
+    fact = _fact(LEADER_ID, "leader", text=text, place=None,
+                 name=getattr(agent, "name", "?"))
+    # WHERE THE NEWS CAME FROM: the body, the yard, the spot he was seen. The
+    # crown sends its men there, so the fact has to remember the place.
+    fact["at"] = at or (float(getattr(agent, "x", 0.0)),
+                        float(getattr(agent, "y", 0.0)))
+    fact["by"] = getattr(agent, "name", "?")
+    if CHIEF is not None:
+        _give(CHIEF, LEADER_ID, frm=getattr(agent, "name", None))
+    for a in AGENTS:
+        _give(a["npc"], LEADER_ID,
+              frm=getattr(agent, "name", None) if a["npc"] is not agent else None)
+    try:
+        import plog
+        plog.log("LEADER", "identified by", getattr(agent, "name", "?"),
+                 "| spread to", len(AGENTS), "agent(s)")
+    except Exception:
+        pass
+    return LEADER_ID
+
+
+def folder_messages(npc) -> list:
+    """A DEAD AGENT'S MAIL, with a NAME on every line.
+
+    `FROM` is the man who told him -- or, if he learned it himself, the name
+    recorded as the fact's author (his own, for something he witnessed with his
+    own eyes). Nothing here is a place pretending to be a person.
+    """
+    out = []
+    for fid in (getattr(npc, "secret_news", None) or ()):
+        fact = FACTS.get(fid)
+        if fact is None:
+            continue
+        sender = (TOLD.get((fid, id(npc))) or fact.get("by") or "the chief")
+        where = None
+        for a in AGENTS:             # where the sender can be found now
+            if getattr(a["npc"], "name", None) == sender and a.get("place"):
+                where = getattr(a["place"], "name", None)
+                break
+        out.append({
+            "from": sender,
+            "where": where or (getattr(fact.get("place"), "name", None)
+                               if isinstance(fact.get("place"), object)
+                               and not isinstance(fact.get("place"), str)
+                               else fact.get("place")),
+            "text": fact.get("text") or " ".join(
+                "%s %s" % (k, v) for k, v in sorted(fact.items())
+                if k not in ("id", "kind", "t", "by")),
+            "t": float(fact.get("t", 0.0)),
+            "kind": fact.get("kind"),
+        })
+    return out
+
+
+def summary(villages, hub_world) -> str:
+    """WHAT IS ACTUALLY OUT THERE, counted from the marks themselves."""
+    towns = [v for v in getattr(villages, "villages", ()) or ()
+             if not getattr(v, "is_hub", False)]
+    a_town = sum(1 for v in towns for n in getattr(v, "npcs", ())
+                 if getattr(n, "secret_police", False)
+                 and getattr(n, "job", None) != "trader")
+    a_trade_town = sum(1 for v in towns for n in getattr(v, "npcs", ())
+                       if getattr(n, "secret_police", False)
+                       and getattr(n, "job", None) == "trader")
+    carts = list(getattr(hub_world, "_caravans", ()) or ())
+    a_trade_free = sum(1 for c in carts
+                       if getattr(getattr(c, "npc", None), "secret_police", False))
+    trade_all = sum(1 for v in towns for n in getattr(v, "npcs", ())
+                    if getattr(n, "job", None) == "trader") + len(carts)
+    in_huts = sum(1 for h in getattr(hub_world, "hubs", ()) or ()
+                  for n in getattr(h, "npcs", ())
+                  if getattr(n, "secret_police", False))
+    return ("1 chief=%s  agents: %d settlement, %d of %d traders "
+            "(%d town + %d free), %d inside the huts"
+            % (getattr(CHIEF, "name", None), a_town,
+               a_trade_town + a_trade_free, trade_all,
+               a_trade_town, a_trade_free, in_huts))

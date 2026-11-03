@@ -11,6 +11,8 @@ import math
 import pygame
 
 import items
+import plog
+import quality
 from inventory import Inventory, ItemStack
 from quality import GRADES, merge as _qmerge
 
@@ -394,9 +396,15 @@ class ChestPanel:
     PLAYER_ROWS = 4
 
     def __init__(self, player_inv: Inventory, chest_inv: Inventory,
-                 slot: int = 40, pad: int = 5) -> None:
+                 slot: int = 40, pad: int = 5, top_rows: int | None = None,
+                 top_label: str = "CHEST") -> None:
         self.player = player_inv
         self.chest = chest_inv
+        # THE OTHER CONTAINER IS NOT ALWAYS A CHEST. A hired man's pack holds
+        # exactly what the player's does -- 32 slots -- so the same panel
+        # opens on it, drawn at his size and under his name.
+        self.top_rows = int(top_rows) if top_rows else self.CHEST_ROWS
+        self.top_label = top_label
         self.slot = slot
         self.pad = pad
         self.held: ItemStack | None = None
@@ -410,7 +418,7 @@ class ChestPanel:
     def _layout(self, sw: int, sh: int):
         slot, pad, cols = self.slot, self.pad, self.COLS
         board_w = cols * slot + (cols + 1) * pad
-        chest_h = self.CHEST_ROWS * slot + (self.CHEST_ROWS + 1) * pad
+        chest_h = self.top_rows * slot + (self.top_rows + 1) * pad
         player_h = self.PLAYER_ROWS * slot + (self.PLAYER_ROWS + 1) * pad
         title, gap = 22, 12
         panel_h = title + chest_h + gap + title + player_h + 14
@@ -418,7 +426,7 @@ class ChestPanel:
         y0 = (sh - panel_h) // 2
 
         chest_rects = []
-        for r in range(self.CHEST_ROWS):
+        for r in range(self.top_rows):
             for c in range(cols):
                 chest_rects.append(pygame.Rect(x0 + pad + c * (slot + pad),
                                                y0 + title + pad + r * (slot + pad),
@@ -517,7 +525,7 @@ class ChestPanel:
         pygame.draw.rect(board, BORDER, board.get_rect(), width=2, border_radius=12)
         screen.blit(board, panel.topleft)
 
-        ct = self.font_title.render("CHEST", True, (226, 200, 150))
+        ct = self.font_title.render(self.top_label.upper(), True, (226, 200, 150))
         screen.blit(ct, (panel.centerx - ct.get_width() // 2, panel.top + 5))
         # player title sits just above the player grid
         pt = self.font_title.render("INVENTORY", True, TEXT)
@@ -692,3 +700,184 @@ class PauseMenu:
                             rect.centery - t.get_height() // 2))
         hint = self.font_small.render("Esc to resume", True, DIM)
         screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 22))
+
+
+class MarketPanel(ChestPanel):
+    """THE MARKET STALL, OPENED LIKE A CHEST.
+
+    Whatever is in it is on the market. Clicking moves a stack either way --
+    your pack below, the counter above -- and that is the whole screen. There
+    are no prices here, because prices are not a property of a shelf: they are
+    what you and the man who makes the goods agreed on, and they are set in his
+    dialogue (see dialogue.py, "What do you want for it?").
+
+    One key remains: T, the stall's own switch. Shut, the goods stay on the
+    counter and nobody buys, which is what a closed shop is.
+    """
+
+    def __init__(self, player_inv: Inventory, stall, slot: int = 40,
+                 pad: int = 5) -> None:
+        super().__init__(player_inv, stall.stock, slot=slot, pad=pad,
+                         top_rows=4, top_label="MARKET")
+        self.stall = stall
+        self.font_note = pygame.font.SysFont("dejavusans", 12)
+
+    def handle_event(self, event) -> None:
+        # THERE IS NO pygame.K_T. A capital letter arrives as K_t with SHIFT
+        # held, so asking for K_T raised AttributeError the first time a player
+        # pressed T -- in the market screen, in the middle of a game.
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_t:
+            self.stall.on = not bool(self.stall.on)
+            try:
+                plog.log("STALL", "trading" if self.stall.on else "SHUT")
+            except Exception:
+                pass
+            return
+        super().handle_event(event)
+
+    def draw(self, screen: pygame.Surface) -> None:
+        super().draw(screen)
+        try:
+            sw, sh = screen.get_size()
+            panel, _top, _bot = self._layout(sw, sh)
+            state = ("TRADING" if self.stall.on
+                     else "SHUT -- nobody will buy")
+            col = (176, 200, 176) if self.stall.on else (220, 130, 110)
+            head = pygame.font.SysFont("dejavusans", 15, bold=True).render(
+                state, True, col)
+            screen.blit(head, (panel.centerx - head.get_width() // 2,
+                               panel.top + 4))
+            note = self.font_note.render(
+                "everything on the counter is for sale   ·   "
+                "prices are agreed with the man who makes it   ·   "
+                "T to open or shut   ·   E to close",
+                True, (150, 146, 134))
+            screen.blit(note, (panel.centerx - note.get_width() // 2,
+                               panel.bottom - 34))
+        except Exception:
+            pass
+
+
+class FolderPanel:
+    """A DEAD AGENT'S MAIL: TO, FROM, and what the news is.
+
+    A scrollable page of messages, three to a page, with the page count in the
+    corner and the folder's owner in the header -- because two folders in one
+    rucksack are two different dead men.
+    """
+
+    PER_PAGE = 3
+
+    def __init__(self, folder_id: str) -> None:
+        self.fid = folder_id
+        self.page = 0
+        self.font_title = pygame.font.SysFont("dejavusans", 18, bold=True)
+        self.font = pygame.font.SysFont("dejavusans", 15)
+        self.font_small = pygame.font.SysFont("dejavusans", 13)
+        self.font_tiny = pygame.font.SysFont("dejavusans", 11)
+
+    # -- data --------------------------------------------------------------
+    def _folder(self):
+        try:
+            import folders
+            return folders.read(self.fid)
+        except Exception:
+            return None
+
+    def _pages(self) -> int:
+        got = self._folder()
+        n = len(got.get("msgs", ())) if got else 0
+        return max(1, (n + self.PER_PAGE - 1) // self.PER_PAGE)
+
+    def _wrap(self, text, font, width) -> list:
+        lines, cur = [], ""
+        for word in str(text).split():
+            trial = (cur + " " + word).strip()
+            if font.size(trial)[0] > width and cur:
+                lines.append(cur)
+                cur = word
+            else:
+                cur = trial
+        if cur:
+            lines.append(cur)
+        return lines
+
+    # -- input -------------------------------------------------------------
+    def handle_event(self, event) -> bool:
+        """True when the panel wants to close."""
+        if event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_ESCAPE, pygame.K_e, pygame.K_q):
+                return True
+            if event.key in (pygame.K_RIGHT, pygame.K_d, pygame.K_PAGEDOWN):
+                self.page = min(self._pages() - 1, self.page + 1)
+            elif event.key in (pygame.K_LEFT, pygame.K_a, pygame.K_PAGEUP):
+                self.page = max(0, self.page - 1)
+        elif event.type == pygame.MOUSEWHEEL:
+            if event.y < 0:
+                self.page = min(self._pages() - 1, self.page + 1)
+            elif event.y > 0:
+                self.page = max(0, self.page - 1)
+        return False
+
+    # -- drawing -----------------------------------------------------------
+    def draw(self, screen: pygame.Surface) -> None:
+        vw, vh = screen.get_size()
+        w = min(760, vw - 80)
+        h = min(560, vh - 80)
+        panel = pygame.Rect(vw // 2 - w // 2, vh // 2 - h // 2, w, h)
+        shade = pygame.Surface((vw, vh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 165))
+        screen.blit(shade, (0, 0))
+        pygame.draw.rect(screen, (22, 20, 18), panel, border_radius=10)
+        pygame.draw.rect(screen, (154, 118, 78), panel, 2, border_radius=10)
+
+        got = self._folder()
+        to = (got or {}).get("to", "an agent")
+        msgs = list((got or {}).get("msgs", ()))
+        pages = self._pages()
+        self.page = max(0, min(pages - 1, self.page))
+
+        head = self.font_title.render("SECRET FOLDER", True, (226, 200, 150))
+        screen.blit(head, (panel.x + 20, panel.y + 12))
+        top = self.font.render("TO: %s" % to, True, (228, 218, 198))
+        screen.blit(top, (panel.x + 20, panel.y + 38))
+        count = self.font_small.render(
+            "page %d / %d   --   %d message%s" % (self.page + 1, pages, len(msgs),
+                                                  "" if len(msgs) == 1 else "s"),
+            True, (170, 164, 150))
+        screen.blit(count, (panel.right - 20 - count.get_width(), panel.y + 42))
+
+        y = panel.y + 72
+        chunk = msgs[self.page * self.PER_PAGE:(self.page + 1) * self.PER_PAGE]
+        if not chunk:
+            empty = self.font.render("Nothing. Whatever he knew is stale.",
+                                     True, (176, 168, 152))
+            screen.blit(empty, (panel.x + 20, y))
+        for m in chunk:
+            rule = pygame.Rect(panel.x + 16, y, w - 32, 1)
+            pygame.draw.rect(screen, (70, 64, 54), rule)
+            y += 8
+            _from = "FROM: %s" % m.get("from", "?")
+            if m.get("where"):
+                _from += "  ·  at %s" % m.get("where")
+            frm = self.font.render(_from, True, (206, 196, 172))
+            screen.blit(frm, (panel.x + 20, y))
+            _age = float(m.get("age", 0.0))
+            _days = max(1, int(round(_age)))
+            _when = ("today" if _age < 0.5 else
+                     "%d day%s ago" % (_days, "" if _days == 1 else "s"))
+            age = self.font_tiny.render(_when, True, (150, 144, 130))
+            screen.blit(age, (panel.right - 20 - age.get_width(), y + 2))
+            y += 22
+            for line in self._wrap(m.get("text", ""), self.font, w - 60)[:6]:
+                t = self.font.render(line, True, (232, 226, 210))
+                screen.blit(t, (panel.x + 30, y))
+                y += 20
+            y += 10
+            if y > panel.bottom - 60:
+                break
+
+        hint = self.font_tiny.render(
+            "wheel or A / D to turn the page   ·   E or ESC to close",
+            True, (140, 134, 122))
+        screen.blit(hint, (panel.x + 20, panel.bottom - 26))

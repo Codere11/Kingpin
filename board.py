@@ -37,6 +37,11 @@ class BoardPanel:
         self.sell_button = None
         self.notice = ""
         self.notice_t = 0.0
+        # THE TOWN'S OWN PROCESS, when the simulation runs outside the frame.
+        # The board is drawn here and the town is simulated there, so hiring
+        # and selling are REQUESTS: the town performs them and the frame is
+        # told what happened. None means everything is local, as it was.
+        self.town_api = None
         self.job_rows: list = []       # (rect, village, trade) for the mouse
         self.font_title = pygame.font.SysFont("dejavusans", 19, bold=True)
         self.font = pygame.font.SysFont("dejavusans", 15, bold=True)
@@ -126,6 +131,10 @@ class BoardPanel:
                     continue
                 if self.player is None:
                     break
+                if self.town_api is not None:
+                    self.notice, self.notice_t = "Asking the town\u2026", 1.5
+                    self.town_api.hire(v, kind, self._hired)
+                    return False
                 if v.hire(self.player, kind):
                     self.notice, self.notice_t = (
                         "Taken   -   %s in %s" % (TRADE_NAMES.get(kind, kind),
@@ -140,6 +149,21 @@ class BoardPanel:
             village = self._town()
             if village is None:
                 self.notice, self.notice_t = "You have no village to sell to", 2.5
+            elif self.town_api is not None:
+                offers = []
+                for i, item, qty, unit in self._sellable():
+                    grade = 3
+                    try:
+                        grade = int(self.inv.slots[i].grade)
+                    except Exception:
+                        pass
+                    offers.append((item, int(qty), int(unit), int(grade)))
+                if not offers:
+                    self.notice, self.notice_t = (
+                        "Nothing the ledger buys. Bring it finished goods."), 2.5
+                else:
+                    self.notice, self.notice_t = "Offering it to the ledger\u2026", 1.5
+                    self.town_api.sell(village, offers, self._sold)
             else:
                 units = 0
                 coin = 0
@@ -205,6 +229,23 @@ class BoardPanel:
                     self.player.tax_paid += due
                 self.notice, self.notice_t = "Taxes paid   -%d coin" % due, 2.5
         return False
+
+    # -- the town's answers ----------------------------------------------
+    def _hired(self, res) -> None:
+        if res and res.get("hired"):
+            self.notice, self.notice_t = (
+                "Taken   -   %s" % TRADE_NAMES.get(res["hired"], res["hired"])), 3.0
+        else:
+            self.notice, self.notice_t = "That post is gone", 2.5
+
+    def _sold(self, res) -> None:
+        if not res or not res.get("sold"):
+            self.notice, self.notice_t = ("The ledger is empty -- nothing to "
+                                          "buy with"), 3.0
+            return
+        self.notice, self.notice_t = (
+            "Sold %d to the ledger   +%d coin"
+            % (int(res["sold"]), int(res.get("coin", 0)))), 3.0
 
     @staticmethod
     def _panel(vw: int, vh: int) -> pygame.Rect:
@@ -324,7 +365,12 @@ class BoardPanel:
         self.job_rows = []
         any_post = False
         for v in self._nearest(village, 3):
-            posts = v.open_posts()
+            # WHAT THE TOWN SAYS IT HAS GOING. When the town is simulated in
+            # another process this list arrives with the tick; otherwise it is
+            # read off the town itself, as it always was.
+            posts = getattr(v, "_lanes_posts", None)
+            if posts is None:
+                posts = v.open_posts()
             if not posts:
                 continue
             any_post = True

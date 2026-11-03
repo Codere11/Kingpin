@@ -296,6 +296,26 @@ class Interior:
         return False
 
     # -- drawing ------------------------------------------------------------
+    def bake(self) -> pygame.Surface:
+        """DRAW THE WHOLE ROOM ONCE, into a surface, and keep it.
+
+        Everything in a room is static -- floor, rug, furniture, walls,
+        windows, the door -- so painting it sixty times a second was pure
+        waste, and it is why a mine (whose rock is painted once) opens
+        instantly and a house does not.
+        """
+        got = getattr(self, "_baked", None)
+        if got is not None:
+            return got
+        surf = pygame.Surface((int(self.W), int(self.H)))
+        self.draw(surf, 0.0, 0.0)
+        self._baked = surf
+        return surf
+
+    def draw_baked(self, screen: pygame.Surface, cam_x: float,
+                   cam_y: float) -> None:
+        screen.blit(self.bake(), (int(-cam_x), int(-cam_y)))
+
     def draw(self, screen: pygame.Surface, cam_x: float, cam_y: float) -> None:
         ox, oy = -cam_x, -cam_y
 

@@ -26,6 +26,10 @@ REGISTRY: dict[str, ItemDef] = {
     "rifle": ItemDef("rifle", "Rifle", "A lever-action rifle. Good for hunting, better for settling arguments."),
     "shotgun": ItemDef("shotgun", "Shotgun", "Scatters a fistful of lead. Slow to work the pump."),
     "ammo": ItemDef("ammo", "Ammo", "Cartridges. Fits any gun you own.", stackable=True, max_stack=100),
+    # WHAT A SPY CARRIES. Taken off an agent's body: every message he was
+    # holding, addressed, dated, and readable by anybody who loots him.
+    "secret_folder": ItemDef("secret_folder", "Secret Folder",
+                             "A dead agent's messages. Equip it and click."),
     "pickaxe": ItemDef("pickaxe", "Pickaxe", "Breaks iron out of the rock."),
     "compass": ItemDef("compass", "Compass", "Points home, or to the nearest village. Press F."),
     "iron": ItemDef("iron", "Iron", "Raw iron, straight from the ground. Crafting stock.",

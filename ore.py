@@ -138,6 +138,21 @@ class OreField:
             self._cache[key] = None
             return None
         x, y, _code, variant = here
+        # NO IRON IN THE CAMP, AND NONE ON THE PERMANENT WAY.
+        try:
+            import gulag
+            if gulag.inside(x, y, 120.0):
+                self._cache[key] = None
+                return None
+        except Exception:
+            pass
+        try:
+            import rail
+            if rail.blocked(x, y, 34.0):
+                self._cache[key] = None
+                return None
+        except Exception:
+            pass
         chunk = Chunk(x, y, key, variant)
         if key in self.mined:
             chunk.mined = True

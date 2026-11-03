@@ -12,6 +12,7 @@ import pygame
 import economy
 import face
 import items
+import nemesis
 from quality import GRADES, SELL_VALUE, letter, sell_coins
 
 BORDER = (72, 72, 80)
@@ -33,6 +34,82 @@ BUY = [
     ("watering_can", 10, "Watering Can"),
     ("first_aid", 10, "First-Aid Kit"),
 ]
+
+
+# WHAT A MAN WILL BUY OFF THE PLAYER IN ONE DAY.
+#
+# Town trade already stops at what a man WANTS, but that answer comes from his
+# stock -- and for a man the frame is not walking, his stock is whatever it was
+# when he was last near the player. So the player could sell the same eight
+# logs over and over to a man whose real woodpile was a hundred logs deep, and
+# leave a village destitute with nothing but firewood. The budget below does
+# not depend on his larder being fresh: it is what the player has sold HIM
+# today.
+DAILY_DAYS_WORTH = 3.0      # three days of a good, no matter the purse
+DAILY_TOOLS = 1             # one tool, or one gun
+DAILY_SEEDS = 30            # thirty seeds in all, not of a kind
+
+# A DAY'S WORTH OF EACH THING, from what was measured in a running game
+# (NEEDS.md): a person eats 1.69 meals a day and a house burns 5 logs; an
+# addict smokes or drinks 1.01; a bench works through eight leaf a day; a
+# smith's forge and a soldier's range have their own appetites.
+PER_DAY = {"bread": 2.0, "berries": 2.0, "cactus_fruit": 2.0,
+           "raw_meat": 2.0, "cooked_meat": 2.0, "wood": 5.0,
+           "cigar": 1.0, "beer": 1.0, "liqueur": 1.0, "mezcal": 1.0,
+           "tobacco": 8.0, "agave": 8.0, "red_mushroom": 8.0,
+           "dried_mushroom": 8.0, "iron": 8.0, "ammo": 10.0,
+           "wheat_wort": 20.0, "berry_wort": 20.0, "agave_wort": 20.0}
+DEFAULT_PER_DAY = 1.0
+
+_NOW = [0.0]
+_SOLD = {}                  # (buyer id, day) -> {"goods": {}, "tools": n, "seeds": n}
+
+
+def set_now(now: float) -> None:
+    _NOW[0] = float(now)
+
+
+def _day() -> int:
+    import economy
+    return int(_NOW[0] // economy.DAY_LENGTH)
+
+
+def _book(npc) -> dict:
+    key = (id(npc), _day())
+    got = _SOLD.get(key)
+    if got is None:
+        got = {"goods": {}, "tools": 0, "seeds": 0}
+        _SOLD[key] = got
+        if len(_SOLD) > 4000:                 # never grow without bound
+            for old in list(_SOLD)[:1000]:
+                _SOLD.pop(old, None)
+    return got
+
+
+def daily_left(npc, item: str) -> int:
+    """HOW MANY MORE OF THIS THE PLAYER MAY SELL HIM TODAY."""
+    import economy
+    book = _book(npc)
+    if item in economy.SEEDS:
+        return max(0, DAILY_SEEDS - int(book["seeds"]))
+    if item in economy.TOOLS or item in economy.ARMS:
+        return max(0, DAILY_TOOLS - int(book["tools"]))
+    per_day = PER_DAY.get(item, DEFAULT_PER_DAY)
+    cap = int(round(DAILY_DAYS_WORTH * per_day))
+    return max(0, cap - int(book["goods"].get(item, 0)))
+
+
+def record_sale(npc, item: str, count: int) -> None:
+    import economy
+    if count <= 0:
+        return
+    book = _book(npc)
+    if item in economy.SEEDS:
+        book["seeds"] = int(book["seeds"]) + int(count)
+    elif item in economy.TOOLS or item in economy.ARMS:
+        book["tools"] = int(book["tools"]) + int(count)
+    else:
+        book["goods"][item] = int(book["goods"].get(item, 0)) + int(count)
 
 
 class TradeMenu:
@@ -121,7 +198,8 @@ class TradeMenu:
         # nearly dead, a house's stack of firewood, a larder's worth of bread.
         demand = self._want(item)
         affordable = int(self.npc.coins / unit) if unit > 0 else 0
-        sold = max(0, min(stack.count, demand, affordable))
+        today = daily_left(self.npc, item)
+        sold = max(0, min(stack.count, demand, affordable, today))
         return sold, sold * unit
 
     def _sell_price(self, index: int):
@@ -135,6 +213,8 @@ class TradeMenu:
             return False, "not buying right now"
         if have <= 0:
             return False, "nothing to sell"
+        if daily_left(self.npc, stack.defn.id) <= 0:
+            return False, "he's had his fill today"
         return False, "he can't afford it"
 
     def _entries(self):
@@ -231,6 +311,7 @@ class TradeMenu:
                 self.inv.slots[index] = None
             self._wants.pop(stack.defn.id, None)      # his want has changed
             self.inv.add("coin", coins)
+            record_sale(self.npc, stack.defn.id, sold)   # the day's budget
             # EVERY DEAL TEACHES BOTH OF THEM SOMETHING ABOUT THE OTHER.
             _cap = getattr(self.npc, "social_cap", 3.0)
             self.npc.social = min(_cap, getattr(self.npc, "social", 0.0) + 0.05)
@@ -241,6 +322,15 @@ class TradeMenu:
             self.npc.trade_demand = max(0, self.npc.trade_demand - sold)
             if self.npc.trade_demand <= 0:
                 self.npc.restock_timer = RESTOCK_SECONDS
+            # SELLING LEAF OR A MADE DRUG IS AN OFFENCE, and any agent close
+            # enough to have watched the deal now knows it.
+            _pl = getattr(self, "player", None)
+            if _pl is not None and stack.defn.id in (nemesis.ILLEGAL_LEAF
+                                                     + nemesis.ILLEGAL_DRUGS):
+                try:
+                    nemesis.note_offence_seen(_pl, "sold", stack.defn.id)
+                except Exception:
+                    pass
             self._smirk()          # he bought off you, and he knows it
             return True
         if kind == "sell_none":

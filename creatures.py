@@ -7,6 +7,8 @@ for half a person's melee. Rabbits are harmless, fast, and skittish.
 
 from __future__ import annotations
 
+import stats
+
 import math
 import random
 
@@ -90,6 +92,7 @@ class Soldier(Enemy):
     attack_flash: float = 0.0
 
     kind = "soldier"
+    is_militia = False        # the Narodna militsiya: blue cap, dart rifle
 
     def __init__(self, x: float, y: float, nation, melee: bool = False,
                  seed: int | None = None, color=None) -> None:
@@ -103,8 +106,8 @@ class Soldier(Enemy):
         self.color = color if color is not None else nations.color(nation)
         self.melee = melee
         self.ammo = 0                     # rounds he is carrying
-        self.max_health = 115
-        self.health = 115
+        self.max_health = stats.PLAYER_MAX_HEALTH
+        self.health = self.max_health
         self.view_range = SOLDIER_VIEW
         self.view_angle = SOLDIER_ANGLE
         self.speed = 138.0 if melee else 122.0
@@ -155,7 +158,11 @@ class Soldier(Enemy):
 
     def update(self, dt, target, combat, occluders=None, speed_scale=1.0,
                view_scale=1.0, visible=True, colliders=None):
+        if getattr(self, "sleep_t", 0.0) > 0.0:
+            self.sleep_t = max(0.0, self.sleep_t - dt)
+            return
         self._colliders = colliders or []
+        stats.apply_body(self)                        # skill makes him bigger
         if self.attack_flash > 0.0:                   # the war face runs down
             self.attack_flash = max(0.0, self.attack_flash - dt)
         if self.hurt_flash > 0.0:                     # ...and so does the hurt
@@ -223,11 +230,16 @@ class Soldier(Enemy):
             ux, uy = dx / distance, dy / distance
             self.facing = (ux, uy)
             self.fire_cd -= dt
-            if self.fire_cd <= 0.0 and distance <= 520.0 and self._round_ready():
+            _n = guns.rounds_now(self, dt,
+                                 self.fire_cd <= 0.0 and distance <= 520.0)
+            if _n and self.fire_cd <= 0.0:
                 self.fire_cd = random.uniform(0.5, 0.9)
+            for _ in range(_n):
+                if not self._round_ready():
+                    break
                 angle = math.atan2(dy, dx) + random.uniform(-0.03, 0.03)
                 self._shoot(combat, self.x + ux * 20.0, self.y + uy * 20.0,
-                            angle, distance + 160.0, 8, 14)
+                            angle, distance + 160.0, 80, 80)
         else:
             self.view_angle = math.radians(90.0)    # eyes on the fence
             self._walk_loop(dt)
@@ -252,11 +264,16 @@ class Soldier(Enemy):
             ux, uy = dx / distance, dy / distance
             self.facing = (ux, uy)
             self.fire_cd -= dt
-            if self.fire_cd <= 0.0 and distance <= 560.0 and self._round_ready():
+            _n = guns.rounds_now(self, dt,
+                                 self.fire_cd <= 0.0 and distance <= 560.0)
+            if _n and self.fire_cd <= 0.0:
                 self.fire_cd = random.uniform(0.45, 0.8)
+            for _ in range(_n):
+                if not self._round_ready():
+                    break
                 angle = math.atan2(dy, dx) + random.uniform(-0.035, 0.035)
                 self._shoot(combat, self.x + ux * 20.0, self.y + uy * 20.0,
-                            angle, distance + 160.0, 8, 14)
+                            angle, distance + 160.0, 80, 80)
         else:
             self.view_angle = math.radians(150.0)
             self._walk_circle(dt)
@@ -306,7 +323,8 @@ class Soldier(Enemy):
         self.fire_cd -= dt
         dx, dy = target.x - self.x, target.y - self.y
         dist = math.hypot(dx, dy) or 1.0
-        if self.fire_cd <= 0.0 and dist <= 560.0:
+        _n = guns.rounds_now(self, dt, self.fire_cd <= 0.0 and dist <= 560.0)
+        for _ in range(_n):
             ux, uy = dx / dist, dy / dist
             angle = math.atan2(dy, dx) + random.uniform(-0.035, 0.035)
             mx, my = self.x + ux * 20.0, self.y + uy * 20.0
@@ -320,10 +338,11 @@ class Soldier(Enemy):
                                     getattr(self, "_soldiers", ()),
                                     getattr(self, "_player", None), self.nation):
                 if self._round_ready():
-                    self.fire_cd = random.uniform(0.55, 0.95) * (
-                    1.8 if self.exhausted else 1.0)
+                    if _n and self.fire_cd <= 0.0:
+                        self.fire_cd = random.uniform(0.55, 0.95) * (
+                            1.8 if self.exhausted else 1.0)
                     self.attack_flash = face.WAR_SECONDS
-                    self._shoot(combat, mx, my, angle, dist + 160.0, 7, 12)
+                    self._shoot(combat, mx, my, angle, dist + 160.0, 80, 80)
 
     def _fight(self, dt, target, combat, speed_scale, visible=True):
         dx, dy = target.x - self.x, target.y - self.y
@@ -418,6 +437,18 @@ class Soldier(Enemy):
                                starved=getattr(self, "hunger", 0.0)
                                >= face.STARVED_HUNGER),
                   vet=face.vet_tier(self.skills.axe, self.skills.shooting))
+        # EVERY SOLDIER OF THE REPUBLIC WEARS THE CAP: gate guards, patrols,
+        # the standing army, a marching column, the crown's hunting party.
+        if getattr(self, "kind", "") == "soldier":
+            face.cap(screen, _hx, _hy, 8, fx, fy,
+                     blue=bool(getattr(self, "is_militia", False)))
+        if getattr(self, "sleep_t", 0.0) > 0.0:
+            try:
+                fnt = pygame.font.SysFont("dejavusans", 12, bold=True)
+                z = fnt.render("Zzz", True, (226, 226, 236))
+                screen.blit(z, (_hx + 6, _hy - 20))
+            except Exception:
+                pass
         # Nation pennant, so the armies are never mistaken for each other.
         pygame.draw.line(screen, (44, 38, 30), (sx + 7, sy - 6), (sx + 7, sy - 30), 2)
         pygame.draw.polygon(screen, self.color,
@@ -650,8 +681,9 @@ def make_squad(nation, x: float, y: float, count: int = 3, color=None):
                           nation, melee=False, seed=random.randint(0, 2 ** 31),
                           color=color)
         soldier.follow = True
-        soldier.max_health = 160          # your squad is veteran, not militia
-        soldier.health = 160
+        # VETERANS HAVE SKILLS, NOT MORE MEAT: the same body as the player.
+        soldier.max_health = stats.PLAYER_MAX_HEALTH
+        soldier.health = stats.PLAYER_MAX_HEALTH
         soldier.march_village = None
         squad.append(soldier)
     return squad
@@ -670,6 +702,14 @@ def is_trader(obj) -> bool:
             or getattr(obj, "job", None) == "trader")
 
 
+def _g_inside(npc) -> bool:
+    try:
+        import gulag as _g
+        return _g.inside(getattr(npc, "x", 0.0), getattr(npc, "y", 0.0))
+    except Exception:
+        return False
+
+
 def choose_target(creature, player, enemies, rabbits, villages, squad=(),
                   persons=None):
     """The nearest thing ``creature`` should be attacking, or None."""
@@ -677,6 +717,84 @@ def choose_target(creature, player, enemies, rabbits, villages, squad=(),
                  for v in villages)
     cands = []
     if creature.kind == "soldier":
+        if getattr(creature, "gulag", False):
+            # A CAMP GUARD SHOOTS ANYBODY INSIDE THE FENCE WHO IS NOT ONE OF
+            # HIS OWN. That is the whole of the law out here.
+            try:
+                import gulag as _g
+                _camp = getattr(creature, "_player", None) or player
+                _here = _g.inside(getattr(_camp, "x", 0.0),
+                                  getattr(_camp, "y", 0.0), 40.0)
+            except Exception:
+                _camp, _here = player, False
+            if _here and not _camp.dead:
+                cands.append(_camp)
+            pool = list(persons or ())
+            for v in villages:
+                pool.extend(getattr(v, "npcs", ()) or ())
+            for npc in pool:
+                if (getattr(npc, "alive", True) and not npc.in_interior
+                        and not getattr(npc, "gulag", False)
+                        and _g_inside(npc)):
+                    cands.append(npc)
+            best, best_d2 = None, 1e30
+            for c in cands:
+                if getattr(c, "dead", False):
+                    continue
+                d2 = (c.x - creature.x) ** 2 + (c.y - creature.y) ** 2
+                if d2 < best_d2:
+                    best_d2, best = d2, c
+            return best
+        if getattr(creature, "manhunt", False):
+            # A HUNTING PARTY HAS STANDING ORDERS. The leader and every known
+            # man of his organisation are fair game on sight, whatever nation
+            # they claim -- and the men are named, not inferred, so a fresh
+            # hire standing in the yard is not "just another villager".
+            # THE LEADER HIMSELF, not whatever `player` happens to be: in the
+            # game's own test mode that argument is the observer, and a hunting
+            # party that hunts the observer never fires a shot at the Kingpin.
+            _who = getattr(creature, "_player", None) or player
+            _ids = getattr(creature, "hunt_ids", None) or ()
+            # ON SIGHT, not by telepathy: a party marching to the yard does not
+            # open fire on a name three kilometres away. Everything on the
+            # list becomes a candidate once it is in front of their rifles.
+            _reach = max(getattr(creature, "view_range", 0.0), 480.0)
+            _reach2 = _reach * _reach
+            if (not _who.dead
+                    and (_who.x - creature.x) ** 2
+                    + (_who.y - creature.y) ** 2 < _reach2):
+                cands.append(_who)
+            if _ids:
+                pool = list(persons or ())
+                for v in villages:
+                    pool.extend(getattr(v, "npcs", ()) or ())
+                seen = set()
+                for npc in pool:
+                    if not getattr(npc, "alive", True) or npc.in_interior:
+                        continue
+                    if id(npc) in seen:
+                        continue
+                    if str(getattr(npc, "id", "")) in _ids:
+                        if ((npc.x - creature.x) ** 2
+                                + (npc.y - creature.y) ** 2) < _reach2:
+                            seen.add(id(npc))
+                            cands.append(npc)
+            for other in enemies:
+                if other is creature or not other.alive:
+                    continue
+                if other.kind == "soldier" and other.nation != creature.nation:
+                    cands.append(other)
+                elif other.kind == "wolf":
+                    cands.append(other)
+            best = None
+            best_d2 = 1e30
+            for c in cands:
+                if c is _who and _who.dead:
+                    continue
+                d2 = (c.x - creature.x) ** 2 + (c.y - creature.y) ** 2
+                if d2 < best_d2:
+                    best_d2, best = d2, c
+            return best
         guard = getattr(creature, "guard_village", None)
         if guard is not None:
             # A border guard is watching the fence line: only people OUTSIDE

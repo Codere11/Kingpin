@@ -20,6 +20,7 @@ the player. No town books, no line-of-sight, no queue for the player.
 
 from __future__ import annotations
 
+import math
 import random
 
 import fence
@@ -35,8 +36,17 @@ STANDOFF = 46.0             # he stops here: close enough to look, not to push
 BREAK_RANGE = 420.0         # run this far and it is a flight, not a search
 CATCH_BASE = 0.55           # of the men carrying contraband, this many are found
 
+# THE MOMENT HE FINDS SOMETHING. He does not start shooting into the man's
+# chest with a hand in his pack -- he makes room and THEN fires. Half a second
+# between the player being told ("5 found. Run.") and the first round.
+CAUGHT_DELAY = 0.5
+CAUGHT_BACKOFF = 34.0       # the space he puts between them first
+_CAUGHT = {"on": False, "t": 0.0, "guard": None, "town": None,
+           "units": 0, "shot": False}
+
 _STATE = {"guard": None, "t": 0.0, "town": None}
 _RETURNING = []             # soldiers walking back to their post: usually empty
+_LAST_GUARD = [None]        # the man who did the last search, kept across reset()
 _VISITORS = {}              # (town, traveller) -> seconds at that gate
 
 
@@ -50,6 +60,127 @@ def reset() -> None:
     _STATE["town"] = None
 
 
+def begin_caught(player, town, units: int, guard=None) -> None:
+    """HE HAS FOUND SOMETHING. Back off, then shoot."""
+    g = guard or _STATE.get("guard") or _LAST_GUARD[0]
+    _CAUGHT.update(on=True, t=0.0, guard=g, town=town, units=int(units),
+                   shot=False)
+    if g is not None:
+        try:
+            # THE FUSE IS HIS OWN ATTACK CLOCK: however his combat code is
+            # driven, the earliest round he can fire is CAUGHT_DELAY from now.
+            g.attack_cd = max(float(getattr(g, "attack_cd", 0.0)), CAUGHT_DELAY)
+            g.fire_cd = max(float(getattr(g, "fire_cd", 0.0)), CAUGHT_DELAY)
+        except Exception:
+            pass
+    try:
+        plog.log("CAUGHT-FOUND", getattr(town, "name", "?"), units,
+                 "unit(s) | the guard makes space and fires in",
+                 CAUGHT_DELAY, "s")
+    except Exception:
+        pass
+
+
+def tick_caught(dt: float, player) -> str | None:
+    """The half second between the find and the shot. Returns "shot" once."""
+    if not _CAUGHT["on"]:
+        return None
+    _CAUGHT["t"] = float(_CAUGHT["t"]) + float(dt)
+    g = _CAUGHT["guard"]
+    t = float(_CAUGHT["t"])
+    if g is not None and getattr(g, "alive", True):
+        dx, dy = player.x - g.x, player.y - g.y
+        d = math.hypot(dx, dy) or 1.0
+        ux, uy = dx / d, dy / d
+        if d < STANDOFF + CAUGHT_BACKOFF - 1.0 and d > 1.0:
+            # ONE clean step back. A nudge lost the argument with his own feet
+            # (he walked forward again in the same frame); a step does not.
+            step = min(CAUGHT_BACKOFF, STANDOFF + CAUGHT_BACKOFF - d)
+            g.x -= ux * step
+            g.y -= uy * step
+            plog.log("CAUGHT-SPACE", getattr(g, "name", "?"), "stepped back",
+                     int(step), "px")
+        try:
+            # HE IS LOOKING AT THE MAN HE JUST SEARCHED. Without this his own
+            # update refuses to fire: squad and guard code want the target in
+            # the narrow arc he happens to be facing, and after a search that
+            # arc is anywhere.
+            g.facing = (ux, uy)
+            g.view_angle = math.radians(170.0)
+            g.aware = True
+            g.aware_timer = 30.0
+            g.target = (g.x, g.y)
+            g.hostile = True
+            g.aggro = True
+            g.attack_cd = max(float(getattr(g, "attack_cd", 0.0)),
+                              CAUGHT_DELAY - t)
+            g.fire_cd = max(float(getattr(g, "fire_cd", 0.0)),
+                            CAUGHT_DELAY - t)
+        except Exception:
+            pass
+    if t >= CAUGHT_DELAY and not _CAUGHT["shot"]:
+        _CAUGHT["shot"] = True
+        if g is not None:
+            try:
+                g.attack_cd = 0.0            # the round goes now
+                g.fire_cd = 0.0
+                g.aggro = True
+                g.hostile = True
+                g.aware = True
+                g.aware_timer = 30.0
+                _d = math.hypot(player.x - g.x, player.y - g.y) or 1.0
+                g.facing = ((player.x - g.x) / _d, (player.y - g.y) / _d)
+            except Exception:
+                pass
+        _CAUGHT["watch"] = 1.5
+        _LAST_GUARD[0] = g
+        try:
+            plog.log("CAUGHT-SHOT", "the guard fires at",
+                     getattr(_CAUGHT["town"], "name", "?"),
+                     "after", round(t, 2), "s and",
+                     int(math.hypot(player.x - (g.x if g else player.x),
+                                    player.y - (g.y if g else player.y))), "px")
+        except Exception:
+            pass
+        return "shot"
+    return None
+
+
+def fire_shot(player, combat) -> bool:
+    """THE ROUND, from the guard's own gun. Returns True if one left.
+
+    It is fired here and not left to whichever loop happens to be walking him:
+    the man who did the search is a town's soldier, and not every town's
+    soldiers are simulated by the frame the player is in.
+    """
+    g = _CAUGHT["guard"] or _LAST_GUARD[0]
+    if g is None or combat is None:
+        return False
+    dx, dy = player.x - g.x, player.y - g.y
+    d = math.hypot(dx, dy) or 1.0
+    try:
+        if not g._round_ready():
+            return False
+        angle = math.atan2(dy, dx) + random.uniform(-0.03, 0.03)
+        mx = g.x + dx / d * 16.0
+        my = g.y + dy / d * 16.0
+        g._shoot(combat, mx, my, angle, d + 120.0, 80, 80)
+        g.attack_flash = 0.35
+        plog.log("CAUGHT-SHOT", "the guard fired from", int(d), "px",
+                 "| mag now", getattr(g, "mag", None))
+        return True
+    except Exception as exc:
+        try:
+            plog.log("CAUGHT-SHOT-ERR", repr(exc))
+        except Exception:
+            pass
+        return False
+
+
+def caught_over() -> None:
+    _CAUGHT.update(on=False, t=0.0, guard=None, town=None, units=0, shot=False)
+
+
 def progress() -> float:
     """0 to 1: the bar under the guard's feet."""
     if _STATE["guard"] is None:
@@ -59,6 +190,35 @@ def progress() -> float:
 
 def guard_of():
     return _STATE["guard"]
+
+
+PASS_SLACK = 600.0      # how far past the wall a pass stops working
+
+
+def pass_expired(player, town, slack: float = PASS_SLACK) -> bool:
+    """HAS HE GONE AWAY? A pass lasts while he is at the gate.
+
+    It used to be spent the instant he stepped outside the wall, so walking
+    out and back in put him through the search again -- three times a minute
+    at one gate. He is a stranger again only when he is out of the town's
+    reach, and never before: a pass that worked from anywhere would be a way
+    to walk contraband in unnoticed.
+    """
+    if town is None:
+        return True
+    d = math.hypot(player.x - town.x, player.y - town.y)
+    return d > float(getattr(town, "radius", 0.0)) + float(slack)
+
+
+def is_service(man) -> bool:
+    """THE SERVICE IS NOT SEARCHED FOR LONG.
+
+    An agent goes through the search like anybody else -- always, every
+    crossing -- but what is found in his pack is not found: he is waved
+    through, nothing is written against him, and the town does not turn.
+    """
+    return bool(getattr(man, "secret_police", False)
+                or getattr(man, "secret_police_chief", False))
 
 
 def units_on(carrier, inventory=None) -> int:
@@ -196,6 +356,7 @@ def tick(dt: float, player, towns, inventory=None):
         return None
 
     town = _STATE["town"]
+    _LAST_GUARD[0] = g if g is not None else _STATE.get("guard")
     reset()
     player.waved_by = town
     units = units_on(player, inventory)
@@ -249,6 +410,12 @@ def tick_town(dt: float, town):
         was = getattr(n, "was_inside", None)
         n.was_inside = inside
         if was is None or was == inside:
+            continue
+        # NOBODY IS SEARCHED LEAVING. The gate on the way out is a doorway,
+        # not a checkpoint (Pivot.md: "the way in is searched, the way out is
+        # free") -- and searching a man on every step he takes in and out of
+        # the wall put the same man in the queue three times a minute.
+        if not inside:
             continue
         if n is town.search_now or n in town.search_queue:
             continue
@@ -306,6 +473,16 @@ def tick_town(dt: float, town):
     except Exception:
         pass
     if _caught:
+        if is_service(cur):
+            # FOUND WITH THE GOODS, AND WAVED THROUGH. No aggro, no charge,
+            # no mark on him.
+            try:
+                plog.log("SEARCH", getattr(town, "name", "?"),
+                         getattr(cur, "name", "?"), "units", units,
+                         "result", "WAVED (service)")
+            except Exception:
+                pass
+            return ("clean", cur, units)
         cur.wanted = True
         return ("caught", cur, units)
     return ("clean", cur, units)
@@ -331,6 +508,16 @@ def search_visitor(dt: float, town, who):
     _VISITORS.pop(key, None)
     units = units_on(who)
     caught = _roll(units, float(getattr(who, "smuggling", 0.0)))
+    if caught and is_service(who):
+        # A CART THAT BELONGS TO THE SERVICE IS LOOKED AT EVERY TIME, and
+        # waved through every time -- goods and all.
+        try:
+            plog.log("SEARCH", getattr(town, "name", "?"),
+                     getattr(who, "name", "?"), "units", units,
+                     "result", "WAVED (service)", "at", "gate")
+        except Exception:
+            pass
+        return "clean"
     try:
         plog.log("SEARCH", getattr(town, "name", "?"),
                  getattr(who, "name", "?"), "units", units,

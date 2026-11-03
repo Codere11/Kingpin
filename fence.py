@@ -38,7 +38,58 @@ def install(village, rng) -> None:
     rebuild(village)
 
 
+def _angdiff(a: float, b: float) -> float:
+    """The smallest angle between two directions, in radians (0 .. pi)."""
+    return abs(((a - b + math.pi) % (2.0 * math.pi)) - math.pi)
+
+
 OUTWARD = {0: (0.0, -1.0), 1: (1.0, 0.0), 2: (0.0, 1.0), 3: (-1.0, 0.0)}
+
+
+def enclosure(walls, x, y, cell=8.0, pad=400.0):
+    """IS HE STANDING INSIDE A CLOSED RING OF HIS OWN FENCES?
+
+    Returns (yard, ring): the rectangle he is shut into, and the pieces of
+    fence that shut him in. (None, []) if the ring leaks -- a gap, a gate he
+    has not closed, or simply open ground.
+
+    A flood fill from his feet over an 8-px grid, stopping at every piece of
+    fence. If the fill reaches the edge of the search box, the country is open
+    and there is no hub here.
+    """
+    if not walls:
+        return None, []
+    x0 = int((min(r.left for r in walls) - pad) // cell)
+    x1 = int((max(r.right for r in walls) + pad) // cell)
+    y0 = int((min(r.top for r in walls) - pad) // cell)
+    y1 = int((max(r.bottom for r in walls) + pad) // cell)
+    solid = set()
+    for r in walls:
+        for cx in range(int(r.left // cell), int(r.right // cell) + 1):
+            for cy in range(int(r.top // cell), int(r.bottom // cell) + 1):
+                solid.add((cx, cy))
+    sx, sy = int(x // cell), int(y // cell)
+    if (sx, sy) in solid:
+        return None, []
+    seen = {(sx, sy)}
+    stack = [(sx, sy)]
+    while stack:
+        cx, cy = stack.pop()
+        if cx <= x0 or cx >= x1 or cy <= y0 or cy >= y1:
+            return None, []                 # it leaks: open country
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            n = (cx + dx, cy + dy)
+            if n in seen or n in solid:
+                continue
+            seen.add(n)
+            stack.append(n)
+    xs = [c for c, _ in seen]
+    ys = [c for _, c in seen]
+    yard = pygame.Rect(min(xs) * cell, min(ys) * cell,
+                       (max(xs) - min(xs) + 1) * cell,
+                       (max(ys) - min(ys) + 1) * cell)
+    ring = [r for r in walls if yard.inflate(48, 48).colliderect(r)]
+    return yard, ring
 
 
 def gate_list(village):
@@ -53,12 +104,15 @@ def gate_list(village):
     r = getattr(village, "fence_rect", None)
     if r is None:
         return []
+    # FOUR OPENINGS, ONE PAIR ON EACH AXIS, EACH AT THE MIDDLE OF ITS WALL.
+    # It was one pair on opposite walls -- the vertical one -- so the railway
+    # had to run around a town instead of through it.
+    _s0 = getattr(village, "gate_side", 0)
     out = []
-    for side, off in ((getattr(village, "gate_side", 0),
-                       getattr(village, "gate_off", 0.0)),
-                      (getattr(village, "gate_side2",
-                              (getattr(village, "gate_side", 0) + 2) % 4),
-                       getattr(village, "gate_off2", 0.0))):
+    for side, off in ((_s0, getattr(village, "gate_off", 0.0)),
+                      ((_s0 + 2) % 4, getattr(village, "gate_off2", 0.0)),
+                      ((_s0 + 1) % 4, 0.0),
+                      ((_s0 + 3) % 4, 0.0)):
         if side == 0:
             out.append((side, village.x + off, r.top))
         elif side == 2:
@@ -127,6 +181,39 @@ def rebuild(village) -> None:
     for side in range(4):
         walls.extend(_side_rects(village, side))
     village.fence_walls = walls
+    # THE FENCE AS A CIRCLE, which pathfind.build and steering both ask for by
+    # name. It was NEVER DEFINED anywhere, so every call into those modules
+    # raised AttributeError -- and nobody found out because nothing ever called
+    # them. This is the attribute that makes the pathfinder work at all.
+    fr = getattr(village, "fence_rect", None)
+    if fr is not None:
+        village.fence_radius = max(fr.w, fr.h) / 2.0
+        # ...AND THE GAPS AS ANGLES, which is how pathfind asks whether a
+        # cell on the ring is a gate or a wall. Neither `gate_angle`,
+        # `gate_half` nor `fence_breaks` existed anywhere: pathfind could not
+        # build a grid at all, which is why nothing ever used it.
+        R = max(1.0, village.fence_radius)
+        half = min(1.2, (GATE_W / 2.0) / R)
+        gates = gate_list(village)
+        village.gate_half = half
+        village.gate_angle = (math.atan2(gates[0][2] - village.y,
+                                         gates[0][1] - village.x)
+                              if gates else 0.0)
+        breaks = []
+        for gside, gx, gy in gates:
+            breaks.append((math.atan2(gy - village.y, gx - village.x), half))
+        for gside, c, hw in (getattr(village, "fence_gaps", ()) or ()):
+            if gside == 0:
+                wx, wy = c, fr.top
+            elif gside == 2:
+                wx, wy = c, fr.bottom
+            elif gside == 1:
+                wx, wy = fr.right, c
+            else:
+                wx, wy = fr.left, c
+            breaks.append((math.atan2(wy - village.y, wx - village.x),
+                           min(1.2, float(hw) / R)))
+        village.fence_breaks = breaks
 
 
 def perimeter_param(r, x, y) -> float:
@@ -165,10 +252,17 @@ def _norm(dx, dy):
     return dx / d, dy / d
 
 
-def cross_dir(village, x, y, tx, ty):
-    """Direction to take when a fence must be crossed, else None."""
+def cross_dir(village, x, y, tx, ty, pad: float = 0.0):
+    """Direction to take when a fence must be crossed, else None.
+
+    `pad` inflates the fence for the INSIDE test only: a man stepping about on
+    the wall line flickers between "inside" and "outside" frame by frame, and
+    the direction he is given flips with it -- measured, a hired man ping-ponged
+    at a gate for two minutes with `cross -> gate` and `cross -` alternating.
+    With a pad he stays "inside" until he is well past the line.
+    """
     r = village.fence_rect
-    inside = r.collidepoint(x, y)
+    inside = (r.inflate(pad, pad) if pad else r).collidepoint(x, y)
     target_inside = r.collidepoint(tx, ty)
     if inside == target_inside:
         return None
