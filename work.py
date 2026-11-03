@@ -153,6 +153,8 @@ def slots(player, trade: str) -> int:
         return 9999 if len(getattr(player, "plots", ()) or ()) > 0 else 0
     if trade == "logger":
         return 9999                          # the woods belong to nobody
+    if trade == "prisoner":
+        return 0                      # a prisoner is not paid, ever
     if trade == "soldier":
         # ONE MAN TO A DUMMY, ONE TO A TARGET: the post is the trade.
         posts = sum(1 for wp in (getattr(player, "workplaces", ()) or ())
@@ -170,6 +172,8 @@ def pay(trade: str) -> int:
     is the labourer's 10, and 13 a day. If that is wrong, it is a number, not
     a structure: say the word.
     """
+    if trade == "prisoner":
+        return 0                      # a prisoner is not paid, ever
     if trade == "soldier":
         return int(round(pay("farm") * SOLDIER_PAY_MULT))
     base = {"farm": economy.LOGGER_WAGE,
@@ -343,6 +347,8 @@ def hire(player, npc, trade: str) -> dict:
         player.workers = []
     if npc not in player.workers:
         player.workers.append(npc)
+    if trade == "prisoner":
+        return 0                      # a prisoner is not paid, ever
     if trade == "soldier":
         npc.soldier = True
         npc.weapon = soldier_kit(npc) or "axe"   # whatever he came with
@@ -541,6 +547,8 @@ def _mash_map() -> dict:
 
 def uses(trade) -> tuple:
     """What the trade spends, as a list of item ids -- for the give page."""
+    if trade == "prisoner":
+        return 0                      # a prisoner is not paid, ever
     if trade == "soldier":
         return ("ammo",)                # ten rounds a day on the range
     r = RECIPES.get(trade)
@@ -551,6 +559,8 @@ def uses(trade) -> tuple:
 
 def products(trade) -> tuple:
     """What the trade makes -- for the take page and for the chest."""
+    if trade == "prisoner":
+        return 0                      # a prisoner is not paid, ever
     if trade == "soldier":
         return ()                       # he makes a killer, not a product
     if trade == "farm":

@@ -217,6 +217,25 @@ def ensure(towns) -> None:
         build(towns)
 
 
+def dist(x: float, y: float) -> float:
+    """How far this point is from the nearest RAIL, centre to centre."""
+    best = 1e18
+    for (ax, ay, bx, by, bb) in _SEGS:
+        if not (bb.x - 300 <= x <= bb.x + bb.w + 300
+                and bb.y - 300 <= y <= bb.y + bb.h + 300):
+            continue
+        dx, dy = bx - ax, by - ay
+        L = dx * dx + dy * dy
+        if L < 1e-9:
+            d = math.hypot(x - ax, y - ay)
+        else:
+            t = max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / L))
+            d = math.hypot(x - (ax + dx * t), y - (ay + dy * t))
+        if d < best:
+            best = d
+    return best if best < 1e17 else 999999.0      # no rail near at all
+
+
 def blocked(x: float, y: float, pad: float = CLEAR) -> bool:
     """Is this point on the permanent way? Plants and trees ask this.
 

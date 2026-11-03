@@ -233,20 +233,31 @@ LAST_NAMES = [
 # NPC.occupation() -- whose docstring says these titles "describe no work he
 # has ever done" -- and observer.job_of(). Use those.
 
-NATION_PREFIX = ["Red", "Black", "Iron", "Golden", "Salt", "Pine", "Crow",
-                 "Ash", "Stone", "Raven", "Copper", "Willow", "Ember", "Frost"]
-NATION_SUFFIX = ["Reach", "Hollow", "Valley", "Crossing", "Flats", "Ridge",
-                 "Bend", "Ford", "Bluffs", "Springs", "Hill", "Creek",
-                 "March", "Barrens"]
+# THE REPUBLIC'S PLACES. Short, plain, Soviet-sounding: a factory town, a
+# collective farm, a name off a poster. Nothing quaint and nothing long.
+SETTLEMENT_NAMES = ("Kirovsk", "Leninsk", "Stalinsk", "Zavodsk", "Krasnograd",
+                    "Pervomaysk", "Oktyabrsk", "Sovetsk", "Komsomolsk",
+                    "Trudovoy", "Mirny", "Yasny", "Rassvet", "Zarya", "Iskra",
+                    "Rodina", "Pobeda", "Mayak", "Sputnik", "Volna",
+                    "Kamenka", "Lipovka", "Beryozovka", "Olkhovka", "Dubovka",
+                    "Zelenograd", "Krasnoarmeysk", "Novoselki", "Zarechye",
+                    "Bereznyaki")
 NATION_COLORS = [rich(c) for c in ((176, 62, 58), (62, 96, 176), (74, 138, 74), (170, 138, 52),
                  (140, 74, 158), (58, 148, 152), (190, 104, 46), (96, 96, 108))]
 
 
 def village_name(gx: int, gy: int, seed: int = 0) -> str:
+    """A settlement's name -- and a CAPITAL is named for its leader: <name>grad."""
     code = ((gx * 73856093) ^ (gy * 19349663)
             ^ (seed * 2654435761)) & 0xFFFFFFFF
-    return (NATION_PREFIX[code % len(NATION_PREFIX)] + " "
-            + NATION_SUFFIX[(code // len(NATION_PREFIX)) % len(NATION_SUFFIX)])
+    try:
+        import nations as _nations
+        if _nations.is_capital_cell(gx, gy, SPACING):
+            leader = FIRST_NAMES[(code // 7) % len(FIRST_NAMES)]
+            return leader + "grad"
+    except Exception:
+        pass
+    return SETTLEMENT_NAMES[code % len(SETTLEMENT_NAMES)]
 
 
 def is_military(npc) -> bool:
@@ -372,6 +383,7 @@ _NPC_CDEF_STATE = (
     "drip_timer",
     "panic",
     "flee",
+    "flee_dir",
     "pause",
     "stuck",
     "_steer_timer",
@@ -1110,12 +1122,20 @@ class NPC:
 
         if self.panic > 0.0 and threat is not None:
             self.panic -= dt
-            dx, dy = self.x - threat.x, self.y - threat.y
-            distance = math.hypot(dx, dy) or 1.0
-            self.x += dx / distance * 118.0 * dt
-            self.y += dy / distance * 118.0 * dt
-            self.facing = (dx / distance, dy / distance)
+            # EVERY MAN HIS OWN DIRECTION. Running straight away from the gun
+            # in one body is a parade; a crowd that bursts outward in all
+            # directions is one the gunman cannot aim into safely.
+            if getattr(self, "flee_dir", None) is None:
+                dx, dy = self.x - threat.x, self.y - threat.y
+                d = math.hypot(dx, dy) or 1.0
+                a = math.atan2(dy, dx) + random.uniform(-1.05, 1.05)
+                self.flee_dir = (math.cos(a), math.sin(a))
+            fx, fy = self.flee_dir
+            self.x += fx * 126.0 * dt
+            self.y += fy * 126.0 * dt
+            self.facing = (fx, fy)
             return
+        self.flee_dir = None
 
         if self.pause > 0.0:
             self.pause -= dt
@@ -2058,6 +2078,7 @@ class NPC:
         self.aggro = False
         self.panic = 0.0
         self.flee = 0.0
+        self.flee_dir = None
         ang = random.uniform(0.0, 2.0 * math.pi)
         dist = random.uniform(0.25, 0.85) * dest.radius
         self.x = dest.x + math.cos(ang) * dist

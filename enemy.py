@@ -66,6 +66,10 @@ class Band:
                 member.aware_timer = max(member.aware_timer, 3.0)
 
 
+CROWD = None        # f() -> everybody whose body must not be shot through
+CIVILIANS = None    # f() -> the unarmed townsfolk, who always count
+
+
 class Enemy:
     kind = "enemy"
 
@@ -147,6 +151,7 @@ class Enemy:
     attack_flash: float = 0.0
 
     sleep_t: float = 0.0      # a dart put him down
+    held_fire: int = 0        # shots he did not take, for the log
 
     def take_damage(self, amount: int, tranq: bool = False) -> bool:
         self.health -= amount
@@ -186,7 +191,65 @@ class Enemy:
         self.mag -= 1
         return True
 
-    def _shoot(self, combat, x, y, angle, distance, dmg_lo, dmg_hi) -> None:
+    def lane_clear(self, x, y, angle, distance, tx=None, ty=None) -> bool:
+        """NO SHOT THROUGH A CROWD.
+
+        The player running into a knot of townspeople used to draw fire at
+        whatever stood behind him: a round took the baker, the baker's friend
+        turned on the guard, and the square ate itself. A gunman now waits
+        for a clear line: nothing of his own -- man, woman or child -- inside
+        the corridor between the muzzle and the target.
+        """
+        if CROWD is None:
+            return True
+        try:
+            crowd = CROWD() or ()
+        except Exception:
+            return True
+        if tx is None:
+            tx = x + math.cos(angle) * distance
+            ty = y + math.sin(angle) * distance
+        civil = set()
+        try:
+            civil = set(CIVILIANS() or ()) if CIVILIANS is not None else set()
+        except Exception:
+            civil = set()
+        for o in crowd:
+            if o is self or o is None or not getattr(o, "alive", True):
+                continue
+            if o is tx or o is ty:
+                continue
+            if isinstance(o, (tuple, list)):
+                ox, oy = float(o[0]), float(o[1])
+                friend = True                    # a bare point is a body to spare
+            else:
+                ox, oy = getattr(o, "x", 0.0), getattr(o, "y", 0.0)
+                friend = (o in civil
+                          or getattr(o, "nation", None) == getattr(self, "nation", object())
+                          or getattr(o, "is_militia", False)
+                          or getattr(o, "gulag", False))
+            if not friend:
+                continue
+            # cheap reject: far outside the muzzle-to-target box
+            if (ox < min(x, tx) - 40.0 or ox > max(x, tx) + 40.0
+                    or oy < min(y, ty) - 40.0 or oy > max(y, ty) + 40.0):
+                continue
+            # inside the corridor? (point-to-segment distance, and nearer than
+            # the target)
+            dx, dy = tx - x, ty - y
+            L = dx * dx + dy * dy
+            if L < 1e-9:
+                continue
+            t = ((ox - x) * dx + (oy - y) * dy) / L
+            if t <= 0.0 or t >= 1.0:
+                continue
+            off = math.hypot(ox - (x + dx * t), oy - (y + dy * t))
+            if off <= 26.0:
+                return False
+        return True
+
+    def _shoot(self, combat, x, y, angle, distance, dmg_lo, dmg_hi,
+               tx=None, ty=None) -> None:
         """A shot: one round for a rifle, a spread of pellets for a shotgun.
 
         THE SAME ROUND AS THE PLAYER'S: `guns.DAMAGE` and nothing else. The
@@ -195,6 +258,17 @@ class Enemy:
         """
         kind = getattr(self, "gun_kind", guns.RIFLE)
         _dmg = guns.DAMAGE[kind]
+        if not self.lane_clear(x, y, angle, distance, tx, ty):
+            self.held_fire += 1
+            if self.held_fire in (1, 10, 50):
+                try:
+                    import plog
+                    plog.log("HELD-FIRE", getattr(self, "name", "?"),
+                             "did not shoot:", self.held_fire, "refusals",
+                             "| a body of ours is in the line")
+                except Exception:
+                    pass
+            return
         for _ in range(guns.PELLETS[kind]):
             a = angle + random.uniform(-0.07, 0.07)
             combat.fire(x, y, a, distance, owner="enemy", shooter=self,
@@ -335,7 +409,8 @@ class Enemy:
             muzzle_x = self.x + ux * 20.0
             muzzle_y = self.y + uy * 20.0
             self._shoot(combat, muzzle_x, muzzle_y, angle, distance + 160.0,
-                        80, 80)
+                        80, 80, tx=getattr(target, 'x', None),
+                        ty=getattr(target, 'y', None))
 
     def _patrol(self, dt: float) -> None:
         if self.idle_timer > 0.0:

@@ -1121,6 +1121,7 @@ def main() -> None:
 
     # ---- THE TEST ENGINE, running the whole network once ----------------
     _TEST_TRAIN = [None]
+    _panic_t = [0.0]           # gunfire -> the crowd breaks and runs
     try:
         import train as _train_mod
         import rail as _rail_t
@@ -1133,12 +1134,24 @@ def main() -> None:
     except Exception as _te:
         plog.log("TRAIN-ERROR", repr(_te)[:160])
     try:
+        import resettle as _resettle
+        _resettle.build(villages.villages)
+    except Exception as _rse:
+        plog.log("RESETTLE-ERROR", repr(_rse)[:140])
+    try:
         import rail as _rail0
         _rail0.ensure(villages.villages)
     except Exception as _re0:
         plog.log("RAIL-ERROR", repr(_re0)[:120])
     armies: list = []                  # columns on the march, this campaign
     world.enemies = enemies            # so villagers can spot a predator
+    # A GUNMAN DOES NOT SHOOT THROUGH HIS OWN PEOPLE.
+    try:
+        import enemy as _enemy_hooks
+        _enemy_hooks.CROWD = lambda: list(village_mod.PEOPLE) + list(enemies)
+        _enemy_hooks.CIVILIANS = lambda: list(village_mod.PEOPLE)
+    except Exception as _eh:
+        plog.log("CROWD-HOOK-ERR", repr(_eh)[:120])
     rabbits: list[Rabbit] = []
     patrols: list[Patrol] = []
     player.nation = None
@@ -1169,19 +1182,30 @@ def main() -> None:
             _ax, _ay = -_oy, _ox                    # along the wall
             # WELL CLEAR OF THE PERMANENT WAY: a guard standing at 52 px was
             # inside the engine's sweep as it came through the gate.
-            _shift = 130.0 if gi % 2 == 0 else -130.0
-            _px = gx + _ax * _shift + _ox * 26.0
-            _py = gy + _ay * _shift + _oy * 26.0
-            # ...and if the line still runs through him, step further out
+            _bx = gx + _ox * 26.0
+            _by = gy + _oy * 26.0
+            # HE STANDS WHERE THE RAIL IS FURTHEST AWAY, along the wall from
+            # the opening -- always within sight of his gate, never on the
+            # sleepers. The old rule stepped him OUTWARD until he was clear,
+            # which walked him away from the gate he is posted to guard.
+            _px, _py = _bx, _by
+            _best = -1.0
             try:
                 import rail as _r
-                _tries = 0
-                while _r.blocked(_px, _py, 26.0) and _tries < 6:
-                    _px += _ox * 34.0
-                    _py += _oy * 34.0
-                    _tries += 1
+                for _out, _off in ((0.0, 110.0), (0.0, -110.0), (0.0, 150.0),
+                                   (0.0, -150.0), (76.0, 0.0), (-76.0, 0.0),
+                                   (150.0, 0.0), (-150.0, 0.0),
+                                   (76.0, 110.0), (76.0, -110.0)):
+                    _cx = _bx + _ax * _off + _ox * _out
+                    _cy = _by + _ay * _off + _oy * _out
+                    _d = _r.dist(_cx, _cy)
+                    if _d > _best:
+                        _best, _px, _py = _d, _cx, _cy
+                    if _d >= 95.0:
+                        break
             except Exception:
-                pass
+                _px = _bx + _ax * (130.0 if gi % 2 == 0 else -130.0)
+                _py = _by + _ay * (130.0 if gi % 2 == 0 else -130.0)
             s = Soldier(_px, _py, village.nation, melee=False,
                         seed=random.randint(0, 2 ** 31),
                         color=nation_color(village.nation))
@@ -6639,6 +6663,28 @@ def main() -> None:
                     plog.log("GULAG-INTRUDER", _n_in, "inside the fence")
             except Exception:
                 pass
+            # ---- GUNFIRE SCATTERS A CROWD ------------------------------
+            try:
+                _panic_t[0] += dt
+                if _panic_t[0] >= 0.25:
+                    _panic_t[0] = 0.0
+                    _fresh = [b for b in combat.bullets if b.travelled < 40.0]
+                    for _b in _fresh[:3]:
+                        _WORK.panic_at(_b.origin_x, _b.origin_y, 620.0)
+            except Exception as _pn:
+                plog.log("PANIC-ERR", repr(_pn)[:120])
+            # ---- THE CAMP'S PEOPLE --------------------------------------
+            try:
+                import prison as _prison
+                _prison.tick(player, enemies, list(village_mod.PEOPLE), dt, now, combat)
+            except Exception as _pe:
+                plog.log("PRISON-ERROR", repr(_pe)[:140])
+            # ---- THE RESETTLEMENT CAMPAIGN ------------------------------
+            try:
+                import resettle as _reset
+                _reset.tick(villages.villages, now, dt)
+            except Exception as _re3:
+                plog.log("RESETTLE-ERROR", repr(_re3)[:140])
             # ---- ARREST AND DETENTION -----------------------------------
             try:
                 import detain as _detain

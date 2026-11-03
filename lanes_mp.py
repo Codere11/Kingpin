@@ -497,6 +497,14 @@ class Workers:
         self.deaths = []
         return got
 
+    def panic_at(self, x, y, radius: float = 600.0) -> None:
+        """GUNFIRE, TOLD TO THE LANES: the crowd breaks in all directions."""
+        if not self.enabled:
+            return
+        self._events.append(("panic", "settle", float(x), float(y),
+                             float(radius)))
+        _log("PANIC queued at %d,%d r=%d" % (int(x), int(y), int(radius)))
+
     def post(self, npc, xy) -> None:
         """TELL THE LANE WHERE THE MAN'S WORK IS (or that he has none)."""
         if not self.enabled or npc is None:
@@ -827,6 +835,19 @@ def _settlement_step(world, towns, men, player, hub_men, villages):
                     if 0 <= ev[2] < len(towns):
                         towns[ev[2]].learn_killers(ev[3], now)
                         towns[ev[2]].provoke()
+                elif ev[0] == "panic":
+                    # A GUN WENT OFF HERE: the unarmed burst outward.
+                    px, py = float(ev[2]), float(ev[3])
+                    rad = float(ev[4]) if len(ev) > 4 else 600.0
+                    for _n in men:
+                        if not getattr(_n, "alive", True):
+                            continue
+                        if getattr(_n, "aggro", False) or getattr(_n, "weapon", None):
+                            continue
+                        if (_n.x - px) ** 2 + (_n.y - py) ** 2 > rad * rad:
+                            continue
+                        _n.panic = max(8.0, getattr(_n, "panic", 0.0))
+                        _n.flee_dir = None      # he picks his own line
                 elif ev[0] == "post":
                     # THE YARD CALLS: the man walks there, or is let go home.
                     _n = by_id.get(str(ev[2]))
