@@ -53,7 +53,17 @@ def build(villages) -> list:
     # out along the gate's own direction until it leaves the map
     ex = -far
     ey = far
-    pts = [(gx + ox * 120.0, gy + oy * 120.0), (ex, ey)]
+    # IT MUST TOUCH THE NETWORK: the first version started 120 px short of the
+    # ring, so the resettlement line was a separate component all of its own --
+    # and the engine's path finder, standing on it, could reach nothing.
+    sx, sy = gx + ox * 120.0, gy + oy * 120.0
+    try:
+        import rail as _rail_j
+        _i, (_px, _py) = _rail_j._nearest_on_segs(gx, gy)
+        sx, sy = _px, _py
+    except Exception:
+        pass
+    pts = [(sx, sy), (ex, ey)]
     try:
         import rail
         for k in range(len(pts) - 1):

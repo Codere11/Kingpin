@@ -1,0 +1,12 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.10.12)
+population set to 1000 over 36 towns
+GULAG SPAWN  489900,-489420
+gate guards raised for 36 settlements
+Traceback (most recent call last):
+  File "/home/maksich/Documents/Kingpin/fpsq.py", line 24, in <module>
+    threading.Thread(target=probe,daemon=True).start(); main.main()
+  File "/home/maksich/Documents/Kingpin/main.py", line 7987, in main
+    pygame.display.flip()
+  File "/home/maksich/Documents/Kingpin/fps.py", line 12, in flip
+    def flip(): S["f"]+=1; _f()
+pygame.error: Could not make GL context current: BadAccess (attempt to access private resource denied)

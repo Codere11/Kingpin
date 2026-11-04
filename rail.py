@@ -387,3 +387,147 @@ def tour() -> list:
 
 def count() -> tuple:
     return len(_SEGS), sum(math.hypot(s[0] - s[2], s[1] - s[3]) for s in _SEGS)
+
+
+# ---------------------------------------------------------------- shortest way
+def _nearest_on_segs(px: float, py: float):
+    """(segment index, closest point on it) -- the nearest piece of track."""
+    best, bd, bpt = -1, 1e18, (px, py)
+    for i, (ax, ay, bx, by, bb) in enumerate(_SEGS):
+        if not (bb.x - 200 <= px <= bb.x + bb.w + 200
+                and bb.y - 200 <= py <= bb.y + bb.h + 200):
+            continue
+        dx, dy = bx - ax, by - ay
+        L = dx * dx + dy * dy
+        if L < 1e-9:
+            d = math.hypot(px - ax, py - ay)
+            pt = (ax, ay)
+        else:
+            t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / L))
+            pt = (ax + dx * t, ay + dy * t)
+            d = math.hypot(px - pt[0], py - pt[1])
+        if d < bd:
+            best, bd, bpt = i, d, pt
+    return best, bpt
+
+
+def _end(i: int, e: int):
+    ax, ay, bx, by, _bb = _SEGS[i]
+    return (ax, ay) if e == 0 else (bx, by)
+
+
+def graph_path(x: float, y: float, tx: float, ty: float) -> list:
+    """THE SHORTEST WAY ALONG THE TRACK from (x, y) to (tx, ty).
+
+    Breadth-first over whole SEGMENTS. A segment meets another where their
+    ends coincide; the walk from one to the next is along the sleepers, end to
+    end. (An earlier version walked snapped NODE keys instead, and a key that
+    no segment ended on had no edges at all -- so the engine was handed a
+    straight line across the country and duly flew off the rails.)
+    """
+    if not _SEGS:
+        return [(x, y), (tx, ty)]
+    from collections import defaultdict, deque
+
+    s0, p0 = _nearest_on_segs(x, y)
+    s1, p1 = _nearest_on_segs(tx, ty)
+    if s0 < 0 or s1 < 0:
+        return [(x, y), (tx, ty)]
+    if s0 == s1:
+        return [p0, p1]
+
+    at: dict = defaultdict(list)
+    for i in range(len(_SEGS)):
+        for e in (0, 1):
+            ex, ey = _end(i, e)
+            # the SAME 24 px node the tour walks: two lines that meet
+            # are joined within a cell, not to the last decimal of a float
+            at[(round(ex / 24.0), round(ey / 24.0))].append((i, e))
+    conn: dict = defaultdict(list)
+    for _k, lst in at.items():
+        if len(lst) < 2:
+            continue
+        for a in lst:
+            for b in lst:
+                if a[0] != b[0]:
+                    conn[a[0]].append((b[0], a[1], b[1]))
+
+    # IF THE POINT STANDS ON A FRAGMENT, USE THE TRACK THAT IS CONNECTED.
+    def _comp_of(start_i):
+        seen_ = {start_i}
+        dq_ = deque([start_i])
+        while dq_:
+            i_ = dq_.popleft()
+            for (j_, _ei, _ej) in conn.get(i_, ()):
+                if j_ not in seen_:
+                    seen_.add(j_)
+                    dq_.append(j_)
+        return seen_
+
+    reach = _comp_of(s1)
+    if s0 not in reach:
+        best_i, best_d, best_pt = -1, 1e18, None
+        for i_ in reach:
+            _ax, _ay, _bx, _by, _bb = _SEGS[i_]
+            _dx, _dy = _bx - _ax, _by - _ay
+            _L = _dx * _dx + _dy * _dy
+            if _L < 1e-9:
+                _pt = (_ax, _ay)
+            else:
+                _t = max(0.0, min(1.0, ((x - _ax) * _dx + (y - _ay) * _dy) / _L))
+                _pt = (_ax + _dx * _t, _ay + _dy * _t)
+            _d = math.hypot(x - _pt[0], y - _pt[1])
+            if _d < best_d:
+                best_i, best_d, best_pt = i_, _d, _pt
+        if best_i >= 0:
+            s0, p0 = best_i, best_pt
+
+    prev = {s0: None}
+    dq = deque([s0])
+    while dq:
+        i = dq.popleft()
+        if i == s1:
+            break
+        for (j, ei, ej) in conn.get(i, ()):
+            if j in prev:
+                continue
+            prev[j] = (i, ei, ej)
+            dq.append(j)
+    if s1 not in prev:
+        return [(x, y), (tx, ty)]
+
+    # THE WALK, AS DIRECTED SEGMENTS: enter j at one end, leave by the other.
+    order = []
+    j = s1
+    _guard = 0
+    while prev.get(j) is not None and _guard < 100000:
+        order.append(j)
+        j = prev[j][0]
+        _guard += 1
+    order.append(s0)
+    order.reverse()
+
+    pts = [p0]
+    for idx, seg in enumerate(order):
+        if idx > 0:
+            entry = prev[seg][2]                 # entered `seg` at this end
+            e_pt = _end(seg, entry)
+            if math.hypot(pts[-1][0] - e_pt[0], pts[-1][1] - e_pt[1]) > 0.5:
+                pts.append(e_pt)
+        if idx < len(order) - 1:
+            exit_end = prev[order[idx + 1]][1]   # ...and leave by this one
+            pts.append(_end(seg, exit_end))
+        else:
+            pts.append(p1)
+    out = []
+    for p in pts:
+        if not out or math.hypot(p[0] - out[-1][0], p[1] - out[-1][1]) > 0.5:
+            out.append(p)
+    return out
+
+
+def path_length(pts) -> float:
+    total = 0.0
+    for i in range(len(pts) - 1):
+        total += math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1])
+    return total

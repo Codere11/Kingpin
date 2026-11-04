@@ -17,7 +17,7 @@ import pygame
 import plog
 
 # a man's sprint is about 190 px/s; five times that
-TRAIN_SPEED = 950.0
+TRAIN_SPEED = 2850.0
 BODY = 34.0              # half-length of the engine, for contact
 HALF_W = 16.0
 
@@ -184,6 +184,33 @@ class Train:
         self.aboard_player = False
         self.travelled = 0.0
         self.started = False
+
+    def set_route(self, pts) -> None:
+        """GIVE THE ENGINE A NEW LINE TO RUN -- an express, or the tour again."""
+        if not pts:
+            return
+        self.route = [(float(a), float(b)) for a, b in pts]
+        self.i = 0
+        self.t = 0.0
+        self.done = False
+        self.hits = set()
+        self.x, self.y = self.route[0]
+
+    def to_camp(self, gate_xy) -> float:
+        """STRAIGHT THERE ALONG THE RAILS. Returns the length of the run."""
+        try:
+            import rail as _rail
+            pts = _rail.graph_path(self.x, self.y, gate_xy[0], gate_xy[1])
+        except Exception:
+            pts = [(self.x, self.y), (gate_xy[0], gate_xy[1])]
+        if len(pts) < 2:
+            return 0.0
+        self.set_route(pts)
+        try:
+            import rail as _rail2
+            return _rail2.path_length(pts)
+        except Exception:
+            return 0.0
 
     # -- movement ----------------------------------------------------------
     def update(self, dt: float) -> None:

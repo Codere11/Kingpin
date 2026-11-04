@@ -2302,6 +2302,12 @@ class NPC:
                              else 10.0 / skills.UNARMED_WEAKNESS)
                     target.take_damage(max(1, round(
                         _base * self.skills.axe_damage_scale())))
+                    # AND HE REMEMBERS THE FACE: twenty points of liking gone.
+                    try:
+                        import economy as _eco
+                        _eco.wronged(target, self, 20.0, getattr(self, "now", 0.0))
+                    except Exception:
+                        pass
 
     def draw(self, screen: pygame.Surface, cam_x: float, cam_y: float,
              show_name: bool = False) -> None:

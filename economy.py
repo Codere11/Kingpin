@@ -1756,6 +1756,52 @@ def grow_opinion(a, b, amount: float = 1.0) -> None:
             op[oid] = min(OPINION_MAX, cur + amount)
 
 
+def wronged(victim, attacker, amount: float = 20.0, now: float = 0.0,
+            cooldown: float = 6.0) -> float:
+    """SOMEONE LAID HANDS ON HIM: the victim likes the attacker twenty less.
+
+    A blow is a blow, not a running total -- one grudge per six seconds, or a
+    man swinging for a minute would leave his victim at minus a thousand and
+    the number would stop meaning anything.
+    """
+    if victim is None or attacker is None or victim is attacker:
+        return 0.0
+    oid = getattr(attacker, "id", None)
+    if oid is None:
+        # THE PLAYER HAS NO ID IN THE BOOKS: the villages know him by one name.
+        try:
+            import village as _v
+            if (attacker.__class__.__module__ == "player"
+                    or getattr(attacker, "is_player", False)):
+                oid = _v.PLAYER_ID
+        except Exception:
+            oid = None
+    if oid is None:
+        return 0.0
+    marks = getattr(victim, "_wronged_at", None)
+    if marks is None:
+        marks = {}
+        try:
+            victim._wronged_at = marks
+        except Exception:
+            return 0.0
+    last = marks.get(oid)
+    if last is not None and now - last < cooldown:
+        return 0.0
+    marks[oid] = now
+    op = opinion_of(victim, oid)
+    cur = float(op.get(oid, 0.0))
+    op[oid] = max(-100.0, cur - abs(amount))
+    try:
+        import plog
+        plog.log("WRONGED", getattr(victim, "name", "?"), "likes",
+                 getattr(attacker, "name", "the player"), op[oid],
+                 "(was", round(cur, 1), ")")
+    except Exception:
+        pass
+    return amount
+
+
 def regard(a, b) -> float:
     """HOW MUCH ONE MAN THINKS OF ANOTHER.
 

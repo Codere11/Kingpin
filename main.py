@@ -1122,6 +1122,7 @@ def main() -> None:
     # ---- THE TEST ENGINE, running the whole network once ----------------
     _TEST_TRAIN = [None]
     _panic_t = [0.0]           # gunfire -> the crowd breaks and runs
+    _EXPRESS = [False]         # the engine is running for the camp, not touring
     try:
         import train as _train_mod
         import rail as _rail_t
@@ -1995,6 +1996,12 @@ def main() -> None:
             if npc.alive and in_arc(npc.x, npc.y, npc.radius):
                     died = npc.take_damage(melee, record=False)
                     _WORK.damage(npc, melee)
+                    # HE KNOWS THE MAN WHO HIT HIM -- and likes him twenty less.
+                    try:
+                        import economy as _ec2
+                        _ec2.wronged(npc, player, 20.0, now)
+                    except Exception:
+                        pass
                     blood.spawn(npc.x, npc.y, 18 if died else 8, 22.0 if died else 14.0)
                     # SELF-DEFENCE IS NOT A MURDER. A man who came at you with
                     # an axe and lost is not a crime, and his neighbours know
@@ -3114,12 +3121,6 @@ def main() -> None:
         for rect in built_gates:
             if view.colliderect(rect):
                 fence.draw_gate(target, cx, cy, rect)
-        # THE TEST TRAIN, on the rails.
-        try:
-            _TEST_TRAIN[0].draw(target, cx, cy)
-            _TEST_TRAIN[0].draw_knocked(target, cx, cy)
-        except Exception:
-            pass
         # THE CAMP, drawn on the ground.
         try:
             import gulag as _gulag_d
@@ -3137,6 +3138,15 @@ def main() -> None:
             _rail.draw(target, cx, cy, vw, vh)
         except Exception as _re:
             plog.log("RAIL-ERROR", repr(_re)[:120])
+        # ...AND THEN THE ENGINE, ON TOP OF ITS OWN TRACK. Riding, though, the
+        # ground is painted first and the track goes over it: from the train
+        # the rail is the thing that matters, not the grass under it.
+        if not getattr(player, "aboard", False):
+            try:
+                _TEST_TRAIN[0].draw(target, cx, cy)
+                _TEST_TRAIN[0].draw_knocked(target, cx, cy)
+            except Exception:
+                pass
         items = []
         # THE DEAD ARE ON THE GROUND. Bodies are sorted into the same painter's
         # list as the living, so a man walking in front of a corpse stands in
@@ -3222,6 +3232,20 @@ def main() -> None:
         items.sort(key=lambda item: item[0])
         for _y, draw in items:
             draw()
+        if getattr(player, "aboard", False):
+            # RIDING: the permanent way is drawn OVER the ground, and the
+            # engine over the rail.
+            try:
+                import rail as _rail_r
+                _rail_r.ensure(villages.villages)
+                _rail_r.draw(target, cx, cy, vw, vh)
+            except Exception:
+                pass
+            try:
+                _TEST_TRAIN[0].draw(target, cx, cy)
+                _TEST_TRAIN[0].draw_knocked(target, cx, cy)
+            except Exception:
+                pass
 
 
     # -- THE NEWS, AS A MAN HEARS IT ----------------------------------------
@@ -5429,6 +5453,22 @@ def main() -> None:
             if getattr(player, "aboard", False):
                 _tr = _TEST_TRAIN[0]
                 if _tr is not None:
+                    if not _EXPRESS[0]:
+                        # AN EXPRESS, NOT A TOUR: somebody is aboard and the
+                        # camp is where he is going.
+                        try:
+                            import gulag as _gl_x
+                            import train as _tmx
+                            import rail as _railx
+                            _glx, _gly = _gl_x.gate_point()
+                            _len = _tr.to_camp((_glx, _gly))
+                            _EXPRESS[0] = True
+                            plog.log("EXPRESS", "the engine runs for the camp |",
+                                     int(_len), "px of track |",
+                                     round(_len / _tmx.TRAIN_SPEED / 60.0, 1),
+                                     "minutes")
+                        except Exception as _xe:
+                            plog.log("EXPRESS-ERR", repr(_xe)[:140])
                     player.x, player.y = _tr.x, _tr.y
                     cam_x = player.x - vw / 2.0
                     cam_y = player.y - vh / 2.0
@@ -5441,6 +5481,13 @@ def main() -> None:
                             try:
                                 import detain as _dr
                                 _dr.release_kit(player, None)
+                                # the tour resumes; the express is over
+                                try:
+                                    import rail as _railr
+                                    _tr.set_route(_railr.tour())
+                                    _EXPRESS[0] = False
+                                except Exception:
+                                    pass
                                 plog.log("DROP-OFF", "the player is put down at the camp",
                                          "with the other", len(getattr(_tr, "aboard", []) or []),
                                          "prisoners")
@@ -5455,6 +5502,22 @@ def main() -> None:
             if getattr(player, "aboard", False):
                 _tr = _TEST_TRAIN[0]
                 if _tr is not None:
+                    if not _EXPRESS[0]:
+                        # AN EXPRESS, NOT A TOUR: somebody is aboard and the
+                        # camp is where he is going.
+                        try:
+                            import gulag as _gl_x
+                            import train as _tmx
+                            import rail as _railx
+                            _glx, _gly = _gl_x.gate_point()
+                            _len = _tr.to_camp((_glx, _gly))
+                            _EXPRESS[0] = True
+                            plog.log("EXPRESS", "the engine runs for the camp |",
+                                     int(_len), "px of track |",
+                                     round(_len / _tmx.TRAIN_SPEED / 60.0, 1),
+                                     "minutes")
+                        except Exception as _xe:
+                            plog.log("EXPRESS-ERR", repr(_xe)[:140])
                     player.x, player.y = _tr.x, _tr.y
                     cam_x = player.x - vw / 2.0
                     cam_y = player.y - vh / 2.0
@@ -5467,6 +5530,13 @@ def main() -> None:
                             try:
                                 import detain as _dr
                                 _dr.release_kit(player, None)
+                                # the tour resumes; the express is over
+                                try:
+                                    import rail as _railr
+                                    _tr.set_route(_railr.tour())
+                                    _EXPRESS[0] = False
+                                except Exception:
+                                    pass
                                 plog.log("DROP-OFF", "the player is put down at the camp",
                                          "with the other", len(getattr(_tr, "aboard", []) or []),
                                          "prisoners")
@@ -6448,6 +6518,13 @@ def main() -> None:
                     died = obj.take_damage(bullet.damage, tranq=_dart)
                     if getattr(obj, "kind", "") == "villager":
                         _WORK.damage(obj, bullet.damage)
+                    try:
+                        _sh2 = bullet.shooter
+                        if _sh2 is not None and _sh2 is not obj:
+                            import economy as _ec
+                            _ec.wronged(obj, _sh2, 20.0, now)
+                    except Exception:
+                        pass
                     if died:
                         _loot(bullet.shooter, obj)
                     blood.spawn(obj.x, obj.y,
@@ -7169,7 +7246,8 @@ def main() -> None:
                 except Exception:
                     pass
             _sel = inventory.selected_stack()
-            player.draw(screen, cam_x, cam_y, _sel.defn.id if _sel else None)
+            if not getattr(player, "aboard", False):
+                player.draw(screen, cam_x, cam_y, _sel.defn.id if _sel else None)
             observer_.draw(screen)
             hotbar.draw(screen)
             hotbar.draw_stamina(screen, player.stamina / player.max_stamina,
@@ -7266,7 +7344,8 @@ def main() -> None:
         _sel0 = inventory.selected_stack()      # never rely on a name that a
         # branch may not have assigned: `selected` was unbound on the frames the
         # player was not inside a house, and this is the line that draws him.
-        player.draw(screen, cam_x, cam_y, _sel0.defn.id if _sel0 else None)
+        if not getattr(player, "aboard", False):
+            player.draw(screen, cam_x, cam_y, _sel0.defn.id if _sel0 else None)
         if getattr(player, "search_progress", 0.0) > 0.0:
             # THE BAR HANGS UNDER THE MAN DOING THE SEARCHING, not in the middle
             # of the screen. Pivot.md S3: he is ten seconds at it, and the
@@ -7539,8 +7618,10 @@ def main() -> None:
         # only reports what the module decided.
         try:
             import gate as gate_mod
-            _res = (None if _inside_now else
-                    gate_mod.tick(dt, player, villages.villages, inventory))
+            # A MAN RIDING THE TRAIN IS NOT AT A GATE. No guard steps up to
+            # him, nobody searches him, nobody shouts.
+            _res = (None if (_inside_now or getattr(player, "aboard", False))
+                    else gate_mod.tick(dt, player, villages.villages, inventory))
             if _res is not None:
                 _kind, _town, _units = _res
                 plog.log("SEARCHED", _kind, "units", _units,
@@ -7665,7 +7746,8 @@ def main() -> None:
         _sel0 = inventory.selected_stack()      # never rely on a name that a
         # branch may not have assigned: `selected` was unbound on the frames the
         # player was not inside a house, and this is the line that draws him.
-        player.draw(screen, cam_x, cam_y, _sel0.defn.id if _sel0 else None)
+        if not getattr(player, "aboard", False):
+            player.draw(screen, cam_x, cam_y, _sel0.defn.id if _sel0 else None)
         combat.draw(screen, cam_x, cam_y)
         draw_hunger_gray()
 
