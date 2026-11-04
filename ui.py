@@ -483,8 +483,10 @@ class ChestPanel:
                 inv = self.chest if which == "chest" else self.player
                 self.held, inv.slots[index] = _place_left(self.held, inv.slots[index])
             else:
-                self.held = None                # dragged out: discarded
-                self.held_from = None
+                # DRAGGED OFF THE PANEL: PUT IT BACK, never into the void.
+                # A 300-stack picked up and let go over the black lost 218
+                # because this line silently threw it away.
+                self.return_held()
 
     def return_held(self) -> None:
         """Put the carried stack somewhere safe -- never silently discard it."""

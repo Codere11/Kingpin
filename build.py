@@ -251,16 +251,31 @@ class BuildMenu:
     def _visible(self) -> list[int]:
         return [i for i, b in enumerate(BUILDINGS) if b["where"] == self.where]
 
+    ROWS = 3                      # THREE ROWS OF BUILDINGS, ALWAYS
+
     def _layout(self, sw: int, sh: int):
+        """A GRID, THREE ROWS DEEP. One tall column ran off the bottom of the
+        screen as soon as the list grew; three rows read across instead."""
         visible = self._visible()
-        width = 400
-        row_h = 68
+        n = len(visible)
+        cols = max(1, (n + self.ROWS - 1) // self.ROWS)
         pad = 14
-        height = 56 + len(visible) * row_h + 36
+        cell_h = 66
+        # the cells shrink to fit the window instead of hanging off it
+        avail_w = max(320, sw - 80)
+        cell_w = max(150, min(300, (avail_w - (cols + 1) * pad) // cols))
+        width = cols * cell_w + (cols + 1) * pad
+        height = 56 + self.ROWS * cell_h + 30
+        width = min(width, sw - 20)
+        height = min(height, sh - 20)
         x0 = (sw - width) // 2
         y0 = (sh - height) // 2
-        rows = [pygame.Rect(x0 + pad, y0 + 50 + i * row_h, width - 2 * pad, row_h - 12)
-                for i in range(len(visible))]
+        rows = []
+        for i in range(n):
+            r, c = i // cols, i % cols
+            rows.append(pygame.Rect(x0 + pad + c * (cell_w + pad),
+                                    y0 + 50 + r * cell_h,
+                                    cell_w, cell_h - 12))
         return pygame.Rect(x0, y0, width, height), rows, visible
 
     def affordable(self, index: int) -> bool:

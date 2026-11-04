@@ -1756,6 +1756,12 @@ def grow_opinion(a, b, amount: float = 1.0) -> None:
             op[oid] = min(OPINION_MAX, cur + amount)
 
 
+POPULATION = None            # f() -> everybody who can see a thing happen
+WITNESS_PX = 520.0           # how far a blow carries
+FRIEND_AT = 70.0             # "his friend": opinion above this
+WITNESS_COST = 10.0          # and a witness likes the attacker ten less
+
+
 def wronged(victim, attacker, amount: float = 20.0, now: float = 0.0,
             cooldown: float = 6.0) -> float:
     """SOMEONE LAID HANDS ON HIM: the victim likes the attacker twenty less.
@@ -1792,6 +1798,51 @@ def wronged(victim, attacker, amount: float = 20.0, now: float = 0.0,
     op = opinion_of(victim, oid)
     cur = float(op.get(oid, 0.0))
     op[oid] = max(-100.0, cur - abs(amount))
+    # AND HIS FRIENDS WHO SAW IT LIKE THE ATTACKER TEN LESS. A man is not
+    # beaten in an empty street: whoever is standing there and thinks well of
+    # him takes it personally.
+    if POPULATION is not None:
+        try:
+            folk = POPULATION() or ()
+        except Exception:
+            folk = ()
+        vid = getattr(victim, "id", None)
+        for other in folk:
+            if other is victim or other is attacker:
+                continue
+            if not getattr(other, "alive", True):
+                continue
+            if getattr(other, "id", None) is None:
+                continue
+            if math.hypot(getattr(other, "x", 0.0) - victim.x,
+                          getattr(other, "y", 0.0) - victim.y) > WITNESS_PX:
+                continue
+            if vid is None:
+                continue
+            if float(opinion_of(other, vid).get(vid, 0.0)) < FRIEND_AT:
+                continue
+            marks_o = getattr(other, "_wronged_at", None)
+            if marks_o is None:
+                marks_o = {}
+                try:
+                    other._wronged_at = marks_o
+                except Exception:
+                    continue
+            last_o = marks_o.get(oid)
+            if last_o is not None and now - last_o < cooldown:
+                continue
+            marks_o[oid] = now
+            op_o = opinion_of(other, oid)
+            cur_o = float(op_o.get(oid, 0.0))
+            op_o[oid] = max(-100.0, cur_o - WITNESS_COST)
+            try:
+                import plog
+                plog.log("WITNESS", getattr(other, "name", "?"), "saw",
+                         getattr(victim, "name", "?"), "struck by",
+                         getattr(attacker, "name", "the player"), "| likes him",
+                         op_o[oid], "(was", round(cur_o, 1), ")")
+            except Exception:
+                pass
     try:
         import plog
         plog.log("WRONGED", getattr(victim, "name", "?"), "likes",
