@@ -173,6 +173,7 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
     angry = (mood == "angry")
     hurt = (mood == "hurt")
     sly = (mood == "sly")
+    sleeping = (mood == "sleep")
 
     if mood == "dead":
         # THE DEAD FACE. The same head as ever -- ONE X across the middle,
@@ -312,20 +313,26 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
             tip = (cx - sgn * cw, iy)
             pygame.draw.line(screen, EYE, (cx + sgn * cw, iy - ch), tip, 1)
             pygame.draw.line(screen, EYE, (cx + sgn * cw, iy + ch), tip, 1)
-    for sgn in (() if hurt else (-1, 1)):
-        cx = ix + sgn * sep
-        pygame.draw.circle(screen, WHITE, (cx, iy), wr)
-        if lid:
-            # A SLIT, AND THEN THE PUPIL ON TOP OF IT. The lid comes FIRST so
-            # that it cuts the white down to a band, and the pupil is drawn
-            # after so the man is still looking at something -- drawn the
-            # other way round the slit was blank and the face went dead.
-            # Sized to the EYE, not the head.
-            pygame.draw.rect(screen, skin, (cx - wr, iy - wr, wr * 2 + 1, lid))
-        # AND THE PUPIL SITS IN THE MIDDLE OF WHAT IS LEFT.
-        pygame.draw.circle(screen, EYE,
-                           (cx + int(round(fx * wr * 0.45)),
-                            iy + lid // 2 + int(round(fy * wr * 0.45))), pr)
+    if sleeping:
+        # EYES CLOSED: one calm line where each eye is, and nothing looking.
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            pygame.draw.line(screen, EYE, (cx - wr, iy), (cx + wr, iy), 1)
+    else:
+        for sgn in (() if hurt else (-1, 1)):
+            cx = ix + sgn * sep
+            pygame.draw.circle(screen, WHITE, (cx, iy), wr)
+            if lid:
+                # A SLIT, AND THEN THE PUPIL ON TOP OF IT. The lid comes FIRST
+                # so that it cuts the white down to a band, and the pupil is
+                # drawn after so the man is still looking at something -- drawn
+                # the other way round the slit was blank and the face went dead.
+                # Sized to the EYE, not the head.
+                pygame.draw.rect(screen, skin, (cx - wr, iy - wr, wr * 2 + 1, lid))
+            # AND THE PUPIL SITS IN THE MIDDLE OF WHAT IS LEFT.
+            pygame.draw.circle(screen, EYE,
+                               (cx + int(round(fx * wr * 0.45)),
+                                iy + lid // 2 + int(round(fy * wr * 0.45))), pr)
 
     # THE BROWS. One style for the mood -- and ONE OF THEM IS THE WAR BROW'S
     # if he has earned it, which is why this is a style and not four copies.

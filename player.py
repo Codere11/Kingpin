@@ -337,6 +337,16 @@ class Player:
     def facing_angle(self) -> float:
         return math.atan2(self.facing[1], self.facing[0])
 
+    _zzz_font = None
+
+    def _draw_zzz(self, screen, sx, sy) -> None:
+        if Player._zzz_font is None:
+            Player._zzz_font = pygame.font.SysFont("dejavusans", 13, bold=True)
+        for i, (dx, dy, size) in enumerate(((-14, -30, 10), (0, -40, 13), (14, -32, 9))):
+            lab = Player._zzz_font.render("z", True, (226, 236, 244))
+            lab = pygame.transform.scale(lab, (size, size))
+            screen.blit(lab, (sx + dx - size // 2, sy + dy - size // 2))
+
     def draw(self, screen: pygame.Surface, cam_x: float, cam_y: float,
              held: str | None = None) -> None:
         sx = self.x - cam_x
@@ -363,10 +373,14 @@ class Player:
         _hx, _hy = sx + fx * 2, sy + fy * 2 - 2
         pygame.draw.circle(screen, (222, 178, 138), (_hx, _hy), 9)
         pygame.draw.circle(screen, (150, 108, 78), (_hx, _hy), 9, 1)
+        # THE DART HAS HIM: he lies there with the sleep rising off him.
+        if getattr(self, "sleep_t", 0.0) > 0.0:
+            self._draw_zzz(screen, sx, sy)
         # the same face as everybody else, on the bigger head
-        face.draw(screen, _hx, _hy, 9, fx, fy,
-                  face.mood_of(self.hurt_flash, self.attack_flash,
-                               starved=self.hunger <= face.STARVED_SATIETY))
+        _mood = ("sleep" if getattr(self, "sleep_t", 0.0) > 0.0
+                 else face.mood_of(self.hurt_flash, self.attack_flash,
+                                   starved=self.hunger <= face.STARVED_SATIETY))
+        face.draw(screen, _hx, _hy, 9, fx, fy, _mood)
         # THE WAITING BAR, just below him -- the swing, or the reload.
         #
         # THE SAME BAR FOR BOTH, because they are the same thing to look at: a

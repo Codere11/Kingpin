@@ -158,6 +158,35 @@ class Soldier(Enemy):
 
     def update(self, dt, target, combat, occluders=None, speed_scale=1.0,
                view_scale=1.0, visible=True, colliders=None):
+        # CARRYING A SLEEPER: straight to the cell, put him down, back to duty.
+        if getattr(self, "carry_victim", None) is not None:
+            _v = self.carry_victim
+            _cell = self.carry_cell
+            if _cell is None or not getattr(_v, "alive", True):
+                self.carry_victim = None
+                self.carry_cell = None
+            else:
+                _dx = _cell.x - self.x
+                _dy = _cell.y - self.y
+                _d = math.hypot(_dx, _dy) or 1.0
+                self.facing = (_dx / _d, _dy / _d)
+                _step = self.speed * 1.4 * dt
+                self.x += _dx / _d * _step
+                self.y += _dy / _d * _step
+                if _d < 30.0:
+                    try:
+                        import detain
+                        detain.deposit(_v, _cell)
+                    except Exception:
+                        pass
+                    self.carry_victim = None
+                    self.carry_cell = None
+                    # back to his post
+                    _gp = getattr(self, "gate_post", None)
+                    if _gp is not None:
+                        self.target = _gp
+                        self.home = _gp
+            return
         if getattr(self, "sleep_t", 0.0) > 0.0:
             self.sleep_t = max(0.0, self.sleep_t - dt)
             return

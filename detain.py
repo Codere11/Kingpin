@@ -85,14 +85,33 @@ def _busy_near(player, x, y, radius) -> bool:
     return False
 
 
+def deposit(victim, cell) -> None:
+    """THE GUARD PUTS HIM DOWN INSIDE THE CELL."""
+    if victim is None or cell is None:
+        return
+    cell_load(cell).append({"kind": "npc", "id": getattr(victim, "id", "?"),
+                            "name": getattr(victim, "name", "?")})
+    victim.in_cell = True
+    victim.sleep_t = 0.0
+    victim.alive = True
+    victim.health = max(10, getattr(victim, "max_health", 100) // 3)
+    try:
+        plog.log("DETAINED", getattr(victim, "name", "?"), "carried into the cell at",
+                 int(cell.x), int(cell.y), "| in it:", len(cell_load(cell)))
+    except Exception:
+        pass
+
+
 def tick(player, enemies, townsmen, dt: float, now: float) -> None:
     _STATE["timer"] += dt
-    # ---- 1. CARRY THE SLEEPERS IN ---------------------------------------
+    # ---- 1. A GUARD GOES AND CARRIES THE SLEEPER IN ---------------------
     try:
         import village as _v
         for n in list(_v.PEOPLE):
             if getattr(n, "sleep_t", 0.0) <= 0.0 or getattr(n, "in_cell", False):
                 continue
+            if getattr(n, "carrier", None) is not None:
+                continue                     # already being carried
             if _busy_near(player, n.x, n.y, QUIET_PX):
                 continue                     # still a fight: leave him lying
             mil = _militia_near(player, enemies, townsmen, n.x, n.y, 900.0)
@@ -101,15 +120,13 @@ def tick(player, enemies, townsmen, dt: float, now: float) -> None:
             cell = _nearest_cell(n.x, n.y)
             if cell is None:
                 continue
-            cell_load(cell).append({"kind": "npc", "id": getattr(n, "id", "?"),
-                                    "name": getattr(n, "name", "?")})
-            n.in_cell = True
-            n.sleep_t = 0.0
-            n.alive = True
-            n.health = max(10, n.max_health // 3)
+            # THE GUARD PICKS HIM UP: he walks to the cell, then puts him down.
+            mil[0].carry_victim = n
+            mil[0].carry_cell = cell
+            n.carrier = mil[0]
             try:
-                plog.log("DETAINED", getattr(n, "name", "?"), "carried into the cell at",
-                         int(cell.x), int(cell.y), "| in it:", len(cell_load(cell)))
+                plog.log("CARRY", getattr(mil[0], "name", "?"), "picks up",
+                         getattr(n, "name", "?"))
             except Exception:
                 pass
     except Exception:

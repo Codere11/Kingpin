@@ -4802,14 +4802,10 @@ def main() -> None:
                 _boot_left[0] -= 1
         _framet0 = time.perf_counter()
         _pt1 = _pt2 = _pt3 = _framet0      # phase marks, if no phase runs
-        # THE HIDDEN DART BAR REFILLS WHILE HE IS AWAKE.
-        try:
-            if getattr(player, "sleep_t", 0.0) <= 0.0:
-                player.tranq_health = min(player.TRANQ_HEALTH,
-                                          getattr(player, "tranq_health",
-                                                  player.TRANQ_HEALTH) + dt * 10.0)
-        except Exception:
-            pass
+        # THE HIDDEN DART BAR DOES NOT REFILL. A dart is a dose; the bar is
+        # how much of the dose is still in him. Refilling it between shots was
+        # why ten darts never put the player down -- each 80-dart had its bite
+        # healed back almost as fast as it landed.
         # THE MAN IS AT A PAIR OF NUMBERS, always. A tuple that reached
         # player.x/y used to take the whole frame down at the first `- vh/2`.
         try:
@@ -6872,6 +6868,18 @@ def main() -> None:
                         _cell = _detain._nearest_cell(player.x, player.y)
                         if _near and _cell is not None:
                             _detain.arrest_player(player, _cell)
+                            # HE IS CARRIED INSIDE, NOT LEFT ON THE ROOF.
+                            _croom = getattr(_cell, "room", None)
+                            if _croom is not None:
+                                inside_mine = _cell
+                                player._mine_latch = True
+                                player.x = _croom.W / 2.0
+                                player.y = _croom.H - 40.0
+                                cam_x = player.x - vw / 2.0
+                                cam_y = player.y - vh / 2.0
+                                pygame.mouse.set_visible(True)
+                                plog.log("ENTER-CELL", "the player is inside the cell at",
+                                         int(_cell.x), int(_cell.y))
                 _detain.player_tick(player, _TEST_TRAIN[0], dt)
                 # the train plans its calls where people are actually waiting
                 if int(now * 2) != int(getattr(_detain, "_plan_at", -1)):
@@ -7328,8 +7336,8 @@ def main() -> None:
                              int(_dr.centery), "-> outside", int(mine_out[0]),
                              int(mine_out[1]))
                     continue
-            if getattr(_room, "is_house", False):
-                pass        # E belongs to the chest; the door is the way out
+            if getattr(_room, "is_house", False) or getattr(_room, "is_cell", False):
+                pass        # a cell's door is the state's, not E's
             elif getattr(player, "_mine_latch", False):
                 if not _keys[pygame.K_e]:
                     player._mine_latch = False
@@ -7364,6 +7372,17 @@ def main() -> None:
                     player.x, player.y = _room.clamp(player.x, player.y)
             else:
                 player.x, player.y = _room.clamp(player.x, player.y)
+            if getattr(_room, "is_cell", False):
+                try:
+                    import detain as _det_c
+                    _det_c.player_tick(player, _TEST_TRAIN[0], dt)
+                except Exception:
+                    pass
+                if getattr(player, "aboard", False):
+                    inside_mine = None
+                    inside_house = None
+                    pygame.mouse.set_visible(False)
+                    continue
             # SWING AT THE FACE. Fifteen of these to the open seam's three,
             # and it is still there afterwards -- the seam never runs out.
             if (pygame.mouse.get_pressed()[0] and mine_cd <= 0.0
