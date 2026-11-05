@@ -408,18 +408,10 @@ class Soldier(Enemy):
                 # dead-on for a veteran, and every shot makes him better. This
                 # is what turns a campaign into hardened troops.
                 self.skills.gain_shooting()
-                combat.fire(mx, my, angle, distance + 160.0, owner="enemy",
-                            # THE SAME BULLET THE PLAYER FIRES. It was
-                            # randint(7, 12): a soldier's musket hit for a
-                            # third of the player's rifle, so the ranks were
-                            # firing popguns and the player was a corps of
-                            # one. It is guns.DAMAGE[RIFLE] now, one number
-                            # for one weapon in the whole world.
-                            damage=guns.DAMAGE[guns.RIFLE], team=self.team,
-                            spread=self.skills.shot_spread(), shooter=self,
-                            # A MILITIAMAN CARRIES A DART RIFLE: same damage,
-                            # and at zero the man sleeps, he does not die.
-                            dart=bool(getattr(self, "is_militia", False)))
+                # THE SAME ROUND THE PLAYER FIRES, fired through the one place.
+                guns.enemy_fire(combat, self, mx, my, angle,
+                                distance + 160.0,
+                                spread=self.skills.shot_spread())
 
     def draw(self, screen, cam_x, cam_y):
         sx, sy = self.x - cam_x, self.y - cam_y

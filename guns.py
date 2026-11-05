@@ -47,6 +47,21 @@ def rounds_now(who, dt: float, can_start: bool) -> int:
     return 1
 
 
+def enemy_fire(combat, shooter, x, y, angle, distance, spread=None) -> None:
+    """ONE ROUND FROM AN ENEMY, AND THE ONLY PLACE ONE IS FIRED.
+
+    The dart decision lives here and nowhere else: a militiaman's round is a
+    dart -- same damage, and at zero health the target sleeps instead of dying.
+    Every gunman, soldier and warder fires through this, so a "bullet that
+    should have been a dart" cannot be written a second time.
+    """
+    kind = getattr(shooter, "gun_kind", RIFLE)
+    combat.fire(x, y, angle, distance, owner="enemy", shooter=shooter,
+                damage=DAMAGE[kind], team=getattr(shooter, "team", None),
+                spread=spread,
+                dart=bool(getattr(shooter, "is_militia", False)))
+
+
 def reload_time(kind: str, skill: float) -> float:
     lo = RELOAD_LO.get(kind, 3.0)
     hi = RELOAD_HI.get(kind, 1.0)
