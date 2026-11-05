@@ -7,6 +7,11 @@ can take down. Extracted from main.py.
 from __future__ import annotations
 
 import pygame
+from village import House, ROOFS
+import industry
+import fence
+import math
+import random
 import hubs
 import nemesis
 import plog
@@ -230,3 +235,294 @@ def commit_plot(placing, plot_start, placement_pos, toast, hubs, villages,
     placing = None
     pygame.mouse.set_visible(False)
     return placing
+
+
+def try_place(g):
+    placing = g.placing
+
+    x, y = g.placement_pos()
+    if placing == "demolish":
+        _wm = g.cam_x + (pygame.mouse.get_pos()[0] / g.zoom)
+        _wm2 = g.cam_y + (pygame.mouse.get_pos()[1] / g.zoom)
+        _said = g.demolish_at(_wm, _wm2)
+        g.toast(_said or "Nothing of yours there")
+        placing = None
+        pygame.mouse.set_visible(False)
+        return
+    if placing == "plot":
+        return                      # a plot is drawn, not clicked (see below)
+    facing, rect, sight = g.placement_box(x, y)
+    if placing in ("fence", "gate"):
+        if not g.can_place(rect, sight):
+            g.toast("Can't build there")
+            return
+        if not hubs.land_ok(rect, g.villages.g.villages, g.hub_world.hubs,
+                           g.player.x, g.player.y):
+            g.toast("Not your land -- the wild, or your own hub")
+            return
+        cost = 30 if placing == "gate" else 10
+        name = "Gate" if placing == "gate" else "Fence"
+        if not g.test_mode:
+            if g.inventory.count_of("wood") < cost:
+                g.toast(f"Need {cost} wood")
+                placing = None
+                pygame.mouse.set_visible(False)
+                return
+            g.inventory.consume("wood", cost)
+        (g.built_gates if placing == "gate" else g.built_fences).append(rect)
+        # A YARD HE HAS CLOSED IN THE WILD IS HIS HUB. Checked each time he
+        # sets a piece down -- the flood fill is a few thousand cells and it
+        # only ever runs while he is building.
+        try:
+            _yard, _ring = fence.enclosure(g.built_fences + g.built_gates,
+                                           g.player.x, g.player.y)
+            if _yard is not None:
+                _wild = True
+                for _v in (list(g.villages.g.villages)
+                           + list(getattr(g.hub_world, "hubs", ()))):
+                    _fr = getattr(_v, "fence_rect", None)
+                    if _fr is not None and _fr.colliderect(
+                            _yard.inflate(600, 600)):
+                        _wild = False
+                        break
+                if _wild:
+                    _h = g.hub_world.add_player_hub(g.player, _yard, _ring,
+                                                  g.built_gates)
+                    if _h is not None:
+                        nemesis.PLACES.append(_h)
+                        g.toast("This is your hub now:   %s" % _h.name)
+                        plog.log("HUB", "fenced", _h.name, "at",
+                                 "%d,%d" % (int(_h.x), int(_h.y)),
+                                 "%dx%d" % (_yard.w, _yard.h))
+        except Exception as _he:
+            plog.log("HUB-ERROR", repr(_he)[:200])
+        g.mark_dirty()
+        g.toast(f"{name} built" if g.test_mode else f"{name} built   -{cost} wood")
+        placing = None
+        pygame.mouse.set_visible(False)
+        return
+    if placing == "stall":
+        # A STALL STANDS IN HIS HUB AND NOWHERE ELSE. The land question is
+        # asked first, so a man who tries to put one in the open is told
+        # why and does not lose the timber.
+        if not hubs.in_player_hub(rect, g.hub_world.hubs):
+            g.toast("A stall must stand inside your own hub")
+            placing = None
+            pygame.mouse.set_visible(False)
+            return
+        if not g.can_place(rect, sight):
+            g.toast("No clear ground here")
+            return
+        _hub = next((h for h in g.hub_world.hubs
+                     if getattr(h, "is_player_hub", False)
+                     and h.fence_rect.colliderect(rect)), None)
+        if _hub is None:
+            g.toast("A stall must stand inside your own hub")
+            placing = None
+            pygame.mouse.set_visible(False)
+            return
+        if stall_mod.in_hub(g.player, _hub) is not None:
+            g.toast("You already have a stall in this hub")
+            placing = None
+            pygame.mouse.set_visible(False)
+            return
+        _cost = g.build_materials("stall")
+        if not g.test_mode:
+            for _it, _q in _cost.items():
+                if g.inventory.count_of(_it) < _q:
+                    g.toast("Need %d %s" % (_q, _it))
+                    placing = None
+                    pygame.mouse.set_visible(False)
+                    return
+            for _it, _q in _cost.items():
+                g.inventory.consume(_it, _q)
+        _st = stall_mod.add(g.player, _hub, x, y)
+        if _st is None:
+            g.toast("A stall must stand inside your own hub")
+            placing = None
+            pygame.mouse.set_visible(False)
+            return
+        g.placed_work.append(_st)
+        g.mark_dirty()
+        g.toast("Market stall built   -%d wood" % int(_cost.get("wood", 0)))
+        placing = None
+        pygame.mouse.set_visible(False)
+        return
+    if placing in ("lab", "brewery", "smith", "mine", "dummy", "target"):
+        _wp = industry.Workplace(placing, x, y, random.randrange(1 << 30))
+        if not hubs.land_ok(_wp.rect, g.villages.g.villages, g.hub_world.hubs,
+                           g.player.x, g.player.y):
+            g.toast("Not your land -- the wild, or your own hub")
+            return
+        if not g.can_place(_wp.rect, _wp.rect.inflate(70, 70)):
+            g.toast("No clear ground here")
+            return
+        _cost = g.build_materials(placing)
+        if not g.test_mode:
+            for _it, _q in _cost.items():
+                if g.inventory.count_of(_it) < _q:
+                    g.toast("Need %d %s" % (_q, _it))
+                    placing = None
+                    pygame.mouse.set_visible(False)
+                    return
+            for _it, _q in _cost.items():
+                g.inventory.consume(_it, _q)
+        _wp.worker = None
+        _wp.owner = g.player
+        g.placed_work.append(_wp)
+        if not isinstance(getattr(g.player, "workplaces", None), list):
+            g.player.workplaces = []
+        g.player.workplaces.append(_wp)          # he can put a man to it
+        g.mark_dirty()
+        _land = hubs.in_player_hub(_wp.rect, g.hub_world.hubs)
+        if not _land:
+            # THE WILD IS HIS NOW. A bench, a forge or a shaft on open
+            # ground is a claim: the yard around it is his hub.
+            _yard = _wp.rect.inflate(320, 320).copy()
+            _h = g.hub_world.add_player_hub(g.player, _yard, [], [])
+            if _h is not None:
+                nemesis.PLACES.append(_h)
+                g.player.work_post = (_h.x, _h.y + 40)
+                g.player.hub = _h
+                plog.log("PHASE-HUB", _h.name, "at",
+                         "%d,%d" % (int(_h.x), int(_h.y)),
+                         "post", g.player.work_post)
+                g.toast("Built -- this is your hub now:   %s" % _h.name)
+            else:
+                g.toast("Built")
+        else:
+            g.toast("Built on your own ground")
+        placing = None
+        pygame.mouse.set_visible(False)
+        return
+    if placing in ("brew_table", "barrel"):
+        name = "Brewing table" if placing == "brew_table" else "Barrel"
+        if g.inside_house is None:
+            g.toast("%s can only be built inside a house" % name)
+        elif not (g.inside_house.interior.can_place_brew(rect)
+                  if placing == "brew_table"
+                  else g.inside_house.interior.can_place_barrel(rect)):
+            g.toast("No clear floor space here")
+            return
+        elif not g.test_mode and g.inventory.count_of("wood") < g.build_cost(placing):
+            g.toast("Need %d wood" % g.build_cost(placing))
+        else:
+            if not g.test_mode:
+                g.inventory.consume("wood", g.build_cost(placing))
+            if placing == "brew_table":
+                g.inside_house.interior.place_brew(x, y)
+            else:
+                g.inside_house.interior.place_barrel(x, y)
+            g.mark_dirty()
+            g.toast("%s built" % name if g.test_mode
+                  else "%s built   -%d wood" % (name, g.build_cost(placing)))
+        placing = None
+        pygame.mouse.set_visible(False)
+        return
+    if placing == "lab_table":
+        if g.inside_house is None:
+            g.toast("A lab table can only be built inside a house")
+        elif not g.inside_house.interior.can_place_lab(rect):
+            g.toast("No clear floor space here")
+            return
+        elif not g.test_mode and g.inventory.count_of("wood") < g.build_cost("lab_table"):
+            g.toast("Need %d wood" % g.build_cost("lab_table"))
+        else:
+            if not g.test_mode:
+                g.inventory.consume("wood", g.build_cost("lab_table"))
+            g.inside_house.interior.place_lab(x, y)
+            g.mark_dirty()
+            g.toast("Lab table built" if g.test_mode
+                  else "Lab table built   -%d wood" % g.build_cost("lab_table"))
+        placing = None
+        pygame.mouse.set_visible(False)
+        return
+    if placing == "workshop":
+        if g.inside_house is None:
+            g.toast("Workshops can only be built inside a house")
+        elif not g.inside_house.interior.can_place_workshop(rect):
+            g.toast("No clear floor space here")
+            return
+        elif not g.test_mode and g.inventory.count_of("wood") < g.build_cost("workshop"):
+            g.toast(f"Need {g.build_cost('workshop')} wood")
+        else:
+            if not g.test_mode:
+                g.inventory.consume("wood", g.build_cost("workshop"))
+            g.inside_house.interior.place_workshop(x, y)
+            g.mark_dirty()
+            g.toast("Workshop built" if g.test_mode
+                  else f"Workshop built   -{g.build_cost('workshop')} wood")
+        placing = None
+        pygame.mouse.set_visible(False)
+        return
+    if not g.can_place(rect, sight):
+        g.toast("Can't build there")
+        return
+    if not g.test_mode:
+        if g.inventory.count_of("wood") < g.build_house_cost:
+            g.toast(f"Need {g.build_house_cost} wood")
+            placing = None
+            pygame.mouse.set_visible(False)
+            return
+        g.inventory.consume("wood", g.build_house_cost)
+    seed = random.randint(0, 2 ** 31)
+    house = House(x, y, g.build_w, g.build_h, random.choice(ROOFS), facing, seed)
+    house.build_seed = seed
+    house.interior_seed = random.randint(0, 2 ** 31)
+    house.interior = Interior(house.interior_seed, tuple(house.facing))
+    house.enterable = True
+    g.built_houses.append(house)
+    g.mark_dirty()
+    g.toast(f"House built   -{g.build_house_cost} wood")
+    placing = None
+    pygame.mouse.set_visible(False)
+    return placing
+
+
+
+def draw_placing(g):
+
+    if g.placing is None:
+        return
+    _amx, _amy = g.wmouse_x, g.wmouse_y      # the world mouse, indoors too
+    aim_dx = (g.cam_x + _amx) - g.player.x
+    aim_dy = (g.cam_y + _amy) - g.player.y
+    length = math.hypot(aim_dx, aim_dy) or 1.0
+    g.player.facing = (aim_dx / length, aim_dy / length)
+    px_, py_ = g.placement_pos()
+    _facing, box, sight = g.placement_box(px_, py_)
+    ok = g.can_place(box, sight)
+    colour = (126, 224, 148) if ok else (226, 96, 84)
+    rr = pygame.Rect(box.x - g.cam_x, box.y - g.cam_y, box.w, box.h)
+    sr = pygame.Rect(sight.x - g.cam_x, sight.y - g.cam_y, sight.w, sight.h)
+    fill = pygame.Surface(rr.size, pygame.SRCALPHA)
+    fill.fill((colour[0], colour[1], colour[2], 48))
+    g.screen.blit(fill, rr.topleft)
+    pygame.draw.rect(g.screen, colour, sr, 2)
+    pygame.draw.rect(g.screen, colour, rr, 2)
+    hint_text = "Click to place   ·   right-click to cancel"
+    if g.placing in ("fence", "gate"):
+        hint_text = "Click to place   ·   R to rotate   ·   right-click to cancel"
+    elif g.placing == "plot":
+        hint_text = "Drag a rectangle   ·   right-click to cancel"
+    elif g.placing == "demolish":
+        hint_text = "Click a thing of yours to take it down   ·   right-click to cancel"
+    if g.placing == "plot" and g.plot_start[0] is not None:
+        # THE RECTANGLE HE IS DRAWING, live under the mouse.
+        _sx, _sy = g.plot_start[0]
+        _ex, _ey = px_, py_
+        _drag = pygame.Rect(int(min(_sx, _ex)), int(min(_sy, _ey)),
+                            int(abs(_ex - _sx)), int(abs(_ey - _sy)))
+        _ok = hubs.land_ok(_drag, g.villages.g.villages, g.hub_world.hubs,
+                           g.player.x, g.player.y)
+        _col = (126, 224, 148) if _ok else (226, 96, 84)
+        _dr = pygame.Rect(_drag.x - g.cam_x, _drag.y - g.cam_y,
+                          _drag.w, _drag.h)
+        _df = pygame.Surface((max(1, _dr.w), max(1, _dr.h)), pygame.SRCALPHA)
+        _df.fill((_col[0], _col[1], _col[2], 48))
+        g.screen.blit(_df, _dr.topleft)
+        pygame.draw.rect(g.screen, _col, _dr, 2)
+    hint = g.font.render(hint_text, True, (236, 236, 240))
+    g.screen.blit(hint, (g.vw // 2 - hint.get_width() // 2, int(g.vh * 0.82)))
+
+# -- house interiors ----------------------------------------------------

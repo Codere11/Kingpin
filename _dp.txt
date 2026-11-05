@@ -1,0 +1,46 @@
+def draw_placing(g):
+
+    if g.placing is None:
+        return
+    _amx, _amy = g.wmouse_x, g.wmouse_y      # the world mouse, indoors too
+    aim_dx = (g.cam_x + _amx) - g.player.x
+    aim_dy = (g.cam_y + _amy) - g.player.y
+    length = math.hypot(aim_dx, aim_dy) or 1.0
+    g.player.facing = (aim_dx / length, aim_dy / length)
+    px_, py_ = g.placement_pos()
+    _facing, box, sight = g.placement_box(px_, py_)
+    ok = g.can_place(box, sight)
+    colour = (126, 224, 148) if ok else (226, 96, 84)
+    rr = pygame.Rect(box.x - g.cam_x, box.y - g.cam_y, box.w, box.h)
+    sr = pygame.Rect(sight.x - g.cam_x, sight.y - g.cam_y, sight.w, sight.h)
+    fill = pygame.Surface(rr.size, pygame.SRCALPHA)
+    fill.fill((colour[0], colour[1], colour[2], 48))
+    g.screen.blit(fill, rr.topleft)
+    pygame.draw.rect(g.screen, colour, sr, 2)
+    pygame.draw.rect(g.screen, colour, rr, 2)
+    hint_text = "Click to place   ·   right-click to cancel"
+    if g.placing in ("fence", "gate"):
+        hint_text = "Click to place   ·   R to rotate   ·   right-click to cancel"
+    elif g.placing == "plot":
+        hint_text = "Drag a rectangle   ·   right-click to cancel"
+    elif g.placing == "demolish":
+        hint_text = "Click a thing of yours to take it down   ·   right-click to cancel"
+    if g.placing == "plot" and g.plot_start[0] is not None:
+        # THE RECTANGLE HE IS DRAWING, live under the mouse.
+        _sx, _sy = g.plot_start[0]
+        _ex, _ey = px_, py_
+        _drag = pygame.Rect(int(min(_sx, _ex)), int(min(_sy, _ey)),
+                            int(abs(_ex - _sx)), int(abs(_ey - _sy)))
+        _ok = hubs.land_ok(_drag, g.villages.g.villages, g.hub_world.hubs,
+                           g.player.x, g.player.y)
+        _col = (126, 224, 148) if _ok else (226, 96, 84)
+        _dr = pygame.Rect(_drag.x - g.cam_x, _drag.y - g.cam_y,
+                          _drag.w, _drag.h)
+        _df = pygame.Surface((max(1, _dr.w), max(1, _dr.h)), pygame.SRCALPHA)
+        _df.fill((_col[0], _col[1], _col[2], 48))
+        g.screen.blit(_df, _dr.topleft)
+        pygame.draw.rect(g.screen, _col, _dr, 2)
+    hint = g.font.render(hint_text, True, (236, 236, 240))
+    g.screen.blit(hint, (g.vw // 2 - hint.get_width() // 2, int(g.vh * 0.82)))
+
+# -- house interiors ----------------------------------------------------
