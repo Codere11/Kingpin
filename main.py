@@ -37,6 +37,7 @@ import houseuse
 import hudtime
 import newsbubble
 import nearby
+import playerutil
 
 import crop
 import biomes
@@ -1281,13 +1282,7 @@ def main() -> None:
                 break
 
     def player_hunted() -> bool:
-        """A guard is actively hunting the player right now."""
-        for village in visible_villages:
-            for g in getattr(village, "guards", ()) or ():
-                if (getattr(g, "hostile", False) and getattr(g, "aware", False)
-                        and g.alive):
-                    return True
-        return False
+        return playerutil.player_hunted(visible_villages)
 
     def tile_is_mine(tx: int, ty: int) -> bool:
         """True for land inside the player's own fenced homestead: a closed
@@ -1319,29 +1314,10 @@ def main() -> None:
         return False
 
     def settle_reload() -> None:
-        """A finished reload pulls rounds from the ammo you are carrying."""
-        if not player.reload_done:
-            return
-        player.reload_done = False
-        kind = player.reload_kind
-        if not kind:
-            return
-        need = guns.MAG[kind] - player.mags.get(kind, 0)
-        take = min(need, inventory.count_of("ammo"))
-        if take > 0:
-            inventory.consume("ammo", take)
-            player.mags[kind] = player.mags.get(kind, 0) + take
-            toast(f"Loaded {player.mags[kind]}/{guns.MAG[kind]}")
+        playerutil.settle_reload(player, inventory, toast)
 
     def banish(nation) -> None:
-        if player.nation != nation:
-            return
-        player.nation = None
-        for old in list(player.squad):
-            if old in enemies:
-                enemies.remove(old)
-        player.squad = []
-        toast(f"Banished from {nation_name(nation)}!   They will shoot on sight")
+        playerutil.banish(player, enemies, nation, toast, nation_name)
 
     # -- item actions -------------------------------------------------------
     def fire() -> None:
@@ -1373,14 +1349,7 @@ def main() -> None:
         skills.gain_shooting()
 
     def use_first_aid() -> None:
-        if player.health >= player.max_health:
-            toast("Already at full health")
-            return
-        if not inventory.consume("first_aid", 1):
-            toast("No first-aid kits left")
-            return
-        player.health = min(player.max_health, player.health + 50)
-        toast("Patched yourself up")
+        playerutil.use_first_aid(player, inventory, toast)
 
     def use_axe() -> None:
         nonlocal kills
@@ -2984,29 +2953,10 @@ def main() -> None:
         draw_status()
 
     def draw_status() -> None:
-        """Battle / plunder banner, top-centre."""
-        if not hud_status:
-            return
-        label = font.render(hud_status, True, (244, 236, 214))
-        plate = pygame.Surface((label.get_width() + 26, 30), pygame.SRCALPHA)
-        pygame.draw.rect(plate, (16, 16, 20, 205), plate.get_rect(), border_radius=8)
-        pygame.draw.rect(plate, (150, 120, 60), plate.get_rect(), width=2, border_radius=8)
-        screen.blit(plate, (vw // 2 - plate.get_width() // 2, 8))
-        screen.blit(label, (vw // 2 - label.get_width() // 2, 8 + (30 - label.get_height()) // 2))
+        hudtime.draw_status(screen, font, hud_status, vw)
 
     def tick_conquest(dt) -> None:
-        """Plunder timers run everywhere, indoors included."""
-        for village in list(active_chaos):
-            village.chaos -= dt
-            if village.chaos <= 0.0:
-                village.chaos = 0.0
-                village.conquered = True
-                village.nation = player.nation
-                for npc in village.npcs:
-                    npc.nation = player.nation
-                    npc.team = ("nation", player.nation)
-                active_chaos.remove(village)
-                toast(f"{village.name} has joined your nation")
+        hudtime.tick_conquest(active_chaos, player, toast, dt)
 
     def update_hud() -> None:
         nonlocal hud_status
@@ -3019,13 +2969,7 @@ def main() -> None:
                           else "")
 
     def draw_hunger_gray() -> None:
-        """Starving drains the colour out of the world."""
-        if player.hunger >= 40.0:
-            return
-        k = 1.0 - player.hunger / 40.0
-        gray = pygame.transform.grayscale(screen)
-        gray.set_alpha(int(205 * k))
-        screen.blit(gray, (0, 0))
+        hudtime.draw_hunger_gray(screen, player)
 
     def mark_dirty() -> None:
         """The world changed: save it SOON, not this instant.

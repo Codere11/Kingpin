@@ -74,3 +74,40 @@ def near_fireplace(player, inside_house) -> bool:
     if inside_house is None:
         return False
     return inside_house.interior.fireplace_near(player.x, player.y)
+
+
+def draw_status(screen, font, hud_status, vw) -> None:
+    """Battle / plunder banner, top-centre."""
+    if not hud_status:
+        return
+    label = font.render(hud_status, True, (244, 236, 214))
+    plate = pygame.Surface((label.get_width() + 26, 30), pygame.SRCALPHA)
+    pygame.draw.rect(plate, (16, 16, 20, 205), plate.get_rect(), border_radius=8)
+    pygame.draw.rect(plate, (150, 120, 60), plate.get_rect(), width=2, border_radius=8)
+    screen.blit(plate, (vw // 2 - plate.get_width() // 2, 8))
+    screen.blit(label, (vw // 2 - label.get_width() // 2, 8 + (30 - label.get_height()) // 2))
+
+
+def tick_conquest(active_chaos, player, toast, dt) -> None:
+    """Plunder timers run everywhere, indoors included."""
+    for village in list(active_chaos):
+        village.chaos -= dt
+        if village.chaos <= 0.0:
+            village.chaos = 0.0
+            village.conquered = True
+            village.nation = player.nation
+            for npc in village.npcs:
+                npc.nation = player.nation
+                npc.team = ("nation", player.nation)
+            active_chaos.remove(village)
+            toast(f"{village.name} has joined your nation")
+
+
+def draw_hunger_gray(screen, player) -> None:
+    """Starving drains the colour out of the world."""
+    if player.hunger >= 40.0:
+        return
+    k = 1.0 - player.hunger / 40.0
+    gray = pygame.transform.grayscale(screen)
+    gray.set_alpha(int(205 * k))
+    screen.blit(gray, (0, 0))
