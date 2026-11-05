@@ -5381,7 +5381,8 @@ def main() -> None:
         else:
             _blk = 0.0
 
-        if (inside_house is not None and not game_over and not pause_open
+        if (inside_house is not None and inside_mine is None
+                and not game_over and not pause_open
                 and not map_open and not confirm_open
                 and not build_menu_open and placing is None):
             _branch = 'house'
@@ -7453,7 +7454,7 @@ def main() -> None:
                         _s.x += ux * 240.0 * dt
                         _s.y += uy * 240.0 * dt
                 war.update(armies, dt, now)
-        if inside_house is not None:
+        if inside_house is not None and inside_mine is None:
             interior = inside_house.interior
             # THE INTERIOR IS DRAWN AT THE SAME ZOOM AS THE WORLD. It was still
             # composed in a full-window frame while its camera came from the
