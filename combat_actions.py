@@ -105,7 +105,7 @@ def use_axe(g, kills) -> int:
     import main as _m
 
     if g.player.dead or not g.player.can_swing():
-        return
+        return kills
     g.player.start_swing()
     g.skills.gain_axe()
     # BARE HANDS. The same swing and the same skill whether or not the axe
@@ -249,7 +249,7 @@ def use_axe(g, kills) -> int:
             g.combat.spawn_impact(hit.centerx, hit.centery, (140, 100, 56))
             g.toast("Chopped down your fence")
             g.mark_dirty()
-            return
+            return kills
 
     # A SETTLEMENT'S FENCE IS NOT WOOD, IT IS LAW. It cannot be cut, by an
     # axe or anything else: the wall is not what keeps people out, the
@@ -274,7 +274,7 @@ def use_axe(g, kills) -> int:
             g.commit_crime()
             g.combat.spawn_impact(door_x, door_y, (120, 78, 44))
             g.toast("Broke the door open")
-            return
+            return kills
     return kills
 
 
