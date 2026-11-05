@@ -8,6 +8,7 @@ Extracted from main.py.
 from __future__ import annotations
 
 import math
+import pygame
 
 import economy
 import guns
@@ -165,3 +166,55 @@ def nearest_town(player, villages, world_half):
     if not towns:
         return None
     return min(towns, key=lambda v: (v.x - player.x) ** 2 + (v.y - player.y) ** 2)
+
+
+def guard_search(npc, inventory, player, toast, commit_crime, random) -> None:
+    """THE SEARCH AT THE GATE."""
+    contraband = ("tobacco", "cigar", "beer", "liqueur", "mezcal",
+                  "dried_mushroom", "red_mushroom", "agave", "wheat_wort",
+                  "berry_wort", "agave_wort")
+    units = sum(inventory.count_of(i) for i in contraband)
+    if units <= 0:
+        toast("%s looks you over and waves you through"
+              % getattr(npc, "name", "The guard"))
+        return
+    skill = max(0.0, min(10.0, float(getattr(player, "smuggling", 0.0))))
+    found = min(1.0, units / 100.0) * (1.0 - 0.09 * skill)
+    if random.random() < found:
+        toast("%s finds it. %d against the wall."
+              % (getattr(npc, "name", "The guard"), units))
+        commit_crime()
+        return
+    player.smuggling = min(10.0, skill + 0.06 + units * 0.001)
+    toast("Searched clean   (smuggling %.1f)" % player.smuggling)
+
+
+def open_trade(npc, make_tradeable, player, main_capital, dialogue_panel,
+               pygame, plog) -> None:
+    """CLICK A MAN AND TALK TO HIM."""
+    try:
+        npc = make_tradeable(npc)
+    except Exception:
+        pass
+    dialogue_panel.open(npc, player, main_capital()[0])
+    pygame.mouse.set_visible(True)
+    plog.log("TALK", "opened with", getattr(npc, "name", "?"),
+             "job", getattr(npc, "job", None),
+             "truth", getattr(npc, "is_truth_teller", False))
+
+
+def open_trade_menu(npc, make_tradeable, player, inventory, toast, village_mod,
+                    trade_menu_cls, pygame, plog):
+    """THE COUNTER, when he asks for it."""
+    try:
+        npc = make_tradeable(npc)
+    except Exception:
+        toast("He wants nothing to do with you")
+        return False, None
+    if getattr(npc, "is_witness", lambda _n: False)(village_mod.PLAYER_ID):
+        toast("%s wants nothing to do with you" % npc.name)
+        return False, None
+    _m = trade_menu_cls(inventory, npc, player)
+    pygame.mouse.set_visible(True)
+    plog.log("TRADE", "opened with", getattr(npc, "name", "?"))
+    return True, _m

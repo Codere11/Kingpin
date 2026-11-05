@@ -998,49 +998,13 @@ def main() -> None:
         hudtime.clamp_world(player, WORLD_HALF)
 
     def try_talk() -> bool:
-        """DID THE PLAYER CLICK THE MAN WHO ANSWERS QUESTIONS?
-
-        His own test, in the EVENT LOOP, before anything else can consume the
-        click -- items, the hotbar, trade. A cutout is drawn above its anchor,
-        so the box is his whole silhouette: 34 px each way, from 80 px above his
-        feet to 30 below.
-        """
-        tt = _TRUTH[0]
-        if tt is None:
-            for _n in list(village_mod.PEOPLE) + list(village_mod.TRAVELLERS):
-                if getattr(_n, "is_truth_teller", False):
-                    tt = _n
-                    _TRUTH[0] = tt
-                    break
-        if tt is None:
-            return False
-        mx, my = pygame.mouse.get_pos()
-        wx = cam_x + mx / ZOOM
-        wy = cam_y + my / ZOOM
-        if abs(wx - tt.x) < 34.0 and -80.0 < (wy - tt.y) < 30.0:
-            dialogue_panel.open(tt, player, _main_capital()[0])
-            pygame.mouse.set_visible(True)
-            plog.log("TALK", "opened with", getattr(tt, "name", "?"))
-            return True
-        return False
+        return life.try_talk(_TRUTH, village_mod, pygame, cam_x, cam_y, ZOOM,
+                             dialogue_panel, player, _main_capital, plog)
 
     def respawn() -> None:
         nonlocal game_over
-        game_over = False
-        pygame.mouse.set_visible(False)
-        player.respawn()
-        # HE COMES BACK WITH YOU. A respawn moved the player to the middle of
-        # the world and left the truth-teller standing where the body fell, out
-        # of sight for ever.
-        if _truth is not None:
-            _truth_home[0], _truth_home[1] = player.x + 44.0, player.y
-            _truth.x, _truth.y = _truth_home[0], _truth_home[1]
-            _truth.alive = True
-            _truth.asleep = False
-            _truth.health = _truth.max_health
-            _TRUTH[0] = _truth
-        combat.bullets.clear()
-        combat.flashes.clear()
+        game_over = life.respawn(player, _truth, _truth_home, _TRUTH, combat,
+                                 pygame)
 
     WITNESS_PX = 900.0        # close enough to have watched it happen
 
@@ -1054,72 +1018,17 @@ def main() -> None:
         return interact.make_tradeable(npc, random)
 
     def guard_search(npc) -> None:
-        """THE SEARCH AT THE GATE.
-
-        A guard does not look in your pack, he decides whether to. The state's
-        chance of finding contraband is the amount of it against the man
-        carrying it:
-
-            found = min(1, units / 100) * (1 - 0.09 * smuggling)
-
-        A hundred items at nothing is a certainty; a hundred at ten is one in
-        ten. Whatever gets through teaches the trade a little, and selling it
-        teaches more -- the skill is bought with the risk and paid in coin.
-        """
-        contraband = ("tobacco", "cigar", "beer", "liqueur", "mezcal",
-                      "dried_mushroom", "red_mushroom", "agave", "wheat_wort",
-                      "berry_wort", "agave_wort")
-        units = sum(inventory.count_of(i) for i in contraband)
-        if units <= 0:
-            toast("%s looks you over and waves you through"
-              % getattr(npc, "name", "The guard"))
-            return
-        skill = max(0.0, min(10.0, float(getattr(player, "smuggling", 0.0))))
-        found = min(1.0, units / 100.0) * (1.0 - 0.09 * skill)
-        if random.random() < found:
-            toast("%s finds it. %d against the wall."
-                  % (getattr(npc, "name", "The guard"), units))
-            commit_crime()
-            return
-        player.smuggling = min(10.0, skill + 0.06 + units * 0.001)
-        toast("Searched clean   (smuggling %.1f)" % player.smuggling)
+        interact.guard_search(npc, inventory, player, toast, commit_crime, random)
 
     def open_trade(npc) -> None:
-        """CLICK A MAN AND TALK TO HIM. EVERY MAN, not only the truth-teller.
-
-        The four questions are the same for everybody -- what he thinks of the
-        Dictator, what he thinks of you, what he is craving, and whether he
-        wants to trade -- because every man has the fields they read. "Wanna
-        trade?" is what opens the counter (see open_trade_menu), so the trade
-        menu is now a thing you ask for, not the first thing a click does.
-        """
-        try:
-            npc = make_tradeable(npc)
-        except Exception:
-            pass
-        dialogue_panel.open(npc, player, _main_capital()[0])
-        pygame.mouse.set_visible(True)
-        plog.log("TALK", "opened with", getattr(npc, "name", "?"),
-                 "job", getattr(npc, "job", None),
-                 "truth", getattr(npc, "is_truth_teller", False))
+        interact.open_trade(npc, make_tradeable, player, _main_capital,
+                            dialogue_panel, pygame, plog)
 
     def open_trade_menu(npc) -> None:
-        """THE COUNTER, when he asks for it."""
         nonlocal trade_open, trade_menu
-        try:
-            npc = make_tradeable(npc)
-        except Exception:
-            toast("He wants nothing to do with you")
-            return
-        if getattr(npc, "is_witness", lambda _n: False)(village_mod.PLAYER_ID):
-            # UNDER NO CIRCUMSTANCES. He knows exactly what you are, and no
-            # amount of time or coin changes it.
-            toast("%s wants nothing to do with you" % npc.name)
-            return
-        trade_menu = TradeMenu(inventory, npc, player)
-        trade_open = True
-        pygame.mouse.set_visible(True)
-        plog.log("TRADE", "opened with", getattr(npc, "name", "?"))
+        trade_open, trade_menu = interact.open_trade_menu(
+            npc, make_tradeable, player, inventory, toast, village_mod,
+            TradeMenu, pygame, plog)
 
     def nearest_hostile(npc):
         return interact.nearest_hostile(npc, player)
@@ -1774,36 +1683,12 @@ def main() -> None:
 
     def try_sleep() -> None:
         nonlocal sleep_timer
-        if inside_house is None:
-            return
-        bed = None
-        for kind, rect in inside_house.interior.furniture:
-            if kind == "bed":
-                bed = rect
-        if bed is None:
-            return
-        if math.hypot(player.x - bed.centerx, player.y - bed.centery) > REACH + 46.0:
-            toast("Get closer to the bed")
-            return
-        if night_factor() <= 0.38:
-            toast("You can only sleep at night")
-            return
-        sleep_timer = SLEEP_TIME
-        pygame.mouse.set_visible(False)
+        sleep_timer = life.try_sleep(inside_house, player, math, REACH, toast,
+                                     night_factor, SLEEP_TIME, pygame)
 
     def draw_night() -> None:
-        night = night_factor()
-        vision.cone_deg = 175.0 - 55.0 * night
-        interior_vision.cone_deg = 175.0 - 55.0 * night
-        if night > 0.03:
-            shade = shade_cache.get((vw, vh))
-            if shade is None:
-                shade = pygame.Surface((vw, vh))
-                shade.fill((10, 14, 32))
-                shade_cache[(vw, vh)] = shade
-            shade.set_alpha(int(195 * night))
-            screen.blit(shade, (0, 0))
-        draw_status()
+        life.draw_night(night_factor, vision, interior_vision, shade_cache, vw,
+                        vh, screen, draw_status)
 
     def draw_status() -> None:
         hudtime.draw_status(screen, font, hud_status, vw)
@@ -1813,13 +1698,7 @@ def main() -> None:
 
     def update_hud() -> None:
         nonlocal hud_status
-        if active_chaos:
-            v = min(active_chaos, key=lambda q: q.chaos)
-            hud_status = ("Battle won  -  %d seconds of plundering left"
-                          % int(math.ceil(v.chaos)))
-        else:
-            hud_status = ("Battle" if any(v.battle for v in visible_villages)
-                          else "")
+        hud_status = life.update_hud(active_chaos, visible_villages, math)
 
     def draw_hunger_gray() -> None:
         hudtime.draw_hunger_gray(screen, player)
