@@ -910,7 +910,10 @@ def main() -> None:
         def _attach_camp() -> None:
             """PUT THE CAMP BACK AFTER A SAVE HAS CLEARED THE YARD.
 
-            load_now() empties placed_work and refills it from the save -- so a
+            # THE SPAWN GOES DOWN FIRST; A SAVE OVERRIDES IT. Applying the spawn after
+    # the load is what threw a restored player back at the open-field spot.
+    player.x, player.y = _hx, _hy
+    load_now() empties placed_work and refills it from the save -- so a
             barn (and thirty mines) attached at world build were thrown away a
             moment later, which is why pressing E at the barn door did nothing.
             Called from both places; it will not double up.
@@ -3491,11 +3494,6 @@ def main() -> None:
     _boot_left = [10]
     _boot_slow = [True]
     _boot_prev = [None]
-    # PUT HIM DOWN LAST. The spawn is decided when he is created, but a dozen
-    # things between there and the first frame -- the village register, the
-    # patrols, the world bounds -- can move him, and one of them was putting
-    # every backstory back at the origin. Set here, nothing after it can.
-    player.x, player.y = _hx, _hy
     # AND HIS TRADE LAST OF ALL. There is a reset a few hundred lines above
     # that clears `player.job` and `player.settled_at` before the save is
     # read -- correct for a fresh start and fatal for a backstory, because it
