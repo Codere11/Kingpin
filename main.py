@@ -42,6 +42,7 @@ import playerutil
 import interact
 import savegame
 import combat_actions
+import placement
 
 import crop
 import biomes
@@ -1268,18 +1269,8 @@ def main() -> None:
 
     # -- building placement -------------------------------------------------
     def placement_pos():
-        # THE ROOM IS 1:1, SO THE ROOM'S MOUSE IS THE WINDOW'S MOUSE. The
-        # `wmouse_x` value is the OUTDOOR mouse (window / ZOOM), and it is only
-        # re-mapped inside the room branch AFTER the event loop has already
-        # run -- so a click read the outdoor mouse against the indoor camera,
-        # landed a third of a screen away, and the floor always read as full.
-        if inside_house is not None or (inside_mine is not None
-                                        and getattr(inside_mine, "kind", "") == "house"):
-            mx, my = pygame.mouse.get_pos()
-        else:
-            mx, my = wmouse_x, wmouse_y
-        return (round((cam_x + mx) / 8.0) * 8.0,
-                round((cam_y + my) / 8.0) * 8.0)
+        return placement.placement_pos(player, inside_house, inside_mine,
+                                       cam_x, cam_y, wmouse_x, wmouse_y)
 
     def placement_box(x, y):
         # THE FOUR TRADES OUT OF DOORS, at the size of the thing itself (the
@@ -1336,36 +1327,12 @@ def main() -> None:
         return facing, rect, rect.inflate(28, 28)
 
     def can_place(rect, sight) -> bool:
-        if inside_house is not None:
-            return inside_house.interior.can_place_workshop(rect)
-        if sight.collidepoint(player.x, player.y):
-            return False
-        for house in built_houses:
-            if sight.colliderect(house.sight_rect):
-                return False
-        for village in visible_villages:
-            for house in village.houses:
-                if sight.colliderect(house.sight_rect):
-                    return False
-        for tree in trees.near(rect.centerx, rect.centery, 170.0):
-            if not tree.felled and rect.inflate(16, 16).colliderect(tree.trunk_rect):
-                return False
-        return True
+        return placement.can_place(rect, sight, player, inside_house,
+                                   built_houses, visible_villages, trees)
 
     def _own_things():
-        """Everything of HIS a click could take down, smallest first."""
-        out = []
-        for _r in built_plots:
-            out.append((_r, "plot", _r))
-        for _wp in placed_work:
-            out.append((_wp.rect, "station", _wp))
-        for _r in built_gates:
-            out.append((_r, "gate", _r))
-        for _r in built_fences:
-            out.append((_r, "fence", _r))
-        for _h in built_houses:
-            out.append((_h.rect, "house", _h))
-        return out
+        return placement.own_things(built_plots, placed_work, built_gates,
+                                    built_fences, built_houses)
 
     def demolish_at(wx: float, wy: float) -> str:
         """ONE CLICK TAKES ONE THING OF HIS DOWN -- the smallest under it."""
