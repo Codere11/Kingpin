@@ -34,6 +34,7 @@ import plog
 import worldio
 import worldbuild
 import houseuse
+import hudtime
 
 import crop
 import biomes
@@ -968,17 +969,7 @@ def main() -> None:
     active_chaos: list = []
 
     def award_levels() -> None:
-        """A REAL level-up wears the shine.
-
-        skills.py raises the flag as the level is crossed -- see
-        Skills._note_levels -- and this is where it becomes something you can
-        see. Called once a frame from each of the three places the player is
-        stepped: the world above ground, the mine, and a house interior each
-        have their own, and a man levels up in all three.
-        """
-        if skills.just_leveled:
-            skills.just_leveled = False
-            player.level_flash = player.LEVEL_FLASH
+        hudtime.award_levels(skills, player)
 
     def toast(message: str) -> None:
         nonlocal toast_text, toast_time
@@ -993,16 +984,7 @@ def main() -> None:
             pass
 
     def clamp_world() -> None:
-        """The world is finite, and the loading screen builds all of it.
-
-        Villages used to be made lazily, the moment one came into view: 50-81 ms
-        inside a single frame, the worst hitch in the game. load_world() now
-        builds every cell up front, but that guarantee only holds if the man
-        cannot walk out past the lattice it built. So the edge of the world is
-        the edge of the world.
-        """
-        player.x = min(max(player.x, -WORLD_HALF), WORLD_HALF)
-        player.y = min(max(player.y, -WORLD_HALF), WORLD_HALF)
+        hudtime.clamp_world(player, WORLD_HALF)
 
     def try_talk() -> bool:
         """DID THE PLAYER CLICK THE MAN WHO ANSWERS QUESTIONS?
@@ -3030,9 +3012,7 @@ def main() -> None:
         return ""
 
     def near_fireplace() -> bool:
-        if inside_house is None:
-            return False
-        return inside_house.interior.fireplace_near(player.x, player.y)
+        return hudtime.near_fireplace(player, inside_house)
 
     def join_army(npc) -> None:
         """Enlist. You are a soldier of that nation from here on -- no squad of
@@ -3128,20 +3108,7 @@ def main() -> None:
                                        player.squad, persons=folk)
 
     def day_phase() -> str:
-        """Where the villagers are in their day.
-
-        Work, then the whole village gathers in the square at mid-day -- and
-        that hour is the only time anyone buys or sells -- then work again.
-        Nobody spends the day chasing a seller across the fields.
-        """
-        if night_factor() > 0.38:
-            return "sleep"
-        t = (0.30 + now / DAY_LENGTH) % 1.0
-        if t < 0.30 or t >= 0.72:
-            return "home"
-        if 0.40 <= t < 0.60:
-            return "market"          # mid-day: business is done in the square
-        return "work"
+        return hudtime.day_phase(now, DAY_LENGTH)
 
     def _nearest_town():
         """THE NEAREST SETTLEMENT, WHICHEVER ONE IT IS.
@@ -3165,34 +3132,16 @@ def main() -> None:
                    + (v.y - player.y) ** 2)
 
     def speed_button() -> pygame.Rect:
-        return pygame.Rect(vw // 2 - 74, vh - 142, 148, 32)
+        return hudtime.speed_button(vw, vh)
 
     def draw_speed_button() -> None:
-        if not test_mode:
-            return
-        r = speed_button()
-        pygame.draw.rect(screen, (30, 30, 36), r, border_radius=8)
-        pygame.draw.rect(screen,
-                         (222, 176, 88) if time_scale > 1.0 else (110, 110, 122),
-                         r, width=2, border_radius=8)
-        text = font.render("SPEED  x%d" % int(time_scale), True,
-                           (244, 236, 214) if time_scale > 1.0 else (172, 172, 182))
-        screen.blit(text, (r.centerx - text.get_width() // 2,
-                           r.centery - text.get_height() // 2))
+        hudtime.draw_speed_button(screen, font, test_mode, time_scale, vw, vh)
 
     def night_factor(t=None) -> float:
-        if t is None:
-            t = now
-        tt = (0.30 + t / DAY_LENGTH) % 1.0
-        brightness = 0.5 + 0.5 * math.sin(2.0 * math.pi * (tt - 0.25))
-        return 1.0 - brightness
+        return hudtime.night_factor(now, DAY_LENGTH, t)
 
     def next_morning(t: float) -> float:
-        for _ in range(int(DAY_LENGTH / 5.0) + 2):
-            t += 5.0
-            if night_factor(t) <= 0.38:
-                break
-        return t
+        return hudtime.next_morning(t, now, DAY_LENGTH)
 
     def try_sleep() -> None:
         nonlocal sleep_timer
