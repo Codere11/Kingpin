@@ -1397,15 +1397,25 @@ class NPC:
         if target is None:
             return False                    # no woods left standing near home
         if math.hypot(target.x - self.x, target.y - self.y) > 28.0:
-            # Reuse the heading for a few frames, as ordinary roaming does:
-            # steering every single frame is what made ten loggers expensive.
-            self._steer_timer -= dt
-            if self._dir is None or self._steer_timer <= 0.0:
-                self._steer_timer = 0.35
-                self._dir = steering.steer(self, target.x, target.y,
-                                           getattr(self, "_rects", ()),
-                                           getattr(self, "_fences", ()))
-            ux, uy = self._dir
+            # A PLAN, NOT A NUDGE: the tree stands outside the gate, and local
+            # steering cannot solve a pinch between fence and gate -- a logger
+            # orbited the wall and never cut a tree. Follow the A* plan when
+            # the lane has built one; otherwise fall back to local steering.
+            _nav = getattr(self, "_nav", None)
+            if _nav is not None:
+                try:
+                    import pathfind as _pf
+                    ux, uy = _pf.steer(self, _nav, target.x, target.y)
+                except Exception:
+                    ux, uy = 0.0, 0.0
+            else:
+                self._steer_timer -= dt
+                if self._dir is None or self._steer_timer <= 0.0:
+                    self._steer_timer = 0.35
+                    self._dir = steering.steer(self, target.x, target.y,
+                                               getattr(self, "_rects", ()),
+                                               getattr(self, "_fences", ()))
+                ux, uy = self._dir
             self.x += ux * self.speed * 1.15 * dt
             self.y += uy * self.speed * 1.15 * dt
             self.facing = (ux, uy)

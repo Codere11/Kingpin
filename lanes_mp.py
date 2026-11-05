@@ -667,11 +667,17 @@ def _settlement_step(world, towns, men, player, hub_men, villages):
     _navcache: dict = {}
 
     def _nav_for(n, now):
-        """A small A* window around ONE man on his way to his post."""
+        """A small A* window around ONE man on his way to his post -- or a
+        logger walking out to his tree (the gate is a pinch local steering
+        cannot solve, so wood was never cut)."""
         p = getattr(n, "work_post", None)
         if p is None:
-            n._nav = None
-            return
+            _lt = getattr(n, "_log_tree", None)
+            if getattr(n, "job", None) == "logger" and _lt is not None and not _lt.felled:
+                p = (_lt.x, _lt.y)
+            else:
+                n._nav = None
+                return
         gx = max(n.x - 700.0, min(n.x + 700.0, p[0]))
         gy = max(n.y - 700.0, min(n.y + 700.0, p[1]))
         x0, y0 = min(n.x, gx) - 260.0, min(n.y, gy) - 260.0
@@ -909,7 +915,8 @@ def _settlement_step(world, towns, men, player, hub_men, villages):
         if timers["nav"] >= 0.5:
             timers["nav"] = 0.0
             for _n in men:
-                if getattr(_n, "work_post", None) is None:
+                if getattr(_n, "work_post", None) is None \
+                        and not (getattr(_n, "job", None) == "logger"):
                     continue
                 try:
                     _nav_for(_n, now)
