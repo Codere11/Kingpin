@@ -6980,10 +6980,10 @@ def main() -> None:
         occluders += [house.sight_rect for house in built_houses
                       if (house.x - player.x) ** 2 + (house.y - player.y) ** 2
                       < (reach + max(house.w, house.h)) ** 2]
-        nearby = sorted(draw_trees,
-                        key=lambda t: (t.x - player.x) ** 2 + (t.y - player.y) ** 2)
+        near_trees = sorted(draw_trees,
+                            key=lambda t: (t.x - player.x) ** 2 + (t.y - player.y) ** 2)
         soft: list[pygame.Rect] = []
-        for i, tree in enumerate(nearby[:80]):
+        for i, tree in enumerate(near_trees[:80]):
             if tree.felled:
                 continue
             if ((tree.x - player.x) ** 2 + (tree.y - player.y) ** 2
