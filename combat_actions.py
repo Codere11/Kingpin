@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import math
 
+import random
+
 import pygame
 import guns
+import ore
 
 
 def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
@@ -39,3 +42,47 @@ def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
                     shooter=player, owner="player", damage=guns.DAMAGE[kind],
                     team="player", spread=spread + extra)
     skills.gain_shooting()
+
+
+def use_pickaxe(player, combat, ore_field, inventory, pay_share, mark_dirty,
+                toast) -> None:
+    import main as _m
+    if player.dead or not player.can_swing():
+        return
+    player.start_swing()
+    angle = player.facing_angle
+    combat.spawn_swing(player.x, player.y, angle)
+
+    def in_arc(tx, ty, extra=0.0):
+        dx, dy = tx - player.x, ty - player.y
+        if math.hypot(dx, dy) > _m.AXE_REACH + extra:
+            return False
+        delta = abs(((math.atan2(dy, dx) - angle + math.pi) % (2.0 * math.pi)) - math.pi)
+        return delta <= _m.AXE_ARC
+
+    struck = None
+    nearest = 1e9
+    for chunk in ore_field.near(player.x, player.y, _m.AXE_REACH + 30.0):
+        cx = min(max(player.x, chunk.rect.left), chunk.rect.right)
+        cy = min(max(player.y, chunk.rect.top), chunk.rect.bottom)
+        distance = math.hypot(player.x - cx, player.y - cy)
+        if distance > _m.AXE_REACH or not in_arc(chunk.x, chunk.y, 20.0):
+            continue
+        if distance < nearest:
+            nearest = distance
+            struck = chunk
+    if struck is None:
+        toast("Nothing to mine here")
+        return
+    struck.strikes += 1
+    combat.spawn_impact(struck.x, struck.y, (150, 150, 160))
+    if struck.strikes >= ore.STRIKES:
+        struck.mined = True
+        ore_field.mined.add(struck.cell)
+        amount = random.randint(ore.YIELD_LO, ore.YIELD_HI)
+        inventory.add("iron", amount)
+        pay_share("iron", amount)
+        mark_dirty()
+        toast(f"Mined iron   +{amount}")
+    else:
+        toast(f"Mining\u2026  {struck.strikes}/{ore.STRIKES}")
