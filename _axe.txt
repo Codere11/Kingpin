@@ -1,0 +1,176 @@
+def use_axe(g, kills) -> int:
+    """Swing the axe: men, beasts, trees, fences, and doors in one arc."""
+
+    if g.player.dead or not g.player.can_swing():
+        return
+    g.player.start_swing()
+    g.skills.gain_axe()
+    # BARE HANDS. The same swing and the same skill whether or not the axe
+    # is in the pack -- a fist simply is not an axe. See
+    # g.skills.UNARMED_WEAKNESS: he hits for a quarter, and can still fight.
+    _armed = g.inventory.count_of("axe") > 0
+    melee = ((MELEE_DAMAGE if _armed
+              else MELEE_DAMAGE / g.skills.UNARMED_WEAKNESS)
+             * g.skills.axe_damage_scale())
+    angle = g.player.facing_angle
+    g.combat.spawn_swing(g.player.x, g.player.y, angle)
+
+    def in_arc(tx, ty, extra=0.0):
+        dx, dy = tx - g.player.x, ty - g.player.y
+        if math.hypot(dx, dy) > AXE_REACH + extra:
+            return False
+        delta = abs(((math.atan2(dy, dx) - angle + math.pi) % (2.0 * math.pi)) - math.pi)
+        return delta <= AXE_ARC
+
+    for enemy in g.enemies:
+        if enemy.alive and in_arc(enemy.x, enemy.y, enemy.radius):
+            _was_alive = getattr(enemy, "alive", True)
+            if (getattr(enemy, "is_militia", False)
+                    or getattr(enemy, "militia", False)):
+                try:
+                    import detain as _da
+                    _da.militia_attacked(g.player, enemy, list(g.enemies),
+                                         list(village_mod.PEOPLE))
+                except Exception:
+                    pass
+            enemy.take_damage(melee)
+            if _was_alive and not getattr(enemy, "alive", True):
+                try:
+                    import detain as _dk
+                    _dk.militia_killed(g.player, enemy, list(g.enemies),
+                                       list(village_mod.PEOPLE))
+                except Exception:
+                    pass
+            g.blood.spawn(enemy.x, enemy.y, 8, 14.0)
+            if (g.player.nation is not None
+                    and getattr(enemy, "nation", None) == g.player.nation):
+                g.banish(g.player.nation)
+    for rabbit in g.rabbits:
+        if rabbit.alive and in_arc(rabbit.x, rabbit.y, rabbit.radius):
+            died = rabbit.take_damage(melee)
+            g.blood.spawn(rabbit.x, rabbit.y, 8, 12.0)
+            if died:
+                amount = random.randint(1, 2)
+                g.inventory.add("raw_meat", amount)
+                g.toast(f"Caught a rabbit   +{amount} raw meat")
+    # EVERY MAN THE BLADE REACHES IS CUT -- once each.
+    #
+    # This walked only the towns in view, so the men of a criminal hut and
+    # every traveller on the road stood inside the arc of a swing that
+    # could not see them; and a man listed in two towns was cut twice for
+    # one blow. One list, from every register in the world, deduplicated.
+    _folk = []
+    _seen = set()
+
+    def _add_man(_n):
+        if _n is None or id(_n) in _seen:
+            return
+        _seen.add(id(_n))
+        _folk.append(_n)
+
+    for _n in list(village_mod.PEOPLE) + list(village_mod.TRAVELLERS):
+        _add_man(_n)
+    for _h in (getattr(g.hub_world, "hubs", None) or ()):
+        for _n in (getattr(_h, "npcs", None) or ()):
+            _add_man(_n)
+    _add_man(g._TRUTH[0])
+    for npc in _folk:
+        if npc.alive and in_arc(npc.x, npc.y, npc.radius):
+                died = npc.take_damage(melee, record=False)
+                g._WORK.damage(npc, melee)
+                # HE KNOWS THE MAN WHO HIT HIM -- and likes him twenty less.
+                try:
+                    import economy as _ec2
+                    _ec2.wronged(npc, g.player, 20.0, g.now)
+                except Exception:
+                    pass
+                g.blood.spawn(npc.x, npc.y, 18 if died else 8, 22.0 if died else 14.0)
+                # SELF-DEFENCE IS NOT A MURDER. A man who came at you with
+                # an axe and lost is not a crime, and his neighbours know
+                # it -- so nothing here counts against you.
+                if (npc.village is not None
+                        and not village_mod.self_defence(npc)):
+                    npc.village.provoke()
+                    if died:
+                        # HE SHOUTED BEFORE HE DIED. The village is told,
+                        # and the refugees and traders carry it on -- but
+                        # only the men who SAW it will never forget.
+                        npc.village.learn_killers(
+                            (village_mod.PLAYER_ID,), g.now)
+                        g._WORK.crime(npc.village, (village_mod.PLAYER_ID,))
+                        g._see_murder(npc)
+                if g.player.nation is not None and npc.nation == g.player.nation:
+                    g.banish(g.player.nation)
+                if died:
+                    kills += 1
+
+    struck = None
+    nearest = 1e9
+    for tree in g.trees.near(g.player.x, g.player.y, AXE_REACH + 30.0):
+        if tree.felled:
+            continue
+        rect = tree.trunk_rect
+        cx = min(max(g.player.x, rect.left), rect.right)
+        cy = min(max(g.player.y, rect.top), rect.bottom)
+        distance = math.hypot(g.player.x - cx, g.player.y - cy)
+        if distance > AXE_REACH or not in_arc(tree.x, tree.y, 26.0):
+            continue
+        if distance < nearest:
+            nearest = distance
+            struck = tree
+    if struck is not None:
+        struck.strikes += 1
+        g.combat.spawn_impact(struck.x, struck.y, (120, 90, 50))
+        if struck.strikes >= AXE_STRIKES:
+            g.trees.fell(struck, g.now)
+            amount = random.randint(10, 30)
+            g.inventory.add("wood", amount)
+            g.pay_share("wood", amount)
+            g.combat.spawn_impact(struck.x, struck.y - 20, (86, 140, 64))
+            g.toast(f"Felled a tree   +{amount} wood")
+        else:
+            g.toast(f"Chopping…  {struck.strikes}/{AXE_STRIKES}")
+
+    # Chop down a fence or gate you built yourself.
+    for lst in (g.built_fences, g.built_gates):
+        hit = None
+        best = 1e9
+        for rect in lst:
+            cx = min(max(g.player.x, rect.left), rect.right)
+            cy = min(max(g.player.y, rect.top), rect.bottom)
+            d = math.hypot(g.player.x - cx, g.player.y - cy)
+            if d <= AXE_REACH and d < best:
+                best, hit = d, rect
+        if hit is not None:
+            lst.remove(hit)
+            g.combat.spawn_impact(hit.centerx, hit.centery, (140, 100, 56))
+            g.toast("Chopped down your fence")
+            g.mark_dirty()
+            return
+
+    # A SETTLEMENT'S FENCE IS NOT WOOD, IT IS LAW. It cannot be cut, by an
+    # axe or anything else: the wall is not what keeps people out, the
+    # SEARCH at the gate is, and a wall you can hack a hole in would make
+    # the gate decorative. The g.player's own fences are still his to cut.
+
+    # Break a villager's door open with the axe.
+    for village in g.visible_villages:
+        for vhouse in village.houses:
+            if getattr(vhouse, "door_broken", False):
+                continue
+            fx, fy = vhouse.facing
+            door_x = vhouse.x + fx * (vhouse.h / 2.0 + 4.0)
+            door_y = vhouse.y + fy * (vhouse.h / 2.0 + 4.0)
+            if not in_arc(door_x, door_y, 22.0):
+                continue
+            vhouse.enterable = True
+            vhouse.interior = Interior(random.randint(0, 2 ** 31),
+                                       tuple(vhouse.facing))
+            fill_loot(vhouse.interior.chest)
+            vhouse.break_door()
+            g.commit_crime()
+            g.combat.spawn_impact(door_x, door_y, (120, 78, 44))
+            g.toast("Broke the door open")
+            return
+    return kills
+
