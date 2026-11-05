@@ -1,0 +1,255 @@
+def on_click(g):
+    copen = g.confirm_open
+
+    _st0 = g.inventory.selected_stack()
+    plog.log("CLICK", "on_click", "item",
+             (_st0.defn.id if _st0 else None), "dead", g.player.dead,
+             "house", g.inside_house is not None,
+             "at", "%d,%d" % (int(g.player.x), int(g.player.y)))
+    if g.player.dead:
+        return
+    # ---- HIM, BEFORE ANYTHING ELSE -------------------------------------
+    # Every other path in this handler can return first: a held item, a
+    # house, an axe, the reach gate, the list of men in view. This does not
+    # depend on any of them. Click his body and the questions open.
+    # ALWAYS FIND HIM. The handle can be stale after a reload; his own
+    # town's list and the wanderers' list are both searched, so there is no
+    # state in which he exists and this cannot find him.
+    _tt0 = g.truth[0]
+    if _tt0 is None:
+        for _tv in g.villages.g.villages:
+            for _tn in _tv.npcs:
+                if getattr(_tn, "is_truth_teller", False):
+                    _tt0 = _tn
+                    g.truth[0] = _tt0
+                    break
+            if _tt0 is not None:
+                break
+    if _tt0 is not None:
+        _tmx, _tmy = pygame.mouse.get_pos()
+        _twx = g.cam_x + _tmx / g.zoom
+        _twy = g.cam_y + _tmy / g.zoom
+        _tdx, _tdy = _twx - _tt0.x, _twy - _tt0.y
+        # LOGGED ON EVERY CLICK, HIT OR MISS, WITH THE NUMBERS. If this ever
+        # fails again, the log says by how much rather than needing a guess.
+        plog.log("CLICK-HIM", "click", "%d,%d" % (int(_twx), int(_twy)),
+                 "him", "%d,%d" % (int(_tt0.x), int(_tt0.y)),
+                 "d", "%d,%d" % (int(_tdx), int(_tdy)))
+        # HIS BODY, AND NOT A SQUARE AROUND HIS FEET. The cutout is drawn
+        # above the anchor, so the box is the same one every other man is
+        # hit with: about his width across, and up to his head.
+        if abs(_tdx) <= 26.0 and -64.0 < _tdy < 22.0:
+            g.dialogue_panel.open(_tt0, g.player, g.main_capital()[0])
+            pygame.mouse.set_visible(True)
+            plog.log("TALK", "opened with", getattr(_tt0, "name", "?"),
+                     "click", "%d,%d" % (int(_twx), int(_twy)),
+                     "him", "%d,%d" % (int(_tt0.x), int(_tt0.y)))
+            return
+    stack = g.inventory.selected_stack()
+    item_id = stack.defn.id if stack else None
+    # ANYTHING THE VILLAGERS CALL FOOD, THE PLAYER CAN EAT. This was a
+    # list of three hand-written cases -- and berries and cactus fruit were
+    # not among them, so a man could starve with a pocket full of them
+    # while every villager in the valley ate the same things for supper.
+    if item_id in economy.FOOD:
+        if g.inventory.consume(item_id, 1):
+            g.player.eat(g.EAT_RESTORE)
+            g.toast("Ate some %s" % items.get(item_id).name.lower())
+        else:
+            g.toast("None of that left")
+        return
+    if item_id == "cooked_meat":
+        if g.inventory.consume("cooked_meat", 1):
+            g.player.eat(g.player.max_hunger)
+            g.toast("Ate cooked meat   -   full up")
+        else:
+            g.toast("No cooked meat")
+        return
+    if item_id == "raw_meat":
+        if g.inside_house is not None and g.near_fireplace():
+            if g.inventory.consume("raw_meat", 1):
+                g.inventory.add("cooked_meat", 1)
+                g.toast("Cooked the meat over the g.fire")
+            else:
+                g.toast("No raw meat")
+        else:
+            g.toast("Cook raw meat at a fireplace")
+        return
+    if item_id == "compass":
+        if g.compass_state.mode == "village":
+            g.toast(compass.village_report(g.player.x, g.player.y, g.world.seed))
+        elif g.compass_state.mode == "home" and g.compass_state.home is not None:
+            g.toast(compass.home_report(g.player.x, g.player.y, g.compass_state.home))
+        else:
+            g.toast("Press F to choose what to find")
+        return
+    if g.inside_house is not None:
+        _mx, _my = pygame.mouse.get_pos()
+        # the room is drawn at the g.world's zoom, so the click is brought
+        # into that same frame before it is compared with anything in it
+        _bx, _by = g.cam_x + _mx / g.zoom, g.cam_y + _my / g.zoom
+        for _kind, _rect in g.inside_house.interior.furniture:
+            if _kind == "bed" and _rect.inflate(18, 18).collidepoint(_bx, _by):
+                g.try_sleep()
+                return
+        return
+    if item_id in ("rifle", "shotgun"):
+        g.fire()
+        return
+    # TALKING COMES BEFORE THE AXE. `on_click` returned at the axe branch
+    # below, so with a weapon in hand -- and the starter kit IS an axe --
+    # no man could ever be spoken to. The man who answers questions is
+    # clicked first, and the axe still works on everybody else.
+    if g.truth[0] is not None:
+        _mx, _my = pygame.mouse.get_pos()
+        _wx = g.cam_x + _mx / g.zoom
+        _wy = g.cam_y + _my / g.zoom
+        if (math.hypot(_wx - g.truth[0].x, _wy - g.truth[0].y) < 26.0
+                and math.hypot(_wx - g.player.x, _wy - g.player.y) <= g.REACH + 40.0):
+            g.dialogue_panel.open(g.truth[0], g.player, g.main_capital()[0])
+            pygame.mouse.set_visible(True)
+            return
+    if item_id == "axe":
+        g.use_axe()
+        return
+    if item_id == "pickaxe":
+        g.use_pickaxe()
+        return
+
+    mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
+    wmouse_x, wmouse_y = mouse_x / g.zoom, mouse_y / g.zoom  # g.world space
+    wx, wy = g.cam_x + wmouse_x, g.cam_y + wmouse_y   # the g.world mouse
+
+    # THE MAN WHO ANSWERS QUESTIONS IS CLICKED ON HIS BODY, NOT HIS FEET.
+    # A cutout figure is drawn ABOVE its anchor point, so a click on the
+    # chest is 20-40 px from (x, y) and a 22 px circle around the feet
+    # missed him entirely. He is found first, by his silhouette.
+    _tt = g.truth[0]
+    if _tt is None:
+        for _n in list(village_mod.PEOPLE) + list(village_mod.TRAVELLERS):
+            if getattr(_n, "is_truth_teller", False):
+                _tt = _n
+                break
+    if _tt is not None and abs(wx - _tt.x) < 30.0 and -70.0 < (wy - _tt.y) < 26.0:
+        g.dialogue_panel.open(_tt, g.player, g.main_capital()[0])
+        pygame.mouse.set_visible(True)
+        return
+
+    # Clicking a villager while not wielding a weapon opens trade.
+    if math.hypot(wx - g.player.x, wy - g.player.y) <= g.REACH + 24.0:
+        _folk = [n for v in g.visible_villages for n in v.npcs]
+        if g.truth[0] is not None and g.truth[0] not in _folk:
+            _folk.append(g.truth[0])         # he is a man like any other
+        # AND THE SOLDIERS. They are not in a village's list -- they are
+        # the nation's, and they march -- so they were the one kind of man
+        # in the g.world you could not do business with.
+        # THE SOLDIERS, NOT THE WOLVES. An enemy list holds both, and a
+        # wolf was being offered a trade menu: clicking one went into the
+        # economy asking what a wolf WANTS and threw AttributeError, taking
+        # the game down. Only a man with a purse is a customer.
+        _folk += [e for e in g.enemies
+                  if getattr(e, "kind", "") == "soldier"
+                  and getattr(e, "alive", True)
+                  and not getattr(e, "attacked", False)]
+        plog.log("CLICK", "folk", len(_folk), "reach_test", True,
+                 "mouse", "%d,%d" % (int(wx), int(wy)),
+                 "player", "%d,%d" % (int(g.player.x), int(g.player.y)))
+        for npc in _folk:
+                _dd = math.hypot(npc.x - wx, npc.y - wy)
+                if _dd < 60.0:
+                    plog.log("CLICK-NEAR", getattr(npc, "name", "?"),
+                             "d", int(_dd), "dx", int(npc.x - wx),
+                             "dy", int(npc.y - wy),
+                             "truth", getattr(npc, "is_truth_teller", False),
+                             "alive", getattr(npc, "alive", None))
+                # A cutout is drawn ABOVE its anchor, so the hit area is his
+                # body, not a circle at his feet -- the same test for every
+                # man in the g.world, villagers included.
+                if (getattr(npc, "alive", True)
+                        and abs(npc.x - wx) < 26.0
+                        and -64.0 < (wy - npc.y) < 22.0):
+                    if getattr(npc, "is_truth_teller", False):
+                        g.dialogue_panel.open(npc, g.player, g.main_capital()[0])
+                        pygame.mouse.set_visible(True)
+                        return
+                    if (getattr(npc, "is_commander", False)
+                            and not getattr(npc, "attacked", False)):
+                        g.confirm.pending = npc
+                        if g.player.nation == npc.nation:
+                            g.confirm.mode = "leave"
+                            g.confirm.open(f"Leave the {npc.village.name} army?")
+                        else:
+                            g.confirm.mode = "join"
+                            g.confirm.open(f"Join the {npc.village.name} army?")
+                        copen = True
+                        pygame.mouse.set_visible(True)
+                        return
+                    if getattr(npc, "attacked", False):
+                        g.toast(f"{npc.name} won't trade with you")
+                        return
+                    # A GUARD AT A GATE SEARCHES; HE DOES NOT TRADE.
+                    if getattr(npc, "gate_index", None) is not None:
+                        g.guard_search(npc)
+                        return
+                    g.open_trade(npc)
+                    return
+
+    if item_id == "first_aid":
+        g.use_first_aid()
+        return
+
+    if math.hypot(wx - g.player.x, wy - g.player.y) > g.REACH:
+        g.toast("Too far away")
+        return
+    tx = int(math.floor(wx / g.TILE))
+    ty = int(math.floor(wy / g.TILE))
+
+    plot = g.world.plot_at(tx, ty)
+    if plot is not None and plot.kind in crop.LEAF_KINDS:
+        grade = g.skills.tobacco_grade()
+        if farm.harvest(g.world, g.inventory, plot, g.now, g.toast, grade,
+                        skill=g.skills.farming,
+                        tx=tx, ty=ty, share=g.pay_share):
+            # LEAF IS ILLEGAL. Any agent close enough to have watched it
+            # g.now knows it, and says so to the next one he meets.
+            nemesis.note_offence_seen(g.player, "grew",
+                                      crop.LEAF_ITEM.get(plot.kind,
+                                                         plot.kind))
+            # The same rate the farmers get. At the old default (0.12) the
+            # g.player reached skill 8 in ~67 harvests -- SSS tobacco by day
+            # two, against three weeks for the men who do it for a living.
+            g.skills.gain_farming(0.02)
+            if (tx, ty) in g.village_plots and not g.tile_is_mine(tx, ty):
+                g.commit_crime()
+        return
+    if plot is not None and plot.kind in crop.FOOD_KINDS:
+        if farm.harvest(g.world, g.inventory, plot, g.now, g.toast, tx=tx, ty=ty,
+                        skill=g.skills.farming,
+                        share=g.pay_share):
+            if (tx, ty) in g.village_plots and not g.tile_is_mine(tx, ty):
+                g.commit_crime()
+        return
+
+    wild = wildcrop.at(g.world, tx, ty, g.visible_villages)
+    if wild is not None:
+        wildcrop.harvest(g.world, tx, ty, wild[0], wild[1], g.inventory, g.toast,
+                         share=g.pay_share)
+        if wild[0] in crop.LEAF_KINDS:
+            nemesis.note_offence_seen(g.player, "grew",
+                                      crop.LEAF_ITEM.get(wild[0], wild[0]))
+        g.skills.gain_farming(0.02)      # wild or sown, the hand learns alike
+        return
+
+    if item_id == "shovel":
+        farm.dig(g.world, g.ground, tx, ty, g.toast)
+    elif item_id == "watering_can":
+        farm.water(g.world, g.ground, tx, ty, g.toast)
+    elif item_id in crop.SEED_CROP:
+        _sown = farm.plant(g.world, g.ground, g.inventory, tx, ty, g.now, g.toast,
+                           item_id, g.skills.farming)
+        if _sown and g.tile_is_mine(tx, ty):
+            # A PLOT OF HIS OWN, and what a hired farmer can be put to.
+            if not isinstance(getattr(g.player, "plots", None), set):
+                g.player.plots = set()
+            g.player.plots.add((tx, ty))
+    return copen
