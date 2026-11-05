@@ -1051,53 +1051,7 @@ def main() -> None:
         interact.meet_army(trader, army, now)
 
     def make_tradeable(npc):
-        """GIVE A MAN A PURSE IF HE HAS NEVER NEEDED ONE.
-
-        A villager is built for trade -- he has coins, a stock, a patience for
-        how much leaf he wants and a face that reacts to a good deal. A SOLDIER
-        is not: he has a rifle, a nation and a wage that is not modelled. But a
-        soldier is a man with pay in his pocket and he buys what the town
-        cannot sell him, so he gets the same purse the first time he is asked.
-        """
-        if getattr(npc, "coins", None) is None:
-            npc.coins = 30 + (abs(hash((getattr(npc, "x", 0.0),
-                                        getattr(npc, "y", 0.0)))) % 45)
-            npc.trade_demand = 4
-            npc.restock_timer = 0.0
-            npc.stock = {}
-        if not getattr(npc, "sly_flash", None):
-            npc.sly_flash = 0.0
-        # AND EVERYTHING `wants()` READS. A villager is built with a larder, a
-        # habit, a thirst and a house; a soldier is built with a rifle. Asking
-        # a soldier what he wants without these threw AttributeError from
-        # inside the economy, which is a long way from the click that caused
-        # it -- and it took the whole game down while the trade menu was being
-        # drawn.
-        if getattr(npc, "stock", None) is None:
-            npc.stock = {}
-        if getattr(npc, "job", None) is None:
-            npc.job = "soldier"
-        if getattr(npc, "home_house", "missing") == "missing":
-            npc.home_house = None
-        if not hasattr(npc, "wants_product"):
-            npc.wants_product = "cigar"      # what he spends his pay on
-        if not hasattr(npc, "wants_drink"):
-            npc.wants_drink = "beer"
-        if not hasattr(npc, "yearning"):
-            npc.yearning = 0.85              # a man with pay, off duty
-        if not hasattr(npc, "quality_pref"):
-            npc.quality_pref = 0
-        if not hasattr(npc, "rng"):
-            # `wants()` rolls a die on the man's own generator. A soldier never
-            # had one because he was never asked anything before.
-            npc.rng = random.Random(int(abs(hash((npc.x, npc.y)))) & 0xFFFFFFFF)
-        if getattr(npc, "trade_demand", 0) <= 0:
-            npc.trade_demand = 4
-        if not getattr(npc, "name", None):
-            npc.name = "a soldier"
-        if not hasattr(npc, "occupation"):
-            npc.occupation = lambda: "soldier"
-        return npc
+        return interact.make_tradeable(npc, random)
 
     def guard_search(npc) -> None:
         """THE SEARCH AT THE GATE.
@@ -1749,18 +1703,10 @@ def main() -> None:
                  "   (the column is in the field)" if player.army else ""))
 
     def leave_army() -> None:
-        if getattr(player, "army", None) is not None:
-            player.army.player = None
-        player.nation = None
-        player.army = None
-        player.wage = 0
-        toast("You left the army")
+        interact.leave_army(player, toast)
 
     def player_hidden_in_village() -> bool:
-        for village in visible_villages:
-            if math.hypot(player.x - village.x, player.y - village.y) < village.radius:
-                return True
-        return False
+        return interact.player_hidden_in_village(player, visible_villages, math)
 
     # One index of the fight, rebuilt once a frame. A fighter only ever
     # considers what is within reach of it, so the cost is linear in the
@@ -1812,25 +1758,7 @@ def main() -> None:
         return hudtime.day_phase(now, DAY_LENGTH)
 
     def _nearest_town():
-        """THE NEAREST SETTLEMENT, WHICHEVER ONE IT IS.
-
-        It used to hand the map `player.settled_at` -- his own town -- and he
-        has none: with no backstory he arrives owning nothing and belonging
-        nowhere, so the gold pin had nothing to draw and the map showed one
-        outlaw hut in an empty country. A man with no town still needs to know
-        where the nearest one is.
-        """
-        # ONLY A TOWN YOU COULD ACTUALLY WALK TO. The world is laid out one ring
-        # beyond the edge it plays in, so men on the road have neighbours to
-        # trade with -- but those cells stand out past WORLD_HALF, where the
-        # player is clamped and the map ends. Pinning one sent a man walking at
-        # a settlement he could never reach.
-        towns = [v for v in (getattr(villages, "villages", ()) or ())
-                 if abs(v.x) <= WORLD_HALF and abs(v.y) <= WORLD_HALF]
-        if not towns:
-            return None
-        return min(towns, key=lambda v: (v.x - player.x) ** 2
-                   + (v.y - player.y) ** 2)
+        return interact.nearest_town(player, villages, WORLD_HALF)
 
     def speed_button() -> pygame.Rect:
         return hudtime.speed_button(vw, vh)
