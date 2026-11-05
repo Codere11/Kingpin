@@ -829,8 +829,14 @@ def _settlement_step(world, towns, men, player, hub_men, villages):
                             _v.take_damage(ev[3])
                             if getattr(_v, "alive", True):
                                 _v.add_threat(player)   # he knows who hit him
+                            _log("DMG %s -%s -> hp %s alive %s"
+                                 % (getattr(_v, "name", "?"), ev[3],
+                                    getattr(_v, "health", "?"),
+                                    getattr(_v, "alive", "?")))
                         except Exception:
                             pass
+                    else:
+                        _log("DMG-MISS by_id %s" % ev[2])
                 elif ev[0] == "crime":
                     if 0 <= ev[2] < len(towns):
                         towns[ev[2]].learn_killers(ev[3], now)

@@ -271,8 +271,11 @@ class Enemy:
             return
         for _ in range(guns.PELLETS[kind]):
             a = angle + random.uniform(-0.07, 0.07)
+            # A MILITIAMAN CARRIES A DART RIFLE. The dart does the same damage,
+            # but at zero it puts the man to sleep -- it does not kill him.
             combat.fire(x, y, a, distance, owner="enemy", shooter=self,
-                        damage=_dmg, team=self.team)
+                        damage=_dmg, team=self.team,
+                        dart=bool(getattr(self, "is_militia", False)))
 
     def _can_see(self, player, occluders, view_scale: float) -> bool:
         dx, dy = player.x - self.x, player.y - self.y

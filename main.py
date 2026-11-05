@@ -118,7 +118,7 @@ AXE_STRIKES = 3          # hits to fell a tree
 # creatures.Soldier.melee_damage exactly: the man in the ranks is his equal.
 # Unarmed he does 16 / skills.UNARMED_WEAKNESS = 4, like any man in the
 # street who swings a fist.
-MELEE_DAMAGE = 16         # == a soldier's melee, and a third of a villager's
+MELEE_DAMAGE = 35         # the axe
 BUILD_COST = 100         # wood cost of a house
 BUILD_W = 120
 BUILD_H = 110
@@ -2461,11 +2461,16 @@ def main() -> None:
 
     # -- building placement -------------------------------------------------
     def placement_pos():
-        # THE INTERIOR IS DRAWN AT THE SAME ZOOM AS THE OUTDOORS, so this is
-        # the world mouse everywhere. Un-zooming it indoors put every ghost a
-        # third of a screen from the cursor, so can_place() tested the wrong
-        # square of floor and there was never room for anything.
-        mx, my = wmouse_x, wmouse_y
+        # THE ROOM IS 1:1, SO THE ROOM'S MOUSE IS THE WINDOW'S MOUSE. The
+        # `wmouse_x` value is the OUTDOOR mouse (window / ZOOM), and it is only
+        # re-mapped inside the room branch AFTER the event loop has already
+        # run -- so a click read the outdoor mouse against the indoor camera,
+        # landed a third of a screen away, and the floor always read as full.
+        if inside_house is not None or (inside_mine is not None
+                                        and getattr(inside_mine, "kind", "") == "house"):
+            mx, my = pygame.mouse.get_pos()
+        else:
+            mx, my = wmouse_x, wmouse_y
         return (round((cam_x + mx) / 8.0) * 8.0,
                 round((cam_y + my) / 8.0) * 8.0)
 
@@ -3026,8 +3031,6 @@ def main() -> None:
         return surface
 
     class _HouseBar:
-        """What the room branch needs: a room and the door he came in by."""
-
         def __init__(self, house, room, door) -> None:
             self.house = house
             self.room = room
@@ -3902,6 +3905,15 @@ def main() -> None:
                           if chest is not None else []),
                 "workshops": ([[r.centerx, r.centery] for r in interior.workshops]
                               if interior is not None else []),
+                "labs": ([[r.centerx, r.centery] for r in interior.lab_tables]
+                         if interior is not None else []),
+                "brews": ([[r.centerx, r.centery] for r in interior.brew_tables]
+                          if interior is not None else []),
+                "barrels": ([[b["rect"].centerx, b["rect"].centery,
+                              b.get("kind") or "", int(b.get("count", 0)),
+                              float(b.get("ready_at", 0.0)), int(b.get("grade", 0))]
+                             for b in interior.barrels]
+                            if interior is not None else []),
             })
         village_state = {}
         for (gx, gy), v in villages._cache.items():
@@ -4000,6 +4012,20 @@ def main() -> None:
             "workers": [getattr(n, "id", None)
                         for n in (getattr(player, "workers", ()) or ())
                         if getattr(n, "alive", False)],
+            # THE TRAIN, WHOLE AND RUNNING: its route, its place on it, its
+            # passengers -- and whether the player is one of them.
+            "train": (None if _TEST_TRAIN[0] is None else {
+                "route": [[float(a), float(b)] for a, b in _TEST_TRAIN[0].route],
+                "i": int(_TEST_TRAIN[0].i),
+                "t": float(_TEST_TRAIN[0].t),
+                "angle": float(_TEST_TRAIN[0].angle),
+                "x": float(_TEST_TRAIN[0].x),
+                "y": float(_TEST_TRAIN[0].y),
+                "done": bool(_TEST_TRAIN[0].done),
+                "travelled": float(_TEST_TRAIN[0].travelled),
+                "aboard": list(getattr(_TEST_TRAIN[0], "aboard", []) or []),
+                "player_aboard": bool(getattr(player, "aboard", False)),
+            }),
             "world": world_to_data(villages),
         }
         if not persist.write_binary(_payload):
@@ -4055,6 +4081,16 @@ def main() -> None:
                         chest.slots[i] = persist.data_to_stack(datum)
                 for wx, wy in entry.get("workshops", []):
                     interior.place_workshop(wx, wy)
+                for wx, wy in entry.get("labs", []):
+                    interior.place_lab(wx, wy)
+                for wx, wy in entry.get("brews", []):
+                    interior.place_brew(wx, wy)
+                for wx, wy, _k, _n, _r, _g in entry.get("barrels", []):
+                    _b = interior.place_barrel(wx, wy)
+                    _b["kind"] = _k or None
+                    _b["count"] = int(_n)
+                    _b["ready_at"] = float(_r)
+                    _b["grade"] = int(_g)
                 house.enterable = True       # your own houses stay open
                 house.door_broken = True
                 house.interior = interior
@@ -4099,6 +4135,27 @@ def main() -> None:
             built_fences.append(pygame.Rect(int(fx0), int(fy0), int(fw), int(fh)))
         for gx0, gy0, gw, gh in data.get("gates", []):
             built_gates.append(pygame.Rect(int(gx0), int(gy0), int(gw), int(gh)))
+        # THE TRAIN, RIGHT WHERE IT WAS, WITH WHOEVER WAS ON IT.
+        _trd = data.get("train")
+        if _trd and _TEST_TRAIN[0] is not None:
+            _tr = _TEST_TRAIN[0]
+            _route = [(float(a), float(b)) for a, b in _trd.get("route", [])]
+            if _route:
+                _tr.route = _route
+                _tr.i = min(int(_trd.get("i", 0)), max(0, len(_route) - 2))
+                _tr.t = float(_trd.get("t", 0.0))
+                _tr.angle = float(_trd.get("angle", 0.0))
+                _tr.x = float(_trd.get("x", _tr.x))
+                _tr.y = float(_trd.get("y", _tr.y))
+                _tr.done = bool(_trd.get("done", False))
+                _tr.travelled = float(_trd.get("travelled", 0.0))
+                _tr.aboard = list(_trd.get("aboard", []) or [])
+            if _trd.get("player_aboard"):
+                player.aboard = True
+                player.x, player.y = _tr.x, _tr.y
+            plog.log("TRAIN-RESTORED", "at", int(_tr.x), int(_tr.y),
+                     "aboard", len(getattr(_tr, "aboard", []) or []),
+                     "player", bool(getattr(player, "aboard", False)))
         # ---- THE YARD, BACK ----
         # Plots, benches and the hub they make of his ground, plus the men he
         # pays. Everything is cleared first, so loading twice in one session
@@ -4745,6 +4802,14 @@ def main() -> None:
                 _boot_left[0] -= 1
         _framet0 = time.perf_counter()
         _pt1 = _pt2 = _pt3 = _framet0      # phase marks, if no phase runs
+        # THE HIDDEN DART BAR REFILLS WHILE HE IS AWAKE.
+        try:
+            if getattr(player, "sleep_t", 0.0) <= 0.0:
+                player.tranq_health = min(player.TRANQ_HEALTH,
+                                          getattr(player, "tranq_health",
+                                                  player.TRANQ_HEALTH) + dt * 10.0)
+        except Exception:
+            pass
         # THE MAN IS AT A PAIR OF NUMBERS, always. A tuple that reached
         # player.x/y used to take the whole frame down at the first `- vh/2`.
         try:
@@ -6509,19 +6574,19 @@ def main() -> None:
                                      "nation", getattr(_sh, "nation", None),
                                      "dmg", bullet.damage,
                                      "hp_before", int(player.health),
+                                     "dart", getattr(bullet, "dart", False),
                                      "wanted", getattr(player, "wanted", False),
                                      "aggro", getattr(_sh, "aggro", None),
                                      "dist", int(math.hypot(_sh.x - player.x,
                                                             _sh.y - player.y)))
                         if getattr(bullet, "dart", False):
-                            # AT ZERO, NOT BEFORE: he takes the damage, and
-                            # only a hit that would have killed him puts him
-                            # down instead.
-                            _left = player.health - bullet.damage
-                            player.take_damage(bullet.damage)
-                            if _left <= 0:
-                                player.health = 1
-                                player.dead = False
+                            # A DART DRAINS A SEPARATE, HIDDEN BAR. His real
+                            # health is never touched by the militia. When the
+                            # bar empties, he goes down -- asleep, alive.
+                            player.tranq_health = getattr(player, "tranq_health",
+                                                          player.TRANQ_HEALTH) - bullet.damage
+                            if player.tranq_health <= 0:
+                                player.tranq_health = player.TRANQ_HEALTH
                                 player.tranq()
                         else:
                             player.take_damage(bullet.damage)
@@ -7176,29 +7241,28 @@ def main() -> None:
                     door_y = house.y + fy * (house.h / 2.0 + 6.0)
                     if ((player.x - door_x) ** 2 + (player.y - door_y) ** 2
                             < 24.0 ** 2):
-                        # A ROOM, DRAWN LIKE THE MINE: one baked picture, the
-                        # house's interior coordinates, its chest and benches
-                        # painted where they stand.
                         try:
                             import houseroom as _hr
                             _room_h = _hr.HouseRoom(house, interior)
                         except Exception as _hre:
                             plog.log("HOUSEROOM-ERR", repr(_hre)[:140])
                             break
-                        # THE WAY OUT IS THROUGH THE DOOR: put him back
-                        # OUTSIDE it, clear of the re-entry trigger, not at
-                        # some stale mine_out from a barn he visited last week.
                         mine_out = (door_x + fx * 60.0, door_y + fy * 60.0)
                         inside_mine = _HouseBar(house, _room_h, mine_out)
                         inside_house = house
                         player._mine_latch = True
                         player.world_xy = (float(door_x), float(door_y))
+                        # LIKE THE GULAG: HE LANDS BESIDE THE DOOR. The exit is a
+                        # 24-pixel collision now, not a wide radius, so standing
+                        # 30 px up from the door cannot fire it -- but he is one
+                        # step from the way out, not a walk across the room.
                         _sp = getattr(interior, "spawn",
-                                      (interior.W / 2.0, interior.H - 60.0))
+                                      (interior.W / 2.0, interior.H - 48.0))
                         player.x, player.y = float(_sp[0]), float(_sp[1])
                         player.bleed = 0.0
                         combat.bullets.clear()
                         prison_cd = 0.7
+                        door_cooldown = 0.7      # grace: not thrown straight out
                         pygame.mouse.set_visible(True)
                         plog.log("ENTER-HOUSE", getattr(house, "name", "?"),
                                  "through the door at", int(door_x), int(door_y),
@@ -7218,7 +7282,23 @@ def main() -> None:
             _room = inside_mine.room
             _room.update(dt)
             mine_cd = max(0.0, mine_cd - dt)
+            door_cooldown = max(0.0, door_cooldown - dt)
             _keys = pygame.key.get_pressed()
+            if getattr(_room, "is_house", False):
+                _door = getattr(_room, "door_rect", None)
+                if _door is not None:
+                    _dd = math.hypot(player.x - _door.centerx,
+                                     player.y - _door.centery)
+                    if _dd < 140.0:
+                        _HCH = getattr(main, "_house_check", 0.0)
+                        main._house_check = _HCH + dt
+                        if main._house_check >= 0.5:
+                            main._house_check = 0.0
+                            plog.log("HOUSE-DOOR", "player", int(player.x),
+                                     int(player.y), "door", int(_door.centerx),
+                                     int(_door.centery), "dist", int(_dd),
+                                     "in", inside_house is not None,
+                                     "mine", inside_mine is not None)
             # THE KEY THAT OPENED IT MUST BE RELEASED FIRST. This block reads
             # key STATE, not key events, so the E that took you down was still
             # held on the next frame and slammed the door behind you -- a dark
@@ -7228,8 +7308,14 @@ def main() -> None:
             # THE WAY OUT IS THE WAY IN: walk back into the doorway.
             if getattr(_room, "is_prison", False) or getattr(_room, "is_house", False):
                 _dr = getattr(_room, "door_rect", None)
-                if (_dr is not None and _dr.colliderect(
-                        pygame.Rect(int(player.x) - 8, int(player.y) - 8, 16, 16))):
+                # THE DOORWAY IS A DOORWAY, NOT A HAIRLINE. The old test asked
+                # a 16-pixel box to overlap the frame exactly; a man walking at
+                # a run stepped clear past it between two frames and never left.
+                # Distance to the middle of the doorway: get anywhere near it
+                # and you are out.
+                if (_dr is not None
+                        and math.hypot(player.x - _dr.centerx,
+                                       player.y - _dr.centery) < 40.0):
                     inside_mine = None
                     inside_house = None
                     player.x, player.y = mine_out
@@ -7237,44 +7323,38 @@ def main() -> None:
                     prison_cd = 1.0
                     door_cooldown = 0.7
                     pygame.mouse.set_visible(False)
+                    plog.log("EXIT-HOUSE", "door", int(_dr.centerx),
+                             int(_dr.centery), "-> outside", int(mine_out[0]),
+                             int(mine_out[1]))
                     continue
             if getattr(_room, "is_house", False):
-                # A HOUSE IS NOT A SHAFT. E belongs to the chest and the
-                # benches; the only way out is walking back through the door.
-                pass
+                pass        # E belongs to the chest; the door is the way out
             elif getattr(player, "_mine_latch", False):
                 if not _keys[pygame.K_e]:
                     player._mine_latch = False
             elif _keys[pygame.K_e] or _keys[pygame.K_ESCAPE]:
                 inside_mine = None                 # back up the shaft
+                inside_house = None
                 player.x, player.y = mine_out
                 prison_cd = 1.0                    # step off the threshold first
-                pygame.mouse.set_visible(0) if pygame.mouse.get_visible() else None
                 pygame.mouse.set_visible(False)
                 continue
-            # THE CAMERA IS SET FIRST, SO THE AIM AND THE MOUSE USE THE SAME
-            # FRAME. A house is composed small and blown up; the mine is 1:1.
-            if getattr(_room, "is_house", False):
-                _hb = pygame.Surface((max(2, int(vw / ZOOM)),
-                                      max(2, int(vh / ZOOM))))
-                _screen_true = screen
-                screen = _hb
-                cam_x = _room.W / 2.0 - _hb.get_width() / 2.0
-                cam_y = _room.H / 2.0 - _hb.get_height() / 2.0
-                wmouse_x = mouse_x / ZOOM
-                wmouse_y = mouse_y / ZOOM
-                _draw_w, _draw_h = _hb.get_width(), _hb.get_height()
-            else:
-                cam_x = _room.W / 2.0 - vw / 2.0
-                cam_y = _room.H / 2.0 - vh / 2.0
-                _draw_w, _draw_h = vw, vh
+            # A HOUSE IS DRAWN EXACTLY LIKE THE GULAG: 1:1, centred, the whole
+            # floor on screen including the door. No buffer, no second scale --
+            # that buffer was cutting the bottom hundred pixels of the room off,
+            # so the doorway was below the visible floor and he could never
+            # walk into it.
+            cam_x = _room.W / 2.0 - vw / 2.0
+            cam_y = _room.H / 2.0 - vh / 2.0
+            _draw_w, _draw_h = vw, vh
+            wmouse_x = mouse_x
+            wmouse_y = mouse_y
             _aim = (wmouse_x - (player.x - cam_x), wmouse_y - (player.y - cam_y))
             player.skill_speed = skills.move_scale()
             award_levels()
             player.skill_stamina = skills.stamina_scale()
             player.update(dt, _keys, _aim, 1.0)
             if getattr(_room, "is_house", False):
-                # THE FURNITURE IS SOLID, THE WAY THE INTERIOR ALWAYS MADE IT.
                 try:
                     player.x, player.y = resolve_circle_rects(
                         player.x, player.y, player.radius,
@@ -7311,7 +7391,6 @@ def main() -> None:
                         toast("Broke out %d iron" % _got)
             _room.draw(screen, cam_x, cam_y, _draw_w, _draw_h)
             if getattr(_room, "is_house", False):
-                # THE SAME GREEN OUTLINE AS OUTDOORS, in the room's own frame.
                 draw_placing()
             if getattr(_room, "is_prison", False):
                 # SIMPLY DARK: one flat veil over the room, nothing else. No
@@ -7325,12 +7404,6 @@ def main() -> None:
             if not getattr(player, "aboard", False):
                 player.draw(screen, cam_x, cam_y, _sel.defn.id if _sel else None)
             observer_.draw(screen)
-            if getattr(_room, "is_house", False):
-                screen = _screen_true
-                _present(screen, _hb, vw, vh)
-            # THE HOUSE'S PANELS ARE DRAWN OVER THE ROOM HERE: the room branch
-            # flips the frame and returns, so a chest or a bench panel drawn
-            # later in the frame would never reach the window.
             try:
                 if chest_open:
                     chest_panel.draw(screen)
@@ -7357,6 +7430,7 @@ def main() -> None:
                 screen.blit(_lab, (vw // 2 - _lab.get_width() // 2, int(vh * 0.68)))
             pygame.display.flip()
             continue
+
 
         # -- draw world ------------------------------------------------------
         tick_conquest(dt)
@@ -7407,6 +7481,8 @@ def main() -> None:
                 interior.draw_baked(screen, cam_x, cam_y)
             except AttributeError:
                 interior.draw(screen, cam_x, cam_y)
+            # THE SAME GREEN OUTLINE AS OUTDOORS, while he is placing furniture.
+            draw_placing()
             eye_x = player.x - cam_x + player.facing[0] * 5.0
             eye_y = player.y - cam_y + player.facing[1] * 5.0
             if not getattr(interior, "windows", True):

@@ -141,6 +141,7 @@ class Player:
         self.max_hunger = 100.0
         self.hunger = 100.0
         self.god = False
+        self.tranq_health = 160.0     # drained ONLY by militia darts
         # Enlistment. A soldier of a nation is paid the soldier's wage every
         # day, takes a soldier's share of what the column plunders, and is a
         # lawful target for everyone that nation is at war with.
@@ -186,11 +187,14 @@ class Player:
     sleep_t: float = 0.0          # a dart put him down
     shackled: bool = False        # held in a cell
 
+    TRANQ_HEALTH = 160.0          # the hidden bar a dart drains
+
     def tranq(self, seconds: float = 25.0) -> None:
-        """A DART IN THE PLAYER: he goes down, he does not die."""
+        """A DART IN THE PLAYER: he goes down, he does not die. The dart never
+        touched his health -- it emptied the hidden tranquiliser bar."""
         self.sleep_t = float(seconds)
         self.moving = False
-        self.health = max(1, int(self.health))
+        self.tranq_health = self.TRANQ_HEALTH
         try:
             import plog
             plog.log("TRANQ", "the player is asleep")
@@ -198,7 +202,10 @@ class Player:
             pass
 
     def take_damage(self, amount: int) -> None:
-        if self.dead or self.god:
+        # A TRANQUILISED MAN IS NOT SHOT AGAIN. Once the dart is in him he is
+        # being carried off; a second round does not undo that -- and it must
+        # not game-over him out from under the militia's arms.
+        if self.dead or self.god or getattr(self, "sleep_t", 0.0) > 0.0:
             return
         self.health = max(0, self.health - amount)
         self.hit_flash = 0.15

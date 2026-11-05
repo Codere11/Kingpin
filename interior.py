@@ -210,11 +210,19 @@ class Interior:
 
     # -- workshops ----------------------------------------------------------
     def can_place_workshop(self, rect: pygame.Rect) -> bool:
-        """A workshop needs clear floor inside the room, clear of furniture."""
+        """A workshop needs floor inside the walls, clear of the chest and the
+        other benches. The bed, the table and the rug are furniture you can
+        stand a bench beside -- blocking on every stick of it made a small
+        room read as "no floor space" no matter where you aimed."""
         inner = pygame.Rect(T + 6, T + 6, self.W - 2 * T - 12, self.H - 2 * T - 12)
         if not inner.contains(rect):
             return False
-        return not any(rect.colliderect(c) for c in self.colliders)
+        solid = (list(self.wall_rects) + list(self.window_barriers)
+                 + [self.chest_rect]
+                 + list(self.workshops) + list(self.lab_tables)
+                 + list(self.brew_tables)
+                 + [b["rect"] for b in self.barrels])
+        return not any(rect.colliderect(c) for c in solid)
 
     def place_workshop(self, x: float, y: float) -> pygame.Rect:
         rect = pygame.Rect(int(x - WORKSHOP_W / 2), int(y - WORKSHOP_H / 2),

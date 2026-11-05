@@ -553,8 +553,12 @@ class ChestPanel:
                     _draw_quality(screen, rect, stack, self.font_tiny)
 
         if self.hover is not None:
-            inv = self.chest if self.hover[0] == "chest" else self.player
-            stack = inv.slots[self.hover[1]]
+            try:
+                inv = self.chest if self.hover[0] == "chest" else self.player
+                _hi = self.hover[1]
+                stack = inv.slots[_hi] if 0 <= _hi < len(inv.slots) else None
+            except Exception:
+                stack = None
             text = stack_label(stack) if stack is not None else ""
         else:
             text = "click to move   ·   right-click to split   ·   E to close"

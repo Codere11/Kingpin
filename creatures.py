@@ -416,7 +416,10 @@ class Soldier(Enemy):
                             # one. It is guns.DAMAGE[RIFLE] now, one number
                             # for one weapon in the whole world.
                             damage=guns.DAMAGE[guns.RIFLE], team=self.team,
-                            spread=self.skills.shot_spread(), shooter=self)
+                            spread=self.skills.shot_spread(), shooter=self,
+                            # A MILITIAMAN CARRIES A DART RIFLE: same damage,
+                            # and at zero the man sleeps, he does not die.
+                            dart=bool(getattr(self, "is_militia", False)))
 
     def draw(self, screen, cam_x, cam_y):
         sx, sy = self.x - cam_x, self.y - cam_y
