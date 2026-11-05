@@ -35,6 +35,7 @@ import worldio
 import worldbuild
 import houseuse
 import hudtime
+import newsbubble
 
 import crop
 import biomes
@@ -2730,134 +2731,15 @@ def main() -> None:
     _heard: set = set()       # (village, army, nation): what he already knows
 
     def hear_news() -> None:
-        """THE PLAYER LEARNS THE WAR THE WAY EVERYBODY ELSE DOES: BY BEING TOLD.
-
-        war.tell makes knowledge move man to man and never by magic, so a
-        player hears a thing when he is standing near somebody who knows it.
-        And NOT from a town already at his throat -- a village that has called
-        him a killer does not stop in the street to pass the time of day.
-        """
-        # ONE AT A TIME, AND NO BACKLOG. Without this the player could walk
-        # through a village and stack up four men's worth of war news, then be
-        # told it one after another for half a minute -- a queue of speeches,
-        # not a conversation. While somebody is talking, nobody else is.
-        if player.dead or _chat:
-            return
-        # NOT EVERY FRAME. This walks every villager of every village on screen
-        # and takes a hypot to each -- at 60 fps that is a scan of the square
-        # sixty times a second to answer a question whose answer cannot change
-        # that fast. Four times a second hears the same conversation.
-        _t = time.perf_counter()
-        if _t < _hear_at[0]:
-            return
-        _hear_at[0] = _t + 0.25
-        for v in visible_villages:
-            if getattr(v, "hostile", False):
-                continue
-            for n in v.npcs:
-                if not n.alive or n.asleep or n.in_interior:
-                    continue
-                # NOT THE COLUMN. Every man in an army is handed the SAME
-                # capture in the same words (see war.note_capture, which gives
-                # it to every soldier AND every townsman of the place that
-                # fell), so a column marching past the player would announce
-                # the fall of one village in a dozen voices at once, one after
-                # another, for as long as it took to walk by.
-                #
-                # A marching army is not a man telling you the news. The news
-                # is CARRIED -- by traders, on the road, a village at a time --
-                # and that is where a player should hear it. The ranks keep it
-                # among themselves; they are busy, and they are not talking to
-                # him.
-                if (getattr(n, "is_soldier", False)
-                        or getattr(n, "levied", False)
-                        or getattr(n, "on_duty", False)
-                        or getattr(n, "is_commander", False)
-                        or getattr(n, "weapon", None) is not None):
-                    continue
-                if math.hypot(n.x - player.x, n.y - player.y) > 250.0:
-                    continue
-                # ONLY WHAT HE HIMSELF KNOWS, AND ONLY WHAT HE STILL KNOWS.
-                # His own list -- never the town's, never a crown's -- and not
-                # the parts of it he has stopped caring about: war.prune_news
-                # runs inside war.tell and not on every tick, so a man can be
-                # carrying a fifteen-day-old notice long after it has died
-                # (WAR_NEWS_LIFETIME). He does not repeat what he has himself
-                # forgotten.
-                for e in list(getattr(n, "news", ()) or ()):
-                    if len(e) < 5:
-                        continue
-                    if now - e[0] >= war.WAR_NEWS_LIFETIME:
-                        continue
-                    key = (e[1], int(e[2]), e[4])
-                    if key in _heard:
-                        continue
-                    _heard.add(key)
-                    _chat.append(["The nation of %s seized %s"
-                                  % (nation_name(e[4]), e[1]), 7.0, n])
-                    return            # ONE AT A TIME; the rest wait their turn
+        newsbubble.hear_news(player, _chat, _hear_at, _heard, visible_villages,
+                             now, nation_name)
 
     def tick_news(dt: float) -> None:
-        if _chat:
-            _chat[0][1] -= dt
-            if _chat[0][1] <= 0.0:
-                _chat.pop(0)
+        newsbubble.tick_news(_chat, dt)
 
     def draw_news(surf, cam_x: float, cam_y: float, w: int, h: int) -> None:
-        """A SPEECH BUBBLE, OUT OF THE SPEAKER'S OWN MOUTH.
-
-        Not a chat log in the corner: one man is telling you one thing, and it
-        comes out of HIM. The bubble hangs over the head of the man saying it
-        and fades away on its own, so the news always has a face and a place --
-        you can see who told you.
-
-        There is no "Name:" in it. In a village you can see the man.
-        """
-        if not _chat:
-            return
-        text, life, who = _chat[0]
-        if who is None or not getattr(who, "alive", False):
-            _chat.pop(0)
-            return
-        # HE HAS TO BE ABLE TO HEAR HIM. Walk out of earshot and the bubble
-        # goes with you -- a man does not keep talking to a back. The words are
-        # not lost, they simply are not shown until you are near again.
-        if math.hypot(who.x - player.x, who.y - player.y) > 250.0:
-            return
-        fade = min(1.0, life / 1.6)
-        # THE TEXT IS RENDERED ONCE, NOT ONCE A FRAME. It does not change while
-        # the bubble is up, and laying out a string is the expensive half of
-        # drawing one -- re-doing it sixty times a second for seven seconds to
-        # produce the identical pixels is work for nothing. Only the alpha
-        # moves, and that is cheap.
-        lab = _news_lab[1]
-        if lab is None or _news_lab[0] != text:
-            lab = speech_font.render(text, True, (30, 26, 22))
-            _news_lab[0], _news_lab[1] = text, lab
-        pad = 5
-        bw, bh = lab.get_width() + pad * 2, lab.get_height() + pad * 2
-        # Above his head, in the small frame the world is drawn in.
-        hx = int(who.x - cam_x)
-        hy = int(who.y - cam_y) - 22
-        bx = max(3, min(w - bw - 3, hx - bw // 2))
-        by = max(3, hy - bh - 5)
-        # THE BUBBLE: cream paper, dark ink, a tail onto the man's crown --
-        # the same wood-and-parchment the boards and the toasts are made of.
-        box = pygame.Surface((bw, bh + 6), pygame.SRCALPHA)
-        pygame.draw.rect(box, (238, 231, 209, int(242 * fade)),
-                         pygame.Rect(0, 0, bw, bh), border_radius=5)
-        pygame.draw.rect(box, (150, 110, 62, int(238 * fade)),
-                         pygame.Rect(0, 0, bw, bh), width=1, border_radius=5)
-        tail = max(4, min(bw - 4, hx - bx))
-        pygame.draw.polygon(box, (238, 231, 209, int(242 * fade)),
-                            [(tail - 5, bh - 1), (tail + 5, bh - 1),
-                             (tail, bh + 6)])
-        pygame.draw.polygon(box, (150, 110, 62, int(238 * fade)),
-                            [(tail - 5, bh - 1), (tail + 5, bh - 1),
-                             (tail, bh + 6)], 1)
-        surf.blit(box, (bx, by))
-        lab.set_alpha(int(255 * fade))
-        surf.blit(lab, (bx + pad, by + pad))
+        newsbubble.draw_news(surf, cam_x, cam_y, w, h, _chat, player,
+                             _news_lab, speech_font)
 
     def pay_share(item: str, gained: int) -> int:
         """THE PLAYER PAYS WHAT EVERYBODY ELSE PAYS: A FIFTH, IN KIND.
