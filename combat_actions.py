@@ -93,6 +93,7 @@ def use_pickaxe(player, combat, ore_field, inventory, pay_share, mark_dirty,
 
 def use_axe(g, kills) -> int:
     """Swing the axe: men, beasts, trees, fences, and doors in one arc."""
+    import main as _m
 
     if g.player.dead or not g.player.can_swing():
         return
@@ -102,18 +103,18 @@ def use_axe(g, kills) -> int:
     # is in the pack -- a fist simply is not an axe. See
     # g.skills.UNARMED_WEAKNESS: he hits for a quarter, and can still fight.
     _armed = g.inventory.count_of("axe") > 0
-    melee = ((MELEE_DAMAGE if _armed
-              else MELEE_DAMAGE / g.skills.UNARMED_WEAKNESS)
+    melee = ((_m.MELEE_DAMAGE if _armed
+              else _m.MELEE_DAMAGE / g.skills.UNARMED_WEAKNESS)
              * g.skills.axe_damage_scale())
     angle = g.player.facing_angle
     g.combat.spawn_swing(g.player.x, g.player.y, angle)
 
     def in_arc(tx, ty, extra=0.0):
         dx, dy = tx - g.player.x, ty - g.player.y
-        if math.hypot(dx, dy) > AXE_REACH + extra:
+        if math.hypot(dx, dy) > _m.AXE_REACH + extra:
             return False
         delta = abs(((math.atan2(dy, dx) - angle + math.pi) % (2.0 * math.pi)) - math.pi)
-        return delta <= AXE_ARC
+        return delta <= _m.AXE_ARC
 
     for enemy in g.enemies:
         if enemy.alive and in_arc(enemy.x, enemy.y, enemy.radius):
@@ -199,14 +200,14 @@ def use_axe(g, kills) -> int:
 
     struck = None
     nearest = 1e9
-    for tree in g.trees.near(g.player.x, g.player.y, AXE_REACH + 30.0):
+    for tree in g.trees.near(g.player.x, g.player.y, _m.AXE_REACH + 30.0):
         if tree.felled:
             continue
         rect = tree.trunk_rect
         cx = min(max(g.player.x, rect.left), rect.right)
         cy = min(max(g.player.y, rect.top), rect.bottom)
         distance = math.hypot(g.player.x - cx, g.player.y - cy)
-        if distance > AXE_REACH or not in_arc(tree.x, tree.y, 26.0):
+        if distance > _m.AXE_REACH or not in_arc(tree.x, tree.y, 26.0):
             continue
         if distance < nearest:
             nearest = distance
@@ -214,7 +215,7 @@ def use_axe(g, kills) -> int:
     if struck is not None:
         struck.strikes += 1
         g.combat.spawn_impact(struck.x, struck.y, (120, 90, 50))
-        if struck.strikes >= AXE_STRIKES:
+        if struck.strikes >= _m.AXE_STRIKES:
             g.trees.fell(struck, g.now)
             amount = random.randint(10, 30)
             g.inventory.add("wood", amount)
@@ -222,7 +223,7 @@ def use_axe(g, kills) -> int:
             g.combat.spawn_impact(struck.x, struck.y - 20, (86, 140, 64))
             g.toast(f"Felled a tree   +{amount} wood")
         else:
-            g.toast(f"Chopping…  {struck.strikes}/{AXE_STRIKES}")
+            g.toast(f"Chopping…  {struck.strikes}/{_m.AXE_STRIKES}")
 
     # Chop down a fence or gate you built yourself.
     for lst in (g.built_fences, g.built_gates):
@@ -232,7 +233,7 @@ def use_axe(g, kills) -> int:
             cx = min(max(g.player.x, rect.left), rect.right)
             cy = min(max(g.player.y, rect.top), rect.bottom)
             d = math.hypot(g.player.x - cx, g.player.y - cy)
-            if d <= AXE_REACH and d < best:
+            if d <= _m.AXE_REACH and d < best:
                 best, hit = d, rect
         if hit is not None:
             lst.remove(hit)
