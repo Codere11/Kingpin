@@ -356,3 +356,22 @@ def choose_target(creature, villages, who, enemy_grid, engage_reach, folk_grid,
     folk = folk_grid.near(creature.x, creature.y, look_reach)
     return creatures_choose_target(creature, who, near, rabbits, villages,
                                    squad, persons=folk)
+
+
+def origin_village(kind, villages):
+    """The town that has work for him, nearest to the origin first."""
+    wants = {"smith": "smith", "artisan": "lab", "brewer": "brewery"}.get(kind)
+    if kind == "soldier":
+        for v in sorted(villages.villages, key=lambda v: v.x * v.x + v.y * v.y):
+            if getattr(v, "is_capital", False):
+                return v
+        return None
+    for v in sorted(villages.villages, key=lambda v: v.x * v.x + v.y * v.y):
+        if kind == "farmer":
+            if v.farm_plots:
+                return v
+        elif wants is None:
+            return v
+        elif any(wp.kind == wants for wp in v.workplaces):
+            return v
+    return None

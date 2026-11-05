@@ -150,3 +150,21 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
             g._TEST_TRAIN[0].draw_knocked(target, cx, cy)
         except Exception:
             pass
+
+
+def draw_boot(surface, title, prog, pygame) -> None:
+    w, h = surface.get_size()
+    surface.fill((14, 12, 16))
+    f_big = pygame.font.SysFont("dejavusansmono", max(14, h // 22), bold=True)
+    f_small = pygame.font.SysFont("dejavusansmono", max(10, h // 44))
+    head = f_big.render(title, True, (226, 188, 98))
+    surface.blit(head, (w // 2 - head.get_width() // 2, int(h * 0.38)))
+    bar = pygame.Rect(int(w * 0.22), int(h * 0.52), int(w * 0.56), max(6, h // 40))
+    pygame.draw.rect(surface, (34, 30, 26), bar)
+    fill = bar.copy()
+    fill.w = max(2, int(bar.w * max(0.02, min(1.0, prog))))
+    pygame.draw.rect(surface, (226, 188, 98), fill)
+    pygame.draw.rect(surface, (110, 90, 54), bar, 1)
+    note = f_small.render("settling in", True, (122, 110, 98))
+    surface.blit(note, (w // 2 - note.get_width() // 2, bar.bottom + 10))
+    pygame.display.flip()

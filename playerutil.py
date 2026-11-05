@@ -133,3 +133,15 @@ def watchdog(heart, persist, os, time, faulthandler):
         heart[0] = time.time()
 
 import nemesis
+
+def csay(msg, os) -> None:
+    """A line the test can be read from: written and flushed at once."""
+    try:
+        print(msg, flush=True)
+    except Exception:
+        pass
+    try:
+        with open(os.path.expanduser("~/.kingpin_saves/chain.log"), "a") as fh:
+            fh.write(msg + "\n")
+    except Exception:
+        pass

@@ -50,6 +50,7 @@ import placement
 import crop
 import biomes
 import board
+import boardapi
 import compass
 import economy
 import items
@@ -359,24 +360,7 @@ def main() -> None:
     # THE TOWN THAT HAS WORK FOR HIM, nearest to the origin first. A man does
     # not arrive in a village that has no forge and call himself a smith.
     def origin_village(kind):
-        wants = {"smith": "smith", "artisan": "lab", "brewer": "brewery"}.get(kind)
-        if kind == "soldier":
-            # THE ARMY IS AT THE CAPITAL. A soldier is the one trade that is
-            # not in the town it works in: it is in the biggest town its nation
-            # has, drawn up in the square.
-            for v in sorted(villages.villages, key=lambda v: v.x * v.x + v.y * v.y):
-                if getattr(v, "is_capital", False):
-                    return v
-            return None
-        for v in sorted(villages.villages, key=lambda v: v.x * v.x + v.y * v.y):
-            if kind == "farmer":
-                if v.farm_plots:
-                    return v
-            elif wants is None:
-                return v
-            elif any(wp.kind == wants for wp in v.workplaces):
-                return v
-        return None
+        return worldbuild.origin_village(kind, villages)
 
     _home = None
     # HIS TOWN, UNDER A NAME NOTHING ELSE USES. `_home` is re-bound inside the
@@ -457,17 +441,7 @@ def main() -> None:
     # link has a deadline; when one does not happen in time the instance STOPS
     # and says which link broke. Nothing is simulated outside the game.
     def _csay(msg: str) -> None:
-        """A line the test can be read from: written and flushed at once,
-        because a windowed build buffers stdout and shows nothing."""
-        try:
-            print(msg, flush=True)
-        except Exception:
-            pass
-        try:
-            with open(os.path.expanduser("~/.kingpin_saves/chain.log"), "a") as fh:
-                fh.write(msg + "\n")
-        except Exception:
-            pass
+        playerutil.csay(msg, os)
 
     _chain = None
     if os.environ.get("KINGPIN_CHAIN"):
@@ -1502,21 +1476,7 @@ def main() -> None:
     # drawn at the TOP of the frame, so it is what is on screen while that
     # work happens rather than a still image and no explanation.
     def draw_boot(surface, title: str, prog: float) -> None:
-        w, h = surface.get_size()
-        surface.fill((14, 12, 16))
-        f_big = pygame.font.SysFont("dejavusansmono", max(14, h // 22), bold=True)
-        f_small = pygame.font.SysFont("dejavusansmono", max(10, h // 44))
-        head = f_big.render(title, True, (226, 188, 98))
-        surface.blit(head, (w // 2 - head.get_width() // 2, int(h * 0.38)))
-        bar = pygame.Rect(int(w * 0.22), int(h * 0.52), int(w * 0.56), max(6, h // 40))
-        pygame.draw.rect(surface, (34, 30, 26), bar)
-        fill = bar.copy()
-        fill.w = max(2, int(bar.w * max(0.02, min(1.0, prog))))
-        pygame.draw.rect(surface, (226, 188, 98), fill)
-        pygame.draw.rect(surface, (110, 90, 54), bar, 1)
-        note = f_small.render("settling in", True, (122, 110, 98))
-        surface.blit(note, (w // 2 - note.get_width() // 2, bar.bottom + 10))
-        pygame.display.flip()
+        render.draw_boot(surface, title, prog, pygame)
 
     _boot_title = "WELCOME TO %s" % (_origin_town.name.upper() if _origin_town is not None else "THE WORLD")
     _boot_left = [10]
@@ -1582,41 +1542,12 @@ def main() -> None:
     _tell_timer = 0.0
 
     class _BoardAPI:
-        """THE NOTICE BOARD, ACROSS THE FENCE.
-
-        The board is drawn in the frame; the town that answers it is simulated
-        in another process. So a hire and a sale are REQUESTS: the town does
-        them, the frame is told what happened and moves the player's own pack
-        and purse. Nothing is faked and nothing goes stale -- the posts it
-        offers and the prices it pays arrive with the tick (see _WORK.watch).
-        """
-
+        def __init__(self):
+            self._api = boardapi.BoardAPI(player, inventory, _WORK)
         def hire(self, town, kind, cb) -> None:
-            def done(res):
-                if res and res.get("hired"):
-                    player.job = res.get("job") or player.job
-                    player.wage = int(res.get("wage") or 0)
-                    player.farm_plot = res.get("farm_plot")
-                    if res.get("nation") is not None:
-                        player.nation = res["nation"]
-                    player.settled_at = town
-                    player.village = town
-                    player._pay_day = -1
-                cb(res)
-
-            _WORK.hire(town, kind, done)
-
+            self._api.hire(town, kind, cb)
         def sell(self, town, offers, cb) -> None:
-            def done(res):
-                if res and res.get("sold"):
-                    for item, n in (res.get("taken") or {}).items():
-                        inventory.consume(item, int(n))
-                        nemesis.note_offence_seen(player, "sold", item)
-                    if res.get("coin"):
-                        inventory.add("coin", int(res["coin"]))
-                cb(res)
-
-            _WORK.sell(town, offers, done)
+            self._api.sell(town, offers, cb)
 
     _BOARD_API = _BoardAPI()
 
