@@ -1273,58 +1273,8 @@ def main() -> None:
                                        cam_x, cam_y, wmouse_x, wmouse_y)
 
     def placement_box(x, y):
-        # THE FOUR TRADES OUT OF DOORS, at the size of the thing itself (the
-        # same rects industry.Workplace builds, without building one every
-        # frame to ask).
-        _sizes = {"lab": (96, 66), "brewery": (116, 78),
-                  "smith": (122, 110), "mine": (136, 112),
-                  "stall": (96, 64)}
-        if placing in _sizes:
-            _w, _h = _sizes[placing]
-            rect = pygame.Rect(int(x - _w / 2), int(y - _h / 2), _w, _h)
-            return (0.0, -1.0), rect, rect.inflate(70, 70)
-        if placing == "plot":
-            rect = pygame.Rect(int(x - 40), int(y - 40), 80, 80)
-            return (0.0, -1.0), rect, rect.inflate(8, 8)
-        if placing == "demolish":
-            rect = pygame.Rect(int(x - 12), int(y - 12), 24, 24)
-            return (0.0, -1.0), rect, rect
-        if placing in ("fence", "gate"):
-            w, h = (60, 16) if placing == "gate" else (140, 16)
-            if not fence_horizontal:
-                w, h = h, w
-            rect = pygame.Rect(int(x - w / 2), int(y - h / 2), w, h)
-            return (0.0, -1.0), rect, rect.inflate(10, 10)
-        if placing == "workshop":
-            rect = pygame.Rect(int(x - WORKSHOP_W / 2), int(y - WORKSHOP_H / 2),
-                               WORKSHOP_W, WORKSHOP_H)
-            return (0.0, -1.0), rect, rect.inflate(16, 16)
-        # (The brew table and the barrel are measured further down, with the
-        # other furniture. A block of try_place's code once sat here by
-        # mistake -- it assigned `placing`, which made `placing` a LOCAL of
-        # this function, so the first read of it raised UnboundLocalError and
-        # the game died the instant the player chose anything to build.)
-        if placing == "lab_table":
-            rect = pygame.Rect(int(x - LAB_W / 2), int(y - LAB_H / 2), LAB_W, LAB_H)
-            return (0.0, -1.0), rect, rect.inflate(16, 16)
-        if placing == "brew_table":
-            rect = pygame.Rect(int(x - BREW_W / 2), int(y - BREW_H / 2), BREW_W, BREW_H)
-            return (0.0, -1.0), rect, rect.inflate(16, 16)
-        if placing == "barrel":
-            rect = pygame.Rect(int(x - BARREL_W / 2), int(y - BARREL_H / 2),
-                               BARREL_W, BARREL_H)
-            return (0.0, -1.0), rect, rect.inflate(12, 12)
-        dx, dy = player.x - x, player.y - y
-        if abs(dx) >= abs(dy):
-            facing = (1.0 if dx > 0 else -1.0, 0.0)
-        else:
-            facing = (0.0, 1.0 if dy > 0 else -1.0)
-        if facing[0] != 0.0:
-            half_x, half_y = BUILD_H / 2.0, BUILD_W / 2.0
-        else:
-            half_x, half_y = BUILD_W / 2.0, BUILD_H / 2.0
-        rect = pygame.Rect(x - half_x, y - half_y, half_x * 2, half_y * 2)
-        return facing, rect, rect.inflate(28, 28)
+        return placement.placement_box(x, y, placing, fence_horizontal,
+                                       player, BUILD_W, BUILD_H)
 
     def can_place(rect, sight) -> bool:
         return placement.can_place(rect, sight, player, inside_house,
@@ -1365,46 +1315,11 @@ def main() -> None:
                       % (int(qty), str(item).replace("_", " "), _g, int(coins)))
 
     def _commit_plot() -> None:
-        """A PLOT IS A RECTANGLE HE DRAWS: no cost, no bench, just ground."""
         nonlocal placing
-        start = plot_start[0]
-        plot_start[0] = None
-        if start is None:
-            return
-        x2, y2 = placement_pos()
-        x1, y1 = start
-        rect = pygame.Rect(int(min(x1, x2)), int(min(y1, y2)),
-                           int(abs(x2 - x1)), int(abs(y2 - y1)))
-        if rect.w < 32 or rect.h < 32:
-            toast("Too small for a plot")
-            return
-        if not hubs.land_ok(rect, villages.villages, hub_world.hubs,
-                           player.x, player.y):
-            toast("Not your land -- the wild, or your own hub")
-            return
-        built_plots.append(rect)
-        if not isinstance(getattr(player, "plots", None), set):
-            player.plots = set()
-        player.plots.add(tuple(rect.topleft))
-        player.yard_plots = [tuple(_r) for _r in built_plots]
-        mark_dirty()
-        if hubs.in_player_hub(rect, hub_world.hubs):
-            toast("Plot staked on your own ground")
-        else:
-            _h = hub_world.add_player_hub(player, rect.inflate(120, 120).copy(),
-                                          [], [])
-            if _h is not None:
-                nemesis.PLACES.append(_h)
-                player.work_post = (_h.x, _h.y + 40)
-                player.hub = _h
-                plog.log("PHASE-HUB", _h.name, "at",
-                         "%d,%d" % (int(_h.x), int(_h.y)),
-                         "post", player.work_post)
-                toast("Plot staked -- this is your hub now:   %s" % _h.name)
-            else:
-                toast("Plot staked")
-        placing = None
-        pygame.mouse.set_visible(False)
+        placing = placement.commit_plot(placing, plot_start, placement_pos,
+                                        toast, hubs, villages, hub_world,
+                                        player, built_plots, mark_dirty,
+                                        nemesis, plog)
 
     def try_place() -> None:
         nonlocal placing
