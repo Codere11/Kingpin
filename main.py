@@ -1217,103 +1217,23 @@ def main() -> None:
         placement.draw_placing(_g)
 
     def render_backdrop(house):
-        """The outdoors around the house, frozen into a surface for windows."""
-        surface = pygame.Surface((vw, vh))
-        ex = house.x - vw / 2.0
-        ey = house.y - vh / 2.0
-        ground.update(3, ex, ey, vw, vh)
-        static_layer.draw(surface, ex, ey, vw, vh)
-        for tree in trees.visible(ex, ey, vw, vh):
-            tree.draw(surface, ex, ey, trees.stump())
-        for village in villages.visible(ex, ey, vw, vh):
-            for village_house in village.houses:
-                village_house.draw(surface, ex, ey)
-            for npc in village.npcs:
-                npc.draw(surface, ex, ey, False)
-        for other in built_houses:
-            if other is not house:
-                other.draw(surface, ex, ey)
-        return surface
+        return houseroom.render_backdrop(house, pygame, vw, vh, ground,
+                                         static_layer, trees, villages,
+                                         built_houses)
 
-    class _HouseBar:
-        def __init__(self, house, room, door) -> None:
-            self.house = house
-            self.room = room
-            self.door = door
-            self.kind = "house"
+    _HouseBar = houseroom._HouseBar
 
     def enter_house(house) -> None:
-        nonlocal inside_house, backdrop, door_cooldown, cam_x, cam_y
-        interior = getattr(house, "interior", None)
-        if interior is None:
-            return
-        # BAKE THE ROOM ON THE WAY IN, not on the first frame indoors: a
-        # room's art never changes, so it is painted once and then it is one
-        # blit a frame. This is why a mine is instant; now a house is too.
-        try:
-            interior.bake()
-        except AttributeError:
-            pass
-        try:
-            player.world_xy = (float(player.x), float(player.y))
-        except Exception:
-            pass
-        plog.log("ENTER-HOUSE", getattr(house, "name", "?"),
-                 "from", int(player.x), int(player.y),
-                 "-> spawn", int(interior.spawn[0]), int(interior.spawn[1]),
-                 "room", interior.W, interior.H)
-        inside_house = house
-        player.x, player.y = interior.spawn
-        player.bleed = 0.0
-        door_cooldown = 0.7
-        combat.bullets.clear()
-        if interior.W <= vw:
-            cam_x = interior.W / 2.0 - vw / 2.0
-        else:
-            cam_x = min(max(player.x - vw / 2.0, 0.0), interior.W - vw)
-        if interior.H <= vh:
-            cam_y = interior.H / 2.0 - vh / 2.0
-        else:
-            cam_y = min(max(player.y - vh / 2.0, 0.0), interior.H - vh)
-        night = night_factor() > 0.38
-        floor = pygame.Rect(interior.T, interior.T,
-                            interior.W - 2 * interior.T, interior.H - 2 * interior.T)
-        for npc in getattr(house, "occupants", ()):   # residents, home at night
-            if not npc.alive or not night:
-                continue                    # by day they are out in the village
-            npc.in_interior = True
-            npc.asleep = False
-            npc._saved = (npc.x, npc.y)
-            npc.x = interior.W * 0.5 + random.uniform(-130.0, 130.0)
-            npc.y = interior.H * 0.5 + random.uniform(-80.0, 80.0)
-            npc.facing = (0.0, -1.0)
-            npc._interior_rect = floor
-            npc._interior_colliders = interior.colliders
-            npc.target = (npc.x, npc.y)
-            npc.pause = 0.0
-        toast("Inside the house")
+        nonlocal inside_house, door_cooldown, cam_x, cam_y
+        _r = houseroom.enter_house(house, player, plog, combat, vw, vh,
+                                   night_factor, pygame, random, toast)
+        if _r[0] is not None:
+            inside_house, door_cooldown, cam_x, cam_y = _r
 
     def exit_house() -> None:
         nonlocal inside_house, door_cooldown
-        house = inside_house
-        if house is None:
-            return
-        night = night_factor() > 0.38
-        for npc in getattr(house, "occupants", ()):
-            if not npc.in_interior:
-                continue
-            npc.in_interior = False
-            if npc._saved is not None:
-                npc.x, npc.y = npc._saved
-                npc._saved = None
-            npc.asleep = night          # back to bed at night, out by day
-            npc._dir = None
-        fx, fy = house.facing
-        player.x = house.x + fx * (house.h / 2.0 + 30.0)
-        player.y = house.y + fy * (house.h / 2.0 + 30.0)
-        plog.log("EXIT-HOUSE", "out to", int(player.x), int(player.y))
-        inside_house = None
-        door_cooldown = 0.7
+        inside_house, door_cooldown = houseroom.exit_house(
+            inside_house, player, night_factor, plog)
 
     _draws: dict = {}
 
