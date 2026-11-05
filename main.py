@@ -42,6 +42,8 @@ import playerutil
 import interact
 import savegame
 import combat_actions
+import life
+import render
 import placement
 
 import crop
