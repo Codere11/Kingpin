@@ -38,6 +38,7 @@ import hudtime
 import newsbubble
 import nearby
 import playerutil
+import interact
 
 import crop
 import biomes
@@ -1037,62 +1038,10 @@ def main() -> None:
     WITNESS_PX = 900.0        # close enough to have watched it happen
 
     def _see_murder(victim) -> None:
-        """Everyone who SAW it keeps it for ever.
-
-        The story goes cold after fifty days, and the men who merely heard it
-        forget. The men who watched do not -- so a world that has forgotten
-        your name is still dangerous in one street, years later, because one
-        old man is standing there who was in the square that afternoon.
-        """
-        village = getattr(victim, "village", None)
-        if village is None:
-            return
-        for who in village.npcs:
-            if not who.alive:
-                continue
-            if math.hypot(who.x - victim.x, who.y - victim.y) <= WITNESS_PX:
-                who.witness((village_mod.PLAYER_ID,))
+        interact.see_murder(victim)
 
     def _meet_army(trader, army, now) -> None:
-        """A caravan halts at a column. It sells what an army on the march
-        cannot buy anywhere else -- powder to the riflemen, a gun to a man with
-        coin and nothing to shoot -- and it LISTENS, because that is the only
-        way word of a campaign ever gets off the road.
-        """
-        cap = getattr(army, "capital", None)
-        for s in army.soldiers:
-            if not getattr(s, "alive", False):
-                continue
-            man = getattr(s, "home_npc", None)
-            if man is None or not man.alive:
-                continue
-            if getattr(s, "melee", True):
-                item, want = "rifle", 1
-            else:
-                item, want = "ammo", economy.AMMO_WANT * 2 - getattr(s, "ammo", 0)
-            if want <= 0:
-                continue
-            have = int(trader.stock.get(item, 0))
-            if have <= 0:
-                continue
-            base = (cap.prices.get(item, economy.ITEM_VALUE.get(item, 8))
-                    if cap is not None else economy.ITEM_VALUE.get(item, 8))
-            price = max(1, int(base))
-            take = max(0, min(have, want, int(man.coins // price)))
-            if take <= 0:
-                continue
-            trader.stock[item] = have - take
-            man.coins -= take * price
-            trader.coins += take * price
-            if item == "ammo":
-                s.ammo = getattr(s, "ammo", 0) + take
-            else:
-                s.melee = False
-                s.gun_kind = guns.RIFLE
-                s.mag = guns.MAG[guns.RIFLE]
-                s.ammo = getattr(s, "ammo", 0) + economy.AMMO_PER_RIFLE
-        for s in army.soldiers[:8]:             # and the news goes with the trade
-            war.tell(trader, s, now)
+        interact.meet_army(trader, army, now)
 
     def make_tradeable(npc):
         """GIVE A MAN A PURSE IF HE HAS NEVER NEEDED ONE.
@@ -1212,74 +1161,10 @@ def main() -> None:
         plog.log("TRADE", "opened with", getattr(npc, "name", "?"))
 
     def nearest_hostile(npc):
-        """WHAT THIS MAN CAN SEE TO FIGHT, and his own business.
-
-        The town used to decide this for every citizen at once and hand the
-        same answer to all of them -- which is how a village could pick a
-        threat it could not see, and why an off-screen town needed a special
-        case to stop it hunting the player from two hundred kilometres away.
-        A man with eyes uses them.
-
-        ONE STATE, SO THE ONLY HOSTILE IS THE PLAYER. This used to scan a
-        soldiers' grid for "any soldier of another nation inside 900 px", and
-        in this world that question has no answer but "nobody":
-        `nations.nation_index()` is one nation everywhere, a hub's guard is
-        six kilometres from any town, and the wolves are not soldiers. It cost
-        11.5 million `.alive` property reads a run to say it -- and the grid it
-        read is gone with it.
-        """
-        reach = 900.0
-        # THE PLAYER IS ONLY A TARGET IF SOMEBODY HAS A REASON. This handed
-        # every man in the world the player as his enemy the moment he came
-        # within nine hundred pixels -- so a hub's gate guard, a farmer in his
-        # rows, anybody, took a shot at a stranger walking past. A man fights
-        # the player if he has been provoked, if the player is wanted, if his
-        # town is up in arms, or if he is a defender of it.
-        _reason = (getattr(npc, "hostile", False)
-                   or getattr(player, "wanted", False)
-                   or getattr(getattr(npc, "village", None), "provoked", False)
-                   or getattr(npc, "defender", False))
-        if player.dead or not _reason:
-            return None
-        d = (player.x - npc.x) ** 2 + (player.y - npc.y) ** 2
-        return player if d < reach * reach else None
+        return interact.nearest_hostile(npc, player)
 
     def commit_crime(where=None) -> None:
-        """THE TOWN TURNS ON HIM. One call, one town, nothing else.
-
-        This used to gather the sight rects of every house in every visible
-        village and run a line-of-sight test for every man against every one of
-        them -- on the frame the crime happened, which is the frame he is
-        crossing a gate. Aggro is a flag on a town. Say so, once.
-        """
-        town = where
-        if town is None:
-            for v in villages.villages:
-                fr = getattr(v, "fence_rect", None)
-                if fr is not None and fr.collidepoint(player.x, player.y):
-                    town = v
-                    break
-        if town is not None:
-            # EXACTLY WHAT A MURDER DOES (see the kill path, main.py:1468).
-            # The town turns, AND it is told whose crime it was -- a story with
-            # his name on it, which is what the guards, the army at the gate and
-            # every refugee on the road carry to the next town. Without the
-            # second line the town is merely angry; nobody remembers.
-            town.provoke()
-            town.learn_killers((village_mod.PLAYER_ID,), now)
-            _WORK.crime(town, (village_mod.PLAYER_ID,))
-            for _w in town.npcs:                 # and the men who saw it
-                if _w.alive and math.hypot(_w.x - player.x,
-                                           _w.y - player.y) <= WITNESS_PX:
-                    _w.witness((village_mod.PLAYER_ID,))
-            plog.log("AGGRO", getattr(town, "name", "?"),
-                     "known_to", len(getattr(town, "killers", ()) or ()))
-            return
-        for v in villages.villages:
-            if math.hypot(v.x - player.x, v.y - player.y) < v.radius + 400.0:
-                v.provoke()
-                plog.log("AGGRO", getattr(v, "name", "?"))
-                break
+        interact.commit_crime(where, villages, player, now, _WORK)
 
     def player_hunted() -> bool:
         return playerutil.player_hunted(visible_villages)
