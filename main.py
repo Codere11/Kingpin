@@ -17,6 +17,7 @@ have a tobacco plot out back. Death brings up a pixelated Game Over screen.
 """
 
 from __future__ import annotations
+from types import SimpleNamespace
 
 import stats
 
@@ -39,6 +40,7 @@ import newsbubble
 import nearby
 import playerutil
 import interact
+import savegame
 
 import crop
 import biomes
@@ -2869,150 +2871,14 @@ def main() -> None:
         save_timer = min(save_timer, 2.0)
 
     def save_now() -> None:
-        houses = []
-        for house in built_houses:
-            # THE CAMP IS REBUILT FROM THE SEED, NOT FROM THE SAVE. Its barn
-            # carries a prison hall, whose floor is a pygame Surface -- writing
-            # that into a save is what froze the game on entering (the autosave
-            # caught it a moment later).
-            if getattr(house, "camp", False):
-                continue
-            interior = getattr(house, "interior", None)
-            chest = getattr(interior, "chest", None) if interior is not None else None
-            houses.append({
-                "x": house.x, "y": house.y, "w": house.w, "h": house.h,
-                "roof": list(house.roof), "facing": list(house.facing),
-                "seed": getattr(house, "build_seed", 0),
-                "interior_seed": getattr(house, "interior_seed", 0),
-                "chest": ([persist.stack_to_data(s) for s in chest.slots]
-                          if chest is not None else []),
-                "workshops": ([[r.centerx, r.centery] for r in interior.workshops]
-                              if interior is not None else []),
-                "labs": ([[r.centerx, r.centery] for r in interior.lab_tables]
-                         if interior is not None else []),
-                "brews": ([[r.centerx, r.centery] for r in interior.brew_tables]
-                          if interior is not None else []),
-                "barrels": ([[b["rect"].centerx, b["rect"].centery,
-                              b.get("kind") or "", int(b.get("count", 0)),
-                              float(b.get("ready_at", 0.0)), int(b.get("grade", 0))]
-                             for b in interior.barrels]
-                            if interior is not None else []),
-            })
-        village_state = {}
-        for (gx, gy), v in villages._cache.items():
-            broken = [i for i, h in enumerate(v.houses)
-                      if getattr(h, "door_broken", False)]
-            if v.conquered or v.plundered or v.chaos > 0.0 or broken:
-                village_state["%d,%d" % (gx, gy)] = {
-                    "conquered": bool(v.conquered),
-                    "plundered": bool(v.plundered),
-                    "chaos": float(v.chaos),
-                    "nation": int(v.nation),
-                    "broken": broken,
-                    "gaps": [[int(s), float(c), float(hw)]
-                             for s, c, hw in v.fence_gaps],
-                }
-        squad = []
-        for s in player.squad:
-            if getattr(s, "alive", False):
-                squad.append({"x": s.x, "y": s.y,
-                              "march": list(s.march_target) if s.march_target else None})
-        _payload = {
-            "seed": world.seed,
-            "houses": houses,
-            "player": {
-                # A SAVE MADE INDOORS MUST NOT STORE INTERIOR COORDINATES.
-                # The room's coordinates are (750, 732)-ish, which in the world
-                # is the middle of the map: that is exactly how the player got
-                # "teleported to the centre" on the next load. Standing inside a
-                # house saves him at that house's door.
-                "x": (inside_house.x if inside_house is not None else player.x),
-                "y": ((inside_house.y + inside_house.h / 2.0 + 20.0)
-                      if inside_house is not None else player.y),
-                "health": player.health, "hunger": player.hunger,
-                "stamina": player.stamina, "bleed": player.bleed,
-                "nation": (int(player.nation) if player.nation is not None
-                           else None),
-                "selected": inventory.selected,
-            },
-            "inventory": [persist.stack_to_data(s) for s in inventory.slots],
-            "held": persist.stack_to_data(panel.held),
-            "skills": {"farming": skills.farming, "movement": skills.movement,
-                       "axe": skills.axe, "shooting": skills.shooting},
-            "now": now,
-            "kills": kills,
-            "plots": [[tx, ty, plot.kind, plot.planted_at]
-                      for (tx, ty), plot in world.plots.items()],
-            "wild": [[tx, ty] for (tx, ty) in world.wild_removed],
-            # PICKED PLANTS KEEP THEIR CLOCK. Wild food comes back on the crop
-            # clock (wildcrop.taken), and that clock was runtime-only, so every
-            # relaunch handed the player a forest of plants he had already
-            # picked -- or, read the other way, nothing in the woods ever had
-            # to grow back at all.
-            "wild_eaten": [[tx, ty, float(when)]
-                           for (tx, ty), when in
-                           (getattr(world, "wild_eaten", {}) or {}).items()],
-            # THE STUMPS. A felled tree was runtime-only, so every relaunch
-            # stood it back up and every stump the player had made vanished --
-            # and a stump is a promise: it grows back in three minutes.
-            "stumps": [[round(t.x, 1), round(t.y, 1), float(t.felled_at)]
-                       for t in trees.stumps()],
-            "compass_home": (list(compass_state.home)
-                             if compass_state.home is not None else None),
-            "ore": [[cx, cy] for (cx, cy) in ore_field.mined],
-            "tiles": [[tx, ty, kind] for (tx, ty), kind in world._overrides.items()],
-            "villages": village_state,
-            "squad": squad,
-            "fences": [[r.x, r.y, r.w, r.h] for r in built_fences],
-            "gates": [[r.x, r.y, r.w, r.h] for r in built_gates],
-            # THE YARD: his plots, his benches, and the hub they make of his
-            # ground. Numbers only -- every one of them is rebuilt on load.
-            "yard_plots": [[r.x, r.y, r.w, r.h] for r in built_plots],
-            "yard_work": [[wp.kind, wp.x, wp.y] for wp in placed_work
-                          if not getattr(wp, "is_stall", False)
-                          and not getattr(wp, "camp", False)
-                          and abs(getattr(wp, "x", 0.0)) < 400000.0
-                          and abs(getattr(wp, "y", 0.0)) < 400000.0],
-            # THE MARKET STALL: goods, prices, purse, switch. Not a Workplace,
-            # so not in yard_work.
-            "stalls": stall_mod.to_data(player),
-            "corpses": corpse_mod.to_data(),
-            "folders": folders_mod.to_data(),
-            "market_workers": [getattr(n, "id", None)
-                               for n in (getattr(player, "workers", ()) or ())
-                               if getattr(n, "to_market", False)],
-            # ...AND WHAT EACH MAN HAS BEEN TOLD NOT TO MAKE.
-            "worker_no_make": {str(getattr(n, "id", "")): sorted(work.banned(n))
-                               for n in (getattr(player, "workers", ()) or ())
-                               if work.banned(n)},
-            "worker_no_sell": {str(getattr(n, "id", "")): sorted(work.not_sold(n))
-                               for n in (getattr(player, "workers", ()) or ())
-                               if work.not_sold(n)},
-            "yard_hub": [[h.fence_rect.x, h.fence_rect.y,
-                          h.fence_rect.w, h.fence_rect.h]
-                         for h in hub_world.hubs
-                         if getattr(h, "is_player_hub", False)],
-            "workers": [getattr(n, "id", None)
-                        for n in (getattr(player, "workers", ()) or ())
-                        if getattr(n, "alive", False)],
-            # THE TRAIN, WHOLE AND RUNNING: its route, its place on it, its
-            # passengers -- and whether the player is one of them.
-            "train": (None if _TEST_TRAIN[0] is None else {
-                "route": [[float(a), float(b)] for a, b in _TEST_TRAIN[0].route],
-                "i": int(_TEST_TRAIN[0].i),
-                "t": float(_TEST_TRAIN[0].t),
-                "angle": float(_TEST_TRAIN[0].angle),
-                "x": float(_TEST_TRAIN[0].x),
-                "y": float(_TEST_TRAIN[0].y),
-                "done": bool(_TEST_TRAIN[0].done),
-                "travelled": float(_TEST_TRAIN[0].travelled),
-                "aboard": list(getattr(_TEST_TRAIN[0], "aboard", []) or []),
-                "player_aboard": bool(getattr(player, "aboard", False)),
-            }),
-            "world": worldio.world_to_data(villages),
-        }
-        if not persist.write_binary(_payload):
-            persist.write(_payload)          # the old JSON writer, as a fallback
+        _g = SimpleNamespace(
+            built_houses=built_houses, villages=villages, player=player,
+            inventory=inventory, panel=panel, skills=skills, now=now, kills=kills,
+            world=world, compass_state=compass_state, ore_field=ore_field,
+            trees=trees, built_fences=built_fences, built_gates=built_gates,
+            built_plots=built_plots, placed_work=placed_work, hub_world=hub_world,
+            train=_TEST_TRAIN, inside_house=inside_house)
+        savegame.write(_g)
 
     def load_now() -> None:
         nonlocal now, kills, cam_x, cam_y
