@@ -36,6 +36,7 @@ import worldbuild
 import houseuse
 import hudtime
 import newsbubble
+import nearby
 
 import crop
 import biomes
@@ -2106,31 +2107,10 @@ def main() -> None:
             return None
 
     def near_stall():
-        """The stall he is standing at -- the building, not its middle."""
-        for _st in stall_mod.stalls_of(player):
-            if _st.rect.inflate(150, 150).collidepoint(player.x, player.y):
-                return _st
-        return None
+        return nearby.near_stall(player)
 
     def _town_price_for(item, grade):
-        """WHAT A CART COULD RESELL THIS LOT FOR AT THE NEAREST TOWN.
-
-        The panel shows it beside the player's own price: it is the ceiling he
-        is undercutting, and without it "price it cheap" is a guess.
-        """
-        try:
-            _best, _bd = None, 1e18
-            for _v in visible_villages:
-                if getattr(_v, "is_hub", False):
-                    continue
-                _d = (_v.x - player.x) ** 2 + (_v.y - player.y) ** 2
-                if _d < _bd:
-                    _best, _bd = _v, _d
-            if _best is None:
-                return 0
-            return int(economy.prospect(_best, item, int(grade)))
-        except Exception:
-            return 0
+        return nearby.town_price_for(player, visible_villages, item, grade)
 
     def _on_stall_sales(sales) -> None:
         """WHAT A CART BOUGHT, applied here, where the goods and the coin are."""
@@ -2742,42 +2722,10 @@ def main() -> None:
                              _news_lab, speech_font)
 
     def pay_share(item: str, gained: int) -> int:
-        """THE PLAYER PAYS WHAT EVERYBODY ELSE PAYS: A FIFTH, IN KIND.
-
-        Taken out of the pack he has just filled, at the moment he fills it, to
-        the village that gave him his post -- which is exactly what
-        economy.take_fifth does to a villager's iron and what cut_wood does to
-        a logger's timber. He never has to remember it and he can never be
-        banished for forgetting, because there is nothing left to forget.
-
-        No post and no village means nothing is owed: an unemployed man works
-        for himself.
-        """
-        town = getattr(player, "settled_at", None)
-        if town is None or gained <= 0 or not getattr(player, "job", None):
-            return 0
-        if not (item in economy.TAXED_OUTPUT or item == "wood"
-                or item in economy.FOOD):
-            return 0
-        frac = getattr(player, "_tax_frac", 0.0) + gained * economy.HARVEST_TAX
-        tax = int(frac)
-        player._tax_frac = frac - tax
-        if tax <= 0:
-            return 0
-        take = min(tax, int(inventory.count_of(item)))
-        if take <= 0:
-            return 0
-        inventory.consume(item, take)
-        economy.store_add(town, item, take)
-        toast("The village's share   -%d %s" % (take, item))
-        return take
+        return nearby.pay_share(item, gained, player, inventory, toast)
 
     def near_board():
-        for v in visible_villages:
-            if math.hypot(player.x - v.board.centerx,
-                          player.y - v.board.centery) < REACH + 26.0:
-                return v
-        return None
+        return nearby.near_board(player, visible_villages, REACH)
 
     def near_chest() -> bool:
         return houseuse.near_chest(player, inside_house)
@@ -2801,30 +2749,7 @@ def main() -> None:
         return houseuse.near_workshop(player, inside_house)
 
     def near_workplace():
-        """Whichever village workplace the player is at, if any.
-
-        The test is against the BUILDING, not its centre: a mine is 136 by 112,
-        so a radius measured from the middle left a man standing at the doorway
-        outside it -- pressing E at the pit head did nothing at all.
-        """
-        for _wp in placed_work:
-            if _wp.rect.inflate(170, 170).collidepoint(player.x, player.y):
-                return _wp
-        for _v in visible_villages:
-            for _wp in _v.workplaces:
-                if _wp.rect.inflate(170, 170).collidepoint(player.x, player.y):
-                    return _wp
-        # THE CAMP BARN IS NOT IN A VILLAGE AND ITS LIST BOOKKEEPING IS NOT
-        # WORTH TRUSTING: asked for by name, every frame, at the doorway.
-        try:
-            import gulag as _g
-            _p = _g.prison()
-            if _p is not None and _p.rect.inflate(170, 170).collidepoint(player.x,
-                                                                      player.y):
-                return _p
-        except Exception:
-            pass
-        return None
+        return nearby.near_workplace(player, placed_work, visible_villages)
 
     def work_action(key: str) -> str:
         """Do a stroke of the trade the player is standing at.
