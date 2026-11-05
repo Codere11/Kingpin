@@ -32,6 +32,7 @@ import time
 import pygame
 import plog
 import worldio
+import worldbuild
 
 import crop
 import biomes
@@ -155,222 +156,6 @@ CORE_HALF = 100000          # THE SETTLED COUNTRY: unchanged, all of it
 WORLD_HALF = CORE_HALF * 5
 
 
-def world_cells():
-    """Every village cell whose centre lies inside the world."""
-    out = []
-    n = int(CORE_HALF / SPACING) + 1
-    # ONE RING FURTHER OUT THAN THE WORLD. A village near the edge has
-    # neighbours just past it, and the trade route planner peeks at all eight
-    # surrounding cells with villages.get() -- which BUILDS the ones that are
-    # missing. So every trader's first run laid out villages beyond the world,
-    # 600 ms at a time, inside a frame. That is what the world cache's
-    # neighbour ring now prevents: everything the planner can look at is laid
-    # out at load, and it never has to build one.
-    for gx in range(-n - 2, n + 2):
-        for gy in range(-n - 2, n + 2):
-            cx, cy = (gx + 0.5) * SPACING, (gy + 0.5) * SPACING
-            if (-CORE_HALF - SPACING * 1.5 <= cx <= CORE_HALF + SPACING * 1.5
-                    and -CORE_HALF - SPACING * 1.5 <= cy
-                    <= CORE_HALF + SPACING * 1.5):
-                out.append((gx, gy))
-    return out
-
-
-def load_world(screen, clock, villages, world=None) -> None:
-    """Build every village in the world before the player takes a step.
-
-    Villages used to be built lazily as they came into view, which cost about a
-    second inside a single frame -- that was the freeze you felt walking up to
-    one, and the largest single cost in the whole frame profile. The villages
-    are identical; they are simply all made now, once, with a bar to watch.
-    """
-    cells = world_cells()
-    font = pygame.font.SysFont("dejavusans", 24, bold=True)
-    small = pygame.font.SysFont("dejavusans", 15, bold=True)
-    clock = pygame.time.Clock()
-    for i, (gx, gy) in enumerate(cells):
-        for e in pygame.event.get():
-            if e.type == pygame.QUIT:
-                pygame.quit()
-                raise SystemExit
-        villages.get(gx, gy)                     # build it here, not mid-swing
-        screen.fill((14, 16, 18))
-        title = font.render("Charting the world", True, (234, 230, 218))
-        screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 74))
-        bar = pygame.Rect(WIDTH // 2 - 230, HEIGHT // 2 - 20, 460, 24)
-        pygame.draw.rect(screen, (36, 38, 42), bar, border_radius=7)
-        frac = (i + 1) / float(len(cells))
-        pygame.draw.rect(screen, (198, 152, 72),
-                         (bar.x, bar.y, max(2, int(bar.w * frac)), bar.h),
-                         border_radius=7)
-        pygame.draw.rect(screen, (92, 92, 100), bar, 2, border_radius=7)
-        label = small.render("%d of %d villages   -   %s"
-                             % (i + 1, len(cells), villages.get(gx, gy).name),
-                             True, (190, 186, 176))
-        screen.blit(label, (WIDTH // 2 - label.get_width() // 2, bar.bottom + 12))
-        pygame.display.flip()
-        clock.tick(120)
-    # THE ONE-TIME WORK, HERE, WHERE YOU CAN SEE IT. A village's first step
-    # costs 54 ms and every step after it costs 0.2 -- and the 54 is the trade
-    # route planner: "building all eight at once cost four seconds and 240 MB
-    # inside a single frame". Sixty-four of those is three and a half seconds,
-    # which is the loading screen's business and nobody else's. Paid here, the
-    # whole world can then be stepped every step for 4.3 ms a frame.
-    if world is not None:
-        for i, v in enumerate(villages.villages):
-            v.update(0.05, world, 1.0, "home")
-            # AND THE ROUTE PLAN EXHAUSTED. trade_routes() fills ONE route per
-            # call -- nine candidates, nine calls -- and a single warm-up left
-            # eight of nine to be built during play, which is where the stall
-            # was coming from even after the first step was paid for.
-            for _ in range(10):
-                try:
-                    v.trade_routes()
-                except Exception:
-                    break
-            screen.fill((14, 16, 18))
-            t = font.render("Waking the villages", True, (234, 230, 218))
-            screen.blit(t, (WIDTH // 2 - t.get_width() // 2, HEIGHT // 2 - 74))
-            b = pygame.Rect(WIDTH // 2 - 230, HEIGHT // 2 - 20, 460, 24)
-            pygame.draw.rect(screen, (36, 38, 42), b, border_radius=7)
-            frac = (i + 1) / float(max(1, len(villages.villages)))
-            pygame.draw.rect(screen, (198, 152, 72),
-                             (b.x, b.y, max(2, int(b.w * frac)), b.h),
-                             border_radius=7)
-            pygame.draw.rect(screen, (92, 92, 100), b, 2, border_radius=7)
-            lab = small.render("%d of %d" % (i + 1, len(villages.villages)),
-                               True, (190, 186, 176))
-            screen.blit(lab, (WIDTH // 2 - lab.get_width() // 2, b.bottom + 12))
-            pygame.display.flip()
-        # AND EVERY MAN, ONCE. His one-time work -- a trader's first route, an
-        # order booked, a plot taken -- is paid for here with the towns', so
-        # the first tick of the real game has nothing cold left in it.
-        village_mod.rebuild_people(villages)
-        for i, n in enumerate(list(village_mod.PEOPLE)):
-            if n.alive:
-                n.tick(0.05, world, 1.0, "home", None, False, (),
-                       lambda who: None)
-
-    screen.fill((14, 16, 18))
-    done = small.render("The world is ready.", True, (190, 186, 176))
-    screen.blit(done, (WIDTH // 2 - done.get_width() // 2, HEIGHT // 2))
-    pygame.display.flip()
-
-
-def _grow_town(v, n: int) -> int:
-    """PUT n MORE PEOPLE IN A TOWN, the way the town was first peopled.
-
-    A save can be thinner than the world it describes: the rosters are
-    restored from a file, and a file written when the world was smaller (or
-    when `rebuild_people` was capping towns at an old capacity) leaves the
-    country half empty for ever. Nothing ever grew a town back, so 1,000
-    people were 883 at the build and 535 after a load.
-    """
-    made = 0
-    rng = getattr(v, "_rng", None) or random.Random(v.code & 0xFFFFFFFF)
-    pool = getattr(v, "_name_pool", None) or list(village_mod.FIRST_NAMES)
-    name_rng = getattr(v, "_name_rng", None) or random.Random(v.code ^ 0x9E3779B9)
-    houses = list(getattr(v, "houses", ()) or ())
-    for _ in range(max(0, int(n))):
-        house = houses[rng.randrange(len(houses))] if houses else None
-        if house is not None:
-            fx, fy = getattr(house, "facing", (0.0, 1.0))
-            door = (house.x + fx * (house.h / 2.0 + 10.0),
-                    house.y + fy * (house.h / 2.0 + 10.0))
-        else:
-            door = (v.x, v.y)
-        v._name_i = int(getattr(v, "_name_i", 0)) + 1
-        name = "%s %s" % (pool[v._name_i % len(pool)],
-                          name_rng.choice(village_mod.LAST_NAMES))
-        try:
-            sx, sy = v.random_point(rng)
-        except Exception:
-            sx, sy = v.x, v.y
-        p = village_mod.NPC(sx, sy, v.code ^ (v._name_i * 83492791), name=name,
-                            npc_id="npc_%d_%d_g%d" % (v.gx, v.gy, v._name_i),
-                            village=v)
-        p.home_house = house
-        p.home_door = door
-        p.wear = getattr(v, "_wear", 1.0)
-        p.nation = v.nation
-        p.team = ("nation", v.nation)
-        if house is not None:
-            house.occupants.append(p)
-        v.npcs.append(p)
-        made += 1
-    return made
-
-
-def set_world_population(villages, target: int = 1000) -> int:
-    """The world is a thousand people. Make it exactly so, on either path.
-
-    A town's share is its HOUSES -- a house is what a man sleeps in -- and the
-    cap is set to match so `can_grow` holds it there instead of letting the
-    town expand back to some number no file can account for.
-
-    This runs BEFORE the world cache is written, which is the other half of the
-    bug: the cache carried all 2,084 of them, so a launch that restored from
-    the cache rebuilt two thousand men and then cut half away, every time.
-    """
-    towns = list(villages.villages)
-    if not towns:
-        return 0
-    total = sum(len(v.npcs) for v in towns)
-    _born = _cut = 0
-    if total != target:
-        kept = 0
-        for i, v in enumerate(towns):
-            if i == len(towns) - 1:
-                want = max(1, target - kept)          # the last takes the rest
-            else:
-                # by HOUSES, so a big town keeps a big population
-                houses = max(1, len(getattr(v, "houses", ())))
-                want = max(1, int(round(float(target) * houses
-                                        / float(_total_houses(towns)))))
-            if len(v.npcs) > want:
-                _cut += len(v.npcs) - want
-                v.npcs[:] = v.npcs[:want]
-            elif len(v.npcs) < want:
-                # A TOWN BELOW ITS SHARE IS FILLED, not left short. Trimming
-                # only ever took people away, so a world built at 883 stayed
-                # at 883 and a save of 535 stayed at 535.
-                _born += _grow_town(v, want - len(v.npcs))
-            # THE CAP MUST COVER THE TOWN BEFORE THE REGISTER IS REBUILT.
-            # `rebuild_people` keeps a town's men only up to its CAPACITY, and
-            # this ran BEFORE the capacity was raised -- so every man just
-            # grown was cut away again in the same call. 883 -> 1000 -> 883.
-            v.capacity = max(int(getattr(v, "capacity", 0)), len(v.npcs))
-            kept += len(v.npcs)
-        village_mod.rebuild_people(villages)
-    # THE CAP IS SET WHETHER OR NOT ANYTHING WAS TRIMMED. Leaving it out when
-    # the count already equalled the target is how a world of exactly 1,000
-    # people grew to 1,032 inside one day: the towns still held a capacity from
-    # the build, and a town grows back to its capacity.
-    # THE CAP IS THE TOWN'S SHARE, NOT ITS LUCK. A town whose capacity is
-    # exactly what it holds can never take a birth back after a hard winter;
-    # its SHARE is what it is allowed to grow to.
-    houses_all = float(_total_houses(towns))
-    for v in towns:
-        share = int(round(float(target) * max(1, len(getattr(v, "houses", ())))
-                          / houses_all))
-        # THE CAP IS THE SHARE -- not the old capacity, which came from a
-        # smaller world and let the sum of ceilings reach 1,119.
-        v.capacity = max(share, len(v.npcs))
-    _fin = sum(len(v.npcs) for v in villages.villages)
-    try:
-        plog.log("POP", "entry", total, "target", target, "grown", _born,
-                 "cut", _cut, "final", _fin,
-                 "capacities", sum(int(getattr(v, "capacity", 0)) for v in towns))
-    except Exception:
-        pass
-    return _fin
-
-
-def _total_houses(towns) -> int:
-    return max(1, sum(len(getattr(v, "houses", ())) for v in towns))
-
-
-
 def _present(dest, src, w, h):
     """PUT THE SCALED VIEW ON THE WINDOW, WITHOUT ASSUMING ITS SIZE.
 
@@ -469,11 +254,11 @@ def main() -> None:
               % (village_mod.rebuild_people(villages),
                  village_mod.rebuild_houses(villages)))
     else:
-        load_world(screen, clock, villages, world)  # every village, before the first step
+        worldbuild.load_world(screen, clock, villages, world)  # every village, before the first step
         # THE POPULATION IS SET BEFORE THE CACHE IS WRITTEN. Writing it after
         # meant the cache held 2,084 people and every later launch restored all
         # of them and then threw half away again.
-        set_world_population(villages)
+        worldbuild.set_world_population(villages)
         worldio.save_cached_world(villages, world.seed)
         village_mod.rebuild_people(villages)
         village_mod.rebuild_houses(villages)
@@ -537,7 +322,7 @@ def main() -> None:
     # with 58 people a town, an older save says 17, and the register is cut to
     # the smaller number before anyone takes a step. Whatever a file says, the
     # world begins at the size it was designed for.
-    _pop = set_world_population(villages)
+    _pop = worldbuild.set_world_population(villages)
     if _pop <= 0:
         print("WARNING: the world has no people at all")
     else:
@@ -4115,7 +3900,7 @@ def main() -> None:
     # laid over the rosters and can only make them smaller; this is the one
     # place that says how big the country is, whatever a file remembers.
     try:
-        _pop2 = set_world_population(villages)
+        _pop2 = worldbuild.set_world_population(villages)
         plog.log("WORLD", "population after the load:", _pop2)
     except Exception as _pe:
         plog.log("WORLD-ERROR", repr(_pe)[:200])
