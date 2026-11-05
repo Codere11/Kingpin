@@ -416,7 +416,7 @@ def restore(g) -> None:
         if _t is not None and not _t.felled:
             _t.felled = True
             _t.felled_at = _at
-            trees.remember_stump(_t)
+            g.trees.remember_stump(_t)
     if _stumps:
         plog.log("STUMPS", "restored", len(_stumps))
     ch = data.get("compass_home")
