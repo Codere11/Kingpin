@@ -1295,6 +1295,12 @@ def main() -> None:
     def hub_stall():
         return placement.hub_stall(player, stall_mod)
 
+    def near_stall():
+        return nearby.near_stall(player)
+
+    def _town_price_for(item, grade):
+        return nearby.town_price_for(player, visible_villages, item, grade)
+
     def _on_stall_sales(sales) -> None:
         """WHAT A CART BOUGHT, applied here, where the goods and the coin are."""
         _st = hub_stall()
