@@ -35,6 +35,7 @@ import plog
 import worldio
 import worldbuild
 import houseuse
+import houseroom
 import hudtime
 import newsbubble
 import nearby
