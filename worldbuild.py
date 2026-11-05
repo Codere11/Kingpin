@@ -231,3 +231,109 @@ def _total_houses(towns) -> int:
 
 
 
+
+import economy
+import fence
+from creatures import Soldier, Wolf, Rabbit
+from village import nation_color
+import biomes
+
+
+def make_village_patrol(village, count, fence, random, nation_color, Soldier):
+    """THE MEN AT THE GATE."""
+    squad = []
+    for gi, (_side, gx, gy) in enumerate(fence.gate_list(village)[:count]):
+        _ox, _oy = fence.OUTWARD.get(_side, (0.0, 1.0))
+        _ax, _ay = -_oy, _ox
+        _bx = gx + _ox * 26.0
+        _by = gy + _oy * 26.0
+        _px, _py = _bx, _by
+        _best = -1.0
+        try:
+            import rail as _r
+            for _out, _off in ((0.0, 110.0), (0.0, -110.0), (0.0, 150.0),
+                               (0.0, -150.0), (76.0, 0.0), (-76.0, 0.0),
+                               (150.0, 0.0), (-150.0, 0.0),
+                               (76.0, 110.0), (76.0, -110.0)):
+                _cx = _bx + _ax * _off + _ox * _out
+                _cy = _by + _ay * _off + _oy * _out
+                _d = _r.dist(_cx, _cy)
+                if _d > _best:
+                    _best, _px, _py = _d, _cx, _cy
+                if _d >= 95.0:
+                    break
+        except Exception:
+            _px = _bx + _ax * (130.0 if gi % 2 == 0 else -130.0)
+            _py = _by + _ay * (130.0 if gi % 2 == 0 else -130.0)
+        s = Soldier(_px, _py, village.nation, melee=False,
+                    seed=random.randint(0, 2 ** 31),
+                    color=nation_color(village.nation))
+        s.is_militia = True
+        try:
+            import guns as _guns
+            s.weapon = "rifle"
+            s.gun_kind = _guns.RIFLE
+            s.mag = _guns.MAG[_guns.RIFLE]
+        except Exception:
+            pass
+        s.gate_village = village
+        s.guard_village = village
+        s.name = "the guard of %s" % getattr(village, "name", "the gate")
+        s.gate_index = gi
+        s.gate_post = (_px, _py)
+        s.home = s.gate_post
+        s.target = s.gate_post
+        s.patrol_center = None
+        s.patrol_r = 0.0
+        s.idle_timer = 1.0e9
+        s.hostile = getattr(village, "provoked", False)
+        s.fire_cd = random.uniform(0.05, 0.30)
+        s.ammo = 30
+        squad.append(s)
+    return squad
+
+
+def loot(killer, victim, player, economy, inventory, toast) -> None:
+    """Everything the dead man carried goes to whoever dropped him."""
+    bag = economy.loot_body(getattr(killer, "home_npc", None) or killer, victim)
+    if killer is player and bag:
+        shown = []
+        for item, qty in bag.items():
+            if qty <= 0:
+                continue
+            left = inventory.add(item, int(qty))
+            if int(qty) - left > 0:
+                shown.append("%s x%d" % (item, int(qty) - left))
+            if left:
+                toast("Dropped %s x%d -- no room" % (item, left))
+        victim.stock.clear()
+        if shown:
+            toast("Looted " + ", ".join(shown))
+
+
+def spawn_wolf(player, world, village_mod, enemies, biomes, math, random,
+               Wolf, origin_town) -> None:
+    for _ in range(24):
+        angle = random.uniform(0.0, 2.0 * math.pi)
+        dist = random.uniform(2600.0, 5200.0)
+        x = player.x + math.cos(angle) * dist
+        y = player.y + math.sin(angle) * dist
+        if village_mod.village_clearance(x, y, world.seed) < 0.0:
+            continue
+        _ot = origin_town
+        if _ot is not None and (math.hypot(x - getattr(_ot, "x", x),
+                                           y - getattr(_ot, "y", y))
+                                < village_mod.SPACING * 0.12):
+            continue
+        enemies.append(Wolf(x, y, biomes.predator_kind(
+            float(world.temperature(x, y)), float(world.humidity(x, y)))))
+        return
+
+
+def spawn_rabbit(player, world, rabbits, biomes, math, random, Rabbit) -> None:
+    angle = random.uniform(0.0, 2.0 * math.pi)
+    dist = random.uniform(180.0, 700.0)
+    rx = player.x + math.cos(angle) * dist
+    ry = player.y + math.sin(angle) * dist
+    rabbits.append(Rabbit(rx, ry, biomes.rabbit_fur(
+        float(world.temperature(rx, ry)), float(world.humidity(rx, ry)))))

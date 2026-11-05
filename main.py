@@ -658,82 +658,8 @@ def main() -> None:
     nav_timer = 0.0
 
     def make_village_patrol(village, count=4):
-        """THE MEN AT THE GATE. Standing still, armed, thirty rounds each.
-
-        Pivot.md S2: two guards, one at each gate, who DO NOT WALK AWAY. One gate
-        is the way in and its guard SEARCHES; the other is the way out and nobody
-        is searched leaving. That asymmetry is the whole border.
-
-        A hub gets ONE (S1: "a soldier -- always standing at the gate"), a
-        settlement gets two.
-        """
-        squad = []
-        for gi, (_side, gx, gy) in enumerate(fence.gate_list(village)[:count]):
-            # HE STANDS BESIDE THE TRACK, NOT ON IT. The rail runs in through
-            # the middle of the opening; a guard on the permanent way would be
-            # shot for standing where the sleepers are.
-            _ox, _oy = fence.OUTWARD.get(_side, (0.0, 1.0))
-            _ax, _ay = -_oy, _ox                    # along the wall
-            # WELL CLEAR OF THE PERMANENT WAY: a guard standing at 52 px was
-            # inside the engine's sweep as it came through the gate.
-            _bx = gx + _ox * 26.0
-            _by = gy + _oy * 26.0
-            # HE STANDS WHERE THE RAIL IS FURTHEST AWAY, along the wall from
-            # the opening -- always within sight of his gate, never on the
-            # sleepers. The old rule stepped him OUTWARD until he was clear,
-            # which walked him away from the gate he is posted to guard.
-            _px, _py = _bx, _by
-            _best = -1.0
-            try:
-                import rail as _r
-                for _out, _off in ((0.0, 110.0), (0.0, -110.0), (0.0, 150.0),
-                                   (0.0, -150.0), (76.0, 0.0), (-76.0, 0.0),
-                                   (150.0, 0.0), (-150.0, 0.0),
-                                   (76.0, 110.0), (76.0, -110.0)):
-                    _cx = _bx + _ax * _off + _ox * _out
-                    _cy = _by + _ay * _off + _oy * _out
-                    _d = _r.dist(_cx, _cy)
-                    if _d > _best:
-                        _best, _px, _py = _d, _cx, _cy
-                    if _d >= 95.0:
-                        break
-            except Exception:
-                _px = _bx + _ax * (130.0 if gi % 2 == 0 else -130.0)
-                _py = _by + _ay * (130.0 if gi % 2 == 0 else -130.0)
-            s = Soldier(_px, _py, village.nation, melee=False,
-                        seed=random.randint(0, 2 ** 31),
-                        color=nation_color(village.nation))
-            s.is_militia = True       # the Narodna militsiya hold the gates
-            # A MILITIAMAN CARRIES A RIFLE, one dart a squeeze. A shotgun's
-            # twelve pellets would put a man down before the magazine was dry.
-            try:
-                import guns as _guns
-                s.weapon = "rifle"
-                s.gun_kind = _guns.RIFLE
-                s.mag = _guns.MAG[_guns.RIFLE]
-            except Exception:
-                pass
-            s.gate_village = village
-            # AND `guard_village`, which is the name the TARGETING reads. He had
-            # only `gate_village`, so choose_target fell through every branch it
-            # knows -- guard, patrol, march -- and landed in the fallback, which
-            # shoots any man of another nation. A nationless player is
-            # `None != 1`, so every gate guard in the world shot at him on
-            # sight, with `wanted False` and `aggro None` in the log.
-            s.guard_village = village
-            s.name = "the guard of %s" % getattr(village, "name", "the gate")
-            s.gate_index = gi            # 0 is the way in, 1 the way out
-            s.gate_post = (_px, _py)
-            s.home = s.gate_post
-            s.target = s.gate_post
-            s.patrol_center = None       # not a territory patrol: he STANDS
-            s.patrol_r = 0.0
-            s.idle_timer = 1.0e9         # stands at his gate until he is sent
-            s.hostile = getattr(village, "provoked", False)
-            s.fire_cd = random.uniform(0.05, 0.30)
-            s.ammo = 30                  # thirty rounds, and then he is a man
-            squad.append(s)
-        return squad
+        return worldbuild.make_village_patrol(village, count, fence, random,
+                                              nation_color, Soldier)
 
     def spawn_patrol() -> None:
         cand = villages.visible(player.x - 4000.0, player.y - 4000.0, 8000, 8000)
@@ -750,56 +676,15 @@ def main() -> None:
         enemies.extend(patrol.members)
 
     def _loot(killer, victim) -> None:
-        """Everything the dead man carried goes to whoever dropped him."""
-        bag = economy.loot_body(getattr(killer, "home_npc", None) or killer,
-                                victim)
-        if killer is player and bag:          # the player's own pockets
-            shown = []
-            for item, qty in bag.items():
-                if qty <= 0:
-                    continue
-                left = inventory.add(item, int(qty))
-                if int(qty) - left > 0:
-                    shown.append("%s x%d" % (item, int(qty) - left))
-                if left:
-                    toast("Dropped %s x%d -- no room" % (item, left))
-            victim.stock.clear()
-            if shown:
-                toast("Looted " + ", ".join(shown))
+        worldbuild.loot(killer, victim, player, economy, inventory, toast)
 
     def spawn_wolf() -> None:
-        for _ in range(24):
-            angle = random.uniform(0.0, 2.0 * math.pi)
-            # FURTHER OUT THAN THEY USED TO BE. The ring was 800 to 1,900
-            # pixels and it was measured from the PLAYER -- which was fine when
-            # he spawned in an empty field and is not fine now, because he
-            # spawns inside a TOWN and a town is bigger than that ring. Wolves
-            # arrived in the gardens on the first frame.
-            dist = random.uniform(2600.0, 5200.0)
-            x = player.x + math.cos(angle) * dist
-            y = player.y + math.sin(angle) * dist
-            # Never inside a village's cleared SQUARE. The old circle test let
-            # wolves spawn in the fence corners, which is why they turned up
-            # standing in people's gardens.
-            if village_mod.village_clearance(x, y, world.seed) < 0.0:
-                continue
-            # AND NOT IN HIS OWN TOWN, whatever the clearance says.
-            _ot = _origin_town
-            if _ot is not None and (math.hypot(x - getattr(_ot, "x", x),
-                                               y - getattr(_ot, "y", y))
-                                    < village_mod.SPACING * 0.12):
-                continue
-            enemies.append(Wolf(x, y, biomes.predator_kind(
-                float(world.temperature(x, y)), float(world.humidity(x, y)))))
-            return
+        worldbuild.spawn_wolf(player, world, village_mod, enemies, biomes, math,
+                              random, Wolf, _origin_town)
 
     def spawn_rabbit() -> None:
-        angle = random.uniform(0.0, 2.0 * math.pi)
-        dist = random.uniform(180.0, 700.0)
-        rx = player.x + math.cos(angle) * dist
-        ry = player.y + math.sin(angle) * dist
-        rabbits.append(Rabbit(rx, ry, biomes.rabbit_fur(
-            float(world.temperature(rx, ry)), float(world.humidity(rx, ry)))))
+        worldbuild.spawn_rabbit(player, world, rabbits, biomes, math, random,
+                                Rabbit)
 
     # NO PATROLS. The gangs out on the map were removed in favour of the two
     # standing guards at each gate -- but this line kept spawning three of them
