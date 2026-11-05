@@ -526,3 +526,27 @@ def draw_placing(g):
     g.screen.blit(hint, (g.vw // 2 - hint.get_width() // 2, int(g.vh * 0.82)))
 
 # -- house interiors ----------------------------------------------------
+
+
+def tile_is_mine(tx, ty, player, built_houses, built_fences, player_hunted,
+                 tile, fence):
+    """True for land inside the player's own fenced homestead."""
+    _p = getattr(player, "farm_plot", None)
+    _town = getattr(player, "settled_at", None)
+    if _p is not None and _town is not None:
+        try:
+            _ctx, _cty, _k = _town.farm_plots[_p]
+            if (_ctx, _cty) == (tx, ty):
+                return True
+        except Exception:
+            pass
+    if not built_houses or not built_fences:
+        return False
+    if player_hunted():
+        return False
+    x = tx * tile + tile / 2.0
+    y = ty * tile + tile / 2.0
+    for rect in fence.homesteads(built_fences, built_houses):
+        if rect.collidepoint(x, y):
+            return True
+    return False

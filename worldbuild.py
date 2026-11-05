@@ -234,7 +234,7 @@ def _total_houses(towns) -> int:
 
 import economy
 import fence
-from creatures import Soldier, Wolf, Rabbit
+from creatures import Soldier, Wolf, Rabbit, choose_target as creatures_choose_target
 from village import nation_color
 import biomes
 
@@ -337,3 +337,22 @@ def spawn_rabbit(player, world, rabbits, biomes, math, random, Rabbit) -> None:
     ry = player.y + math.sin(angle) * dist
     rabbits.append(Rabbit(rx, ry, biomes.rabbit_fur(
         float(world.temperature(rx, ry)), float(world.humidity(rx, ry)))))
+
+
+def main_capital(villages):
+    """The seat: the town whose king is the Dictator."""
+    best = None
+    for _v in villages.villages:
+        if getattr(_v, "king", None) is not None:
+            return (_v,)
+        if best is None and getattr(_v, "is_capital", False):
+            best = _v
+    return (best,)
+
+
+def choose_target(creature, villages, who, enemy_grid, engage_reach, folk_grid,
+                  look_reach, rabbits, squad):
+    near = enemy_grid.near(creature.x, creature.y, engage_reach)
+    folk = folk_grid.near(creature.x, creature.y, look_reach)
+    return creatures_choose_target(creature, who, near, rabbits, villages,
+                                   squad, persons=folk)

@@ -218,3 +218,25 @@ def open_trade_menu(npc, make_tradeable, player, inventory, toast, village_mod,
     pygame.mouse.set_visible(True)
     plog.log("TRADE", "opened with", getattr(npc, "name", "?"))
     return True, _m
+
+
+def join_army(npc, player, toast, nation_name, economy, inventory, armies) -> None:
+    """Enlist. You are a soldier of that nation from here on."""
+    if player.nation is not None and player.nation == npc.nation:
+        toast("You already serve %s" % nation_name(npc.nation))
+        return
+    player.nation = npc.nation
+    player.wage = (economy.PAY_RIFLE
+                   if inventory.count_of("rifle") > 0 else economy.PAY_MELEE)
+    player.army = None
+    for a_ in armies:
+        if a_.nation == npc.nation and not a_.done:
+            player.army = a_
+            a_.player = player
+            break
+    player.village = npc.village
+    inventory.add("bread", 3)
+    inventory.add("first_aid", 1)
+    toast("Enlisted in the %s army   -   pay %d a day%s"
+          % (nation_name(npc.nation), player.wage,
+             "   (the column is in the field)" if player.army else ""))

@@ -55,3 +55,22 @@ def use_first_aid(player, inventory, toast) -> None:
         return
     player.health = min(player.max_health, player.health + 50)
     toast("Patched yourself up")
+
+
+class Watcher:
+    """In test mode the armies do not see the player."""
+    __slots__ = ("_p", "dead", "nation", "squad")
+
+    def __init__(self, p) -> None:
+        self._p = p
+        self.dead = True
+        self.nation = None
+        self.squad = []
+
+    @property
+    def x(self) -> float:
+        return self._p.x
+
+    @property
+    def y(self) -> float:
+        return self._p.y

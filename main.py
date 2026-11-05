@@ -288,14 +288,8 @@ def main() -> None:
     dialogue_panel = dialogue.Dialogue()
 
     def _main_capital():
-        """The seat: the town whose king is the Dictator."""
-        best = None
-        for _v in villages.villages:
-            if getattr(_v, "king", None) is not None:
-                return (_v,)
-            if best is None and getattr(_v, "is_capital", False):
-                best = _v
-        return (best,)
+        return worldbuild.main_capital(villages)
+
     hub_world.build_caravans(world)
     # NO TREE THROUGH A ROOF -- BUT THE WOODS STILL GROW IN THE YARD.
     #
@@ -928,33 +922,8 @@ def main() -> None:
         return playerutil.player_hunted(visible_villages)
 
     def tile_is_mine(tx: int, ty: int) -> bool:
-        """True for land inside the player's own fenced homestead: a closed
-        rectangle of his fences with one of his houses inside. Farming there
-        is not trespass -- unless he is already being hunted.
-
-        AND HIS OWN FIELD FIRST, before any of that: the one the town gave him
-        with his backstory. Without it a farmer's very first harvest was a
-        crime and the whole town turned on him.
-        """
-        _p = getattr(player, "farm_plot", None)
-        _town = getattr(player, "settled_at", None)
-        if _p is not None and _town is not None:
-            try:
-                _ctx, _cty, _k = _town.farm_plots[_p]
-                if (_ctx, _cty) == (tx, ty):
-                    return True
-            except Exception:
-                pass
-        if not built_houses or not built_fences:
-            return False
-        if player_hunted():
-            return False
-        x = tx * TILE + TILE / 2.0
-        y = ty * TILE + TILE / 2.0
-        for rect in fence.homesteads(built_fences, built_houses):
-            if rect.collidepoint(x, y):
-                return True
-        return False
+        return placement.tile_is_mine(tx, ty, player, built_houses,
+                                      built_fences, player_hunted, TILE, fence)
 
     def settle_reload() -> None:
         playerutil.settle_reload(player, inventory, toast)
@@ -1254,37 +1223,8 @@ def main() -> None:
         return hudtime.near_fireplace(player, inside_house)
 
     def join_army(npc) -> None:
-        """Enlist. You are a soldier of that nation from here on -- no squad of
-        your own, no escort, no special treatment.
-
-        An enlisted man is paid the soldier's wage every day, eats what the
-        column eats, takes a soldier's share of what it plunders, and is shot
-        at by everyone his nation is at war with. The column's war is your war:
-        it is somewhere on the map doing what the crown told it to, and if you
-        want to be in it you had better keep up. Harm one of your own and the
-        banishment stands.
-        """
-        if player.nation is not None and player.nation == npc.nation:
-            toast("You already serve %s" % nation_name(npc.nation))
-            return
-        player.nation = npc.nation
-        # The wage is the wage: a rifleman's if he is carrying a rifle, else
-        # an axeman's. It is paid out of the crown, every day, like everyone
-        # else in the ranks.
-        player.wage = (economy.PAY_RIFLE
-                       if inventory.count_of("rifle") > 0 else economy.PAY_MELEE)
-        player.army = None
-        for a_ in armies:
-            if a_.nation == npc.nation and not a_.done:
-                player.army = a_          # march with the column in the field
-                a_.player = player
-                break
-        player.village = npc.village
-        inventory.add("bread", 3)
-        inventory.add("first_aid", 1)
-        toast("Enlisted in the %s army   -   pay %d a day%s"
-              % (nation_name(npc.nation), player.wage,
-                 "   (the column is in the field)" if player.army else ""))
+        interact.join_army(npc, player, toast, nation_name, economy, inventory,
+                           armies)
 
     def leave_army() -> None:
         interact.leave_army(player, toast)
@@ -1304,39 +1244,15 @@ def main() -> None:
     # nation" threw the wolves away -- and with one nation in the world the
     # answer was always nobody. See nearest_hostile.)
 
-    class _Watcher:
-        """In test mode the armies do not see the player.
-
-        He is there to watch a war, not to be shot by it. Everything else
-        about the world stays real -- the soldiers still fight each other, the
-        villagers still live and die -- but the man at the keyboard is a ghost
-        who happens to be standing in the field.
-        """
-
-        __slots__ = ("_p", "dead", "nation", "squad")
-
-        def __init__(self, p) -> None:
-            self._p = p
-            self.dead = True            # nothing targets a dead man
-            self.nation = None
-            self.squad: list = []
-
-        @property
-        def x(self) -> float:
-            return self._p.x
-
-        @property
-        def y(self) -> float:
-            return self._p.y
+    _Watcher = playerutil.Watcher
 
     watcher = _Watcher(player)
 
     def choose_target(creature, villages):
         who = watcher if test_mode else player
-        near = enemy_grid.near(creature.x, creature.y, ENGAGE_REACH)
-        folk = folk_grid.near(creature.x, creature.y, LOOK_REACH)
-        return creatures_choose_target(creature, who, near, rabbits, villages,
-                                       player.squad, persons=folk)
+        return worldbuild.choose_target(creature, villages, who, enemy_grid,
+                                        ENGAGE_REACH, folk_grid, LOOK_REACH,
+                                        rabbits, player.squad)
 
     def day_phase() -> str:
         return hudtime.day_phase(now, DAY_LENGTH)
