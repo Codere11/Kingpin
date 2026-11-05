@@ -1316,149 +1316,16 @@ def main() -> None:
     _draws: dict = {}
 
     def draw_exterior(cx, cy, show_names: bool = False, target=None) -> None:
-        target = target if target is not None else screen
-        static_layer.draw(target, cx, cy, vw, vh)
-        blood.draw(target, cx, cy, vw, vh)
-        world_villages = villages.visible(cx, cy, vw, vh,
-                                          extra=hub_world.hubs)
-        world_trees = trees.visible(cx, cy, vw, vh)
-        view = pygame.Rect(cx - 150, cy - 150, vw + 300, vh + 300)
-        for village in world_villages:
-            fence.draw(target, cx, cy, village, view)
-        for rect in built_fences:
-            if view.colliderect(rect):
-                fence.draw_segment(target, cx, cy, rect)
-        for rect in camp_walls:
-            if view.colliderect(rect):
-                fence.draw_segment(target, cx, cy, rect)
-        for rect in built_gates:
-            if view.colliderect(rect):
-                fence.draw_gate(target, cx, cy, rect)
-        # THE CAMP, drawn on the ground.
-        try:
-            import gulag as _gulag_d
-            _gulag_d.draw(target, cx, cy, view)
-        except Exception as _ge2:
-            if not getattr(main, "_ge2_seen", False):
-                main._ge2_seen = True
-                import traceback as _tb2
-                plog.log("GULAG-DRAW-ERROR", repr(_ge2)[:120])
-                plog.log("GULAG-TRACE", _tb2.format_exc()[:900])
-        # THE RAILWAY, on the ground under everything that stands on it.
-        try:
-            import rail as _rail
-            _rail.ensure(villages.villages)
-            _rail.draw(target, cx, cy, vw, vh)
-        except Exception as _re:
-            plog.log("RAIL-ERROR", repr(_re)[:120])
-        # ...AND THEN THE ENGINE, ON TOP OF ITS OWN TRACK. Riding, though, the
-        # ground is painted first and the track goes over it: from the train
-        # the rail is the thing that matters, not the grass under it.
-        if not getattr(player, "aboard", False):
-            try:
-                _TEST_TRAIN[0].draw(target, cx, cy)
-                _TEST_TRAIN[0].draw_knocked(target, cx, cy)
-            except Exception:
-                pass
-        items = []
-        # THE DEAD ARE ON THE GROUND. Bodies are sorted into the same painter's
-        # list as the living, so a man walking in front of a corpse stands in
-        # front of it and one behind it does not. Nothing ever called
-        # corpse.draw: a body could be clicked and looted and was never ONCE
-        # put on the screen.
-        for _c in corpse_mod.CORPSES:
-            if not view.collidepoint(_c.x, _c.y):
-                continue
-            items.append((_c.y, lambda c=_c: c.draw(target, cx, cy, now)))
-        for (x, y, planted_at, kind, biome) in crop.visible_plants(world, cx, cy,
-                                                                   vw, vh):
-            if not view.collidepoint(x, y):
-                continue
-            items.append((y, lambda x=x, y=y, p=planted_at, k=kind, b=biome:
-                          crop.draw_crop(target, x, y, k, now - p, cx, cy, b)))
-        _stump = trees.stump()
-        for (x, y, kind, stage) in wildcrop.visible(world, world_villages,
-                                                    cx, cy, vw, vh):
-            if not view.collidepoint(x, y):
-                continue
-            age = (stage + 0.4) * crop.GROW_SECONDS / 4.0
-            items.append((y, lambda x=x, y=y, e=age, k=kind:
-                          crop.draw_crop(target, x, y, k, e, cx, cy, None)))
-        for tree in world_trees:
-            items.append((tree.y, lambda t=tree, s=_stump:
-                          t.draw(target, cx, cy, s)))
-        for chunk in ore_field.visible(cx, cy, vw, vh):
-            if view.collidepoint(chunk.x, chunk.y):
-                items.append((chunk.y,
-                              lambda c=chunk: ore_field.draw(target, cx, cy, c)))
-        for enemy in enemies:
-            if view.collidepoint(enemy.x, enemy.y):
-                items.append((enemy.y, lambda e=enemy: e.draw(target, cx, cy)))
-        for rabbit in rabbits:
-            if view.collidepoint(rabbit.x, rabbit.y):
-                items.append((rabbit.y, lambda r=rabbit: r.draw(target, cx, cy)))
-        # ...AND THE PLAYER'S OWN, drawn whether or not any village is in
-        # sight. This block used to sit INSIDE the village loop, so a house
-        # built out in the open was never drawn at all: solid, enterable, and
-        # invisible.
-        for house in built_houses:
-            if not view.colliderect(house.sight_rect):
-                continue
-            items.append((house.base_y, lambda h=house: h.draw(target, cx, cy)))
-        for village in world_villages:
-            items.append((village.board.bottom,
-                          lambda v=village: v.draw_board(target, cx, cy)))
-            for wp in village.workplaces:
-                if not view.colliderect(wp.sight_rect):
-                    continue
-                items.append((wp.base_y, lambda w=wp: w.draw(target, cx, cy)))
-            for house in village.houses:
-                if not view.colliderect(house.sight_rect):
-                    continue
-                items.append((house.base_y, lambda h=house: h.draw(target, cx, cy)))
-            for npc in village.npcs:
-                if npc.asleep or npc.in_interior:
-                    continue
-                if npc is _TRUTH[0]:
-                    continue        # drawn once, with the world, below
-                if not view.collidepoint(npc.x, npc.y):
-                    continue
-                near = show_names and ((npc.x - player.x) ** 2
-                                       + (npc.y - player.y) ** 2) < 260.0 ** 2
-                items.append((npc.y, lambda n=npc, s=near:
-                              n.draw(target, cx, cy, s)))
-        if _TRUTH[0] is not None:
-            _tn = _TRUTH[0]
-            try:
-                _draws["n"] = _draws.get("n", 0) + 1
-                if _draws["n"] % 120 == 1:
-                    plog.log("TRUTH-DRAW", "at", "%d,%d" % (int(_tn.x), int(_tn.y)),
-                             "view", view.collidepoint(_tn.x, _tn.y),
-                             "player", "%d,%d" % (int(player.x), int(player.y)))
-            except Exception:
-                pass
-            if view.collidepoint(_tn.x, _tn.y):
-                _tnear = show_names and ((_tn.x - player.x) ** 2
-                                         + (_tn.y - player.y) ** 2) < 260.0 ** 2
-                items.append((_tn.y, lambda n=_tn, s=_tnear:
-                              n.draw(target, cx, cy, s)))
-        items.sort(key=lambda item: item[0])
-        for _y, draw in items:
-            draw()
-        if getattr(player, "aboard", False):
-            # RIDING: the permanent way is drawn OVER the ground, and the
-            # engine over the rail.
-            try:
-                import rail as _rail_r
-                _rail_r.ensure(villages.villages)
-                _rail_r.draw(target, cx, cy, vw, vh)
-            except Exception:
-                pass
-            try:
-                _TEST_TRAIN[0].draw(target, cx, cy)
-                _TEST_TRAIN[0].draw_knocked(target, cx, cy)
-            except Exception:
-                pass
+        _g = SimpleNamespace(
+            screen=screen, static_layer=static_layer, blood=blood,
+            villages=villages, hub_world=hub_world, trees=trees, vw=vw, vh=vh,
+            pygame=pygame, fence=fence, built_fences=built_fences,
+            camp_walls=camp_walls, built_gates=built_gates, player=player,
+            _TEST_TRAIN=_TEST_TRAIN, corpse_mod=corpse_mod, now=now, crop=crop,
+            world=world, wildcrop=wildcrop, ore_field=ore_field,
+            enemies=enemies, rabbits=rabbits, built_houses=built_houses,
+            _TRUTH=_TRUTH, _draws=_draws, plog=plog)
+        render.draw_exterior(_g, cx, cy, show_names, target)
 
 
     # -- THE NEWS, AS A MAN HEARS IT ----------------------------------------
