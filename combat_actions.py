@@ -11,11 +11,14 @@ import math
 import random
 
 import pygame
+import plog
+import corpse as corpse_mod
 import economy
 import guns
 import ore
 import village as village_mod
 from interior import Interior, fill_loot
+from ui import ChestPanel
 
 
 def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
@@ -269,3 +272,76 @@ def use_axe(g, kills) -> int:
     return kills
 
 
+def click_a_man(g, at=None):
+    bopen = g.body_open
+    bpanel = g.body_panel
+
+    """CLICK A MAN, OPEN THAT MAN. Nothing else.
+
+    The nearest living man to the point you clicked, within 48 px. If he is
+    the truth-teller his questions open; if he is anybody else his trade
+    opens. It does not care what you are holding, where you are standing,
+    whether a house is open, or which men happen to be on screen -- every
+    man in the world is a candidate, because a man you can see is a man in
+    a village's list.
+    """
+    # THE CLICK'S OWN POSITION. The event carries it; the cursor is only a
+    # fallback, because a click is where it happened, not where the pointer
+    # happens to be when the frame reads it.
+    if at is not None:
+        mx, my = at
+    else:
+        mx, my = pygame.mouse.get_pos()
+    wx = g.cam_x + mx / g.zoom
+    wy = g.cam_y + my / g.zoom
+    # A BODY FIRST: it is not a man you can talk to, and `g.open_trade` on a
+    # corpse would be nonsense -- but a body is what you loot.
+    _body = corpse_mod.nearest(wx, wy)
+    if _body is not None:
+        bpanel = ChestPanel(g.inventory, _body.pack,
+                                top_label=getattr(_body, "name", "a body"))
+        bopen = True
+        pygame.mouse.set_visible(True)
+        plog.log("BODY-OPEN", getattr(_body, "name", "?"), "at",
+                 int(math.hypot(_body.x - g.player.x, _body.y - g.player.y)), "px")
+        return (True, bopen, bpanel)
+    best, bd = None, 1e18
+    # HIM FIRST AND ALWAYS. He is a village's man, but a village's list can
+    # be rebuilt at load -- so he is a candidate in his own right.
+    if g.truth[0] is not None:
+        best = g.truth[0]
+        bd = math.hypot(best.x - wx, best.y - wy)
+    for _v in g.villages.g.villages:
+        for _n in _v.npcs:
+            if not getattr(_n, "alive", True) or getattr(_n, "in_interior", False):
+                continue
+            d = math.hypot(_n.x - wx, _n.y - wy)
+            if d < bd:
+                best, bd = _n, d
+    for _n in list(getattr(village_mod, "TRAVELLERS", ())):
+        if not getattr(_n, "alive", True):
+            continue
+        d = math.hypot(_n.x - wx, _n.y - wy)
+        if d < bd:
+            best, bd = _n, d
+    # NOTHING WITHIN 48 PX? THEN ANY CLICK NEAR HIM OPENS HIM. There is
+    # exactly one truth-teller in the world; if you are standing beside him
+    # and you click, that click is for him -- no distance arithmetic, no
+    # camera/zoom to get wrong, nothing left to fail.
+    if best is None or bd > 48.0:
+        # NOTHING WAS CLICKED. This used to open the truth-teller whenever
+        # he happened to be within 140 px OF THE PLAYER -- a third of the
+        # screen -- so a click on empty ground across the square opened a
+        # conversation. A man is opened by clicking HIM.
+        plog.log("PICK-NONE", "nearest",
+                 int(bd) if best is not None else -1)
+        return (False, bopen, bpanel)
+    if getattr(best, "is_truth_teller", False):
+        g.dialogue_panel.open(best, g.player, g.main_capital()[0])
+        g.toast("%s looks at you." % getattr(best, "name", "He"))
+    else:
+        g.open_trade(best)
+    pygame.mouse.set_visible(True)
+    plog.log("PICK", getattr(best, "name", "?"), "at", int(bd),
+             "truth", getattr(best, "is_truth_teller", False))
+    return (True, bopen, bpanel)

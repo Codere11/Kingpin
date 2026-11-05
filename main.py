@@ -1238,76 +1238,15 @@ def main() -> None:
                             # every villager: one item, one meal.
 
     def click_a_man(at=None) -> bool:
-        """CLICK A MAN, OPEN THAT MAN. Nothing else.
-
-        The nearest living man to the point you clicked, within 48 px. If he is
-        the truth-teller his questions open; if he is anybody else his trade
-        opens. It does not care what you are holding, where you are standing,
-        whether a house is open, or which men happen to be on screen -- every
-        man in the world is a candidate, because a man you can see is a man in
-        a village's list.
-        """
-        # THE CLICK'S OWN POSITION. The event carries it; the cursor is only a
-        # fallback, because a click is where it happened, not where the pointer
-        # happens to be when the frame reads it.
-        if at is not None:
-            mx, my = at
-        else:
-            mx, my = pygame.mouse.get_pos()
-        wx = cam_x + mx / ZOOM
-        wy = cam_y + my / ZOOM
-        # A BODY FIRST: it is not a man you can talk to, and `open_trade` on a
-        # corpse would be nonsense -- but a body is what you loot.
-        _body = corpse_mod.nearest(wx, wy)
-        if _body is not None:
-            nonlocal body_open, body_panel
-            body_panel = ChestPanel(inventory, _body.pack,
-                                    top_label=getattr(_body, "name", "a body"))
-            body_open = True
-            pygame.mouse.set_visible(True)
-            plog.log("BODY-OPEN", getattr(_body, "name", "?"), "at",
-                     int(math.hypot(_body.x - player.x, _body.y - player.y)), "px")
-            return True
-        best, bd = None, 1e18
-        # HIM FIRST AND ALWAYS. He is a village's man, but a village's list can
-        # be rebuilt at load -- so he is a candidate in his own right.
-        if _TRUTH[0] is not None:
-            best = _TRUTH[0]
-            bd = math.hypot(best.x - wx, best.y - wy)
-        for _v in villages.villages:
-            for _n in _v.npcs:
-                if not getattr(_n, "alive", True) or getattr(_n, "in_interior", False):
-                    continue
-                d = math.hypot(_n.x - wx, _n.y - wy)
-                if d < bd:
-                    best, bd = _n, d
-        for _n in list(getattr(village_mod, "TRAVELLERS", ())):
-            if not getattr(_n, "alive", True):
-                continue
-            d = math.hypot(_n.x - wx, _n.y - wy)
-            if d < bd:
-                best, bd = _n, d
-        # NOTHING WITHIN 48 PX? THEN ANY CLICK NEAR HIM OPENS HIM. There is
-        # exactly one truth-teller in the world; if you are standing beside him
-        # and you click, that click is for him -- no distance arithmetic, no
-        # camera/zoom to get wrong, nothing left to fail.
-        if best is None or bd > 48.0:
-            # NOTHING WAS CLICKED. This used to open the truth-teller whenever
-            # he happened to be within 140 px OF THE PLAYER -- a third of the
-            # screen -- so a click on empty ground across the square opened a
-            # conversation. A man is opened by clicking HIM.
-            plog.log("PICK-NONE", "nearest",
-                     int(bd) if best is not None else -1)
-            return False
-        if getattr(best, "is_truth_teller", False):
-            dialogue_panel.open(best, player, _main_capital()[0])
-            toast("%s looks at you." % getattr(best, "name", "He"))
-        else:
-            open_trade(best)
-        pygame.mouse.set_visible(True)
-        plog.log("PICK", getattr(best, "name", "?"), "at", int(bd),
-                 "truth", getattr(best, "is_truth_teller", False))
-        return True
+        nonlocal body_open, body_panel
+        _g = SimpleNamespace(
+            player=player, inventory=inventory, cam_x=cam_x, cam_y=cam_y,
+            zoom=ZOOM, truth=_TRUTH, villages=villages,
+            dialogue_panel=dialogue_panel, main_capital=_main_capital,
+            toast=toast, open_trade=open_trade,
+            body_open=body_open, body_panel=body_panel)
+        _ok, body_open, body_panel = combat_actions.click_a_man(_g, at)
+        return _ok
 
     def on_click() -> None:
         nonlocal confirm_open
