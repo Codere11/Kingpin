@@ -15,7 +15,7 @@ import random
 import hubs
 import nemesis
 import plog
-from interior import (BARREL_H, BARREL_W, BREW_H, BREW_W, LAB_H, LAB_W, WORKSHOP_H, WORKSHOP_W)
+from interior import (Interior, BARREL_H, BARREL_W, BREW_H, BREW_W, LAB_H, LAB_W, WORKSHOP_H, WORKSHOP_W)
 import stall as stall_mod
 
 
