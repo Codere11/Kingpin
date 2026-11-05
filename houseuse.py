@@ -126,3 +126,59 @@ def near_workshop(player, inside_house) -> bool:
     if inside_house is None:
         return False
     return inside_house.interior.workshop_near(player.x, player.y)
+
+
+def work_action(key, smith_shop, player, now, economy, inventory, skills,
+                random, pay_share, quality):
+    """Do a stroke of the trade the player is standing at. Returns (cd, msg)."""
+    wp = smith_shop
+    if wp is None:
+        return 0.0, ""
+    kind = wp.kind
+    if kind == "brewery":
+        brew = getattr(player, "brew", None)
+        if brew is not None and now >= brew[2]:
+            wort, count, _r = brew
+            player.brew = None
+            out = economy.BREW.get(wort)
+            if out:
+                inventory.add(out, count)
+                return 2.0, "Drew %d %s" % (count, out)
+        if brew is None:
+            food = getattr(wp.worker.village, "local_food", "wheat") \
+                if wp.worker else "wheat"
+            if inventory.count_of(food) >= economy.WORT_BATCH:
+                inventory.consume(food, economy.WORT_BATCH)
+                player.brew = (economy.WORT.get(food, "wheat_wort"),
+                               economy.WORT_BATCH, now + economy.BREW_SECONDS)
+                return 2.0, "Mashed %d %s   -   ready in %d min" % (
+                    economy.WORT_BATCH, food, int(economy.BREW_SECONDS / 60))
+        return 0.0, "Nothing to draw"
+    if kind == "lab":
+        leaf = next((k for k in economy.PROCESS
+                     if inventory.count_of(k) >= economy.CRAFT_CONSUME), None)
+        if leaf is None:
+            return 0.0, "No leaf"
+        out = economy.PROCESS[leaf]
+        inventory.consume(leaf, economy.CRAFT_CONSUME)
+        g = skills.leaf_grade(8)
+        inventory.add(out, 1, g)
+        return 2.0, "Made one %s   (%s)" % (out, quality.letter(g))
+    if kind == "mine":
+        _dug = random.randint(3, 7)
+        inventory.add("iron", _dug)
+        pay_share("iron", _dug)
+        return 2.0, "Broke out some iron"
+    if kind == "smith":
+        if inventory.count_of("iron") < economy.IRON_PER_TOOL:
+            return 0.0, "Need %d iron" % economy.IRON_PER_TOOL
+        inventory.consume("iron", economy.IRON_PER_TOOL)
+        kindw = "shovel"
+        for want in ("axe", "pickaxe", "shovel"):
+            if any(k == want for _w, k in
+                   (getattr(wp.worker, "tool_orders", ()) or ())):
+                kindw = want
+                break
+        inventory.add(kindw, 1, skills.leaf_grade(8))
+        return 2.0, "Forged a %s" % kindw
+    return 0.0, ""

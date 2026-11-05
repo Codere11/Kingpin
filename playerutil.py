@@ -74,3 +74,62 @@ class Watcher:
     @property
     def y(self) -> float:
         return self._p.y
+
+
+def on_offences(events, by_id, nemesis) -> None:
+    for _ev in events:
+        try:
+            _aid, _verb, _item, _x, _y, _wids = _ev
+            _actor = by_id.get(str(_aid))
+            _ws = [by_id.get(str(_i)) for _i in _wids]
+            nemesis.note_offence(_actor, _verb, _item, _x, _y,
+                                 [w for w in _ws if w is not None])
+        except Exception:
+            pass
+
+
+def on_caught(events, by_id, settle_towns, nemesis) -> None:
+    for _ev in events:
+        try:
+            _aid, _ti, _units = _ev
+            _actor = by_id.get(str(_aid))
+            _ti = int(_ti)
+            _town = settle_towns[_ti] if 0 <= _ti < len(settle_towns) else None
+            nemesis.note_caught(_actor, _town, int(_units))
+        except Exception:
+            pass
+
+
+def inside_h(inside_house):
+    try:
+        return inside_house is not None
+    except Exception:
+        return "?"
+
+
+def dump_trace(why, trace, plog):
+    try:
+        plog.log("==== TRACE:", why, "====")
+        for row in trace:
+            plog.log("  T:", " ".join(str(c) for c in row))
+    except Exception:
+        pass
+
+
+def watchdog(heart, persist, os, time, faulthandler):
+    while True:
+        time.sleep(2.0)
+        if time.time() - heart[0] < 6.0:
+            continue
+        try:
+            path_ = os.path.join(persist.DIR, "hang.log")
+            os.makedirs(persist.DIR, exist_ok=True)
+            with open(path_, "a") as fh:
+                fh.write("\n==== HANG  %.0f  (no frame for %.1fs) ====\n"
+                         % (time.time(), time.time() - heart[0]))
+                faulthandler.dump_traceback(file=fh)
+        except Exception:
+            pass
+        heart[0] = time.time()
+
+import nemesis

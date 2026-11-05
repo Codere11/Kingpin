@@ -1153,71 +1153,11 @@ def main() -> None:
         return nearby.near_workplace(player, placed_work, visible_villages)
 
     def work_action(key: str) -> str:
-        """Do a stroke of the trade the player is standing at.
-
-        The inputs and the outputs are the village's own constants -- the same
-        50-unit mash, the same leaf-to-cigar ratio, the same iron per tool --
-        so the player works the bench exactly as the man beside him does. The
-        only difference is the clock: a hand at the bench is not a daily
-        production quota, so each stroke takes a few seconds.
-        """
         nonlocal work_cd
-        wp = smith_shop
-        if wp is None or work_cd > 0.0:
-            return ""
-        kind = wp.kind
-        if kind == "brewery":
-            brew = getattr(player, "brew", None)
-            if brew is not None and now >= brew[2]:
-                wort, count, _r = brew
-                player.brew = None
-                out = economy.BREW.get(wort)
-                if out:
-                    inventory.add(out, count)
-                    work_cd = 2.0
-                    return "Drew %d %s" % (count, out)
-            if brew is None:
-                food = getattr(wp.worker.village, "local_food", "wheat") \
-                    if wp.worker else "wheat"
-                if inventory.count_of(food) >= economy.WORT_BATCH:
-                    inventory.consume(food, economy.WORT_BATCH)
-                    player.brew = (economy.WORT.get(food, "wheat_wort"),
-                                   economy.WORT_BATCH, now + economy.BREW_SECONDS)
-                    work_cd = 2.0
-                    return "Mashed %d %s   -   ready in %d min" % (
-                        economy.WORT_BATCH, food, int(economy.BREW_SECONDS / 60))
-            return "Nothing to draw"
-        if kind == "lab":
-            leaf = next((k for k in economy.PROCESS
-                         if inventory.count_of(k) >= economy.CRAFT_CONSUME), None)
-            if leaf is None:
-                return "No leaf"
-            out = economy.PROCESS[leaf]
-            inventory.consume(leaf, economy.CRAFT_CONSUME)
-            g = skills.leaf_grade(8)
-            inventory.add(out, 1, g)
-            work_cd = 2.0
-            return "Made one %s   (%s)" % (out, quality.letter(g))
-        if kind == "mine":
-            _dug = random.randint(3, 7)
-            inventory.add("iron", _dug)
-            pay_share("iron", _dug)
-            work_cd = 2.0
-            return "Broke out some iron"
-        if kind == "smith":
-            if inventory.count_of("iron") < economy.IRON_PER_TOOL:
-                return "Need %d iron" % economy.IRON_PER_TOOL
-            inventory.consume("iron", economy.IRON_PER_TOOL)
-            kindw = "shovel"
-            for want in ("axe", "pickaxe", "shovel"):
-                if any(k == want for _w, k in
-                       (getattr(wp.worker, "tool_orders", ()) or ())):
-                    kindw = want
-                    break
-            inventory.add(kindw, 1, skills.leaf_grade(8))
-            work_cd = 2.0
-            return "Forged a %s" % kindw
-        return ""
+        work_cd, _msg = houseuse.work_action(key, smith_shop, player, now,
+                                             economy, inventory, skills, random,
+                                             pay_share, quality)
+        return _msg
 
     def near_fireplace() -> bool:
         return hudtime.near_fireplace(player, inside_house)
@@ -1461,15 +1401,7 @@ def main() -> None:
         pass
 
     def _on_offences(events) -> None:
-        for _ev in events:
-            try:
-                _aid, _verb, _item, _x, _y, _wids = _ev
-                _actor = _BY_ID.get(str(_aid))
-                _ws = [_BY_ID.get(str(_i)) for _i in _wids]
-                nemesis.note_offence(_actor, _verb, _item, _x, _y,
-                                     [w for w in _ws if w is not None])
-            except Exception:
-                pass
+        playerutil.on_offences(events, _BY_ID, nemesis)
 
     # (the sink is attached once the lanes exist -- see below)
 
@@ -1530,18 +1462,10 @@ def main() -> None:
     _branch = "?"
 
     def _inside_h():
-        try:
-            return inside_house is not None
-        except Exception:
-            return "?"
+        return playerutil.inside_h(inside_house)
 
     def _dump_trace(why):
-        try:
-            plog.log("==== TRACE:", why, "====")
-            for row in _trace:
-                plog.log("  T:", " ".join(str(c) for c in row))
-        except Exception:
-            pass
+        playerutil.dump_trace(why, _trace, plog)
 
     def close_modals(why="") -> None:
         """SHUT EVERY PANEL. THE WORLD IS NEVER HELD HOSTAGE BY A MENU.
@@ -1652,15 +1576,7 @@ def main() -> None:
                      if not getattr(v, "is_hub", False)]
 
     def _on_caught(events) -> None:
-        for _ev in events:
-            try:
-                _aid, _ti, _units = _ev
-                _actor = _BY_ID.get(str(_aid))
-                _ti = int(_ti)
-                _town = _SETTLE_TOWNS[_ti] if 0 <= _ti < len(_SETTLE_TOWNS) else None
-                nemesis.note_caught(_actor, _town, int(_units))
-            except Exception:
-                pass
+        playerutil.on_caught(events, _BY_ID, _SETTLE_TOWNS, nemesis)
 
     _WORK.caught_sink = _on_caught
     _tell_timer = 0.0
@@ -1714,20 +1630,7 @@ def main() -> None:
 
     def _watchdog() -> None:
         import faulthandler
-        while True:
-            time.sleep(2.0)
-            if time.time() - _HEART[0] < 6.0:
-                continue
-            try:
-                path_ = os.path.join(persist.DIR, "hang.log")
-                os.makedirs(persist.DIR, exist_ok=True)
-                with open(path_, "a") as fh:
-                    fh.write("\n==== HANG  %.0f  (no frame for %.1fs) ====\n"
-                             % (time.time(), time.time() - _HEART[0]))
-                    faulthandler.dump_traceback(file=fh)
-            except Exception:
-                pass
-            _HEART[0] = time.time()
+        playerutil.watchdog(_HEART, persist, os, time, faulthandler)
 
     try:
         threading.Thread(target=_watchdog, daemon=True).start()
