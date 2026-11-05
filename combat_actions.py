@@ -317,7 +317,7 @@ def click_a_man(g, at=None):
     if g.truth[0] is not None:
         best = g.truth[0]
         bd = math.hypot(best.x - wx, best.y - wy)
-    for _v in g.villages.g.villages:
+    for _v in g.villages.villages:
         for _n in _v.npcs:
             if not getattr(_n, "alive", True) or getattr(_n, "in_interior", False):
                 continue
@@ -372,7 +372,7 @@ def on_click(g):
     # state in which he exists and this cannot find him.
     _tt0 = g.truth[0]
     if _tt0 is None:
-        for _tv in g.villages.g.villages:
+        for _tv in g.villages.villages:
             for _tn in _tv.npcs:
                 if getattr(_tn, "is_truth_teller", False):
                     _tt0 = _tn
