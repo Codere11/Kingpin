@@ -364,17 +364,14 @@ def main() -> None:
     def origin_village(kind):
         return worldbuild.origin_village(kind, g.villages)
 
-    g._home = None
-    # HIS TOWN, UNDER A NAME NOTHING ELSE USES. `_home` is re-bound inside the
-    # loop -- to a candidate, to a tuple of coordinates, to None -- and any
-    # code that read it later was reading whatever the loop last left there.
-    # That is what crashed on the first wolf spawn: `.x` off a tuple.
+    g._home = origin_village(g.origin)
+    # HIS TOWN, UNDER A NAME NOTHING ELSE USES.
     g._origin_town = g._home
-    g._hx = 0.0                       # the middle of the world
+    g._hx = 0.0
     g._hy = 0.0
     if g._home is not None:
-        # AND NOT IN THE ROAD: he starts a few paces off the door of the place
-        # he is going to work, so the first thing he sees is his own trade.
+        # NOT IN THE ROAD: a few paces off the door of the place he works, so
+        # the first thing he sees is his own trade.
         g._wants = {"smith": "smith", "artisan": "lab", "brewer": "brewery"}.get(g.origin)
         g._spot = None
         if g._wants is not None:
@@ -384,36 +381,38 @@ def main() -> None:
             g._spot = type("P", (), {"x": g._tx * 32 + 16, "y": g._ty * 32 + 16})()
         if g._spot is not None:
             g._hx, g._hy = g._spot.x, g._spot.y + 64.0
-    # HE WAKES IN THE WILDERNESS, SOMEWHERE NEW EVERY WORLD.
-    #
-    # A man with an axe and nothing else, in open country, with the nearest
-    # town a walk away -- not standing in a square he did not choose. The spot
-    # is drawn from the world's own seed, so the same save always wakes in the
-    # same place, and no town's fence, no hut's yard is within sight of him.
-    try:
-        g._towns_all = [v for v in g.villages.villages
-                      if not getattr(v, "is_hub", False)]
-    except Exception:
-        g._towns_all = []
-    g._spawn_rng = random.Random((int(g._save.get("seed", 20240501)) ^ 0xA11CE5EED)
-                               & 0xFFFFFFFF)
-    g._start = None
-    g._hx, g._hy = 0.0, 0.0
-    for _try in range(600):
-        g._sx = g._spawn_rng.uniform(-65000.0, 65000.0)
-        g._sy = g._spawn_rng.uniform(-65000.0, 65000.0)
-        if any((v.x - g._sx) ** 2 + (v.y - g._sy) ** 2 < 1500.0 ** 2
-               for v in g._towns_all):
-            continue
-        if any(getattr(_h, "fence_rect", None) is not None
-               and _h.fence_rect.inflate(900, 900).collidepoint(g._sx, g._sy)
-               for _h in getattr(g.hub_world, "hubs", ()) or ()):
-            continue
-        g._hx, g._hy = g._sx, g._sy
-        break
-    # HE STARTS IN THE OPEN, IN THE MIDDLE OF THE MAP: out in the country
-    # between the towns, no fence over him and nobody looking at him.
-    print("OPEN-FIELD SPAWN  %.0f,%.0f" % (g._hx, g._hy))
+        if g._hx == 0.0 and g._hy == 0.0:
+            # no bench beside him: the square itself, inside the wall
+            g._hx, g._hy = g._home.x, g._home.y
+    # HE WAKES INSIDE HIS TOWN, not climbing the wall. Mark the town he woke
+    # in, so the wall-crossing check does not convict him on the first frame.
+    g._start = g._home
+    if g._home is None:
+        # NO TOWN AT ALL: open country, somewhere new every world.
+        try:
+            g._towns_all = [v for v in g.villages.villages
+                          if not getattr(v, "is_hub", False)]
+        except Exception:
+            g._towns_all = []
+        g._spawn_rng = random.Random((int(g._save.get("seed", 20240501)) ^ 0xA11CE5EED)
+                                   & 0xFFFFFFFF)
+        g._hx, g._hy = 0.0, 0.0
+        for _try in range(600):
+            g._sx = g._spawn_rng.uniform(-65000.0, 65000.0)
+            g._sy = g._spawn_rng.uniform(-65000.0, 65000.0)
+            if any((v.x - g._sx) ** 2 + (v.y - g._sy) ** 2 < 1500.0 ** 2
+                   for v in g._towns_all):
+                continue
+            if any(getattr(_h, "fence_rect", None) is not None
+                   and _h.fence_rect.inflate(900, 900).collidepoint(g._sx, g._sy)
+                   for _h in getattr(g.hub_world, "hubs", ()) or ()):
+                continue
+            g._hx, g._hy = g._sx, g._sy
+            break
+        print("OPEN-FIELD SPAWN  %.0f,%.0f" % (g._hx, g._hy))
+    else:
+        print("SETTLEMENT SPAWN  %.0f,%.0f  in %s"
+              % (g._hx, g._hy, getattr(g._home, "name", "?")))
     # ---- OBSERVE MODE ------------------------------------------------------
     # KINGPIN_OBSERVE=1 runs a real instance -- real window, real frame, real
     # world -- with the player standing invincible in open ground while
