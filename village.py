@@ -885,7 +885,7 @@ class NPC:
         self._chat_timer = getattr(self, "_chat_timer", 0.0) - dt
         if self._chat_timer <= 0.0 and not getattr(self, "asleep", False) \
                 and not getattr(self, "in_interior", False):
-            self._chat_timer = 2.0
+            self._chat_timer = 0.7
             try:
                 import comm as _comm
                 _res = _comm.npc_try_chat(

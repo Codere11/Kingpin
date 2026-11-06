@@ -164,11 +164,11 @@ def draw_clouds(screen, cam_x, cam_y):
         sx = x - cam_x
         sy = y - cam_y
         surf, rect = _cloud_surf(_cloud_font, kind, text, ttl)
-        # SOUND TRAVELS: a voice behind the player still shows, pinned to the
-        # edge of the view, instead of being culled with the speaker.
-        cx = max(m, min(sw - m, int(sx)))
-        cy = max(m, min(sh - m, int(sy) - 56))
-        rect.center = (cx, cy)
+        rect.center = (int(sx), int(sy) - 56)
+        # Only draw it if the speaker is actually on screen; a voice off the
+        # edge does not pop in at the border and glitch.
+        if (rect.right < 0 or rect.left > sw or rect.bottom < 0 or rect.top > sh):
+            continue
         if any(rect.colliderect(r) for r in placed):
             continue       # it still happened; there is just no room to show it
         placed.append(rect)
@@ -198,9 +198,9 @@ def _cloud_surf(font, kind, text, ttl):
 # A man speaks to a neighbour on his own: the opinion he holds decides whether
 # it is praise, an insult or a threat, and the odds lean with the opinion.
 NEARBY_PX = 90.0
-SCAN_SECONDS = 2.0
-CHAT_PER_PERSON_CD = 30.0       # cannot speak to the SAME man this often
-CHAT_ALL_CD = 180.0             # after five chats, rest this long before any
+SCAN_SECONDS = 0.7
+CHAT_PER_PERSON_CD = 6.0        # cannot speak to the SAME man this often
+CHAT_ALL_CD = 60.0              # after a burst, rest this long before any
 
 # THE FIRST BREAK: an insulting spree.
 SPREE_MIN_MOOD = 30.0
@@ -281,7 +281,7 @@ def npc_try_chat(speaker, others, now):
     cds[oid] = now + CHAT_PER_PERSON_CD
     n = int(getattr(speaker, "_chat_n", 0)) + 1
     speaker._chat_n = n
-    if n >= 5:
+    if n >= 10:
         speaker._chat_all_until = now + CHAT_ALL_CD
         speaker._chat_n = 0
     _apply(speaker, o, kind)
