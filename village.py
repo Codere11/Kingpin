@@ -894,6 +894,16 @@ class NPC:
                     economy._note("CHAT day %d  %-18s %-8s %s"
                                   % (int(now / economy.DAY_LENGTH), self.name,
                                      _res[1], getattr(_res[0], "name", "?")))
+                    # RELAY IT TO THE FRAME: if the player is there, he hears
+                    # it -- a bubble over the speaker.
+                    try:
+                        if combat is not None and hasattr(combat, "chats"):
+                            combat.chats.append((round(self.x, 1),
+                                                 round(self.y, 1),
+                                                 _res[1],
+                                                 getattr(self, "name", "?")))
+                    except Exception:
+                        pass
             except Exception:
                 pass
         # THE EVENING IS HIS. The town says when the market is; who he spends

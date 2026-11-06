@@ -405,6 +405,18 @@ class Workers:
             for f in msg.get("fires", ()):
                 combat.fire(f[0], f[1], f[2], f[3], owner="enemy",
                             damage=f[4], team=f[5], spread=f[6])
+            for cx, cy, ckind, cname in msg.get("chats", ()):
+                # A WORD SPOKEN WHERE THE PLAYER CAN HEAR IT: a bubble over
+                # the speaker. Everything else stays in the lane's log.
+                try:
+                    import village as _vm
+                    import comm as _comm
+                    _p = getattr(_vm, "PLAYER", None)
+                    if _p is not None and not getattr(_p, "dead", False):
+                        if math.hypot(cx - _p.x, cy - _p.y) <= 420.0:
+                            _comm.spawn_cloud(cx, cy, ckind)
+                except Exception:
+                    pass
             for i, vals in msg.get("towns", ()):
                 if i < len(lane.towns):
                     v = lane.towns[i]
@@ -614,6 +626,7 @@ def _settlement_step(world, towns, men, player, hub_men, villages):
     class _Sink:
         def __init__(self):
             self.fires = []
+            self.chats = []
 
         def fire(self, x, y, angle, distance, owner="player", damage=25,
                  team=None, spread=None, shooter=None):
@@ -800,6 +813,7 @@ def _settlement_step(world, towns, men, player, hub_men, villages):
     def step(msg):
         del plots[:]
         del sink.fires[:]
+        del sink.chats[:]
         del offences[:]
         now, dt, phase = msg["now"], msg["dt"], msg["phase"]
         px, py, wanted, dead = msg["player"]
@@ -1018,7 +1032,7 @@ def _settlement_step(world, towns, men, player, hub_men, villages):
                 done.append((rid, {"error": repr(exc)[:120]}))
         return _reply(msg, towns, men, plots, sink.fires, player, 0,
                       watch=watch, done=done, offences=offences,
-                      relay=relay, caughts=caughts)
+                      relay=relay, caughts=caughts, chats=sink.chats)
 
     return step
 
@@ -1181,6 +1195,7 @@ def _hub_step(world, hubs, men, carts, towns, player):
     class _Sink:
         def __init__(self):
             self.fires = []
+            self.chats = []
 
         def fire(self, x, y, angle, distance, owner="player", damage=25,
                  team=None, spread=None, shooter=None):
@@ -1364,6 +1379,7 @@ def _hub_step(world, hubs, men, carts, towns, player):
     def step(msg):
         del plots[:]
         del sink.fires[:]
+        del sink.chats[:]
         del offences[:]
         now, dt, phase = msg["now"], msg["dt"], msg["phase"]
         px, py, wanted, dead = msg["player"]
@@ -1452,7 +1468,8 @@ def _hub_step(world, hubs, men, carts, towns, player):
         sales = list(stall.sales_log)
         del stall.sales_log[:]
         return _reply(msg, hubs, men, plots, sink.fires, player, 1,
-                      offences=offences, caughts=caughts, stall_sales=sales)
+                      offences=offences, caughts=caughts, stall_sales=sales,
+                      chats=sink.chats)
 
     return step
 
@@ -1479,7 +1496,7 @@ def _census(men) -> dict:
 
 def _reply(msg, towns, men, plots, fires, player, kind,
            watch=(), done=(), offences=(), relay=(), caughts=(),
-           stall_sales=()) -> dict:
+           stall_sales=(), chats=()) -> dict:
     """WHAT THE FRAME NEEDS. Positions always; packs for the men he can reach."""
     recs = [_man_record(n) for n in men]
     packs = []
@@ -1503,6 +1520,7 @@ def _reply(msg, towns, men, plots, fires, player, kind,
         "census": census,
         "plots": plots,
         "fires": fires,
+        "chats": list(chats),
         "towns": [(i, (bool(v.provoked), bool(getattr(v, "battle", False)),
                        float(getattr(v, "chaos", 0.0)),
                        bool(getattr(v, "conquered", False)),
