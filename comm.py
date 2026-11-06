@@ -156,12 +156,18 @@ def draw_clouds(screen, cam_x, cam_y):
     global _cloud_font
     if _cloud_font is None:
         _cloud_font = pygame.font.SysFont("dejavusans", 13, bold=True)
+    sw, sh = screen.get_size()
+    m = 24
     placed = []          # screen rects already taken: never overlap
     for x, y, kind, text, ttl in list(_clouds):
         sx = x - cam_x
         sy = y - cam_y
         surf, rect = _cloud_surf(_cloud_font, kind, text, ttl)
-        rect.center = (int(sx), int(sy) - 56)
+        # SOUND TRAVELS: a voice behind the player still shows, pinned to the
+        # edge of the view, instead of being culled with the speaker.
+        cx = max(m, min(sw - m, int(sx)))
+        cy = max(m, min(sh - m, int(sy) - 56))
+        rect.center = (cx, cy)
         if any(rect.colliderect(r) for r in placed):
             continue       # it still happened; there is just no room to show it
         placed.append(rect)
