@@ -77,6 +77,19 @@ class Combat:
                                    max(1.0, distance), owner, damage, team,
                                    shooter, dart=dart))
         self.flashes.append([x, y, a, FLASH_TIME, owner])
+        # EVERY SHOT IS LOGGED WITH WHO FIRED IT AND FROM WHICH LINE OF CODE.
+        try:
+            import traceback, plog
+            fr = traceback.extract_stack(limit=3)[-2]
+            _sh = getattr(shooter, "name", None) or ("player" if owner == "player" else owner)
+            _kind = getattr(shooter, "kind", None)
+            _militia = getattr(shooter, "is_militia", False)
+            plog.log("SHOT-FIRED", "owner", owner, "shooter", _sh,
+                     "kind", _kind, "militia", _militia,
+                     "dart", bool(dart), "at", "%s:%d:%s"
+                     % (fr.filename.split("/")[-1], fr.lineno, fr.name))
+        except Exception:
+            pass
 
     def update(self, dt: float) -> None:
         if any(b.remove for b in self.bullets):
