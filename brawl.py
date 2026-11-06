@@ -75,7 +75,8 @@ def step(npc, now, dt, others, combat=None):
         _tgt = None
     if _tgt is None:
         # start one?
-        if float(getattr(npc, "mood", 50.0)) < BREAK_MIN_MOOD \
+        if float(getattr(npc, "mood", 50.0)) \
+                < BREAK_MIN_MOOD + float(getattr(npc, "_break_off", 0.0)) \
                 and not getattr(npc, "asleep", False) \
                 and not getattr(npc, "in_interior", False) \
                 and not getattr(npc, "in_cell", False):

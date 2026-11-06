@@ -2157,17 +2157,32 @@ def needs(npc, dt: float) -> bool:
             stock[want] -= 1
             yearning = 0.0
             npc.use_fx = (want, USE_FX_SECONDS)
+            try:
+                import mind as _mind
+                _mind.consume(npc, want)
+            except Exception:
+                pass
         else:
             drink = npc.wants_drink
             if stock.get(drink, 0) > 0:
                 stock[drink] -= 1
                 yearning = 0.0
                 npc.use_fx = (drink, USE_FX_SECONDS)
+                try:
+                    import mind as _mind
+                    _mind.consume(npc, drink)
+                except Exception:
+                    pass
             elif stock.get("govbeer", 0) > 0:
                 # the state's bottle does the same work
                 stock["govbeer"] -= 1
                 yearning = 0.0
                 npc.use_fx = ("govbeer", USE_FX_SECONDS)
+                try:
+                    import mind as _mind
+                    _mind.consume(npc, "govbeer")
+                except Exception:
+                    pass
     fx = npc.use_fx
     if fx is not None:
         item, left = fx

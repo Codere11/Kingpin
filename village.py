@@ -509,6 +509,8 @@ class NPC:
     opinion: Any = None
     at_court: Any = False        # a mayor: at the capital, or at home
 
+    _break_off: Any = 0.0        # consumption raises his breaking point
+
     # -- WHAT A MAN IS, WRITTEN DOWN --------------------------------------
     # One plain dict: every compiled field and everything in __dict__. The
     # compiled class would rather hand pickle a (dict, slots) tuple, and the

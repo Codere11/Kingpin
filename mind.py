@@ -23,6 +23,21 @@ def apply_mood(npc, delta, reason=None):
     return new
 
 
+def break_threshold(npc):
+    """The mood below which a man BREAKS. Consumption raises it +10 at a time:
+    the fix lifts his mood and his breaking point together, so a satisfied man
+    still snaps at the same underlying misery -- the smoke does not save him."""
+    return float(getattr(npc, "_break_off", 0.0))
+
+
+def consume(npc, item):
+    """A man has started to savour something (a smoke, a drink, a chew). +10
+    mood -- and +10 to his breaking point, so the pleasure does not make him
+    harder to break. The item is in his hand until he finishes it."""
+    apply_mood(npc, 10.0, reason="consumed %s" % item)
+    npc._break_off = float(getattr(npc, "_break_off", 0.0)) + 10.0
+
+
 def step(npc, now, dt, others, combat=None):
     """The man's whole mind, one step: spree, brawl, chat."""
     _spree(npc, now, dt)
@@ -45,7 +60,7 @@ def _spree(npc, now, dt):
         apply_mood(npc, -comm.CATHARSIS_MOOD, reason="catharsis ended")
         npc._catharsis_end = 0.0
     if not getattr(npc, "_spree_until", 0.0) \
-            and float(getattr(npc, "mood", 50.0)) < comm.SPREE_MIN_MOOD \
+            and float(getattr(npc, "mood", 50.0)) < comm.SPREE_MIN_MOOD + break_threshold(npc) \
             and not getattr(npc, "asleep", False) \
             and not getattr(npc, "in_interior", False):
         npc._spree_timer = getattr(npc, "_spree_timer", comm.SPREE_ROLL_SECONDS) - dt
