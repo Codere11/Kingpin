@@ -2292,10 +2292,10 @@ class NPC:
             self.y -= uy * self.combat_speed * self.LUNGE_MULT * dt
             return
         if self.weapon == "rifle":
-            # A MAN WITH A RIFLE DOES NOT SHOOT HIS NEIGHBOURS. In a brawl he
-            # closes and swings his fists; the rifle stays for beasts and
-            # soldiers, not for the man next door.
-            if getattr(target, "kind", "") == "villager":
+            # A RIFLE IS FOR BEASTS, NOT PEOPLE. Against any person -- villager,
+            # soldier, the player -- he closes and swings his fists. The rifle
+            # comes out only for a wolf at the fence.
+            if getattr(target, "kind", "") != "wolf":
                 self.x += ux * self.combat_speed * 1.3 * dt
                 self.y += uy * self.combat_speed * 1.3 * dt
                 self.attack_cd -= dt
