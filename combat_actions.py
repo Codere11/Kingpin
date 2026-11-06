@@ -458,7 +458,7 @@ def on_click(g):
                 _verb = {"praise": "praised", "insult": "insulted",
                          "threaten": "threatened"}[g.comm]
                 if _ok:
-                    _comm.spawn_cloud(_found.x, _found.y, g.comm)
+                    _comm.spawn_cloud(g.player.x, g.player.y, g.comm)
                     g.toast("You %s %s" % (_verb, _name))
                 else:
                     g.toast("You've said your piece to %s today" % _name)
