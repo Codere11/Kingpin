@@ -173,14 +173,24 @@ SCAN_SECONDS = 2.0
 CHAT_PER_PERSON_CD = 30.0       # cannot speak to the SAME man this often
 CHAT_ALL_CD = 180.0             # after five chats, rest this long before any
 
+# THE FIRST BREAK: an insulting spree.
+SPREE_MIN_MOOD = 30.0
+SPREE_ROLL_SECONDS = 30.0
+SPREE_SECONDS = 300.0
+CATHARSIS_MOOD = 40.0
+CATHARSIS_DAYS = 3
 
-def npc_chances(op):
+
+def npc_chances(op, starving=False):
     """(praise, insult, threaten) percent chances from the opinion he holds
-    (-100..+100; 0 is neutral, the user's 50)."""
+    (-100..+100; 0 is neutral, the user's 50). A starving man threatens a lot
+    more (+30)."""
     d = op / 5.0
     praise = 30.0 + 6.0 * d
     insult = 15.0 - 3.0 * d
     threaten = 15.0 - 3.0 * d
+    if starving:
+        threaten += 30.0
     return (max(0.0, min(100.0, praise)),
             max(0.0, min(100.0, insult)),
             max(0.0, min(100.0, threaten)))
@@ -198,14 +208,13 @@ def _apply(speaker, target, kind):
 
 def npc_try_chat(speaker, others, now):
     """One man tries to speak to one nearby man. Returns (target, kind) or None."""
-    if now < float(getattr(speaker, "_chat_all_until", 0.0)):
-        return None
+    spree = now < float(getattr(speaker, "_spree_until", 0.0))
+    rng = speaker.rng
+    cands = []
     cds = getattr(speaker, "_chat_cds", None)
     if cds is None:
         cds = {}
         speaker._chat_cds = cds
-    rng = speaker.rng
-    cands = []
     for o in others:
         if o is speaker or not getattr(o, "alive", True):
             continue
@@ -216,14 +225,21 @@ def npc_try_chat(speaker, others, now):
             continue
         if math.hypot(o.x - speaker.x, o.y - speaker.y) > NEARBY_PX:
             continue
-        if now < float(cds.get(oid, 0.0)):
+        if not spree and now < float(cds.get(oid, 0.0)):
             continue
-        op = float(economy.opinion_of(speaker, oid).get(oid, 0.0))
-        cands.append((o, oid, op))
+        cands.append((o, oid))
     if not cands:
         return None
-    o, oid, op = cands[rng.randrange(len(cands))]
-    praise, insult, threaten = npc_chances(op)
+    o, oid = cands[rng.randrange(len(cands))]
+    if spree:
+        # NO LIMIT, NO COOLDOWN, ONE WORD: the spree insults everyone he meets.
+        _apply(speaker, o, "insult")
+        return (o, "insult")
+    if now < float(getattr(speaker, "_chat_all_until", 0.0)):
+        return None
+    op = float(economy.opinion_of(speaker, oid).get(oid, 0.0))
+    starving = float(getattr(speaker, "hunger", 0.0)) >= economy.DOLE_AT
+    praise, insult, threaten = npc_chances(op, starving)
     r = rng.random() * 100.0
     if r < praise:
         kind = "praise"

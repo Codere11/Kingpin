@@ -1045,6 +1045,33 @@ def monetize(village, amount: int) -> int:
     return amount - take
 
 
+def _banter_note(a, b):
+    """After a trade, either man may speak: 15% insult, 15% threat, 15% praise."""
+    for speaker, other in ((a, b), (b, a)):
+        if speaker is None or other is None or speaker is other:
+            continue
+        rng = getattr(speaker, "rng", None)
+        if rng is None:
+            continue
+        r = rng.random()
+        if r < 0.15:
+            kind, op, mood = "insult", -10.0, -10.0
+        elif r < 0.30:
+            kind, op, mood = "threaten", -15.0, -15.0
+        elif r < 0.45:
+            kind, op, mood = "praise", 10.0, 10.0
+        else:
+            continue
+        sid = getattr(speaker, "id", None)
+        if sid is not None:
+            opd = opinion_of(other, sid)
+            cur = float(opd.get(sid, 0.0))
+            opd[sid] = max(-100.0, min(100.0, cur + op))
+        other.mood = max(0.0, min(100.0, float(getattr(other, "mood", 50.0)) + mood))
+        _note("BANTER %-18s %-8s %s"
+              % (getattr(speaker, "name", "?"), kind, getattr(other, "name", "?")))
+
+
 def _settle(village, item, price, qty, seller, buyer) -> int:
     """Move qty of item for qty*price, plus sales tax between villagers."""
     if seller is None:
@@ -1107,6 +1134,7 @@ def _settle(village, item, price, qty, seller, buyer) -> int:
         # little better -- +1 each way, capped. Buying off the village's own
         # ledger is not a trade with a person, so it warms nobody.
         grow_opinion(seller, buyer)
+        _banter_note(seller, buyer)
     # AND THE DEAL SHOWS ON HIS FACE. Raised HERE, at the settlement, so it is
     # the TRADE that does it and not the fact that he is a trader standing in
     # a market. Both sides are checked, because a trader buying looks exactly

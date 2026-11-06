@@ -524,4 +524,29 @@ def search_visitor(dt: float, town, who):
                  "result", "CAUGHT" if caught else "clean", "at", "gate")
     except Exception:
         pass
+    # A SEARCH IS A PROVOCATION. One man in five curses the guard; one in ten
+    # thanks him -- and the guard remembers which.
+    try:
+        import economy as _eco
+        _rng = getattr(who, "rng", None)
+        if _rng is not None:
+            _r = _rng.random()
+            if _r < 0.20:
+                _kind, _op, _mood = "insult", -10.0, -10.0
+            elif _r < 0.30:
+                _kind, _op, _mood = "praise", 10.0, 10.0
+            else:
+                _kind = None
+            if _kind is not None:
+                _sid = getattr(who, "id", None)
+                if _sid is not None:
+                    _opd = _eco.opinion_of(g, _sid)
+                    _cur = float(_opd.get(_sid, 0.0))
+                    _opd[_sid] = max(-100.0, min(100.0, _cur + _op))
+                g.mood = max(0.0, min(100.0, float(getattr(g, "mood", 50.0)) + _mood))
+                _eco._note("GATE-SPEAK %-16s %-8s the guard of %s"
+                            % (getattr(who, "name", "?"), _kind,
+                               getattr(town, "name", "?")))
+    except Exception:
+        pass
     return "caught" if caught else "clean"

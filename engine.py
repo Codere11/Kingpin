@@ -5,6 +5,7 @@ import time
 import threading
 import comm
 import socio
+import grief
 
 
 def run(g):
@@ -70,6 +71,11 @@ def run(g):
             plog.log("SOCIO-ERR", repr(_so)[:120])
         # CHAT CLOUDS: what was just said to a man, fading over a few seconds.
         comm.tick_clouds(g.dt)
+        # SEEING A CORPSE: -15 mood, once per body, spread over a minute.
+        try:
+            grief.tick(list(village_mod.PEOPLE), g.dt)
+        except Exception as _gr:
+            plog.log("GRIEF-ERR", repr(_gr)[:120])
 
         # THE LANES HAVE FINISHED A TICK: take their state before anything
         # reads a man or draws one. Never blocks -- a lane that is late is one

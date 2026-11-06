@@ -847,6 +847,30 @@ class NPC:
             self.sly_flash -= dt
             if self.sly_flash < 0.0:
                 self.sly_flash = 0.0
+        # THE FIRST BREAK: an insulting spree. Below 30 mood, every thirty
+        # seconds there is a coin-flip that it begins. When it ends (five
+        # minutes), the catharsis lifts him +40 for three days.
+        _spree_until = getattr(self, "_spree_until", 0.0)
+        if _spree_until and now >= _spree_until:
+            self._spree_until = 0.0
+            self.mood = min(100.0, float(getattr(self, "mood", 50.0)) + 40.0)
+            self._catharsis_end = now + 3 * economy.DAY_LENGTH
+            economy._note("SPREE-END %s catharsis +40" % self.name)
+        _cath_end = getattr(self, "_catharsis_end", 0.0)
+        if _cath_end and now >= _cath_end:
+            self.mood = max(0.0, float(getattr(self, "mood", 50.0)) - 40.0)
+            self._catharsis_end = 0.0
+        if not getattr(self, "_spree_until", 0.0) \
+                and float(getattr(self, "mood", 50.0)) < 30.0 \
+                and not getattr(self, "asleep", False) \
+                and not getattr(self, "in_interior", False):
+            self._spree_timer = getattr(self, "_spree_timer", 30.0) - dt
+            if self._spree_timer <= 0.0:
+                self._spree_timer = 30.0
+                if self.rng.random() < 0.5:
+                    self._spree_until = now + 300.0
+                    economy._note("SPREE-BEGIN %s mood %.0f"
+                                  % (self.name, self.mood))
         # A WORD NOW AND THEN. A man who is awake may turn to a neighbour and
         # praise, insult or threaten him -- on a cooldown, so he does not
         # chatter himself empty.
