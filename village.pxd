@@ -49,6 +49,7 @@ cdef class NPC:
     # -- hunger and health ------------------------------------------------
     cdef public double hunger
     cdef public double yearning
+    cdef public double mood
     cdef public double health
     cdef public double max_health
     cdef public double hit_flash

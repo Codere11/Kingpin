@@ -596,6 +596,7 @@ class NPC:
         self.max_health = stats.PLAYER_MAX_HEALTH
         self.health = self.max_health
         self.alive = True
+        self.mood = 50.0             # 0 = miserable, 100 = bliss; everyone starts at 50
         self.hit_flash = 0.0
         self.work_flash = 0.0
         self.attack_flash = 0.0
