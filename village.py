@@ -511,6 +511,7 @@ class NPC:
 
     _break_off: Any = 0.0        # consumption raises his breaking point
     _break_off_until: Any = 0.0   # ...and it wears off three minutes later
+    _consume_mood_off: Any = 0.0  # the mood the fix added, to remove on expiry
 
     # -- WHAT A MAN IS, WRITTEN DOWN --------------------------------------
     # One plain dict: every compiled field and everything in __dict__. The

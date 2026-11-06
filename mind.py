@@ -33,19 +33,28 @@ def break_threshold(npc):
 
 
 def consume(npc, item, now):
-    """A man has started to savour something (a smoke, a drink, a chew). +10
-    mood -- and +10 to his breaking point for three minutes, so the pleasure
-    does not make him harder to break until the volatility has worn off. The
-    item is in his hand until he finishes it."""
+    """A man has started to savour something (a smoke, a drink, a chew).
+    Three minutes of it: +10 mood and +10 to his breaking point, both
+    temporary. The item is in his hand until he finishes it."""
+    old = float(getattr(npc, "mood", 50.0))
     apply_mood(npc, 10.0, reason="consumed %s" % item)
+    new = float(getattr(npc, "mood", 50.0))
+    # remember exactly how much mood the fix actually added, so the expiry
+    # removes exactly that (clamping at 100 cannot leak a phantom 10).
+    npc._consume_mood_off = float(getattr(npc, "_consume_mood_off", 0.0)) + (new - old)
     npc._break_off = float(getattr(npc, "_break_off", 0.0)) + 10.0
     npc._break_off_until = now + CONSUME_BREAK_SECONDS
 
 
 def _consume_expire(npc, now):
-    """The volatility wears off: the breaking point comes back down."""
+    """Three minutes are up: the mood and the raised breaking point both
+    come back down."""
     _until = getattr(npc, "_break_off_until", 0.0)
     if _until and now >= _until:
+        _off = float(getattr(npc, "_consume_mood_off", 0.0))
+        if _off:
+            apply_mood(npc, -_off, reason="consumption wore off")
+        npc._consume_mood_off = 0.0
         npc._break_off = 0.0
         npc._break_off_until = 0.0
 
