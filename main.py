@@ -413,6 +413,16 @@ def main() -> None:
     else:
         print("SETTLEMENT SPAWN  %.0f,%.0f  in %s"
               % (g._hx, g._hy, getattr(g._home, "name", "?")))
+        # A HOT SETTLEMENT: the town he wakes in is unhappy and gathered in
+        # the square around him, so the first thing he sees is the mood -- and
+        # the breaks -- spreading through it.
+        for _n in getattr(g._home, "npcs", ()):
+            _n.mood = _n.rng.uniform(5.0, 28.0)
+            _n.x = g._hx + _n.rng.uniform(-90.0, 90.0)
+            _n.y = g._hy + _n.rng.uniform(-90.0, 90.0)
+            _n.home = (_n.x, _n.y)
+            _n.target = (_n.x, _n.y)
+            _n._px, _n._py = _n.x, _n.y
     # ---- OBSERVE MODE ------------------------------------------------------
     # KINGPIN_OBSERVE=1 runs a real instance -- real window, real frame, real
     # world -- with the player standing invincible in open ground while
