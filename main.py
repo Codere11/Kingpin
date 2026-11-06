@@ -570,7 +570,7 @@ def main() -> None:
     g.compass_state = compass.Compass()
     g.compass_menu = compass.CompassMenu()
     g.comm = None            # equipped way to speak: insult / praise / threaten
-    g.comm_open = False      # the Communication panel (G)
+    g.comm_mode = False      # G toggles the hotbar between items and words
     g.build_menu.free = g.test_mode
     g.workshop_menu.free = g.test_mode
     g.pause_menu = PauseMenu()

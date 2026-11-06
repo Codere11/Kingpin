@@ -420,6 +420,53 @@ def on_click(g):
                      "click", "%d,%d" % (int(_twx), int(_twy)),
                      "him", "%d,%d" % (int(_tt0.x), int(_tt0.y)))
             return
+    if g.comm in ("insult", "praise", "threaten"):
+        # A WORD, NOT A SWING. The equipped communication overrides the item
+        # in hand. Click his body and it is still a chat; click beside him and
+        # you speak.
+        _cmx, _cmy = pygame.mouse.get_pos()
+        _cwx = g.cam_x + _cmx / g.zoom
+        _cwy = g.cam_y + _cmy / g.zoom
+        _body = _man_under(g, _cwx, _cwy)
+        if _body is not None:
+            if getattr(_body, "is_truth_teller", False):
+                g.dialogue_panel.open(_body, g.player, g.main_capital()[0])
+            elif getattr(_body, "attacked", False):
+                g.toast(f"{_body.name} won't trade with you")
+            else:
+                g.open_trade(_body)
+            pygame.mouse.set_visible(True)
+            return
+        import main as _m
+        if math.hypot(_cwx - g.player.x, _cwy - g.player.y) <= g.reach + 24.0:
+            _ang = math.atan2(_cwy - g.player.y, _cwx - g.player.x)
+            _found = None
+            _bd = 1e18
+            for _n in _clickable_men(g):
+                _d = math.hypot(_n.x - g.player.x, _n.y - g.player.y)
+                if _d > _m.AXE_REACH + 30.0:
+                    continue
+                _na = math.atan2(_n.y - g.player.y, _n.x - g.player.x)
+                _da = abs((_ang - _na + math.pi) % (2.0 * math.pi) - math.pi)
+                if _da <= _m.AXE_ARC and _d < _bd:
+                    _found, _bd = _n, _d
+            if _found is not None:
+                import comm as _comm
+                _ok, _left = _comm.use_comm(_found, g.comm, g.now)
+                g.player.swing_cd = g.player.skill_axe_cd   # the same wait as a fist
+                _name = getattr(_found, "name", "him")
+                _verb = {"praise": "praised", "insult": "insulted",
+                         "threaten": "threatened"}[g.comm]
+                if _ok:
+                    g.toast("You %s %s" % (_verb, _name))
+                else:
+                    g.toast("You've said your piece to %s today" % _name)
+                plog.log("COMM", g.comm, _name, "ok", _ok, "left", _left)
+            else:
+                g.toast("Nobody there to %s" % g.comm)
+        else:
+            g.toast("Too far away")
+        return
     stack = g.inventory.selected_stack()
     item_id = stack.defn.id if stack else None
     # ANYTHING THE VILLAGERS CALL FOOD, THE PLAYER CAN EAT. This was a

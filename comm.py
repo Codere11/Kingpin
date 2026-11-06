@@ -93,3 +93,31 @@ def use_comm(target, kind, now):
     opd["player"] = max(-100.0, min(100.0, cur + op))
     target.mood = max(0.0, min(100.0, float(getattr(target, "mood", 50.0)) + mood))
     return True, CAP_PER_DAY - rec[1]
+
+
+def bar_rects(vw, vh):
+    slot = 58
+    pad = 8
+    n = 3
+    panel_w = n * slot + (n + 1) * pad
+    x0 = (vw - panel_w) // 2
+    y0 = vh - slot - 2 * pad - 16
+    return [pygame.Rect(x0 + pad + i * (slot + pad), y0 + pad, slot, slot)
+            for i in range(n)]
+
+
+def bar_slot_at(pos, vw, vh):
+    for i, r in enumerate(bar_rects(vw, vh)):
+        if r.collidepoint(pos):
+            return i
+    return None
+
+
+def draw_bar(screen, font, vw, vh, selected):
+    """The Communication hotbar: three slots where the pack normally is."""
+    for i, kind in enumerate(KINDS):
+        r = bar_rects(vw, vh)[i]
+        pygame.draw.rect(screen, (26, 24, 28), r, border_radius=6)
+        border = (222, 176, 88) if selected == kind else (70, 64, 56)
+        pygame.draw.rect(screen, border, r, 2, border_radius=6)
+        draw_symbol(screen, kind, r.centerx, r.centery)

@@ -271,16 +271,6 @@ def run(g):
                         g.compass_open = False
                         pygame.mouse.set_visible(False)
                         g.toast("Click to read the compass")
-            elif g.comm_open:
-                if event.type == pygame.KEYDOWN and event.key in (pygame.K_g,
-                                                                  pygame.K_ESCAPE):
-                    g.comm_open = False
-                    pygame.mouse.set_visible(False)
-                elif event.type == pygame.KEYDOWN and pygame.K_1 <= event.key <= pygame.K_3:
-                    g.comm = comm.KINDS[event.key - pygame.K_1]
-                    g.comm_open = False
-                    pygame.mouse.set_visible(False)
-                    g.toast("Equipped %s" % g.comm.title())
             elif g.confirm_open:
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     g.confirm_open = False
@@ -424,8 +414,8 @@ def run(g):
                     g.compass_open = True
                     pygame.mouse.set_visible(True)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_g:
-                g.comm_open = not g.comm_open
-                pygame.mouse.set_visible(g.comm_open)
+                g.comm_mode = not g.comm_mode
+                pygame.mouse.set_visible(g.comm_mode)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 g.stack = g.inventory.selected_stack()
                 kind = g.stack.defn.id if g.stack else None
@@ -530,9 +520,15 @@ def run(g):
                 g.empty = g.hotbar.first_empty()
                 if g.empty is not None:
                     g.hotbar.select_visible(g.empty)
+                    g.comm = None
                     g.toast("Empty hands")
             elif event.type == pygame.KEYDOWN and pygame.K_1 <= event.key <= pygame.K_9:
-                g.hotbar.select_visible(event.key - pygame.K_1)
+                if g.comm_mode and event.key - pygame.K_1 < 3:
+                    g.comm = comm.KINDS[event.key - pygame.K_1]
+                    g.toast("Equipped %s" % g.comm.title())
+                else:
+                    g.hotbar.select_visible(event.key - pygame.K_1)
+                    g.comm = None
             elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEWHEEL):
                 if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
                         and g.dialogue_panel.open_
@@ -569,6 +565,13 @@ def run(g):
                         if g.click_a_man(event.pos):
                             break
                 g.consumed = g.hotbar.handle_event(event)
+                if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                        and g.comm_mode):
+                    _ci = comm.bar_slot_at(event.pos, g.vw, g.vh)
+                    if _ci is not None:
+                        g.comm = comm.KINDS[_ci]
+                        g.toast("Equipped %s" % g.comm.title())
+                        g.consumed = True
                 if (not g.consumed and event.type == pygame.MOUSEBUTTONDOWN
                         and event.button == 1):
                     g.on_click()
@@ -3180,8 +3183,6 @@ def run(g):
         if not getattr(g.player, "aboard", False):
             g.player.draw(g.screen, g.cam_x, g.cam_y, g.comm if g.comm else (g._sel0.defn.id if g._sel0 else None))
         g.combat.draw(g.screen, g.cam_x, g.cam_y)
-        if g.comm_open:
-            comm.draw_panel(g.screen, g.font, g.vw, g.vh, g.comm)
         g.draw_hunger_gray()
 
         if g.game_over:
@@ -3225,7 +3226,10 @@ def run(g):
             if g.inside_mine is None:
                 _present(g.screen, g.view_surf, g.scr_w, g.scr_h)
             g.vw, g.vh = g.scr_w, g.scr_h
-            g.hotbar.draw(g.screen)
+            if g.comm_mode:
+                comm.draw_bar(g.screen, g.font, g.vw, g.vh, g.comm)
+            else:
+                g.hotbar.draw(g.screen)
             # THE INSPECTOR IS DRAWN ABOVE GROUND TOO.
             #
             # observer_.draw() lived ONLY inside the MINE's render block, so
