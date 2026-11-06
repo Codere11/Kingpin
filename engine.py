@@ -435,6 +435,8 @@ def run(g):
                     pygame.mouse.set_visible(True)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_g:
                 g.comm_mode = not g.comm_mode
+                if not g.comm_mode:
+                    g.comm = None      # leaving the words puts the hands back empty
                 pygame.mouse.set_visible(g.comm_mode)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 g.stack = g.inventory.selected_stack()
