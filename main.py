@@ -1289,6 +1289,18 @@ def main() -> None:
     g.player.settled_at = None
     g.player.job = None
     load_now()
+    # THE HOT SETTLEMENT SURVIVES THE LOAD. load_now restores the saved mood
+    # (near 50) and positions, which clobbered the unhappy square set at
+    # spawn -- so the brawl never began. Re-apply it around the player, AFTER
+    # the save has had its say, and before the lanes fork.
+    if g._home is not None:
+        for _n in getattr(g._home, "npcs", ()):
+            _n.mood = _n.rng.uniform(5.0, 28.0)
+            _n.x = g.player.x + _n.rng.uniform(-90.0, 90.0)
+            _n.y = g.player.y + _n.rng.uniform(-90.0, 90.0)
+            _n._px, _n._py = _n.x, _n.y
+            _n.home = (_n.x, _n.y)
+            _n.target = (_n.x, _n.y)
     # AN AXE IN HIS HAND, ONCE THE SAVE HAS HAD ITS SAY. The starting kit is
     # added before the save is read -- so a restored pack overwrote it and a
     # man who loaded a game had no axe at all. Anyone with nothing to cut with

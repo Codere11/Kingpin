@@ -33,13 +33,21 @@ def most_hated(npc, others):
     return best
 
 
-def punch(npc, target, now):
-    """One punch: the war face, the damage, the memory, and the return swing."""
+def punch(npc, target, now, combat=None):
+    """One punch: the SAME swing arc the player's fist makes, the damage, the
+    memory, and the return swing."""
     if target is None or not getattr(target, "alive", True):
         return False
     if math.hypot(target.x - npc.x, target.y - npc.y) > REACH:
         return False
     npc._did_attack()
+    # THE SAME SWING THE PLAYER SEES, without the recharge bar underneath.
+    if combat is not None:
+        try:
+            combat.spawn_swing(npc.x, npc.y, math.atan2(target.y - npc.y,
+                                                        target.x - npc.x))
+        except Exception:
+            pass
     target.take_damage(max(1, round((35.0 / 3.0) * npc.skills.axe_damage_scale())))
     try:
         economy.wronged(target, npc, 20.0, now)
@@ -49,7 +57,7 @@ def punch(npc, target, now):
     return True
 
 
-def step(npc, now, dt, others):
+def step(npc, now, dt, others, combat=None):
     """One man's brawl step: start a break, chase the target, or swing."""
     _tgt = getattr(npc, "_brawl_target", None)
     # the brawl ends when the other man is down or gone: catharsis
@@ -86,7 +94,7 @@ def step(npc, now, dt, others):
         npc.y += uy * getattr(npc, "speed", 50.0) * 1.4 * dt
         npc.facing = (ux, uy)
     else:
-        if punch(npc, _tgt, now):
+        if punch(npc, _tgt, now, combat):
             economy._note("PUNCH %s -> %s"
                           % (getattr(npc, "name", "?"),
                              getattr(_tgt, "name", "?")))

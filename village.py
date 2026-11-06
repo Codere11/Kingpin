@@ -876,7 +876,8 @@ class NPC:
         try:
             import brawl as _brawl
             _brawl.step(self, now, dt,
-                        self.village.npcs if self.village is not None else ())
+                        self.village.npcs if self.village is not None else (),
+                        combat)
         except Exception:
             pass
         # A WORD NOW AND THEN. A man who is awake may turn to a neighbour and
