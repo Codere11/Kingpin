@@ -353,7 +353,7 @@ def click_a_man(g, at=None):
     return (True, bopen, bpanel)
 
 
-def _folk(g):
+def _clickable_men(g):
     """Every living man who can be clicked: the villagers in view, the
     truth-teller, and the soldiers -- never the wolves."""
     out = [n for v in g.visible_villages for n in v.npcs
@@ -367,7 +367,7 @@ def _folk(g):
 
 def _man_under(g, wx, wy):
     """The living man whose drawn body stands over this world point."""
-    for npc in _folk(g):
+    for npc in _clickable_men(g):
         if abs(npc.x - wx) < 26.0 and -64.0 < (wy - npc.y) < 22.0:
             return npc
     return None
@@ -605,7 +605,7 @@ def on_click(g):
         _ang = math.atan2(wy - g.player.y, wx - g.player.x)
         _found = None
         _bd = 1e18
-        for _n in _folk(g):
+        for _n in _clickable_men(g):
             _d = math.hypot(_n.x - g.player.x, _n.y - g.player.y)
             if _d > _m.AXE_REACH + 30.0:
                 continue
