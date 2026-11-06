@@ -276,6 +276,12 @@ class Soldier(Enemy):
     def _patrol_update(self, dt, target, combat, occluders, view_scale, visible):
         """A territory patrol: walk the village's political border; engage
         anything hostile that comes into sight, then carry on."""
+        # A soldier does not shoot civilians: a brawl is fists, not bullets.
+        if (not getattr(self, "is_militia", False)
+                and target is not None
+                and getattr(target, "kind", "") == "villager"):
+            self._fight(dt, target, combat, 1.0, visible)
+            return
         if self.hit_flash > 0.0:
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if self.bleed > 0.0:
@@ -349,6 +355,12 @@ class Soldier(Enemy):
             self.facing = (nx, ny)          # on watch: square to the fence
 
     def _fire_while_marching(self, dt, target, combat):
+        # A soldier does not shoot civilians: a brawl is fists, not bullets.
+        if (not getattr(self, "is_militia", False)
+                and target is not None
+                and getattr(target, "kind", "") == "villager"):
+            self._fight(dt, target, combat, 1.0, True)
+            return
         self.fire_cd -= dt
         dx, dy = target.x - self.x, target.y - self.y
         dist = math.hypot(dx, dy) or 1.0
