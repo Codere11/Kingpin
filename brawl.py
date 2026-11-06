@@ -12,7 +12,7 @@ REACH = 46.0
 JOIN_RADIUS = 50.0
 CATHARSIS = 40.0
 SENTENCE_DAYS = 3
-BUST_SECONDS = 8.0       # a brawl this old brings the militia
+BUST_SECONDS = 20.0      # a brawl this old brings the militia
 
 
 def most_hated(npc, others):
@@ -108,7 +108,7 @@ def town_step(town, now, dt):
     fighters = [n for n in getattr(town, "npcs", ())
                 if getattr(n, "_brawl_target", None) is not None
                 and getattr(n, "alive", True)]
-    if len(fighters) < 2:
+    if len(fighters) < 4:
         return
     # find the brawl's age on one of them, else start the clock
     oldest = max((getattr(f, "_brawl_age", 0.0) for f in fighters), default=0.0)
