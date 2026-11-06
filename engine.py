@@ -76,6 +76,11 @@ def run(g):
             grief.tick(list(village_mod.PEOPLE), g.dt)
         except Exception as _gr:
             plog.log("GRIEF-ERR", repr(_gr)[:120])
+        # A NEARBY MAN MAY SPEAK TO THE PLAYER: praise, insult or threaten.
+        try:
+            comm.tick_npc_to_player(list(village_mod.PEOPLE), g.player, g.dt)
+        except Exception as _np:
+            plog.log("NPC-TO-PLAYER-ERR", repr(_np)[:120])
 
         # THE LANES HAVE FINISHED A TICK: take their state before anything
         # reads a man or draws one. Never blocks -- a lane that is late is one

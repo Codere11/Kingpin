@@ -124,45 +124,67 @@ def draw_bar(screen, font, vw, vh, selected):
         draw_symbol(screen, kind, r.centerx, r.centery)
 
 
-_clouds = []          # [world_x, world_y, kind, seconds_left]
-CLOUD_SECONDS = 3.0
+_clouds = []          # [world_x, world_y, kind, text, seconds_left]
+CLOUD_SECONDS = 0.5
+
+MESSAGES = {
+    "insult": ("F#!K", "Scum!", "Idiot!", "Fool!"),
+    "praise": ("Good man!", "Well done!", "Fine work!"),
+    "threaten": ("I'll end you!", "Watch it!", "Dead man!"),
+}
+TEXT_COLOR = {"insult": (12, 12, 12), "praise": (90, 128, 48),
+              "threaten": (208, 30, 30)}
+_cloud_font = None
 
 
 def spawn_cloud(x, y, kind):
-    """A chat cloud over a man: what was just said to him."""
-    _clouds.append([float(x), float(y), kind, CLOUD_SECONDS])
+    """A chat cloud over the speaker: what was just said."""
+    import random as _r
+    text = _r.choice(MESSAGES.get(kind, ("...",)))
+    _clouds.append([float(x), float(y), kind, text, CLOUD_SECONDS])
 
 
 def tick_clouds(dt):
     if not _clouds:
         return
     for c in _clouds:
-        c[3] -= dt
-    _clouds[:] = [c for c in _clouds if c[3] > 0.0]
+        c[4] -= dt
+    _clouds[:] = [c for c in _clouds if c[4] > 0.0]
 
 
 def draw_clouds(screen, cam_x, cam_y):
-    for x, y, kind, ttl in _clouds:
+    global _cloud_font
+    if _cloud_font is None:
+        _cloud_font = pygame.font.SysFont("dejavusans", 13, bold=True)
+    placed = []          # screen rects already taken: never overlap
+    for x, y, kind, text, ttl in list(_clouds):
         sx = x - cam_x
         sy = y - cam_y
-        _draw_cloud(screen, sx, sy, kind, ttl)
+        surf, rect = _cloud_surf(_cloud_font, kind, text, ttl)
+        rect.center = (int(sx), int(sy) - 56)
+        if any(rect.colliderect(r) for r in placed):
+            continue       # it still happened; there is just no room to show it
+        placed.append(rect)
+        screen.blit(surf, rect)
 
 
-def _draw_cloud(screen, sx, sy, kind, ttl):
-    """A rounded speech bubble above the man, with the message on it."""
-    bw, bh = 66, 36
-    bx = int(sx) - bw // 2
-    by = int(sy) - 64
-    fade = max(0.0, min(1.0, ttl / 0.4))          # fade the last 0.4 s
-    surf = pygame.Surface((bw + 8, bh + 12), pygame.SRCALPHA)
-    # tail first, then the bubble over it
+def _cloud_surf(font, kind, text, ttl):
+    lab = font.render(text, True, TEXT_COLOR.get(kind, (20, 20, 20)))
+    pad_x, pad_y = 10, 7
+    bw = lab.get_width() + pad_x * 2 + 8
+    bh = lab.get_height() + pad_y * 2 + 8
+    surf = pygame.Surface((bw, bh), pygame.SRCALPHA)
     pygame.draw.polygon(surf, (250, 244, 232),
-                        [(bw // 2 - 4, bh + 2), (bw // 2 + 4, bh + 2), (bw // 2, bh + 10)])
-    pygame.draw.rect(surf, (250, 244, 232), (2, 2, bw, bh), border_radius=12)
-    pygame.draw.rect(surf, (64, 60, 56), (2, 2, bw, bh), 2, border_radius=12)
+                        [(bw // 2 - 4, bh - 2), (bw // 2 + 4, bh - 2),
+                         (bw // 2, bh + 7)])
+    pygame.draw.rect(surf, (250, 244, 232), (2, 2, bw - 8, bh - 6),
+                     border_radius=10)
+    pygame.draw.rect(surf, (64, 60, 56), (2, 2, bw - 8, bh - 6), 2,
+                     border_radius=10)
+    surf.blit(lab, (4 + pad_x, 2 + pad_y))
+    fade = max(0.0, min(1.0, ttl / 0.3))
     surf.set_alpha(int(255 * fade))
-    screen.blit(surf, (bx - 4, by))
-    draw_symbol(screen, kind, bx + bw // 2, by + bh // 2 + 2)
+    return surf, surf.get_rect()
 
 
 # -- NPC TO NPC ------------------------------------------------------------
@@ -257,3 +279,56 @@ def npc_try_chat(speaker, others, now):
         speaker._chat_n = 0
     _apply(speaker, o, kind)
     return (o, kind)
+
+
+# -- NPC TO PLAYER ---------------------------------------------------------
+_to_player_pending = []
+_to_player_index = 0
+
+
+def npc_to_player(npc, now):
+    """An NPC speaks to the player. Returns the kind, or None if he says nothing."""
+    if npc is None or not getattr(npc, "alive", True):
+        return None
+    rng = getattr(npc, "rng", None)
+    if rng is None:
+        return None
+    op = float(economy.opinion_of(npc, "player").get("player", 0.0))
+    starving = float(getattr(npc, "hunger", 0.0)) >= economy.DOLE_AT
+    praise, insult, threaten = npc_chances(op, starving)
+    r = rng.random() * 100.0
+    if r < praise:
+        kind = "praise"
+    elif r < praise + insult:
+        kind = "insult"
+    elif r < praise + insult + threaten:
+        kind = "threaten"
+    else:
+        return None
+    opd = economy.opinion_of(npc, "player")
+    opd["player"] = max(-100.0, min(100.0, op + EFFECT[kind][0]))
+    spawn_cloud(npc.x, npc.y, kind)
+    return kind
+
+
+def tick_npc_to_player(people, player, dt):
+    """Spread over ~a minute: every nearby man gets a chance to speak to the player."""
+    global _to_player_pending, _to_player_index
+    if player is None:
+        return
+    if not _to_player_pending:
+        _to_player_pending = [n for n in people if getattr(n, "alive", True)]
+        _to_player_index = 0
+    if not _to_player_pending:
+        return
+    count = max(1, int(len(_to_player_pending) * dt / 60.0))
+    for _ in range(count):
+        if _to_player_index >= len(_to_player_pending):
+            _to_player_pending = []
+            break
+        n = _to_player_pending[_to_player_index]
+        _to_player_index += 1
+        if getattr(n, "in_interior", False) or getattr(n, "asleep", False):
+            continue
+        if math.hypot(n.x - player.x, n.y - player.y) <= 170.0:
+            npc_to_player(n, 0.0)
