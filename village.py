@@ -847,6 +847,23 @@ class NPC:
             self.sly_flash -= dt
             if self.sly_flash < 0.0:
                 self.sly_flash = 0.0
+        # A WORD NOW AND THEN. A man who is awake may turn to a neighbour and
+        # praise, insult or threaten him -- on a cooldown, so he does not
+        # chatter himself empty.
+        self._chat_timer = getattr(self, "_chat_timer", 0.0) - dt
+        if self._chat_timer <= 0.0 and not getattr(self, "asleep", False) \
+                and not getattr(self, "in_interior", False):
+            self._chat_timer = 2.0
+            try:
+                import comm as _comm
+                _res = _comm.npc_try_chat(
+                    self, self.village.npcs if self.village is not None else (), now)
+                if _res is not None:
+                    economy._note("CHAT day %d  %-18s %-8s %s"
+                                  % (int(now / economy.DAY_LENGTH), self.name,
+                                     _res[1], getattr(_res[0], "name", "?")))
+            except Exception:
+                pass
         # THE EVENING IS HIS. The town says when the market is; who he spends
         # it with, and where they stand, he arranges himself -- along with
         # clearing up after it. These are the three fields the town used to
@@ -3564,6 +3581,16 @@ class Village:
                    sum(1 for n in self.npcs if n.defender or n.is_commander),
                    sum(1 for n in self.npcs if not n.job and n.farm_plot is None
                        and not n.defender and not n.is_commander)))
+            # THE MOOD OF THE TOWN, in buckets: how many men feel what.
+            _moods = [float(getattr(n, "mood", 50.0)) for n in self.npcs
+                      if getattr(n, "alive", True)]
+            economy._note("MOOD day %d  %-14s <20:%d 20-40:%d 40-60:%d 60-80:%d >80:%d"
+                          % (day, self.name,
+                             sum(1 for m in _moods if m < 20),
+                             sum(1 for m in _moods if 20 <= m < 40),
+                             sum(1 for m in _moods if 40 <= m < 60),
+                             sum(1 for m in _moods if 60 <= m < 80),
+                             sum(1 for m in _moods if m >= 80)))
         if not self._seeded and world is not None:
             self._seeded = True
             self._seed_fields(world, now)

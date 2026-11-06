@@ -6,6 +6,7 @@ direction, within reach, not on his body. Each is capped at three uses a day
 against any one person, so a man cannot be praised or insulted into nonsense.
 """
 import pygame
+import math
 
 import economy
 
@@ -162,3 +163,81 @@ def _draw_cloud(screen, sx, sy, kind, ttl):
     surf.set_alpha(int(255 * fade))
     screen.blit(surf, (bx - 4, by))
     draw_symbol(screen, kind, bx + bw // 2, by + bh // 2 + 2)
+
+
+# -- NPC TO NPC ------------------------------------------------------------
+# A man speaks to a neighbour on his own: the opinion he holds decides whether
+# it is praise, an insult or a threat, and the odds lean with the opinion.
+NEARBY_PX = 90.0
+SCAN_SECONDS = 2.0
+CHAT_PER_PERSON_CD = 30.0       # cannot speak to the SAME man this often
+CHAT_ALL_CD = 180.0             # after five chats, rest this long before any
+
+
+def npc_chances(op):
+    """(praise, insult, threaten) percent chances from the opinion he holds
+    (-100..+100; 0 is neutral, the user's 50)."""
+    d = op / 5.0
+    praise = 30.0 + 6.0 * d
+    insult = 15.0 - 3.0 * d
+    threaten = 15.0 - 3.0 * d
+    return (max(0.0, min(100.0, praise)),
+            max(0.0, min(100.0, insult)),
+            max(0.0, min(100.0, threaten)))
+
+
+def _apply(speaker, target, kind):
+    op, mood = EFFECT[kind]
+    sid = getattr(speaker, "id", None)
+    if sid is not None:
+        opd = economy.opinion_of(target, sid)
+        cur = float(opd.get(sid, 0.0))
+        opd[sid] = max(-100.0, min(100.0, cur + op))
+    target.mood = max(0.0, min(100.0, float(getattr(target, "mood", 50.0)) + mood))
+
+
+def npc_try_chat(speaker, others, now):
+    """One man tries to speak to one nearby man. Returns (target, kind) or None."""
+    if now < float(getattr(speaker, "_chat_all_until", 0.0)):
+        return None
+    cds = getattr(speaker, "_chat_cds", None)
+    if cds is None:
+        cds = {}
+        speaker._chat_cds = cds
+    rng = speaker.rng
+    cands = []
+    for o in others:
+        if o is speaker or not getattr(o, "alive", True):
+            continue
+        if getattr(o, "in_interior", False) or getattr(o, "asleep", False):
+            continue
+        oid = getattr(o, "id", None)
+        if oid is None:
+            continue
+        if math.hypot(o.x - speaker.x, o.y - speaker.y) > NEARBY_PX:
+            continue
+        if now < float(cds.get(oid, 0.0)):
+            continue
+        op = float(economy.opinion_of(speaker, oid).get(oid, 0.0))
+        cands.append((o, oid, op))
+    if not cands:
+        return None
+    o, oid, op = cands[rng.randrange(len(cands))]
+    praise, insult, threaten = npc_chances(op)
+    r = rng.random() * 100.0
+    if r < praise:
+        kind = "praise"
+    elif r < praise + insult:
+        kind = "insult"
+    elif r < praise + insult + threaten:
+        kind = "threaten"
+    else:
+        return None
+    cds[oid] = now + CHAT_PER_PERSON_CD
+    n = int(getattr(speaker, "_chat_n", 0)) + 1
+    speaker._chat_n = n
+    if n >= 5:
+        speaker._chat_all_until = now + CHAT_ALL_CD
+        speaker._chat_n = 0
+    _apply(speaker, o, kind)
+    return (o, kind)
