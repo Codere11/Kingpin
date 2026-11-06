@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import threading
+import comm
 
 
 def run(g):
@@ -270,6 +271,16 @@ def run(g):
                         g.compass_open = False
                         pygame.mouse.set_visible(False)
                         g.toast("Click to read the compass")
+            elif g.comm_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_g,
+                                                                  pygame.K_ESCAPE):
+                    g.comm_open = False
+                    pygame.mouse.set_visible(False)
+                elif event.type == pygame.KEYDOWN and pygame.K_1 <= event.key <= pygame.K_3:
+                    g.comm = comm.KINDS[event.key - pygame.K_1]
+                    g.comm_open = False
+                    pygame.mouse.set_visible(False)
+                    g.toast("Equipped %s" % g.comm.title())
             elif g.confirm_open:
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     g.confirm_open = False
@@ -412,6 +423,9 @@ def run(g):
                     g.compass_menu.open(g.compass_state.home is not None)
                     g.compass_open = True
                     pygame.mouse.set_visible(True)
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_g:
+                g.comm_open = not g.comm_open
+                pygame.mouse.set_visible(g.comm_open)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                 g.stack = g.inventory.selected_stack()
                 kind = g.stack.defn.id if g.stack else None
@@ -2653,7 +2667,7 @@ def run(g):
                     pass
             g._sel = g.inventory.selected_stack()
             if not getattr(g.player, "aboard", False):
-                g.player.draw(g.screen, g.cam_x, g.cam_y, g._sel.defn.id if g._sel else None)
+                g.player.draw(g.screen, g.cam_x, g.cam_y, g.comm if g.comm else (g._sel.defn.id if g._sel else None))
             g.observer_.draw(g.screen)
             try:
                 if g.chest_open:
@@ -2759,7 +2773,7 @@ def run(g):
         # branch may not have assigned: `selected` was unbound on the frames the
         # player was not inside a house, and this is the line that draws him.
         if not getattr(g.player, "aboard", False):
-            g.player.draw(g.screen, g.cam_x, g.cam_y, g._sel0.defn.id if g._sel0 else None)
+            g.player.draw(g.screen, g.cam_x, g.cam_y, g.comm if g.comm else (g._sel0.defn.id if g._sel0 else None))
         if getattr(g.player, "search_progress", 0.0) > 0.0:
             # THE BAR HANGS UNDER THE MAN DOING THE SEARCHING, not in the middle
             # of the screen. Pivot.md S3: he is ten seconds at it, and the
@@ -3164,8 +3178,10 @@ def run(g):
         # branch may not have assigned: `selected` was unbound on the frames the
         # player was not inside a house, and this is the line that draws him.
         if not getattr(g.player, "aboard", False):
-            g.player.draw(g.screen, g.cam_x, g.cam_y, g._sel0.defn.id if g._sel0 else None)
+            g.player.draw(g.screen, g.cam_x, g.cam_y, g.comm if g.comm else (g._sel0.defn.id if g._sel0 else None))
         g.combat.draw(g.screen, g.cam_x, g.cam_y)
+        if g.comm_open:
+            comm.draw_panel(g.screen, g.font, g.vw, g.vh, g.comm)
         g.draw_hunger_gray()
 
         if g.game_over:

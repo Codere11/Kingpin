@@ -621,6 +621,19 @@ def on_click(g):
                 plog.log("HAND", "cooldown", "wait",
                          round(float(getattr(g.player, "swing_cd", 0.0)), 2))
                 return
+            if g.comm in ("insult", "praise", "threaten"):
+                import comm as _comm
+                _ok, _left = _comm.use_comm(_found, g.comm, g.now)
+                g.player.swing_cd = g.player.skill_axe_cd   # the same wait as a fist
+                _name = getattr(_found, "name", "him")
+                _verb = {"praise": "praised", "insult": "insulted",
+                         "threaten": "threatened"}[g.comm]
+                if _ok:
+                    g.toast("You %s %s" % (_verb, _name))
+                else:
+                    g.toast("You've said your piece to %s today" % _name)
+                plog.log("COMM", g.comm, _name, "ok", _ok, "left", _left)
+                return
             plog.log("HAND", "swing at", getattr(_found, "name", "?"),
                      "d", int(_bd), "armed", g.inventory.count_of("axe") > 0)
             g.use_axe()

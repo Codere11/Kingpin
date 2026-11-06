@@ -569,6 +569,8 @@ def main() -> None:
     g.confirm = ConfirmMenu()
     g.compass_state = compass.Compass()
     g.compass_menu = compass.CompassMenu()
+    g.comm = None            # equipped way to speak: insult / praise / threaten
+    g.comm_open = False      # the Communication panel (G)
     g.build_menu.free = g.test_mode
     g.workshop_menu.free = g.test_mode
     g.pause_menu = PauseMenu()
@@ -960,6 +962,7 @@ def main() -> None:
             guard_search=guard_search, open_trade=open_trade,
             commit_crime=commit_crime, pay_share=pay_share,
             tile_is_mine=tile_is_mine, near_fireplace=near_fireplace, toast=toast,
+            comm=g.comm,
             confirm_open=g.confirm_open)
         g.confirm_open = combat_actions.on_click(_g)
 
