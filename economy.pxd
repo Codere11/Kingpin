@@ -17,4 +17,5 @@
 
 from village cimport NPC
 
-cpdef bint needs(NPC npc, double dt)
+cpdef bint needs(NPC npc, double dt, double now=*)
+# the =* default above means: callers may pass two or three arguments

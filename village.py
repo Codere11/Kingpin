@@ -510,6 +510,7 @@ class NPC:
     at_court: Any = False        # a mayor: at the capital, or at home
 
     _break_off: Any = 0.0        # consumption raises his breaking point
+    _break_off_until: Any = 0.0   # ...and it wears off three minutes later
 
     # -- WHAT A MAN IS, WRITTEN DOWN --------------------------------------
     # One plain dict: every compiled field and everything in __dict__. The
@@ -869,7 +870,7 @@ class NPC:
                 self.bond_partner = None
                 self.social_target = None
                 self._market_spot = None
-        if not economy.needs(self, dt):
+        if not economy.needs(self, dt, now):
             self.die()               # starved
             return False
         home = self.village

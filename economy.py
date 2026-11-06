@@ -2105,7 +2105,7 @@ def dole(village, npc) -> bool:
     return False
 
 
-def needs(npc, dt: float) -> bool:
+def needs(npc, dt: float, now: float = 0.0) -> bool:
     """HIS BODY, AND NOTHING ELSE. Returns False if he died of it.
 
     Hunger, craving, healing, eating out of his OWN pack, a smoke, a drink,
@@ -2159,7 +2159,7 @@ def needs(npc, dt: float) -> bool:
             npc.use_fx = (want, USE_FX_SECONDS)
             try:
                 import mind as _mind
-                _mind.consume(npc, want)
+                _mind.consume(npc, want, now)
             except Exception:
                 pass
         else:
@@ -2170,7 +2170,7 @@ def needs(npc, dt: float) -> bool:
                 npc.use_fx = (drink, USE_FX_SECONDS)
                 try:
                     import mind as _mind
-                    _mind.consume(npc, drink)
+                    _mind.consume(npc, drink, now)
                 except Exception:
                     pass
             elif stock.get("govbeer", 0) > 0:
@@ -2180,7 +2180,7 @@ def needs(npc, dt: float) -> bool:
                 npc.use_fx = ("govbeer", USE_FX_SECONDS)
                 try:
                     import mind as _mind
-                    _mind.consume(npc, "govbeer")
+                    _mind.consume(npc, "govbeer", now)
                 except Exception:
                     pass
     fx = npc.use_fx

@@ -8,6 +8,8 @@ import economy
 import comm
 import brawl
 
+CONSUME_BREAK_SECONDS = 180.0   # the raised breaking point lasts three minutes
+
 
 def apply_mood(npc, delta, reason=None):
     """THE ONLY WRITER OF MOOD. Every effect in the world -- a kind word, a
@@ -30,16 +32,27 @@ def break_threshold(npc):
     return float(getattr(npc, "_break_off", 0.0))
 
 
-def consume(npc, item):
+def consume(npc, item, now):
     """A man has started to savour something (a smoke, a drink, a chew). +10
-    mood -- and +10 to his breaking point, so the pleasure does not make him
-    harder to break. The item is in his hand until he finishes it."""
+    mood -- and +10 to his breaking point for three minutes, so the pleasure
+    does not make him harder to break until the volatility has worn off. The
+    item is in his hand until he finishes it."""
     apply_mood(npc, 10.0, reason="consumed %s" % item)
     npc._break_off = float(getattr(npc, "_break_off", 0.0)) + 10.0
+    npc._break_off_until = now + CONSUME_BREAK_SECONDS
+
+
+def _consume_expire(npc, now):
+    """The volatility wears off: the breaking point comes back down."""
+    _until = getattr(npc, "_break_off_until", 0.0)
+    if _until and now >= _until:
+        npc._break_off = 0.0
+        npc._break_off_until = 0.0
 
 
 def step(npc, now, dt, others, combat=None):
     """The man's whole mind, one step: spree, brawl, chat."""
+    _consume_expire(npc, now)
     _spree(npc, now, dt)
     _brawl(npc, now, dt, others, combat)
     _chat(npc, now, dt, others, combat)

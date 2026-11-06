@@ -183,7 +183,7 @@ class Caravan:
         n = self.npc
         if not getattr(n, "alive", False):
             return
-        economy.needs(n, dt)                     # hunger is his own business
+        economy.needs(n, dt, now)                 # hunger is his own business
         if n.hunger >= 100.0:
             return
 
