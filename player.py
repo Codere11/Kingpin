@@ -389,11 +389,11 @@ class Player:
         if self.reloading > 0.0 and self.reload_total > 0.0:
             self._draw_action_bar(screen, sx, sy,
                                   1.0 - self.reloading / self.reload_total)
-        elif (held == "axe" and self.swing_cd > 0.0
-                and self.skill_axe_cd > 0.0):
-            # ITS LENGTH IS THE WAIT ITSELF. skill_axe_cd comes from
-            # skills.axe_cooldown(), which is 2.0 s at no skill and 0.1 s
-            # mastered, so the better the axe the sooner the bar fills.
+        elif (self.swing_cd > 0.0 and self.skill_axe_cd > 0.0):
+            # THE SAME WAIT FOR A FIST AS FOR AN AXE. The bar is the swing
+            # cooldown, whatever he swung with: skill_axe_cd comes from
+            # skills.axe_cooldown(), 2.0 s at no skill and 0.1 s mastered,
+            # so the better the axe the sooner the bar fills.
             self._draw_action_bar(screen, sx, sy,
                                   1.0 - self.swing_cd / self.skill_axe_cd)
 
