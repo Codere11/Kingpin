@@ -871,6 +871,14 @@ class NPC:
                     self._spree_until = now + 300.0
                     economy._note("SPREE-BEGIN %s mood %.0f"
                                   % (self.name, self.mood))
+        # THE MAJOR BREAK: below 20 mood, a man goes and punches the one he
+        # hates most -- and a brawl spreads from there.
+        try:
+            import brawl as _brawl
+            _brawl.step(self, now, dt,
+                        self.village.npcs if self.village is not None else ())
+        except Exception:
+            pass
         # A WORD NOW AND THEN. A man who is awake may turn to a neighbour and
         # praise, insult or threaten him -- on a cooldown, so he does not
         # chatter himself empty.
@@ -3579,6 +3587,30 @@ class Village:
                 self.calm()
         day = int(now / economy.DAY_LENGTH)
         self._day = now / economy.DAY_LENGTH
+        # THE MILITIA BREAKS UP BRAWLS: dart every man throwing punches.
+        try:
+            import brawl as _brawl
+            _brawl.town_step(self, now, dt)
+        except Exception:
+            pass
+        # THE HOLDING CELL: a brawler is fed two loaves a day from the state's
+        # ledger and serves three days; he cannot fight while inside.
+        _d = int(now / economy.DAY_LENGTH)
+        for _n in self.npcs:
+            _sd = int(getattr(_n, "_sentence_days", 0))
+            if _sd <= 0:
+                continue
+            if getattr(_n, "_fed_day", -1) != _d:
+                _n._fed_day = _d
+                _n.stock["bread"] = _n.stock.get("bread", 0) + 2
+            if getattr(_n, "_sentence_day", -1) != _d:
+                _n._sentence_day = _d
+                _n._sentence_days = _sd - 1
+                if _sd - 1 <= 0:
+                    _n.in_cell = False
+                    _n._brawl_target = None
+                    economy._note("RELEASED %s served the brawl sentence"
+                                  % getattr(_n, "name", "?"))
         if day != getattr(self, "_log_day", -1):
             self._log_day = day
             # THE CAPACITY COLUMN IS THE REAL CEILING. It read
