@@ -847,66 +847,14 @@ class NPC:
             self.sly_flash -= dt
             if self.sly_flash < 0.0:
                 self.sly_flash = 0.0
-        # THE FIRST BREAK: an insulting spree. Below 30 mood, every thirty
-        # seconds there is a coin-flip that it begins. When it ends (five
-        # minutes), the catharsis lifts him +40 for three days.
-        _spree_until = getattr(self, "_spree_until", 0.0)
-        if _spree_until and now >= _spree_until:
-            self._spree_until = 0.0
-            self.mood = min(100.0, float(getattr(self, "mood", 50.0)) + 40.0)
-            self._catharsis_end = now + 3 * economy.DAY_LENGTH
-            economy._note("SPREE-END %s catharsis +40" % self.name)
-        _cath_end = getattr(self, "_catharsis_end", 0.0)
-        if _cath_end and now >= _cath_end:
-            self.mood = max(0.0, float(getattr(self, "mood", 50.0)) - 40.0)
-            self._catharsis_end = 0.0
-        if not getattr(self, "_spree_until", 0.0) \
-                and float(getattr(self, "mood", 50.0)) < 30.0 \
-                and not getattr(self, "asleep", False) \
-                and not getattr(self, "in_interior", False):
-            self._spree_timer = getattr(self, "_spree_timer", 30.0) - dt
-            if self._spree_timer <= 0.0:
-                self._spree_timer = 30.0
-                if self.rng.random() < 0.5:
-                    self._spree_until = now + 300.0
-                    economy._note("SPREE-BEGIN %s mood %.0f"
-                                  % (self.name, self.mood))
-        # THE MAJOR BREAK: below 20 mood, a man goes and punches the one he
-        # hates most -- and a brawl spreads from there.
+        # THE MAN'S MIND: the spree, the brawl, the chat -- one place now.
         try:
-            import brawl as _brawl
-            _brawl.step(self, now, dt,
-                        self.village.npcs if self.village is not None else (),
-                        combat)
+            import mind as _mind
+            _mind.step(self, now, dt,
+                       self.village.npcs if self.village is not None else (),
+                       combat)
         except Exception:
             pass
-        # A WORD NOW AND THEN. A man who is awake may turn to a neighbour and
-        # praise, insult or threaten him -- on a cooldown, so he does not
-        # chatter himself empty.
-        self._chat_timer = getattr(self, "_chat_timer", 0.0) - dt
-        if self._chat_timer <= 0.0 and not getattr(self, "asleep", False) \
-                and not getattr(self, "in_interior", False):
-            self._chat_timer = 0.7
-            try:
-                import comm as _comm
-                _res = _comm.npc_try_chat(
-                    self, self.village.npcs if self.village is not None else (), now)
-                if _res is not None:
-                    economy._note("CHAT day %d  %-18s %-8s %s"
-                                  % (int(now / economy.DAY_LENGTH), self.name,
-                                     _res[1], getattr(_res[0], "name", "?")))
-                    # RELAY IT TO THE FRAME: if the player is there, he hears
-                    # it -- a bubble over the speaker.
-                    try:
-                        if combat is not None and hasattr(combat, "chats"):
-                            combat.chats.append((round(self.x, 1),
-                                                 round(self.y, 1),
-                                                 _res[1],
-                                                 getattr(self, "name", "?")))
-                    except Exception:
-                        pass
-            except Exception:
-                pass
         # THE EVENING IS HIS. The town says when the market is; who he spends
         # it with, and where they stand, he arranges himself -- along with
         # clearing up after it. These are the three fields the town used to
