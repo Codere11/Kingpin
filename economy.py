@@ -1133,6 +1133,8 @@ def _settle(village, item, price, qty, seller, buyer) -> int:
         flow(village, '_settle', (cut))
         village.ledger_coins += cut
     buyer.stock[item] = buyer.stock.get(item, 0) + qty
+    if item in LUXURY:
+        _record_seller(buyer, item, seller)
     if seller is not None:
         # A TRADE IS A RELATIONSHIP. Both men come away knowing the other a
         # little better -- +1 each way, capped. Buying off the village's own
@@ -1766,6 +1768,18 @@ def opinion_of(npc, other_id) -> dict:
         op = {}
         npc.opinion = op
     return op
+
+
+def _record_seller(buyer, item, seller) -> None:
+    """A luxury keeps a memory of who sold it. If the militia catches the
+    buyer consuming it and he talks, THIS is the man they go and brand."""
+    if seller is None:
+        return
+    d = getattr(buyer, "_seller_of", None)
+    if d is None:
+        d = {}
+        buyer._seller_of = d
+    d[item] = seller
 
 
 def grow_opinion(a, b, amount: float = 1.0) -> None:

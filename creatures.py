@@ -93,6 +93,7 @@ class Soldier(Enemy):
 
     kind = "soldier"
     is_militia = False        # the Narodna militsiya: blue cap, dart rifle
+    mood: float = 50.0        # a soldier has a mood too, for mind.apply_mood
 
     def __init__(self, x: float, y: float, nation, melee: bool = False,
                  seed: int | None = None, color=None) -> None:
@@ -108,6 +109,7 @@ class Soldier(Enemy):
         self.ammo = 0                     # rounds he is carrying
         self.max_health = stats.PLAYER_MAX_HEALTH
         self.health = self.max_health
+        self.mood = 50.0        # the same mood a villager has
         self.view_range = SOLDIER_VIEW
         self.view_angle = SOLDIER_ANGLE
         self.speed = 138.0 if melee else 122.0
@@ -191,6 +193,10 @@ class Soldier(Enemy):
             self.sleep_t = max(0.0, self.sleep_t - dt)
             return
         self._colliders = colliders or []
+        if getattr(self, "_questioning", False):
+            # question.py is walking him toward the man he caught consuming;
+            # the guard's own watch waits until the question has been put.
+            return
         stats.apply_body(self)                        # skill makes him bigger
         if self.attack_flash > 0.0:                   # the war face runs down
             self.attack_flash = max(0.0, self.attack_flash - dt)

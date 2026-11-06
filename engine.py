@@ -1411,6 +1411,18 @@ def run(g):
                                  colliders=g.e_colliders)
                     enemy.x, enemy.y = resolve_circle_rects(
                         enemy.x, enemy.y, enemy.radius, g.e_colliders)
+                    # A MILITIAMAN WHO SEES A MAN CONSUME GOES AND ASKS.
+                    if (getattr(enemy, "is_militia", False)
+                            or getattr(enemy, "militia", False)):
+                        try:
+                            import question as _q
+                            _tv = getattr(enemy, "guard_village", None)
+                            _ppl = getattr(_tv, "npcs", ()) if _tv is not None else ()
+                            if _ppl:
+                                _q.tick(enemy, _ppl, g.now, g.dt, g.e_occluders,
+                                        g.combat, g.player)
+                        except Exception:
+                            pass
 
             for village in g.visible_villages:
                 for npc in village.npcs:

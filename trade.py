@@ -312,6 +312,18 @@ class TradeMenu:
             self._wants.pop(stack.defn.id, None)      # his want has changed
             self.inv.add("coin", coins)
             record_sale(self.npc, stack.defn.id, sold)   # the day's budget
+            # A LUXURY KEEPS WHO SOLD IT. If the militia catches him drinking
+            # it and he talks, the name he gives is the player's.
+            try:
+                import economy as _e
+                if stack.defn.id in _e.LUXURY:
+                    d = getattr(self.npc, "_seller_of", None)
+                    if d is None:
+                        d = {}
+                        self.npc._seller_of = d
+                    d[stack.defn.id] = "player"
+            except Exception:
+                pass
             # EVERY DEAL TEACHES BOTH OF THEM SOMETHING ABOUT THE OTHER.
             _cap = getattr(self.npc, "social_cap", 3.0)
             self.npc.social = min(_cap, getattr(self.npc, "social", 0.0) + 0.05)
