@@ -133,7 +133,7 @@ MESSAGES = {
     "threaten": ("I'll end you!", "Watch it!", "Dead man!"),
 }
 TEXT_COLOR = {"insult": (12, 12, 12), "praise": (90, 128, 48),
-              "threaten": (208, 30, 30), "need": (72, 116, 176)}
+              "threaten": (208, 30, 30)}
 _cloud_font = None
 
 
