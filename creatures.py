@@ -867,9 +867,11 @@ def choose_target(creature, player, enemies, rabbits, villages, squad=(),
             # moment he walked up the road. Nationless is not foreign.
             _town = getattr(creature, "gate_village", None) or getattr(
                 creature, "guard_village", None)
-            _angry = (getattr(creature, "hostile", False)
-                      or getattr(_town, "provoked", False)
-                      or getattr(player, "wanted", False))
+            # A BRAWL IS NOT HIS FIGHT. The town turning on a brawl used to
+            # make its own guards shoot the PLAYER, just for standing in the
+            # middle. A guard hunts a WANTED man; he does not shoot a man for
+            # being near a punch-up.
+            _angry = getattr(player, "wanted", False)
             if (not player.dead
                     and (_angry
                          or (player.nation is not None
