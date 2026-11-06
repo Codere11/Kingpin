@@ -15,10 +15,10 @@ MOVE_LO = 0.75                 # -25% at zero skill ...
 
 # BARE HANDS. A fist is the same motion and the same skill as an axe -- a
 # villager who has swung one all his life swings the other just as well -- but
-# flesh is not steel. A blow lands a QUARTER of what the axe would, so an
+# flesh is not steel. A blow lands a THIRD of what the axe would, so an
 # unarmed man can still win a fight, and will still lose one to anybody
 # holding anything. The tournament in the capital is fought this way.
-UNARMED_WEAKNESS = 4.0
+UNARMED_WEAKNESS = 3.0
 MOVE_HI = 1.50                 # ... +50% at maximum
 # A MASTER'S ROAD IS LONG. These are the distances, swings and shots that a
 # working life actually accumulates in about three hundred days -- so a man who

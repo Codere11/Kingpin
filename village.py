@@ -2303,7 +2303,7 @@ class NPC:
                 if hasattr(target, "take_damage"):
                     self.skills.gain_axe()
                     # A MAN WITH AN AXE SWINGS AN AXE; A MAN WITHOUT ONE SWINGS
-                    # HIS FISTS. Same motion, same skill, a quarter of the
+                    # HIS FISTS. Same motion, same skill, a third of the
                     # damage -- see skills.UNARMED_WEAKNESS. Before this he
                     # fought bare-handed at full axe weight, so an unarmed
                     # villager hit as hard as an armed one.

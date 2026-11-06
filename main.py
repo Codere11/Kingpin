@@ -133,7 +133,7 @@ AXE_STRIKES = 3          # hits to fell a tree
 # soldier's 16, and more than triple a villager's 10 -- so every fight in the
 # world was his to lose and nothing could ever threaten him. 16 is
 # creatures.Soldier.melee_damage exactly: the man in the ranks is his equal.
-# Unarmed he does 16 / skills.UNARMED_WEAKNESS = 4, like any man in the
+# Unarmed he does 16 / skills.UNARMED_WEAKNESS = 5, like any man in the
 # street who swings a fist.
 MELEE_DAMAGE = 35         # the axe
 BUILD_COST = 100         # wood cost of a house

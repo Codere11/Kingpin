@@ -353,6 +353,26 @@ def click_a_man(g, at=None):
     return (True, bopen, bpanel)
 
 
+def _folk(g):
+    """Every living man who can be clicked: the villagers in view, the
+    truth-teller, and the soldiers -- never the wolves."""
+    out = [n for v in g.visible_villages for n in v.npcs
+           if getattr(n, "alive", True) and not getattr(n, "in_interior", False)]
+    if g.truth[0] is not None and g.truth[0] not in out:
+        out.append(g.truth[0])
+    out += [e for e in g.enemies
+            if getattr(e, "kind", "") == "soldier" and getattr(e, "alive", True)]
+    return out
+
+
+def _man_under(g, wx, wy):
+    """The living man whose drawn body stands over this world point."""
+    for npc in _folk(g):
+        if abs(npc.x - wx) < 26.0 and -64.0 < (wy - npc.y) < 22.0:
+            return npc
+    return None
+
+
 def on_click(g):
     copen = g.confirm_open
 
@@ -451,6 +471,33 @@ def on_click(g):
     if item_id in ("rifle", "shotgun"):
         g.fire()
         return
+    # CLICK DIRECTLY ON A MAN -> CHAT, whatever is in his hands. This is the
+    # one click that never swings: a body is a conversation, not a target.
+    _mx0, _my0 = pygame.mouse.get_pos()
+    _wx0 = g.cam_x + _mx0 / g.zoom
+    _wy0 = g.cam_y + _my0 / g.zoom
+    _man0 = _man_under(g, _wx0, _wy0)
+    if _man0 is not None:
+        if getattr(_man0, "is_truth_teller", False):
+            g.dialogue_panel.open(_man0, g.player, g.main_capital()[0])
+        elif (getattr(_man0, "is_commander", False)
+              and not getattr(_man0, "attacked", False)):
+            g.confirm.pending = _man0
+            if g.player.nation == _man0.nation:
+                g.confirm.mode = "leave"
+                g.confirm.open(f"Leave the {_man0.village.name} army?")
+            else:
+                g.confirm.mode = "join"
+                g.confirm.open(f"Join the {_man0.village.name} army?")
+            copen = True
+        elif getattr(_man0, "attacked", False):
+            g.toast(f"{_man0.name} won't trade with you")
+        elif getattr(_man0, "gate_index", None) is not None:
+            g.guard_search(_man0)
+        else:
+            g.open_trade(_man0)
+        pygame.mouse.set_visible(True)
+        return
     # TALKING COMES BEFORE THE AXE. `on_click` returned at the axe branch
     # below, so with a weapon in hand -- and the starter kit IS an axe --
     # no man could ever be spoken to. The man who answers questions is
@@ -548,6 +595,29 @@ def on_click(g):
                         return
                     g.open_trade(npc)
                     return
+
+    # HAND-TO-HAND. No weapon branch ran: a click that points at a man
+    # (within arm's reach) but is not on his body is an attack. The swing
+    # lands with the axe if he owns one, with his fists if he does not --
+    # a third of the weight, see skills.UNARMED_WEAKNESS.
+    import main as _m
+    if math.hypot(wx - g.player.x, wy - g.player.y) <= g.reach + 24.0:
+        _ang = math.atan2(wy - g.player.y, wx - g.player.x)
+        _found = None
+        _bd = 1e18
+        for _n in _folk(g):
+            _d = math.hypot(_n.x - g.player.x, _n.y - g.player.y)
+            if _d > _m.AXE_REACH + 30.0:
+                continue
+            _na = math.atan2(_n.y - g.player.y, _n.x - g.player.x)
+            _da = abs((_ang - _na + math.pi) % (2.0 * math.pi) - math.pi)
+            if _da <= _m.AXE_ARC and _d < _bd:
+                _found, _bd = _n, _d
+        if _found is not None:
+            plog.log("HAND", "swing at", getattr(_found, "name", "?"),
+                     "d", int(_bd), "armed", g.inventory.count_of("axe") > 0)
+            g.use_axe()
+            return
 
     if item_id == "first_aid":
         g.use_first_aid()
