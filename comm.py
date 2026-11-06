@@ -38,6 +38,21 @@ def _thumbs(screen, x, y):
     pygame.draw.line(screen, skin, (int(x + 2), int(y - 2)), (int(x + 7), int(y - 9)), 4)
 
 
+def _symbol_surface(kind):
+    """The G-hotbar symbol for a kind, as its own surface."""
+    if kind == "praise":
+        s = pygame.Surface((30, 30), pygame.SRCALPHA)
+        _thumbs(s, 15, 15)
+        return s
+    if kind == "threaten":
+        lab = _font(26, True).render("!", True, (216, 30, 30))
+    else:
+        lab = _font(15, True).render("F#!K", True, (10, 10, 10))
+    s = pygame.Surface((lab.get_width() + 6, lab.get_height() + 6), pygame.SRCALPHA)
+    s.blit(lab, (3, 3))
+    return s
+
+
 def draw_symbol(screen, kind, x, y):
     """The symbol as the player holds it."""
     if kind == "insult":
@@ -142,10 +157,8 @@ _cloud_font = None
 
 
 def spawn_cloud(x, y, kind, text=None):
-    """A chat cloud over the speaker: what was just said."""
-    if text is None:
-        import random as _r
-        text = _r.choice(MESSAGES.get(kind, ("...",)))
+    """A chat cloud over the speaker. For the three comm kinds a None text
+    means: draw the SYMBOL (the G-hotbar icon), not words."""
     _clouds.append([float(x), float(y), kind, text, CLOUD_SECONDS])
 
 
@@ -180,10 +193,14 @@ def draw_clouds(screen, cam_x, cam_y):
 
 
 def _cloud_surf(font, kind, text, ttl):
-    lab = font.render(text, True, TEXT_COLOR.get(kind, (20, 20, 20)))
+    if text is None and kind in KINDS:
+        content = _symbol_surface(kind)
+    else:
+        content = font.render(text if text else "?", True,
+                              TEXT_COLOR.get(kind, (20, 20, 20)))
     pad_x, pad_y = 10, 7
-    bw = lab.get_width() + pad_x * 2 + 8
-    bh = lab.get_height() + pad_y * 2 + 8
+    bw = content.get_width() + pad_x * 2 + 8
+    bh = content.get_height() + pad_y * 2 + 8
     surf = pygame.Surface((bw, bh), pygame.SRCALPHA)
     pygame.draw.polygon(surf, (250, 244, 232),
                         [(bw // 2 - 4, bh - 2), (bw // 2 + 4, bh - 2),
@@ -192,7 +209,7 @@ def _cloud_surf(font, kind, text, ttl):
                      border_radius=10)
     pygame.draw.rect(surf, (64, 60, 56), (2, 2, bw - 8, bh - 6), 2,
                      border_radius=10)
-    surf.blit(lab, (4 + pad_x, 2 + pad_y))
+    surf.blit(content, (4 + pad_x, 2 + pad_y))
     fade = max(0.0, min(1.0, ttl / 0.3))
     surf.set_alpha(int(255 * fade))
     return surf, surf.get_rect()
