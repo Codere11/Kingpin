@@ -2292,6 +2292,21 @@ class NPC:
             self.y -= uy * self.combat_speed * self.LUNGE_MULT * dt
             return
         if self.weapon == "rifle":
+            # A MAN WITH A RIFLE DOES NOT SHOOT HIS NEIGHBOURS. In a brawl he
+            # closes and swings his fists; the rifle stays for beasts and
+            # soldiers, not for the man next door.
+            if getattr(target, "kind", "") == "villager":
+                self.x += ux * self.combat_speed * 1.3 * dt
+                self.y += uy * self.combat_speed * 1.3 * dt
+                self.attack_cd -= dt
+                if distance <= 34.0 and self.attack_cd <= 0.0:
+                    self.attack_cd = max(0.5, self.skills.axe_cooldown())
+                    self._did_attack()
+                    self.skills.gain_axe()
+                    if hasattr(target, "take_damage"):
+                        target.take_damage(max(1, round(
+                            (35.0 / 3.0) * self.skills.axe_damage_scale())))
+                return
             preferred = 220.0
             if distance > preferred + 40.0:
                 self.x += ux * self.combat_speed * 1.5 * dt      # sprint in
