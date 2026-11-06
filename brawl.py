@@ -40,7 +40,7 @@ def punch(npc, target, now):
     if math.hypot(target.x - npc.x, target.y - npc.y) > REACH:
         return False
     npc._did_attack()
-    target.take_damage(max(1, round((10.0 / 3.0) * npc.skills.axe_damage_scale())))
+    target.take_damage(max(1, round((35.0 / 3.0) * npc.skills.axe_damage_scale())))
     try:
         economy.wronged(target, npc, 20.0, now)
     except Exception:

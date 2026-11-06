@@ -832,13 +832,14 @@ def _settlement_step(world, towns, men, player, hub_men, villages):
                     _v = by_id.get(str(ev[2]))
                     if _v is not None:
                         try:
-                            _v.take_damage(ev[3])
+                            _before = getattr(_v, "health", "?")
+                            _r = _v.take_damage(ev[3])
                             if getattr(_v, "alive", True):
                                 _v.add_threat(player)   # he knows who hit him
-                            _log("DMG %s -%s -> hp %s alive %s"
-                                 % (getattr(_v, "name", "?"), ev[3],
+                            _log("DMG %s -%s hp %s -> %s alive %s ret %s"
+                                 % (getattr(_v, "name", "?"), ev[3], _before,
                                     getattr(_v, "health", "?"),
-                                    getattr(_v, "alive", "?")))
+                                    getattr(_v, "alive", "?"), _r))
                         except Exception:
                             pass
                     else:
