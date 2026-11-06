@@ -543,7 +543,11 @@ def search_visitor(dt: float, town, who):
                     _opd = _eco.opinion_of(g, _sid)
                     _cur = float(_opd.get(_sid, 0.0))
                     _opd[_sid] = max(-100.0, min(100.0, _cur + _op))
-                g.mood = max(0.0, min(100.0, float(getattr(g, "mood", 50.0)) + _mood))
+                try:
+                    import mind as _mind
+                    _mind.apply_mood(g, _mood, reason=_kind)
+                except Exception:
+                    pass
                 _eco._note("GATE-SPEAK %-16s %-8s the guard of %s"
                             % (getattr(who, "name", "?"), _kind,
                                getattr(town, "name", "?")))

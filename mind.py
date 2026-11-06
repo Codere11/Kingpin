@@ -9,6 +9,20 @@ import comm
 import brawl
 
 
+def apply_mood(npc, delta, reason=None):
+    """THE ONLY WRITER OF MOOD. Every effect in the world -- a kind word, a
+    corpse, the day's coin, a fight won -- lands here, so the clamp and the
+    arithmetic live in one place. `reason` feeds the log; high-volume callers
+    (socio, grief) pass None and stay silent."""
+    old = float(getattr(npc, "mood", 50.0))
+    new = max(0.0, min(100.0, old + delta))
+    npc.mood = new
+    if reason:
+        economy._note("MOOD %-16s %+.0f (%.0f -> %.0f) %s"
+                      % (getattr(npc, "name", "?"), delta, old, new, reason))
+    return new
+
+
 def step(npc, now, dt, others, combat=None):
     """The man's whole mind, one step: spree, brawl, chat."""
     _spree(npc, now, dt)
@@ -22,13 +36,13 @@ def _spree(npc, now, dt):
     _spree_until = getattr(npc, "_spree_until", 0.0)
     if _spree_until and now >= _spree_until:
         npc._spree_until = 0.0
-        npc.mood = min(100.0, float(getattr(npc, "mood", 50.0)) + comm.CATHARSIS_MOOD)
+        apply_mood(npc, comm.CATHARSIS_MOOD, reason="spree catharsis")
         npc._catharsis_end = now + comm.CATHARSIS_DAYS * economy.DAY_LENGTH
         economy._note("SPREE-END %s catharsis +%d"
                       % (getattr(npc, "name", "?"), comm.CATHARSIS_MOOD))
     _cath_end = getattr(npc, "_catharsis_end", 0.0)
     if _cath_end and now >= _cath_end:
-        npc.mood = max(0.0, float(getattr(npc, "mood", 50.0)) - comm.CATHARSIS_MOOD)
+        apply_mood(npc, -comm.CATHARSIS_MOOD, reason="catharsis ended")
         npc._catharsis_end = 0.0
     if not getattr(npc, "_spree_until", 0.0) \
             and float(getattr(npc, "mood", 50.0)) < comm.SPREE_MIN_MOOD \

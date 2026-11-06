@@ -65,7 +65,11 @@ def step(npc, now, dt, others, combat=None):
     if _tgt is not None and (not getattr(_tgt, "alive", True)
                              or getattr(_tgt, "sleep_t", 0.0) > 0.0):
         npc._brawl_target = None
-        npc.mood = min(100.0, float(getattr(npc, "mood", 50.0)) + CATHARSIS)
+        try:
+            import mind as _mind
+            _mind.apply_mood(npc, CATHARSIS, reason="brawl catharsis")
+        except Exception:
+            pass
         economy._note("BRAWL-END %s catharsis +%d"
                       % (getattr(npc, "name", "?"), CATHARSIS))
         _tgt = None

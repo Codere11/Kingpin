@@ -36,4 +36,8 @@ def _see(p):
             continue
         if math.hypot(c.x - p.x, c.y - p.y) <= RADIUS:
             seen.add(id(c))
-            p.mood = max(0.0, min(100.0, float(getattr(p, "mood", 50.0)) - 15.0))
+            try:
+                import mind as _mind
+                _mind.apply_mood(p, -15.0, reason="corpse")
+            except Exception:
+                pass

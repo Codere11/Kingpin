@@ -58,5 +58,9 @@ def tick(people, now, dt):
         _index += 1
         old = float(getattr(p, "_soc_off", 0.0))
         new = float(getattr(p, "_soc_off_new", 0.0))
-        p.mood = max(0.0, min(100.0, float(getattr(p, "mood", 50.0)) + (new - old)))
+        try:
+            import mind as _mind
+            _mind.apply_mood(p, new - old)
+        except Exception:
+            pass
         p._soc_off = new

@@ -1067,7 +1067,11 @@ def _banter_note(a, b):
             opd = opinion_of(other, sid)
             cur = float(opd.get(sid, 0.0))
             opd[sid] = max(-100.0, min(100.0, cur + op))
-        other.mood = max(0.0, min(100.0, float(getattr(other, "mood", 50.0)) + mood))
+        try:
+            import mind as _mind
+            _mind.apply_mood(other, mood, reason=kind)
+        except Exception:
+            pass
         _note("BANTER %-18s %-8s %s"
               % (getattr(speaker, "name", "?"), kind, getattr(other, "name", "?")))
 

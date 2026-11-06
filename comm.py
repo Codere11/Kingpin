@@ -92,7 +92,11 @@ def use_comm(target, kind, now):
     opd = economy.opinion_of(target, "player")
     cur = float(opd.get("player", 0.0))
     opd["player"] = max(-100.0, min(100.0, cur + op))
-    target.mood = max(0.0, min(100.0, float(getattr(target, "mood", 50.0)) + mood))
+    try:
+        import mind as _mind
+        _mind.apply_mood(target, mood, reason=kind)
+    except Exception:
+        pass
     return True, CAP_PER_DAY - rec[1]
 
 
@@ -232,7 +236,11 @@ def _apply(speaker, target, kind):
         opd = economy.opinion_of(target, sid)
         cur = float(opd.get(sid, 0.0))
         opd[sid] = max(-100.0, min(100.0, cur + op))
-    target.mood = max(0.0, min(100.0, float(getattr(target, "mood", 50.0)) + mood))
+    try:
+        import mind as _mind
+        _mind.apply_mood(target, mood, reason=kind)
+    except Exception:
+        pass
 
 
 def npc_try_chat(speaker, others, now):
