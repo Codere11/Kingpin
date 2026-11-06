@@ -1294,13 +1294,18 @@ def main() -> None:
     # spawn -- so the brawl never began. Re-apply it around the player, AFTER
     # the save has had its say, and before the lanes fork.
     if g._home is not None:
-        for _n in getattr(g._home, "npcs", ()):
+        _hot = [n for n in getattr(g._home, "npcs", ())
+                if not getattr(n, "is_truth_teller", False)]
+        for _i, _n in enumerate(_hot):
             _n.mood = _n.rng.uniform(5.0, 28.0)
             _n.x = g.player.x + _n.rng.uniform(-90.0, 90.0)
             _n.y = g.player.y + _n.rng.uniform(-90.0, 90.0)
             _n._px, _n._py = _n.x, _n.y
             _n.home = (_n.x, _n.y)
             _n.target = (_n.x, _n.y)
+            # EVERY THIRD MAN WANTS TO HIT SOMEBODY, from the first frame.
+            if _i % 3 == 0 and len(_hot) > 1:
+                _n._brawl_target = _hot[(_i + 1) % len(_hot)]
     # AN AXE IN HIS HAND, ONCE THE SAVE HAS HAD ITS SAY. The starting kit is
     # added before the save is read -- so a restored pack overwrote it and a
     # man who loaded a game had no axe at all. Anyone with nothing to cut with
