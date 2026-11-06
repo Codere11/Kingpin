@@ -276,10 +276,10 @@ class Soldier(Enemy):
     def _patrol_update(self, dt, target, combat, occluders, view_scale, visible):
         """A territory patrol: walk the village's political border; engage
         anything hostile that comes into sight, then carry on."""
-        # A soldier does not shoot civilians: a brawl is fists, not bullets.
+        # A soldier does not shoot people: a brawl is fists, not bullets.
         if (not getattr(self, "is_militia", False)
                 and target is not None
-                and getattr(target, "kind", "") == "villager"):
+                and getattr(target, "kind", "") not in ("soldier", "wolf", "rabbit")):
             self._fight(dt, target, combat, 1.0, visible)
             return
         if self.hit_flash > 0.0:
@@ -355,10 +355,10 @@ class Soldier(Enemy):
             self.facing = (nx, ny)          # on watch: square to the fence
 
     def _fire_while_marching(self, dt, target, combat):
-        # A soldier does not shoot civilians: a brawl is fists, not bullets.
+        # A soldier does not shoot people: a brawl is fists, not bullets.
         if (not getattr(self, "is_militia", False)
                 and target is not None
-                and getattr(target, "kind", "") == "villager"):
+                and getattr(target, "kind", "") not in ("soldier", "wolf", "rabbit")):
             self._fight(dt, target, combat, 1.0, True)
             return
         self.fire_cd -= dt
@@ -394,11 +394,12 @@ class Soldier(Enemy):
         self.facing = (ux, uy)
         speed = self.speed * speed_scale * self.skills.move_scale()
 
-        # A SOLDIER DOES NOT SHOOT CIVILIANS. In a brawl he closes and swings
-        # his fists; only the militia is exempt -- it darts, it does not punch.
+        # A SOLDIER DOES NOT SHOOT PEOPLE. His rifle is for enemy soldiers and
+        # wolves; against a civilian -- or the player -- he closes and swings
+        # his fists. The militia is exempt: it darts, it does not punch.
         if (not getattr(self, "is_militia", False)
                 and not self.melee
-                and getattr(target, "kind", "") == "villager"):
+                and getattr(target, "kind", "") not in ("soldier", "wolf", "rabbit")):
             self.x += ux * speed * 1.3 * dt
             self.y += uy * speed * 1.3 * dt
             self.fire_cd -= dt
