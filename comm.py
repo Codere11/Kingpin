@@ -133,14 +133,15 @@ MESSAGES = {
     "threaten": ("I'll end you!", "Watch it!", "Dead man!"),
 }
 TEXT_COLOR = {"insult": (12, 12, 12), "praise": (90, 128, 48),
-              "threaten": (208, 30, 30)}
+              "threaten": (208, 30, 30), "need": (72, 116, 176)}
 _cloud_font = None
 
 
-def spawn_cloud(x, y, kind):
+def spawn_cloud(x, y, kind, text=None):
     """A chat cloud over the speaker: what was just said."""
-    import random as _r
-    text = _r.choice(MESSAGES.get(kind, ("...",)))
+    if text is None:
+        import random as _r
+        text = _r.choice(MESSAGES.get(kind, ("...",)))
     _clouds.append([float(x), float(y), kind, text, CLOUD_SECONDS])
 
 
@@ -292,6 +293,23 @@ _to_player_pending = []
 _to_player_index = 0
 
 
+def need_line(npc):
+    """What he is craving, as a spoken line -- or None if he wants nothing."""
+    if float(getattr(npc, "yearning", 0.0)) < economy.YEARING_BUY:
+        return None
+    product = getattr(npc, "wants_product", None)
+    drink = getattr(npc, "wants_drink", None)
+    rng = getattr(npc, "rng", None)
+    if product and drink:
+        return ("I need a smoke" if (rng is None or rng.random() < 0.5)
+                else "I need a %s" % drink)
+    if product:
+        return "I need a smoke"
+    if drink:
+        return "I need a %s" % drink
+    return None
+
+
 def npc_to_player(npc, now):
     """An NPC speaks to the player. Returns the kind, or None if he says nothing."""
     if npc is None or not getattr(npc, "alive", True):
@@ -299,6 +317,11 @@ def npc_to_player(npc, now):
     rng = getattr(npc, "rng", None)
     if rng is None:
         return None
+    # A NEED ANNOUNCED: 80% of the time he says what he is craving.
+    need = need_line(npc)
+    if need is not None and rng.random() < 0.80:
+        spawn_cloud(npc.x, npc.y, "need", text=need)
+        return "need"
     op = float(economy.opinion_of(npc, "player").get("player", 0.0))
     starving = float(getattr(npc, "hunger", 0.0)) >= economy.DOLE_AT
     praise, insult, threaten = npc_chances(op, starving)
