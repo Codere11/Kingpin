@@ -121,3 +121,44 @@ def draw_bar(screen, font, vw, vh, selected):
         border = (222, 176, 88) if selected == kind else (70, 64, 56)
         pygame.draw.rect(screen, border, r, 2, border_radius=6)
         draw_symbol(screen, kind, r.centerx, r.centery)
+
+
+_clouds = []          # [world_x, world_y, kind, seconds_left]
+CLOUD_SECONDS = 3.0
+
+
+def spawn_cloud(x, y, kind):
+    """A chat cloud over a man: what was just said to him."""
+    _clouds.append([float(x), float(y), kind, CLOUD_SECONDS])
+
+
+def tick_clouds(dt):
+    if not _clouds:
+        return
+    for c in _clouds:
+        c[3] -= dt
+    _clouds[:] = [c for c in _clouds if c[3] > 0.0]
+
+
+def draw_clouds(screen, cam_x, cam_y):
+    for x, y, kind, ttl in _clouds:
+        sx = x - cam_x
+        sy = y - cam_y
+        _draw_cloud(screen, sx, sy, kind, ttl)
+
+
+def _draw_cloud(screen, sx, sy, kind, ttl):
+    """A rounded speech bubble above the man, with the message on it."""
+    bw, bh = 66, 36
+    bx = int(sx) - bw // 2
+    by = int(sy) - 64
+    fade = max(0.0, min(1.0, ttl / 0.4))          # fade the last 0.4 s
+    surf = pygame.Surface((bw + 8, bh + 12), pygame.SRCALPHA)
+    # tail first, then the bubble over it
+    pygame.draw.polygon(surf, (250, 244, 232),
+                        [(bw // 2 - 4, bh + 2), (bw // 2 + 4, bh + 2), (bw // 2, bh + 10)])
+    pygame.draw.rect(surf, (250, 244, 232), (2, 2, bw, bh), border_radius=12)
+    pygame.draw.rect(surf, (64, 60, 56), (2, 2, bw, bh), 2, border_radius=12)
+    surf.set_alpha(int(255 * fade))
+    screen.blit(surf, (bx - 4, by))
+    draw_symbol(screen, kind, bx + bw // 2, by + bh // 2 + 2)

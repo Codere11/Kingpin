@@ -423,13 +423,6 @@ class Player:
     @staticmethod
     def _draw_held(screen: pygame.Surface, item_id: str, sx: float, sy: float,
                    fx: float, fy: float, swing: float = 0.0) -> None:
-        if item_id in ("insult", "praise", "threaten"):
-            import comm
-            px, py = -fy, fx
-            hx = sx + fx * 4.0 + px * 9.0
-            hy = sy + fy * 4.0 + py * 9.0
-            comm.draw_symbol(screen, item_id, hx, hy)
-            return
         size, rotates, side = HOLD.get(item_id, (28, False, 9.0))
         icon = items.icon(item_id, size)
 

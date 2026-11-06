@@ -68,6 +68,8 @@ def run(g):
             socio.tick(list(village_mod.PEOPLE), g.now, g.dt)
         except Exception as _so:
             plog.log("SOCIO-ERR", repr(_so)[:120])
+        # CHAT CLOUDS: what was just said to a man, fading over a few seconds.
+        comm.tick_clouds(g.dt)
 
         # THE LANES HAVE FINISHED A TICK: take their state before anything
         # reads a man or draws one. Never blocks -- a lane that is late is one
@@ -2677,7 +2679,7 @@ def run(g):
                     pass
             g._sel = g.inventory.selected_stack()
             if not getattr(g.player, "aboard", False):
-                g.player.draw(g.screen, g.cam_x, g.cam_y, g.comm if g.comm else (g._sel.defn.id if g._sel else None))
+                g.player.draw(g.screen, g.cam_x, g.cam_y, g._sel.defn.id if g._sel else None)
             g.observer_.draw(g.screen)
             try:
                 if g.chest_open:
@@ -2783,7 +2785,7 @@ def run(g):
         # branch may not have assigned: `selected` was unbound on the frames the
         # player was not inside a house, and this is the line that draws him.
         if not getattr(g.player, "aboard", False):
-            g.player.draw(g.screen, g.cam_x, g.cam_y, g.comm if g.comm else (g._sel0.defn.id if g._sel0 else None))
+            g.player.draw(g.screen, g.cam_x, g.cam_y, g._sel0.defn.id if g._sel0 else None)
         if getattr(g.player, "search_progress", 0.0) > 0.0:
             # THE BAR HANGS UNDER THE MAN DOING THE SEARCHING, not in the middle
             # of the screen. Pivot.md S3: he is ten seconds at it, and the
@@ -3009,6 +3011,7 @@ def run(g):
         # the barn showed the middle of the map instead of the hall.
         if not g._inside_now:
             g.draw_exterior(g.cam_x, g.cam_y, True)
+            comm.draw_clouds(g.screen, g.cam_x, g.cam_y)
         try:
             # HIS OWN BENCHES, FORGES AND SHAFTS. A village's workplaces are
             # part of its ground; his are his, and have to be drawn.
@@ -3188,7 +3191,7 @@ def run(g):
         # branch may not have assigned: `selected` was unbound on the frames the
         # player was not inside a house, and this is the line that draws him.
         if not getattr(g.player, "aboard", False):
-            g.player.draw(g.screen, g.cam_x, g.cam_y, g.comm if g.comm else (g._sel0.defn.id if g._sel0 else None))
+            g.player.draw(g.screen, g.cam_x, g.cam_y, g._sel0.defn.id if g._sel0 else None)
         g.combat.draw(g.screen, g.cam_x, g.cam_y)
         g.draw_hunger_gray()
 
