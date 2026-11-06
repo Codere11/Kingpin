@@ -382,6 +382,25 @@ class Soldier(Enemy):
         self.facing = (ux, uy)
         speed = self.speed * speed_scale * self.skills.move_scale()
 
+        # A SOLDIER DOES NOT SHOOT CIVILIANS. In a brawl he closes and swings
+        # his fists; only the militia is exempt -- it darts, it does not punch.
+        if (not getattr(self, "is_militia", False)
+                and not self.melee
+                and getattr(target, "kind", "") == "villager"):
+            self.x += ux * speed * 1.3 * dt
+            self.y += uy * speed * 1.3 * dt
+            self.fire_cd -= dt
+            if distance <= 34.0 and self.fire_cd <= 0.0:
+                self.fire_cd = max(0.35, self.skills.axe_cooldown()) * (
+                    1.6 if self.exhausted else 1.0)
+                self.attack_flash = face.WAR_SECONDS
+                self.skills.gain_axe()
+                if hasattr(target, "take_damage"):
+                    _base = self.melee_damage / skills.UNARMED_WEAKNESS
+                    target.take_damage(max(1, round(
+                        _base * self.skills.axe_damage_scale())))
+            return
+
         if self.melee:
             self.x += ux * speed * 1.3 * dt
             self.y += uy * speed * 1.3 * dt
