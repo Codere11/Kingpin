@@ -614,6 +614,13 @@ def on_click(g):
             if _da <= _m.AXE_ARC and _d < _bd:
                 _found, _bd = _n, _d
         if _found is not None:
+            # THE SAME WAIT AS THE AXE. A fist cannot swing while the arm is
+            # already coming back; this gate is the player's swing cooldown,
+            # nobody else's -- NPCs keep their own attack_cd.
+            if not g.player.can_swing():
+                plog.log("HAND", "cooldown", "wait",
+                         round(float(getattr(g.player, "swing_cd", 0.0)), 2))
+                return
             plog.log("HAND", "swing at", getattr(_found, "name", "?"),
                      "d", int(_bd), "armed", g.inventory.count_of("axe") > 0)
             g.use_axe()
