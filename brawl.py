@@ -89,11 +89,26 @@ def step(npc, now, dt, others, combat=None):
         return
     d = math.hypot(_tgt.x - npc.x, _tgt.y - npc.y)
     if d > REACH:
-        ux = (_tgt.x - npc.x) / d
-        uy = (_tgt.y - npc.y) / d
+        # STEER AND COLLIDE LIKE EVERY OTHER WALK: a brawler is not a ghost.
+        # He goes around walls and people on his way to the punch.
+        try:
+            import steering as _st
+            ux, uy = _st.steer(npc, _tgt.x, _tgt.y,
+                               getattr(npc, "_rects", ()),
+                               getattr(npc, "_fences", ()))
+        except Exception:
+            ux = (_tgt.x - npc.x) / d
+            uy = (_tgt.y - npc.y) / d
         npc.x += ux * getattr(npc, "speed", 50.0) * 1.4 * dt
         npc.y += uy * getattr(npc, "speed", 50.0) * 1.4 * dt
         npc.facing = (ux, uy)
+        try:
+            from physics import resolve_circle_rects
+            npc.x, npc.y = resolve_circle_rects(
+                npc.x, npc.y, getattr(npc, "radius", 10),
+                getattr(npc, "_rects", ()))
+        except Exception:
+            pass
     else:
         # THE SAME SKILL-SCALED WAIT AS THE PLAYER'S SWING: no punch every
         # frame, a man winds up and recovers.
