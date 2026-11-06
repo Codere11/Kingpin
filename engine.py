@@ -1869,6 +1869,13 @@ def run(g):
                             pass
                     g._dart = (getattr(bullet, "dart", False)
                              and getattr(obj, "kind", "") not in ("wolf", "rabbit"))
+                    if (not getattr(bullet, "dart", False)
+                            and getattr(obj, "kind", "") == "villager"):
+                        _sh3 = bullet.shooter
+                        plog.log("CIVILIAN-BULLET", getattr(_sh3, "name", "?"),
+                                 "kind", getattr(_sh3, "kind", "?"),
+                                 "militia", getattr(_sh3, "is_militia", False),
+                                 "hit", getattr(obj, "name", "?"))
                     g.died = obj.take_damage(bullet.damage, tranq=g._dart)
                     if getattr(obj, "kind", "") == "villager":
                         g._WORK.damage(obj, bullet.damage)

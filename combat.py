@@ -111,7 +111,11 @@ class Combat:
         for b in self.bullets:
             x1, y1 = b.x - cam_x, b.y - cam_y
             x0, y0 = b.prev_x - cam_x, b.prev_y - cam_y
-            if b.owner == "player":
+            if getattr(b, "dart", False):
+                # A MILITIA DART: blue, so a tranquiliser is never mistaken
+                # for a bullet. Same flight, same speed, different colour.
+                glow, core, head = (36, 96, 150), (80, 176, 210), (190, 232, 246)
+            elif b.owner == "player":
                 glow, core, head = (220, 150, 40), (255, 232, 150), (255, 255, 220)
             else:
                 glow, core, head = (150, 30, 20), (255, 120, 60), (255, 205, 160)
