@@ -406,9 +406,12 @@ class Workers:
             for f in msg.get("fires", ()):
                 combat.fire(f[0], f[1], f[2], f[3], owner="enemy",
                             damage=f[4], team=f[5], spread=f[6])
-            for sx, sy, sang in msg.get("swings", ()):
+            for _sw in msg.get("swings", ()):
                 try:
-                    combat.spawn_swing(sx, sy, sang)
+                    if len(_sw) >= 4:
+                        combat.spawn_swing(_sw[0], _sw[1], _sw[2], _sw[3])
+                    else:
+                        combat.spawn_swing(_sw[0], _sw[1], _sw[2])
                 except Exception:
                     pass
             for cx, cy, ckind, cname in msg.get("chats", ()):
@@ -641,7 +644,8 @@ def _settlement_step(world, towns, men, player, hub_men, villages):
                                round(distance, 1), damage, team, spread))
 
         def spawn_swing(self, x, y, angle, *a, **k):
-            self.swings.append((round(x, 1), round(y, 1), round(angle, 4)))
+            _w = a[0] if a else 1.0
+            self.swings.append((round(x, 1), round(y, 1), round(angle, 4), round(_w, 3)))
 
         def spawn_impact(self, *a, **k):
             pass

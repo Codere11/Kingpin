@@ -56,10 +56,10 @@ class Combat:
         self.bullets: list[Bullet] = []
         self.flashes: list[list] = []          # [x, y, angle, time, owner]
         self.impacts: list[list] = []          # [x, y, vx, vy, life, colour]
-        self.swings: list[list] = []           # [x, y, angle, life]
+        self.swings: list[list] = []           # [x, y, angle, life, width]
 
-    def spawn_swing(self, x: float, y: float, angle: float) -> None:
-        self.swings.append([x, y, angle, SWING_TIME])
+    def spawn_swing(self, x: float, y: float, angle: float, width: float = 1.0) -> None:
+        self.swings.append([x, y, angle, SWING_TIME, width])
 
     def spawn_impact(self, x: float, y: float, colour) -> None:
         for _ in range(6):
@@ -141,7 +141,7 @@ class Combat:
                                (int(x - cam_x), int(y - cam_y)),
                                max(1, int(1 + 4 * life)))
 
-        for x, y, angle, life in self.swings:
+        for x, y, angle, life, width in self.swings:
             k = life / SWING_TIME                 # 1 at the start, 0 at the end
             progress = 1.0 - k
             sx, sy = x - cam_x, y - cam_y
@@ -149,8 +149,10 @@ class Combat:
             rect = pygame.Rect(sx - radius, sy - radius, radius * 2, radius * 2)
             at = angle - 1.15 + 2.3 * progress
             fade = int(230 * k) + 25
-            pygame.draw.arc(screen, (fade, fade, fade), rect, at - 0.55, at + 0.55, 4)
-            pygame.draw.arc(screen, (150, 158, 168), rect, at - 0.95, at + 0.95, 2)
+            w = 0.55 * width
+            w2 = 0.95 * width
+            pygame.draw.arc(screen, (fade, fade, fade), rect, at - w, at + w, 4)
+            pygame.draw.arc(screen, (150, 158, 168), rect, at - w2, at + w2, 2)
 
         for x, y, angle, time_left, owner in self.flashes:
             k = max(0.0, time_left / FLASH_TIME)

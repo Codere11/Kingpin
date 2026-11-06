@@ -45,7 +45,8 @@ def punch(npc, target, now, combat=None):
     if combat is not None:
         try:
             combat.spawn_swing(npc.x, npc.y, math.atan2(target.y - npc.y,
-                                                        target.x - npc.x))
+                                                        target.x - npc.x),
+                              width=1.0 / 3.0)
         except Exception:
             pass
     target.take_damage(max(1, round((35.0 / 3.0) * npc.skills.axe_damage_scale())))
@@ -94,7 +95,11 @@ def step(npc, now, dt, others, combat=None):
         npc.y += uy * getattr(npc, "speed", 50.0) * 1.4 * dt
         npc.facing = (ux, uy)
     else:
-        if punch(npc, _tgt, now, combat):
+        # THE SAME SKILL-SCALED WAIT AS THE PLAYER'S SWING: no punch every
+        # frame, a man winds up and recovers.
+        npc.attack_cd = getattr(npc, "attack_cd", 0.0) - dt
+        if npc.attack_cd <= 0.0 and punch(npc, _tgt, now, combat):
+            npc.attack_cd = max(0.35, npc.skills.axe_cooldown())
             economy._note("PUNCH %s -> %s"
                           % (getattr(npc, "name", "?"),
                              getattr(_tgt, "name", "?")))
