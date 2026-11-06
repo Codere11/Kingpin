@@ -4,6 +4,7 @@ import sys
 import time
 import threading
 import comm
+import socio
 
 
 def run(g):
@@ -61,6 +62,12 @@ def run(g):
         g.vw, g.vh = g.screen.get_size()
         g.mouse_x, g.mouse_y = pygame.mouse.get_pos()          # window space
         g.wmouse_x, g.wmouse_y = g.mouse_x / ZOOM, g.mouse_y / ZOOM  # world space
+
+        # MOOD FROM MONEY: once a day, spread over the next minutes.
+        try:
+            socio.tick(list(village_mod.PEOPLE), g.now, g.dt)
+        except Exception as _so:
+            plog.log("SOCIO-ERR", repr(_so)[:120])
 
         # THE LANES HAVE FINISHED A TICK: take their state before anything
         # reads a man or draws one. Never blocks -- a lane that is late is one
