@@ -581,7 +581,7 @@ class NPC:
         self._market_spot = None
         self.skills = skills.Skills()      # the same skills the player has
         self.target = (x, y)
-        self.pause = self.rng.uniform(0.2, 1.2)
+        self.pause = self.rng.uniform(0.1, 0.5)
         self.stuck = 0.0
         self._px = x
         self._py = y
@@ -1134,6 +1134,13 @@ class NPC:
             self._fight(dt, threat, combat)
             return
 
+        # A MAN IN A BRAWL IS CHASING ONE MAN AND NOTHING ELSE. mind.step
+        # already moved him toward his punch target this tick; the schedule
+        # must not move him a second way in the same tick, or he twitches
+        # between the two tasks.
+        if getattr(self, "_brawl_target", None) is not None:
+            return
+
         if self.panic > 0.0 and threat is not None:
             self.panic -= dt
             # EVERY MAN HIS OWN DIRECTION. Running straight away from the gun
@@ -1193,7 +1200,7 @@ class NPC:
             tx, ty = self.target
             if math.hypot(tx - self.x, ty - self.y) < 6.0:
                 self.target = self._pick_target()
-                self.pause = self.rng.uniform(0.6, 2.4)
+                self.pause = self.rng.uniform(0.15, 0.6)
                 self._dir = None
                 return
         # Roaming is low-effort: reuse the direction for a few frames.
