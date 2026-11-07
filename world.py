@@ -57,9 +57,10 @@ GRASS_DIRT = rich((112, 94, 62))
 # bays and headlands -- never a straight ruler line.
 COAST_X = 0.0            # the beach sits on the world's x=0 meridian
 SAND_W = 110.0           # beach width in pixels
-OCEAN = np.array((34, 82, 124), np.float32)     # deep colonial sea
-SAND = np.array((202, 178, 130), np.float32)    # warm pixel sand
-SEAWEED = (44, 100, 94)                          # muted teal, in the water
+WATER = (30, 88, 146)                            # the strong blue water overlay
+WATER_ALPHA = 170                                # ...painted over the sea floor
+SAND = np.array((202, 178, 130), np.float32)    # warm pixel sand (beach AND sea floor)
+ALGAE = (86, 205, 96)                            # bright green algae, under the water
 
 
 def coast_x(y, seed):
@@ -295,15 +296,11 @@ class GroundRenderer:
         _ocean = X > _coast[:, None]
         _sand = (~_ocean) & (X > (_coast[:, None] - SAND_W))
         if _ocean.any():
-            _dist = np.clip((X - _coast[:, None]) / 900.0, 0.0, 1.0)
-            _base = OCEAN[None, None, :] * (1.0 - 0.30 * _dist[..., None])
-            _waves = fbm(X * 0.02, Y * 0.02, seed + 5, octaves=2)
-            _crest = np.clip((_waves - 0.52) * 2.2, 0.0, 1.0)[..., None]
-            _ocean_col = np.clip(_base + _crest * 26.0, 0.0, 255.0)
-            col[_ocean] = _ocean_col[_ocean]
-            _foam = _ocean & (X <= _coast[:, None] + 7.0)
-            if _foam.any():
-                col[_foam] = (236, 236, 222)
+            # THE SEA FLOOR IS THE SAME SAND AS THE BEACH. The water is a
+            # strong blue overlay painted later, over this sand and the algae
+            # on it -- so the sea reads as shallow water, not flat blue.
+            _sd = (0.92 + 0.14 * np.sin(X * 0.05 + Y * 0.03 + seed * 0.7))[..., None]
+            col[_ocean] = (SAND[None, None, :] * _sd)[_ocean]
         if _sand.any():
             _sv = (0.93 + 0.12 * np.sin(X * 0.05 + Y * 0.03 + seed * 0.5))[..., None]
             col[_sand] = (SAND[None, None, :] * _sv)[_sand]
@@ -344,7 +341,7 @@ class GroundRenderer:
         sc = getattr(self, "scatter", None)
         if sc is not None:                  # grass is baked in, generated once
             sc.render_into(surf, cx, cy)
-        self._draw_seaweed(surf, cx, cy)
+        self._draw_algae(surf, cx, cy)
         self._draw_roads(surf, cx, cy)
         # ...AND THE PLAYER'S OWN WORK, PAINTED CRISP. Everything above is
         # computed on a coarse grid and smooth-scaled, which nobody notices in
@@ -371,6 +368,21 @@ class GroundRenderer:
             for k in range(3):
                 yy = r.top + 5 + k * max(3, (r.h - 10) // 3)
                 pygame.draw.line(surf, edge, (r.left + 3, yy), (r.right - 3, yy), 1)
+        # THE WATER ITSELF: a strong blue overlay over the sea floor (the sand
+        # and the algae on it), following the coast. Painted last so it tints
+        # everything in the sea and nothing on the land.
+        _ox = np.arange(CHUNK, dtype=np.float32) + cx * CHUNK
+        _oy = np.arange(CHUNK, dtype=np.float32) + cy * CHUNK
+        _Xf, _Yf = np.meshgrid(_ox, _oy)
+        _sea = _Xf > coast_x(_Yf, seed)
+        if _sea.any():
+            _ov = np.zeros((CHUNK, CHUNK, 4), np.uint8)
+            _ov[..., 0] = WATER[0]
+            _ov[..., 1] = WATER[1]
+            _ov[..., 2] = WATER[2]
+            _ov[..., 3] = np.where(_sea, WATER_ALPHA, 0)
+            _ovs = pygame.image.frombuffer(_ov.tobytes(), (CHUNK, CHUNK), "RGBA")
+            surf.blit(_ovs, (0, 0))
         return surf
 
     def _stone(self, surf, x, y, rng, dense=False):
@@ -381,23 +393,23 @@ class GroundRenderer:
         pygame.draw.ellipse(surf, (shade + 42, shade + 36, shade + 24),
                             (x - r * 0.5, y - r * 0.4, r, r * 0.8))
 
-    def _draw_seaweed(self, surf, cx, cy):
-        """Subtle seaweed in the ocean: muted teal wisps that sit IN the water
-        rather than on it, so they camouflage with the sea instead of shouting."""
+    def _draw_algae(self, surf, cx, cy):
+        """Bright green algae on the sea floor: scatter-like tufts, but much
+        less frequent, and only where there is water."""
         seed = self.world.seed
         rng = random.Random((cx * 73856093) ^ (cy * 19349663) ^ seed)
-        for _ in range(16):
-            x = rng.randint(0, CHUNK - 2)
-            y = rng.randint(0, CHUNK - 4)
+        for _ in range(9):
+            x = rng.randint(0, CHUNK - 4)
+            y = rng.randint(0, CHUNK - 6)
             wx = cx * CHUNK + x
             wy = cy * CHUNK + y
             if wx <= coast_x(wy, seed):      # only out in the ocean
                 continue
-            for k in range(rng.randint(2, 4)):
+            for k in range(rng.randint(2, 3)):
                 yy = y + k * 3
-                if yy < CHUNK - 2:
-                    pygame.draw.line(surf, SEAWEED,
-                                     (x + (k & 1), yy), (x + 1 + (k & 1), yy + 2), 1)
+                if yy < CHUNK - 3:
+                    pygame.draw.line(surf, ALGAE,
+                                     (x + (k & 1), yy), (x + 2 + (k & 1), yy + 2), 1)
 
     def _draw_roads(self, surf, cx, cy):
         """Road/plaza stones, pre-baked per village and looked up by chunk."""
