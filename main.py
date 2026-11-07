@@ -413,6 +413,14 @@ def main() -> None:
     else:
         print("SETTLEMENT SPAWN  %.0f,%.0f  in %s"
               % (g._hx, g._hy, getattr(g._home, "name", "?")))
+    # ---- THE COLONIAL COAST ----------------------------------------------
+    # He wakes on the beach: the ocean to his right, the Crown's ship just
+    # offshore, and the land stretching away west. Overrides the old spawn.
+    import world as _world
+    g._hx = _world.coast_x(0.0, g.world.seed) - 44.0
+    g._hy = 0.0
+    g._home = None
+    g._start = None
     # ---- OBSERVE MODE ------------------------------------------------------
     # KINGPIN_OBSERVE=1 runs a real instance -- real window, real frame, real
     # world -- with the player standing invincible in open ground while

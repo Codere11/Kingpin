@@ -10,6 +10,14 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
     target = target if target is not None else g.screen
     g.static_layer.draw(target, cx, cy, g.vw, g.vh)
     g.blood.draw(target, cx, cy, g.vw, g.vh)
+    # THE CROWN'S SHIP, anchored just offshore, bow to the beach.
+    try:
+        import ship as _ship
+        import world as _world
+        _ship.draw(target, cx, cy,
+                   _world.coast_x(0.0, getattr(g.world, "seed", 0)) + 56.0, 0.0)
+    except Exception:
+        pass
     world_villages = g.villages.visible(cx, cy, g.vw, g.vh,
                                       extra=g.hub_world.hubs)
     world_trees = g.trees.visible(cx, cy, g.vw, g.vh)

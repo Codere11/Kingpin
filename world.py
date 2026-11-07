@@ -51,6 +51,22 @@ GRASS_LITE = rich((116, 156, 72))
 GRASS_DRY = rich((146, 142, 86))
 GRASS_DIRT = rich((112, 94, 62))
 
+# --- THE COLONIAL COAST -----------------------------------------------------
+# Land to the WEST, endless impassable ocean to the EAST, and a sand beach
+# between. The coastline is not a ruler line: it curls slowly with y.
+COAST_X = 0.0            # the beach sits on the world's x=0 meridian
+SAND_W = 88.0            # beach width in pixels
+OCEAN = np.array((34, 82, 124), np.float32)     # deep colonial sea
+SAND = np.array((202, 178, 130), np.float32)    # warm pixel sand
+SEAWEED = (44, 100, 94)                          # muted teal, in the water
+
+
+def coast_x(y, seed):
+    """The shoreline x for a given world y -- two slow sines, so bays and
+    headlands read as a natural coast. Works on scalars and arrays alike."""
+    return COAST_X + (np.sin(y * 0.0011 + seed) * 90.0
+                      + np.sin(y * 0.0037 + seed * 0.71) * 34.0)
+
 
 # plot kinds that count as worked / planted soil (must match crop.py)
 _WORKED = ("dirt", "fertile", "plant", "wheat", "berries", "mushroom",
@@ -105,6 +121,14 @@ class World:
             override = self._overrides.get((tx, ty))
             if override is not None:
                 return override
+            # the coast overrides the noise: ocean east, sand on the beach
+            _wx = tx * TILE + TILE / 2.0
+            _wy = ty * TILE + TILE / 2.0
+            _c = coast_x(_wy, self.seed)
+            if _wx > _c:
+                return "ocean"
+            if _wx > _c - SAND_W:
+                return "sand"
             key = (tx, ty)
             got = self._kind_cache.get(key)
             if got is not None:
@@ -259,6 +283,19 @@ class GroundRenderer:
         col = dark * (1.0 - mixv) + lite * mixv
         col = col * (0.90 + 0.18 * clump)[..., None]
 
+        # THE COAST: paint the ocean and the beach over the land noise. East
+        # of the curling shoreline is water; the strip just west of it is sand.
+        _yy = Y[:, 0]
+        _coast = coast_x(_yy, seed)
+        _ocean = X > _coast[:, None]
+        _sand = (~_ocean) & (X > (_coast[:, None] - SAND_W))
+        if _ocean.any():
+            _w = (0.90 + 0.10 * np.sin(X * 0.05 + Y * 0.021 + seed))[..., None]
+            col[_ocean] = (OCEAN[None, None, :] * _w)[_ocean]
+        if _sand.any():
+            _sv = (0.94 + 0.10 * np.sin(X * 0.061 + Y * 0.029 + seed * 0.5))[..., None]
+            col[_sand] = (SAND[None, None, :] * _sv)[_sand]
+
         # Player-made soil edits: dug dirt, then watered (fertile) dirt. Each
         # tile paints a soft blob, and blobs merge naturally where they overlap.
         radius = TILE * 0.95
@@ -295,6 +332,7 @@ class GroundRenderer:
         sc = getattr(self, "scatter", None)
         if sc is not None:                  # grass is baked in, generated once
             sc.render_into(surf, cx, cy)
+        self._draw_seaweed(surf, cx, cy)
         self._draw_roads(surf, cx, cy)
         # ...AND THE PLAYER'S OWN WORK, PAINTED CRISP. Everything above is
         # computed on a coarse grid and smooth-scaled, which nobody notices in
@@ -330,6 +368,24 @@ class GroundRenderer:
                             (x - r, y - r * 0.7, r * 2, r * 1.4))
         pygame.draw.ellipse(surf, (shade + 42, shade + 36, shade + 24),
                             (x - r * 0.5, y - r * 0.4, r, r * 0.8))
+
+    def _draw_seaweed(self, surf, cx, cy):
+        """Subtle seaweed in the ocean: muted teal wisps that sit IN the water
+        rather than on it, so they camouflage with the sea instead of shouting."""
+        seed = self.world.seed
+        rng = random.Random((cx * 73856093) ^ (cy * 19349663) ^ seed)
+        for _ in range(16):
+            x = rng.randint(0, CHUNK - 2)
+            y = rng.randint(0, CHUNK - 4)
+            wx = cx * CHUNK + x
+            wy = cy * CHUNK + y
+            if wx <= coast_x(wy, seed):      # only out in the ocean
+                continue
+            for k in range(rng.randint(2, 4)):
+                yy = y + k * 3
+                if yy < CHUNK - 2:
+                    pygame.draw.line(surf, SEAWEED,
+                                     (x + (k & 1), yy), (x + 1 + (k & 1), yy + 2), 1)
 
     def _draw_roads(self, surf, cx, cy):
         """Road/plaza stones, pre-baked per village and looked up by chunk."""
