@@ -7,7 +7,7 @@ build/
 dist/
 *.spec
 _internal/
-Kingpin
+GetWorld
 
 # ---- runtime data (yours, not the project's) ----
 saves/

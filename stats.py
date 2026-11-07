@@ -1,14 +1,14 @@
 """stats.py -- ONE BODY FOR EVERYBODY.
 
 The player's body is the standard. Whatever a man's skills, a rifle round and
-an axe blow do the same arithmetic to him as to the Kingpin: everyone in the
+an axe blow do the same arithmetic to him as to the player: everyone in the
 world -- villagers, defenders, levied soldiers, standing armies, the crown's
 raised men, bandits -- has this much health and no more.
 """
 
 PLAYER_MAX_HEALTH = 115
 # A FIGHTER'S BODY GROWS WITH HIS TRADE. Nobody starts tougher than the
-# Kingpin; a man who has mastered the axe or the gun has 180 to lose -- so the
+# player; a man who has mastered the axe or the gun has 180 to lose -- so the
 # same 80-health round that kills a levy leaves a veteran standing.
 SKILL_MAX_HEALTH = 180
 

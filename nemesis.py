@@ -593,7 +593,7 @@ def secret_summary() -> str:
 
 
 LEADER_ID = "leader:identified"
-LEADER = "the Kingpin"          # what the service calls the man behind the yard
+LEADER = "the player"           # what the service calls the man behind the yard
 
 
 def note_leader(agent, player=None, at=None) -> str | None:

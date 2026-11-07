@@ -814,7 +814,7 @@ def choose_target(creature, player, enemies, rabbits, villages, squad=(),
             # hire standing in the yard is not "just another villager".
             # THE LEADER HIMSELF, not whatever `player` happens to be: in the
             # game's own test mode that argument is the observer, and a hunting
-            # party that hunts the observer never fires a shot at the Kingpin.
+            # party that hunts the observer never fires a shot at the player.
             _who = getattr(creature, "_player", None) or player
             _ids = getattr(creature, "hunt_ids", None) or ()
             # ON SIGHT, not by telepathy: a party marching to the yard does not

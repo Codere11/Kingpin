@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build the standalone Kingpin app. Fast rebuilds.
+# Build the standalone GetWorld app. Fast rebuilds.
 #
 #   ./build.sh
 #
@@ -45,13 +45,13 @@ if ! "$VENV/bin/cythonize" -i -3 village.py economy.py skills.py > /tmp/kingpin-
 fi
 
 echo "Building..."
-rm -rf "$DIST" Kingpin.spec __pycache__
+rm -rf "$DIST" GetWorld.spec __pycache__
 
 "$VENV/bin/pyinstaller" \
     --noconfirm \
     --onedir \
     --windowed \
-    --name Kingpin \
+    --name GetWorld \
     --workpath "$WORK" \
     --specpath "$WORK" \
     --distpath "$DIST" \
@@ -63,8 +63,8 @@ rm -rf "$DIST" Kingpin.spec __pycache__
 
 # Executable at the top level, with its runtime bundle next to it.
 rm -rf _internal
-mv "$DIST/Kingpin/Kingpin" ./Kingpin
-mv "$DIST/Kingpin/_internal" ./_internal
+mv "$DIST/GetWorld/GetWorld" ./GetWorld
+mv "$DIST/GetWorld/_internal" ./_internal
 rm -rf "$DIST"
 
-echo "Built $(pwd)/Kingpin"
+echo "Built $(pwd)/GetWorld"

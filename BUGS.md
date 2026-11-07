@@ -398,14 +398,14 @@ enough to make the manhunt a no-op):
 - **The distance cull ate them.** main.py's per-frame cull keeps an enemy only
   if it is `follow`, holds a gate, patrols, or is within 6,500 px of the
   PLAYER. The party spawns 620 px from the *place*, not from the player, so any
-  time the Kingpin was not already standing there the ten men were created,
+  time the player was not already standing there the ten men were created,
   logged `MANHUNT dispatched 10 men ...`, and deleted in the same frame. The
   party is now exempt from that cull: it is sent to a place and stands there.
 - **In test mode the party hunted the observer.** `creatures.choose_target` is
   handed `watcher` instead of `player` when the game runs in TEST MODE, and the
   manhunt branch used that argument: ten armed men marched to the yard and
   stared at nothing (`targeting: nothing`, 0 damage). The branch now reads
-  `creature._player` -- the real Kingpin -- and the same run measured
+  `creature._player` -- the real player -- and the same run measured
   `targeting: THE PLAYER` from 274 px and **779 damage** in 21 s.
 - **E with a body open opened the pack and froze the world.** The body/folder
   panels are not in the `BLOCKED` guard list, so an E press that missed its
@@ -443,7 +443,7 @@ What it does now (`manhunt.dispatch`), measured in the running game:
   (`_detach`) and given `march_target` = the place the news came from; the
   game's own march code moves them at column speed. Measured: sent from
   **11,921 px away**, closing **6,285 px in 30 s**, alive the whole way.
-- **THEN THEY HUNT.** Within sight of the place they acquire the Kingpin and
+- **THEN THEY HUNT.** Within sight of the place they acquire the player and
   every named man of his (`targeting: THE PLAYER`, 779 damage measured in the
   earlier run once they were on top of him).
 

@@ -1,6 +1,6 @@
 # HANDOVER — read this first, then the code
 
-A fresh session on **Kingpin** (Python + pygame-ce, top-down 2D open world).
+A fresh session on **GetWorld** (Python + pygame-ce, top-down 2D open world).
 This file is the things that are **not discoverable by reading the code**: the
 traps, the rules of the build, and how the user works. Read it, then read the
 code it points at.
@@ -33,7 +33,7 @@ code it points at.
 ```
 ./build.sh      # cythonise village/economy/skills, then PyInstaller  (~4 min)
 ./run.sh        # dev run
-./Kingpin       # the exe he plays
+./GetWorld       # the exe he plays
 ```
 
 * **`build.sh` exits 1 on a Cython failure, on purpose.** It used to print

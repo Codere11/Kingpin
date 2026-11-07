@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Run Kingpin straight from source -- no build, starts in about a second.
+# Run GetWorld straight from source -- no build, starts in about a second.
 # Use this while iterating; only run ./build.sh when you want the standalone app.
 #
 set -euo pipefail
