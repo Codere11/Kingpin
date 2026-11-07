@@ -1218,6 +1218,15 @@ def run(g):
                 g.player.x, g.player.y = resolve_circle_rects(
                     g.player.x, g.player.y, g.player.radius,
                     g.grid.near(g.player.x, g.player.y, g.player.radius + 6.0))
+            # THE OCEAN IS IMPASSABLE: the shore is the eastern edge of the
+            # world. Walk into the sea and he is pushed back to the sand.
+            try:
+                import world as _world
+                _c = _world.coast_x(g.player.y, g.world.seed)
+                if g.player.x > _c:
+                    g.player.x = _c - g.player.radius
+            except Exception:
+                pass
 
             for patrol in g.patrols:
                 g.best = None

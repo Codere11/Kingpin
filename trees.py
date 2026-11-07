@@ -20,6 +20,7 @@ import pygame
 import biomes
 import nations
 from noise import fbm
+from world import coast_x
 from village import (SPACING, VILLAGE_SCALE, village_center,
                      village_clearance, village_radius)
 
@@ -499,6 +500,9 @@ class Trees:
         rng = random.Random(code)
         x = cx * CELL + CELL / 2.0 + rng.uniform(-JIT, JIT)
         y = cy * CELL + CELL / 2.0 + rng.uniform(-JIT, JIT)
+        if x > coast_x(y, self.seed):
+            self._presence[key] = None   # trees do not grow out of the ocean
+            return None
         temp = float(biomes.temperature(x, y, self.seed))
         hum = float(biomes.humidity(x, y, self.seed))
         clump = self._clump(x, y)

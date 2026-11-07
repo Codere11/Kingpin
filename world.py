@@ -53,19 +53,23 @@ GRASS_DIRT = rich((112, 94, 62))
 
 # --- THE COLONIAL COAST -----------------------------------------------------
 # Land to the WEST, endless impassable ocean to the EAST, and a sand beach
-# between. The coastline is not a ruler line: it curls slowly with y.
+# between. The coastline is fBm noise, so it reads as a natural coast with
+# bays and headlands -- never a straight ruler line.
 COAST_X = 0.0            # the beach sits on the world's x=0 meridian
-SAND_W = 88.0            # beach width in pixels
+SAND_W = 110.0           # beach width in pixels
 OCEAN = np.array((34, 82, 124), np.float32)     # deep colonial sea
 SAND = np.array((202, 178, 130), np.float32)    # warm pixel sand
 SEAWEED = (44, 100, 94)                          # muted teal, in the water
 
 
 def coast_x(y, seed):
-    """The shoreline x for a given world y -- two slow sines, so bays and
-    headlands read as a natural coast. Works on scalars and arrays alike."""
-    return COAST_X + (np.sin(y * 0.0011 + seed) * 90.0
-                      + np.sin(y * 0.0037 + seed * 0.71) * 34.0)
+    """The shoreline x for a given world y. fBm value noise (scalars and
+    arrays alike) so the coast wiggles naturally with bays and headlands.
+    A scalar in gives a plain float out (so it never poisons pygame.Rect)."""
+    yy = np.asarray(y, np.float32) * 0.008
+    n = fbm(np.float32(0.0), yy, seed + 77, octaves=3)
+    r = COAST_X + (n - 0.5) * 300.0
+    return float(r) if getattr(r, "ndim", 0) == 0 else r
 
 
 # plot kinds that count as worked / planted soil (must match crop.py)
@@ -284,16 +288,24 @@ class GroundRenderer:
         col = col * (0.90 + 0.18 * clump)[..., None]
 
         # THE COAST: paint the ocean and the beach over the land noise. East
-        # of the curling shoreline is water; the strip just west of it is sand.
+        # of the shoreline is water (deeper + darker far out, with wave crests
+        # and a foam line at the shore); the strip west of it is sand.
         _yy = Y[:, 0]
         _coast = coast_x(_yy, seed)
         _ocean = X > _coast[:, None]
         _sand = (~_ocean) & (X > (_coast[:, None] - SAND_W))
         if _ocean.any():
-            _w = (0.90 + 0.10 * np.sin(X * 0.05 + Y * 0.021 + seed))[..., None]
-            col[_ocean] = (OCEAN[None, None, :] * _w)[_ocean]
+            _dist = np.clip((X - _coast[:, None]) / 900.0, 0.0, 1.0)
+            _base = OCEAN[None, None, :] * (1.0 - 0.30 * _dist[..., None])
+            _waves = fbm(X * 0.02, Y * 0.02, seed + 5, octaves=2)
+            _crest = np.clip((_waves - 0.52) * 2.2, 0.0, 1.0)[..., None]
+            _ocean_col = np.clip(_base + _crest * 26.0, 0.0, 255.0)
+            col[_ocean] = _ocean_col[_ocean]
+            _foam = _ocean & (X <= _coast[:, None] + 7.0)
+            if _foam.any():
+                col[_foam] = (236, 236, 222)
         if _sand.any():
-            _sv = (0.94 + 0.10 * np.sin(X * 0.061 + Y * 0.029 + seed * 0.5))[..., None]
+            _sv = (0.93 + 0.12 * np.sin(X * 0.05 + Y * 0.03 + seed * 0.5))[..., None]
             col[_sand] = (SAND[None, None, :] * _sv)[_sand]
 
         # Player-made soil edits: dug dirt, then watered (fertile) dirt. Each
@@ -754,6 +766,8 @@ class Scatter:
                 for i in range(count):
                     wx = (cx + self._rand(cx, cy, i, 2)) * cell
                     wy = (cy + self._rand(cx, cy, i, 3)) * cell
+                    if wx > coast_x(wy, self.seed):
+                        continue        # the ocean grows seaweed, not grass
                     if tilled:
                         ttx = int(math.floor(wx / TILE))
                         tty = int(math.floor(wy / TILE))
