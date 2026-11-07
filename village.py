@@ -4208,6 +4208,8 @@ class Villages:
         return list(self._cache.values())
 
     def get(self, gx: int, gy: int) -> Village:
+        if gx >= 0:
+            return None      # the ocean east of the coast holds no settlement
         village = self._cache.get((gx, gy))
         if village is None:
             village = Village(gx, gy, self.seed)
@@ -4339,7 +4341,7 @@ class Villages:
                 if abs(_vx2 - cx) <= r and abs(_vy2 - cy) <= r:
                     if _v0 is None:
                         _v0 = self.get(gx, gy)      # now, and only now
-                    if _v0 not in out:
+                    if _v0 is not None and _v0 not in out:
                         out.append(_v0)
         # AND THE OFF-LATTICE ONES. Everything above finds a town by asking the
         # LATTICE where it is -- `village_center(gx, gy)` -- so a settlement

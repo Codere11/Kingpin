@@ -151,6 +151,8 @@ def build(towns) -> None:
     def seg(a, b):
         ax, ay = float(a[0]), float(a[1])
         bx, by = float(b[0]), float(b[1])
+        if ax > 150.0 or bx > 150.0:
+            return        # no track into the sea (coast never exceeds x=150)
         if abs(ax - bx) < 0.6 and abs(ay - by) < 0.6:
             return
         _SEGS.append((ax, ay, bx, by,

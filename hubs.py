@@ -976,6 +976,9 @@ class Hubs:
             # why a hub needs its own list, its own draw AND ITS OWN COLLISION.
             x = rng.uniform(-80000.0, 80000.0)
             y = rng.uniform(-80000.0, 80000.0)
+            import world as _world
+            if x > _world.coast_x(y, world.seed):
+                continue          # no hub out in the ocean
             if any((v.x - x) ** 2 + (v.y - y) ** 2 < MIN_FROM_TOWN ** 2
                    for v in towns):
                 continue

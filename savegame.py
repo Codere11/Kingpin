@@ -445,6 +445,8 @@ def restore(g) -> None:
         try:
             gx, gy = (int(v) for v in key.split(","))
             v = g.villages.get(gx, gy)
+            if v is None:
+                continue
             v.conquered = bool(st.get("conquered", False))
             v.plundered = bool(st.get("plundered", False))
             v.chaos = float(st.get("chaos", 0.0))

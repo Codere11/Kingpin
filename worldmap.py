@@ -189,6 +189,8 @@ class WorldMap:
         for gxx in range(g0, g1 + 1):
             for gyy in range(g0, g1 + 1):
                 v = villages.get(gxx, gyy)
+                if v is None:
+                    continue
                 if (abs(v.x - cx) <= edge and abs(v.y - cy) <= edge):
                     ordered.append(v)
         ordered.sort(key=lambda v: v.y)

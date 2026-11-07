@@ -26,6 +26,8 @@ def world_cells():
     # neighbour ring now prevents: everything the planner can look at is laid
     # out at load, and it never has to build one.
     for gx in range(-n - 2, n + 2):
+        if gx >= 0:
+            continue        # the ocean east of the coast has no settlements
         for gy in range(-n - 2, n + 2):
             cx, cy = (gx + 0.5) * main.SPACING, (gy + 0.5) * main.SPACING
             if (-main.CORE_HALF - main.SPACING * 1.5 <= cx <= main.CORE_HALF + main.SPACING * 1.5
@@ -318,6 +320,9 @@ def spawn_wolf(player, world, village_mod, enemies, biomes, math, random,
         dist = random.uniform(2600.0, 5200.0)
         x = player.x + math.cos(angle) * dist
         y = player.y + math.sin(angle) * dist
+        import world as _world
+        if x > _world.coast_x(y, world.seed):
+            continue                     # wolves do not live in the sea
         if village_mod.village_clearance(x, y, world.seed) < 0.0:
             continue
         _ot = origin_town
@@ -335,6 +340,9 @@ def spawn_rabbit(player, world, rabbits, biomes, math, random, Rabbit) -> None:
     dist = random.uniform(180.0, 700.0)
     rx = player.x + math.cos(angle) * dist
     ry = player.y + math.sin(angle) * dist
+    import world as _world
+    if rx > _world.coast_x(ry, world.seed):
+        return
     rabbits.append(Rabbit(rx, ry, biomes.rabbit_fur(
         float(world.temperature(rx, ry)), float(world.humidity(rx, ry)))))
 
