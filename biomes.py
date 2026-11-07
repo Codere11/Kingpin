@@ -14,8 +14,8 @@ from palette import rich
 
 from noise import fbm, value_noise
 
-TEMP_SCALE = 0.000155          # ~6 km features
-HUM_SCALE = 0.000185
+TEMP_SCALE = 0.0000155         # ~60 km features: huge, uninterrupted biomes
+HUM_SCALE = 0.0000185
 
 # rows: cold -> hot ; cols: dry -> wet
 GRID = (
