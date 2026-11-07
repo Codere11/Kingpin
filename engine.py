@@ -475,6 +475,8 @@ def run(g):
                 # one thing a man on a road needs -- where am I and where is the
                 # nearest town -- was a debug tool.
                 g.map_open = not g.map_open
+                if g.map_open and g.world_map is not None:
+                    g.world_map.reset(g.player.x, g.player.y)   # the map follows him
                 pygame.mouse.set_visible(g.map_open)
             elif (g.dialogue_panel.open_
                   and ((event.type == pygame.KEYDOWN

@@ -724,9 +724,9 @@ def main() -> None:
     g.speed_i = 0
     g.time_scale = g.SPEEDS[0]
     # Chart the map at world creation, on a worker thread, so pressing M
-    # simply shows it instead of stalling the game for a second.
-    g.world_map = (worldmap.WorldMap(g.world.seed, background=True)
-                 if g.test_mode else None)
+    # simply shows it instead of stalling the game for a second. The map is
+    # the simulation's view: a region the size of the old world, around him.
+    g.world_map = worldmap.WorldMap(g.world.seed, background=True)
     g.placing = None
     g.built_houses: list[House] = []
     g.placed_work: list = []          # the four trades, out of doors, on his land

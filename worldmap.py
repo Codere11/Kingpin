@@ -30,6 +30,8 @@ class WorldMap:
         self.zoom = 1.0
         self.center_x = 0.0
         self.center_y = 0.0
+        self.build_cx = 0.0        # the centre the current map image was built around
+        self.build_cy = 0.0
         self.base = None
         self._lock = threading.Lock()
         self._font_key = None
@@ -56,6 +58,14 @@ class WorldMap:
         self.center_x = x
         self.center_y = y
         self._clamp()
+        # THE MAP FOLLOWS THE PLAYER. If he has walked past the edge of the
+        # built image, rebuild it around him (on the worker thread).
+        if (abs(x - self.build_cx) > self.half
+                or abs(y - self.build_cy) > self.half):
+            self.build_cx = x
+            self.build_cy = y
+            self.base = None
+            self.start_build()
 
     def _clamp(self) -> None:
         span = self.half / self.zoom
@@ -79,8 +89,11 @@ class WorldMap:
 
     def _build(self) -> pygame.Surface:
         n, half = self.size, self.half
-        xs = np.linspace(-half, half, n, dtype=np.float32)
-        xgrid, ygrid = np.meshgrid(xs, xs)
+        xs = np.linspace(self.build_cx - half, self.build_cx + half, n,
+                         dtype=np.float32)
+        ys = np.linspace(self.build_cy - half, self.build_cy + half, n,
+                         dtype=np.float32)
+        xgrid, ygrid = np.meshgrid(xs, ys)
         forest = fbm(xgrid * 0.0006, ygrid * 0.0006, self.seed + 1, octaves=4)
         clump = fbm(xgrid * 0.0045, ygrid * 0.0045, self.seed + 2, octaves=3)
         temp = biomes.temperature(xgrid, ygrid, self.seed)
@@ -90,6 +103,13 @@ class WorldMap:
         t = t * t * (3.0 - 2.0 * t)
         density = np.clip(0.12 + t * (0.55 + 0.45 * clump), 0.0, 1.0)[..., None]
         base_rgb = base_rgb * (1.0 - 0.34 * density)      # darker where wooded
+        # THE COAST: ocean to the east, sand beach at the shoreline.
+        import world as _world
+        _coast = _world.coast_x(ygrid, self.seed)
+        _ocean = xgrid > _coast
+        _sand = (~_ocean) & (xgrid > (_coast - _world.SAND_W))
+        base_rgb[_ocean] = (40, 92, 140)
+        base_rgb[_sand] = (202, 178, 130)
         tint = np.array(nations.COLORS, dtype=np.float32)[nations.overlay(xgrid, ygrid)]
         alpha = 0.20                        # faint, vague political wash
         rgb = (base_rgb * (1.0 - alpha) + tint * alpha).astype(np.uint8)
