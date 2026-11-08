@@ -563,7 +563,7 @@ def run(g):
                     g._held = g.inventory.selected_stack()
                     g._held_id = g._held.defn.id if g._held else None
                     # A BUILDABLE IN THE HAND: LEFT CLICK PLACES A 1x1 BLOCK.
-                    if g._held_id in ("wood",) and g.hotbar.slot_at(event.pos) is None:
+                    if g._held_id in _block.BUILDABLE and g.hotbar.slot_at(event.pos) is None:
                         try:
                             import block as _block
                             _wx = g.cam_x + event.pos[0] / ZOOM
@@ -571,9 +571,9 @@ def run(g):
                             _tx = int(_wx // _block.TILE)
                             _ty = int(_wy // _block.TILE)
                             if _block.place_block(g, _tx, _ty, g._held_id):
-                                g.toast("Placed a plank")
+                                g.toast("Placed a %s" % g._held_id)
                             else:
-                                g.toast("No room or no wood")
+                                g.toast("No room or none left")
                         except Exception:
                             pass
                         g.consumed = True

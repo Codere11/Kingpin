@@ -5,6 +5,7 @@ in the hovered square. Blocks are 1 tile (TILE x TILE) and snap to the grid.
 """
 import pygame
 from world import TILE
+import math
 
 
 # what counts as a block you can place in the hand
@@ -95,16 +96,34 @@ def place_block(g, tx, ty, kind):
 
 
 def _clear_cell(g, tx, ty):
-    """A block kills what was growing in its square: the stump goes, and the
-    wild plant never regrows."""
+    """A block kills what was growing in its square: the stump goes (out of
+    the forest itself, so it is never drawn again), and the wild plant never
+    regrows."""
     wx = tx * TILE + TILE / 2.0
     wy = ty * TILE + TILE / 2.0
-    try:
-        for t in list(getattr(g.trees, "_stumps", ())):
-            if abs(t.x - wx) < TILE and abs(t.y - wy) < TILE:
-                g.trees._stumps.remove(t)
-    except Exception:
-        pass
+    trees = getattr(g, "trees", None)
+    if trees is not None:
+        try:
+            import trees as _trees
+            _cell = getattr(_trees, "CELL", 180)
+            for t in list(trees.near(wx, wy, TILE * 1.2)):
+                if not getattr(t, "felled", False):
+                    continue
+                if abs(t.x - wx) < TILE and abs(t.y - wy) < TILE:
+                    cx = int(math.floor(t.x / _cell))
+                    cy = int(math.floor(t.y / _cell))
+                    try:
+                        trees._cache[(cx, cy)] = None
+                        trees._presence[(cx, cy)] = None
+                    except Exception:
+                        pass
+                    try:
+                        if t in getattr(trees, "_stumps", ()):
+                            trees._stumps.remove(t)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
     try:
         g.world.wild_eaten[(tx, ty)] = float("inf")
     except Exception:
