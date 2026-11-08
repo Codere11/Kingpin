@@ -198,10 +198,18 @@ def _clamp_view() -> None:
 
 
 def _zoom(factor: float, ax: float = 0.0, ay: float = 0.0) -> None:
-    """Zoom about a world point, so the ground under it stays put."""
+    """Zoom about a world point, so the ground under it stays put.
+
+    The half-extent is snapped to the notch grid (WORLD_HALF x ZOOM_STEP**n), so
+    the chart is one per notch -- a chart built for one half is never stretched
+    over another, which is what made the map distort when zooming back out.
+    """
     before = _VIEW["half"]
-    _VIEW["half"] = max(MIN_HALF, min(MAX_HALF, before / factor))
-    scale = _VIEW["half"] / before
+    target = max(MIN_HALF, min(MAX_HALF, before / factor))
+    n = round(math.log(target / WORLD_HALF) / math.log(ZOOM_STEP))
+    snapped = max(MIN_HALF, min(MAX_HALF, WORLD_HALF * (ZOOM_STEP ** n)))
+    scale = snapped / before
+    _VIEW["half"] = snapped
     _VIEW["cx"] = ax + (_VIEW["cx"] - ax) * scale
     _VIEW["cy"] = ay + (_VIEW["cy"] - ay) * scale
     _clamp_view()
