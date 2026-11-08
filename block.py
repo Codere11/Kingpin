@@ -72,4 +72,22 @@ def place_block(g, tx, ty, kind):
         return False
     g.inventory.consume(kind, 1)
     g.built_blocks[(tx, ty)] = kind
+    _clear_cell(g, tx, ty)
     return True
+
+
+def _clear_cell(g, tx, ty):
+    """A block kills what was growing in its square: the stump goes, and the
+    wild plant never regrows."""
+    wx = tx * TILE + TILE / 2.0
+    wy = ty * TILE + TILE / 2.0
+    try:
+        for t in list(getattr(g.trees, "_stumps", ())):
+            if abs(t.x - wx) < TILE and abs(t.y - wy) < TILE:
+                g.trees._stumps.remove(t)
+    except Exception:
+        pass
+    try:
+        g.world.wild_eaten[(tx, ty)] = float("inf")
+    except Exception:
+        pass
