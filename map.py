@@ -280,77 +280,13 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
 
     label_font = pygame.font.SysFont("dejavusansmono", max(11, vh // 44), bold=True)
 
-    # ---- THE GULAG, AT THE TOP-RIGHT OF THE WASTE -----------------------
-    try:
-        import gulag as _gulag
-        gx, gy = _gulag.middle()
-        if (cx - view_half) <= gx <= (cx + view_half) and (cy - view_half) <= gy <= (cy + view_half):
-            ax, ay = (x0 + int((gx - (cx - view_half)) / (2.0 * view_half) * size),
-                      y0 + int((gy - (cy - view_half)) / (2.0 * view_half) * size))
-            r = max(4, size // 90)
-            pygame.draw.rect(screen, (28, 26, 24), (ax - r, ay - r, r * 2, r * 2))
-            pygame.draw.rect(screen, (206, 62, 48), (ax - r, ay - r, r * 2, r * 2), 2)
-            pygame.draw.line(screen, (206, 62, 48), (ax - r // 2, ay - r // 2),
-                             (ax + r // 2, ay + r // 2), 2)
-            pygame.draw.line(screen, (206, 62, 48), (ax + r // 2, ay - r // 2),
-                             (ax - r // 2, ay + r // 2), 2)
-            lbl = small_charting.render("GULAG", True, (226, 96, 78))
-            screen.blit(lbl, (ax - lbl.get_width() // 2, ay + r + 3))
-    except Exception:
-        pass
-
-    # ---- EVERY SETTLEMENT, AND EVERY HUB ------------------------------
-    # A dot is not enough to tell a town from a camp from a man's own yard, so
-    # each has its own mark and its own colour, and a name when there is room
-    # for it on the paper. Nothing is edge-pinned but the things that matter
-    # to him: the map is the country, not a compass.
+    # ---- NATIVE CAMPS AND THE PLAYER ------------------------------
+    # Old Soviet settlements, hubs and the gulag are gone from the paper; what
+    # remains is the country itself -- biome legend, native campfires, and him.
     taken: list = []
-
-    def mark(wx, wy, colour, label, kind):
-        px, py = at(wx, wy)
-        if not (x0 - 2 <= px <= x0 + size + 2 and y0 - 2 <= py <= y0 + size + 2):
-            return
-        r = 7 if kind == "settlement" else 6
-        if kind == "settlement":
-            pygame.draw.rect(screen, EDGE, (px - r - 1, py - r - 1,
-                                           2 * r + 3, 2 * r + 3),
-                             border_radius=2)
-            pygame.draw.rect(screen, colour, (px - r, py - r, 2 * r, 2 * r),
-                             border_radius=2)
-            pygame.draw.rect(screen, (250, 248, 240),
-                             (px - r, py - r, 2 * r, 2 * r), 1, border_radius=2)
-        else:
-            pts = [(px, py - r - 2), (px + r + 2, py), (px, py + r + 2),
-                   (px - r - 2, py)]
-            pygame.draw.polygon(screen, EDGE, pts)
-            inner = [(px, py - r), (px + r, py), (px, py + r), (px - r, py)]
-            pygame.draw.polygon(screen, colour, inner)
-            pygame.draw.polygon(screen, (250, 248, 240), inner, 1)
-        if not label:
-            return
-        txt = small_font.render(label, True, (250, 248, 240))
-        shade = small_font.render(label, True, (10, 9, 8))
-        for tx, ty in ((px + r + 5, py - txt.get_height() // 2),
-                       (px - r - 5 - txt.get_width(), py - txt.get_height() // 2),
-                       (px - txt.get_width() // 2, py - r - 4 - txt.get_height()),
-                       (px - txt.get_width() // 2, py + r + 4)):
-            rect = pygame.Rect(tx, ty, txt.get_width(), txt.get_height())
-            if (rect.left < x0 or rect.right > x0 + size
-                    or rect.top < y0 or rect.bottom > y0 + size):
-                continue
-            if any(rect.colliderect(other) for other in taken):
-                continue
-            taken.append(rect)
-            screen.blit(shade, (tx + 1, ty + 1))
-            screen.blit(txt, (tx, ty))
-            break
 
     small_font = pygame.font.SysFont("dejavusansmono", max(9, vh // 62),
                                      bold=True)
-    for _v in settlements or ():
-        mark(_v.x, _v.y, (214, 198, 156), _v.name.split()[0], "settlement")
-    # NATIVE CAMPS: a campfire on the paper, one per settlement already
-    # generated within the simulated distance.
     for _n in natives or ():
         _px, _py = at(_n.x, _n.y)
         if x0 - 2 <= _px <= x0 + size + 2 and y0 - 2 <= _py <= y0 + size + 2:
@@ -371,11 +307,6 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
                 screen.blit(_sd, (_tx + 1, _ty + 1))
                 screen.blit(_lbl, (_tx, _ty))
                 break
-    for _h in hub_list or ():
-        _mine = getattr(_h, "is_player_hub", False)
-        _lab = (getattr(_h, "name", "hold") if _mine else "camp")
-        mark(_h.x, _h.y, (236, 206, 120) if _mine else (176, 122, 200),
-             _lab.split()[0] if _mine else "camp", "hub")
     # HIM, last and on top -- AND NEVER LOST OFF THE EDGE. A map you cannot
     # find yourself on is not a map; when the view has left him he is pinned
     # to the frame with a bright ring, so pressing C is only a convenience.
