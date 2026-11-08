@@ -155,19 +155,20 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
             _plog.log("SHIP-DRAW-ERROR", repr(_ship_err)[:160])
         except Exception:
             pass
-    # MINECRAFT-STYLE BLOCKS, snapped to the 1x1 squares.
-    try:
-        import block as _block
-        _block.draw_blocks(target, getattr(g, "built_blocks", {}), cx, cy, view)
-    except Exception:
-        pass
-    # THE 1x1 GRID MESH when a buildable is in the hand.
+    # THE 1x1 GRID MESH when a buildable is in the hand -- UNDER the blocks,
+    # so a placed row covers its own seam lines and stays one solid wall.
     try:
         import block as _block
         _sel = g.inventory.selected_stack()
         _sel_id = _sel.defn.id if _sel else None
         if _sel_id in _block.BUILDABLE:
             _block.draw_grid(target, cx, cy, g.vw, g.vh, g.wmouse_x, g.wmouse_y)
+    except Exception:
+        pass
+    # MINECRAFT-STYLE BLOCKS, snapped to the 1x1 squares.
+    try:
+        import block as _block
+        _block.draw_blocks(target, getattr(g, "built_blocks", {}), cx, cy, view)
     except Exception:
         pass
     if getattr(g.player, "aboard", False):
