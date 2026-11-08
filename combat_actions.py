@@ -261,10 +261,10 @@ def use_axe(g, kills) -> int:
         _cx = min(max(g.player.x, _r.left), _r.right)
         _cy = min(max(g.player.y, _r.top), _r.bottom)
         if math.hypot(g.player.x - _cx, g.player.y - _cy) <= _m.AXE_REACH:
-            g.built_blocks.pop((_tx, _ty), None)
-            g.inventory.add("wood", 1)
+            _bk = g.built_blocks.pop((_tx, _ty), "wood")
+            g.inventory.add(_bk, 1)
             g.combat.spawn_impact(_r.centerx, _r.centery, (140, 100, 56))
-            g.toast("Chopped up a plank  +1 wood")
+            g.toast("Chopped it up  +1 %s" % _bk)
             g.mark_dirty()
             return kills
 

@@ -1248,6 +1248,10 @@ def main() -> None:
             and g.inventory.count_of("pickaxe") <= 0):
         g.inventory.add("axe", 1)
         mark_dirty()
+    # FIFTY HIDES TO BUILD WITH, fresh on spawn.
+    if g.inventory.count_of("hide") < 50:
+        g.inventory.add("hide", 50 - g.inventory.count_of("hide"))
+        mark_dirty()
 
     # ...AND THE WORLD IS A THOUSAND PEOPLE AFTER THE LOAD, TOO. The save is
     # laid over the rosters and can only make them smaller; this is the one

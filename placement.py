@@ -85,11 +85,12 @@ def demolish_at(wx, wy, player, built_plots, built_gates, built_fences,
     hits.sort(key=lambda h: h[0])
     _area, kind, rect, obj = hits[0]
     if kind == "plank":
+        _bk = built_blocks.get(obj, "wood") if built_blocks is not None else "wood"
         if built_blocks is not None:
             built_blocks.pop(obj, None)
-        inventory.add("wood", 1)
+        inventory.add(_bk, 1)
         mark_dirty()
-        return "Plank taken down  +1 wood"
+        return "Taken down  +1 %s" % _bk
     if kind == "plot":
         if rect in built_plots:
             built_plots.remove(rect)

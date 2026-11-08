@@ -8,7 +8,7 @@ from world import TILE
 
 
 # what counts as a block you can place in the hand
-BUILDABLE = ("wood",)
+BUILDABLE = ("wood", "hide")
 
 
 def _wood_block(screen, x, y):
@@ -26,6 +26,22 @@ def _wood_block(screen, x, y):
     pygame.draw.line(screen, (78, 50, 28), (x + TILE // 2, y + 2), (x + TILE // 2, y + 8), 1)
 
 
+def _hide_block(screen, x, y):
+    """A placed hide: the side of an Indian tent -- a triangle."""
+    hide = (112, 74, 46)
+    hide_l = (150, 104, 62)
+    hide_d = (72, 46, 28)
+    peak = (x + TILE // 2, y + 2)
+    bl = (x + 3, y + TILE - 2)
+    br = (x + TILE - 3, y + TILE - 2)
+    pygame.draw.polygon(screen, hide, [peak, bl, br])
+    pygame.draw.polygon(screen, hide_d, [peak, bl, br], 2)
+    # the tent pole
+    pygame.draw.line(screen, hide_l, (peak[0], peak[1] + 1), (peak[0], y + TILE - 4), 1)
+    # the door slit at the base
+    pygame.draw.line(screen, hide_d, (peak[0], y + TILE - 8), (peak[0], y + TILE - 2), 2)
+
+
 def draw_blocks(screen, blocks, cam_x, cam_y, view):
     """Every placed block, snapped to its square."""
     for (tx, ty), kind in blocks.items():
@@ -37,6 +53,8 @@ def draw_blocks(screen, blocks, cam_x, cam_y, view):
         y = wy - cam_y
         if kind == "wood":
             _wood_block(screen, int(x), int(y))
+        elif kind == "hide":
+            _hide_block(screen, int(x), int(y))
 
 
 def draw_grid(screen, cam_x, cam_y, vw, vh, wmouse_x, wmouse_y):
