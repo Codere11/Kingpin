@@ -421,6 +421,22 @@ def main() -> None:
     g._hy = 0.0
     g._home = None
     g._start = None
+    # ---- OBSERVATION CAMP: A FEW NATIVES STAND BY THE SPAWN --------------
+    _orng = random.Random(int(g.world.seed) ^ 0x0B5E51)
+    g._observe_npcs = []
+    _obs_names = ("Awan", "Kiona", "Takoda", "Yuma", "Nashoba", "Chenoa")
+    for _i in range(4):
+        _n = village_mod.NPC(g._hx + _orng.uniform(-150.0, -50.0),
+                             g._hy + _orng.uniform(-120.0, 120.0),
+                             _orng.randrange(1 << 30),
+                             name=_obs_names[_i % len(_obs_names)],
+                             npc_id="obs_%d" % _i, role="Villager")
+        _n.facing = (0.0, 1.0)
+        g._observe_npcs.append(_n)
+    g._observe_soldiers = []
+    _s = Soldier(g._hx + 60.0, g._hy, 0, seed=_orng.randrange(1 << 30))
+    _s.facing = (1.0, 0.0)
+    g._observe_soldiers.append(_s)
     # ---- OBSERVE MODE ------------------------------------------------------
     # KINGPIN_OBSERVE=1 runs a real instance -- real window, real frame, real
     # world -- with the player standing invincible in open ground while

@@ -141,6 +141,13 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
                                      + (_tn.y - g.player.y) ** 2) < 260.0 ** 2
             items.append((_tn.y, lambda n=_tn, s=_tnear:
                           n.draw(target, cx, cy, s)))
+    # THE OBSERVATION CAMP: a few natives and a soldier standing by the spawn.
+    for _n in getattr(g, "_observe_npcs", ()):
+        if view.collidepoint(_n.x, _n.y):
+            items.append((_n.y, lambda n=_n: n.draw(target, cx, cy, False)))
+    for _s in getattr(g, "_observe_soldiers", ()):
+        if view.collidepoint(_s.x, _s.y):
+            items.append((_s.y, lambda s=_s: s.draw(target, cx, cy)))
     items.sort(key=lambda item: item[0])
     for _y, draw in items:
         draw()
