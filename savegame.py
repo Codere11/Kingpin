@@ -144,16 +144,21 @@ def write(g) -> None:
         }),
         "world": worldio.world_to_data(g.villages),
     }
-    if not persist.write_binary(payload):
+    import chunksave
+    if not chunksave.save(payload):
         persist.write(payload)
 
 
 def restore(g) -> None:
     """Put a save back onto the live world. Mutates g's objects in place and
     leaves the new camera on g.cam_x / g.cam_y for the caller to take."""
-    data = persist.read_binary()
+    try:
+        import chunksave
+        data = chunksave.load()       # manifest + chunks, or the old blob
+    except Exception:
+        data = None
     if data is None:
-        data = persist.read()            # an older save, in JSON
+        data = persist.read()         # an older save, in JSON
     # THE WORLD FIRST, so everything below can rely on it, and so a load
     # is a load: the people, their skills, their coin, their towns.
     worldio.world_from_data(g.villages, data.get("world"))
