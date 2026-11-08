@@ -765,6 +765,26 @@ class Bison(Enemy):
             self.aggro = True
         return dead
 
+    def _separation(self):
+        """A push away from herd mates, so bisons never pile onto one spot."""
+        px = py = 0.0
+        for b in Bison.BISONS:
+            if b is self or not b.alive:
+                continue
+            dx = self.x - b.x
+            dy = self.y - b.y
+            d = math.hypot(dx, dy)
+            if 0.01 < d < 46.0:
+                w = (46.0 - d) / 46.0
+                px += dx / d * w
+                py += dy / d * w
+        return px, py
+
+    def _move(self, ux: float, uy: float, speed: float, dt: float) -> None:
+        sx, sy = self._separation()
+        self.x += (ux * speed + sx * 90.0) * dt
+        self.y += (uy * speed + sy * 90.0) * dt
+
     def update(self, dt: float, target, combat, occluders=None,
                speed_scale: float = 1.0, view_scale: float = 1.0,
                visible: bool = True, colliders=None) -> None:
@@ -782,8 +802,7 @@ class Bison(Enemy):
             d = math.hypot(dx, dy)
             if d < 220.0:
                 ux, uy = (dx / d, dy / d)
-                self.x += ux * self.speed * 0.75 * dt
-                self.y += uy * self.speed * 0.75 * dt
+                self._move(ux, uy, self.speed * 0.75, dt)
                 self.facing = (ux, uy)
                 return
         self.graze_timer -= dt
@@ -797,8 +816,7 @@ class Bison(Enemy):
         dx, dy = tx - self.x, ty - self.y
         d = math.hypot(dx, dy)
         if d > 6.0:
-            self.x += dx / d * self.speed * 0.3 * dt
-            self.y += dy / d * self.speed * 0.3 * dt
+            self._move(dx / d, dy / d, self.speed * 0.3, dt)
             self.facing = (dx / d, dy / d)
 
     def _charge(self, dt: float, target) -> None:
@@ -811,8 +829,7 @@ class Bison(Enemy):
         d = math.hypot(dx, dy) or 1.0
         ux, uy = dx / d, dy / d
         self.facing = (ux, uy)
-        self.x += ux * self.speed * dt
-        self.y += uy * self.speed * dt
+        self._move(ux, uy, self.speed, dt)
         self.fire_cd -= dt
         if d <= 44.0 and self.fire_cd <= 0.0:
             self.fire_cd = 1.0
