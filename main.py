@@ -1037,7 +1037,8 @@ def main() -> None:
             enemies=g.enemies, rabbits=g.rabbits, built_houses=g.built_houses,
             _TRUTH=g._TRUTH, _draws=g._draws, plog=plog,
             inventory=g.inventory, built_blocks=g.built_blocks,
-            wmouse_x=g.wmouse_x, wmouse_y=g.wmouse_y)
+            wmouse_x=g.wmouse_x, wmouse_y=g.wmouse_y,
+            _observe_npcs=g._observe_npcs, _observe_soldiers=g._observe_soldiers)
         render.draw_exterior(_g, cx, cy, show_names, target)
 
 
