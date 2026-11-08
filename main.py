@@ -1267,6 +1267,22 @@ def main() -> None:
     except Exception as _pe:
         plog.log("WORLD-ERROR", repr(_pe)[:200])
 
+    # THE NATIVE SETTLEMENT: teepees and fields around a fireplace, a few
+    # blocks to the player's right. He wakes facing south, so his right is
+    # west -- inland, away from the ocean and the Crown's ship. Built AFTER
+    # the population pass, so its people are not cut away as strangers.
+    g.native_settlement = None
+    try:
+        import native as _native
+        _nseed = (int(g.world.seed) ^ 0x7E7E) & 0xFFFFFFFF
+        g.native_settlement = _native.build(g, g.player.x - 8 * 32.0,
+                                            g.player.y, _nseed)
+        plog.log("NATIVE", "settlement at %.0f,%.0f  people %d"
+                 % (g.native_settlement.x, g.native_settlement.y,
+                    g.native_settlement.people))
+    except Exception as _ne:
+        plog.log("NATIVE-ERROR", repr(_ne)[:200])
+
     # THE MAN WHO ANSWERS QUESTIONS IS NOT A CASUALTY OF A SAVE LOAD.
     # `load_now` rebuilds every town's roll up to its capacity, and he is the
     # LAST man appended to his town -- so the cap dropped him, and he survived
