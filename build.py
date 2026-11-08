@@ -11,14 +11,9 @@ from __future__ import annotations
 import pygame
 
 BUILDINGS = [
-    {"id": "house", "name": "House", "wood": 100, "where": "outside"},
-    {"id": "workshop", "name": "Workshop", "wood": 300, "where": "inside"},
-    {"id": "lab_table", "name": "Lab Table", "wood": 150, "where": "inside"},
-    {"id": "brew_table", "name": "Brewing Table", "wood": 120, "where": "inside"},
-    {"id": "barrel", "name": "Barrel", "wood": 60, "where": "inside"},
     {"id": "fence", "name": "Fence", "wood": 10, "where": "outside"},
     {"id": "gate", "name": "Gate", "wood": 30, "where": "outside"},
-    # THE FOUR TRADES, OUT OF DOORS. A bench, a brewhouse, a forge and a shaft
+    # THE TRADES, OUT OF DOORS. A bench, a brewhouse, a forge and a shaft
     # are things a man puts on his own ground -- not only inside a house.
     # Only legal in the wilderness or in the player's own hub (see
     # hubs.land_ok), and in the wild the ground becomes his.
@@ -35,11 +30,9 @@ BUILDINGS = [
     # post is what makes him better than a man with a gun.
     {"id": "dummy", "name": "Training dummy", "wood": 40, "where": "outside"},
     {"id": "target", "name": "Archery target", "wood": 60, "where": "outside"},
-    # A FORGE IS IRON AND A SHAFT IS TIMBER AND IRON -- not wood alone.
+    # A FORGE IS IRON -- not wood alone.
     {"id": "smith", "name": "Forge", "wood": 0,
      "cost": {"iron": 300}, "where": "outside"},
-    {"id": "mine", "name": "Mine shaft", "wood": 0,
-     "cost": {"iron": 100, "wood": 300}, "where": "outside"},
 ]
 
 

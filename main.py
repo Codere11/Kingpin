@@ -760,98 +760,11 @@ def main() -> None:
     # collided with separately: a wall you can hack a hole in is not a prison.
     g.camp_walls: list = []
 
-    # THE GULAG IS BUILT WITH THE WORLD, and its guards are raised with it.
-    # (Laid out here, before anything asks what may grow where, so the railway
-    # corridor is clear ground from the first frame.)
-    try:
-        import gulag as _gulag
-        _gulag.build()
+    # THE GULAG IS GONE: no camp, no guards, no barn, no holding cells.
+    g._camp_men = []
+    g._barn = None
+    g._holding = []
 
-        def _camp_guard(px, py, nation):
-            return Soldier(px, py, nation, melee=False,
-                           seed=random.randint(0, 2 ** 31))
-        g._camp_men = _gulag.make_guards(_camp_guard, nation=1)
-        # THE CAMP GUARDS ARE NOT IN THE GENERAL ENEMY LIST AT ALL.
-        #
-        # Twenty men put into `enemies` means twenty men running the full
-        # soldier brain every frame -- target acquisition, steering over every
-        # collider in the world, line-of-sight against thirty mine buildings and
-        # two houses -- to stand still on a post. That was the stutter at the
-        # gate, and it was also why they wanted the player but never fired:
-        # they were "in combat" without a clean shot. They are driven by the
-        # camp itself now (gulag.tick), which makes them cheap AND certain.
-        # REAL BUILDINGS AND A REAL FENCE: the game's own lists, so they
-        # collide, block sight, are drawn by the fence and house code, and the
-        # two buildings can be walked into like any other house.
-        g.built_houses.extend(_gulag.houses())
-        # THE BARN IS A WORKPLACE, ENTERED LIKE A MINE (E at the door).
-        g._barn = _gulag.prison()
-        if g._barn is not None and g._barn not in g.placed_work:
-            g.placed_work.append(g._barn)
-        # A HOLDING CELL BY EACH SETTLEMENT'S RAILWAY.
-        try:
-            import holding as _holding
-            _holding.build(g.villages.villages)
-            for _c in _holding.cells():
-                if _c not in g.placed_work:
-                    g.placed_work.append(_c)
-        except Exception as _hce:
-            plog.log("CELLS-ERROR", repr(_hce)[:140])
-
-        def _attach_camp() -> None:
-            """PUT THE CAMP BACK AFTER A SAVE HAS CLEARED THE YARD.
-
-            # THE SPAWN GOES DOWN FIRST; A SAVE OVERRIDES IT. Applying the spawn after
-    # the load is what threw a restored player back at the open-field spot.
-    player.x, player.y = _hx, _hy
-    load_now() empties placed_work and refills it from the save -- so a
-            barn (and thirty mines) attached at world build were thrown away a
-            moment later, which is why pressing E at the barn door did nothing.
-            Called from both places; it will not double up.
-            """
-            try:
-                import gulag as _g
-                for _objs, _lst in ((_g.works(), g.placed_work),
-                                    (_g.houses(), g.built_houses),
-                                    (_g.walls(), g.camp_walls)):
-                    for _o in _objs:
-                        if _o not in _lst:
-                            _lst.append(_o)
-                _p = _g.prison()
-                if _p is not None and _p not in g.placed_work:
-                    g.placed_work.append(_p)
-            except Exception:
-                pass
-        _gulag.plant_trees(g.trees)          # fifty REAL trees, in rows
-        # WARM THE CAMP BEFORE ANYBODY WALKS IN. Ground, scatter, tree cells and
-        # wild-plant cells round the gate are composed and cached at load, so
-        # the first approach costs nothing: the hitch at the entrance was every
-        # one of these being made on demand, one region at a time.
-        try:
-            import world as _world_mod
-            g._cx, g._cy = _gulag.SITE
-            for _dx in (-2600, 0, 2600):
-                for _dy in (-1600, 0, 1600):
-                    g.static_layer.warm(g._cx + _dx, g._cy + _dy, 1600, 900)
-            g.trees.visible(g._cx - 4000.0, g._cy - 4000.0, 8000.0, 8000.0)
-            try:
-                import wildcrop as _wc
-                _wc.visible(g.world, g.villages.villages, g._cx - 4000.0,
-                            g._cy - 4000.0, 8000.0, 8000.0)
-            except Exception:
-                pass
-            plog.log("WARM", "camp ground, trees and wild cells prepared")
-        except Exception as _we:
-            plog.log("WARM-ERROR", repr(_we)[:140])
-        g.placed_work.extend(_gulag.works())
-        g.camp_walls.extend(_gulag.walls())
-        plog.log("GULAG", "built at %d,%d | guards %d | houses %d | mines %d "
-                 "| walls %d | pines %d"
-                 % (int(_gulag.SITE[0]), int(_gulag.SITE[1]), len(g._camp_men),
-                    len(_gulag.houses()), len(_gulag.works()),
-                    len(_gulag.walls()), len(_gulag.tree_spots())))
-    except Exception as _ge:
-        plog.log("GULAG-ERROR", repr(_ge)[:160])
     g.built_gates: list = []
     g.fence_horizontal = True
     g.inside_house = None

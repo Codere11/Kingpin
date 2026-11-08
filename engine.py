@@ -2543,7 +2543,7 @@ def run(g):
                                  int(g._bar.door[0]), int(g._bar.door[1]))
                         continue
 
-            if g.door_cooldown <= 0.0:
+            if False:   # THE INTERIOR SYSTEM IS GONE: houses and mines are not entered
                 g.candidates = list(g.built_houses)
                 for village in g.visible_villages:
                     g.candidates.extend(village.houses)
