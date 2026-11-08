@@ -1246,7 +1246,7 @@ def run(g):
             if not g.player.dead:
                 g.player.x, g.player.y = resolve_circle_rects(
                     g.player.x, g.player.y, g.player.radius,
-                    g.grid.near(g.player.x, g.player.y, g.player.radius + 6.0)
+                    list(g.grid.near(g.player.x, g.player.y, g.player.radius + 6.0))
                     + g._block_cols)
             # THE OCEAN IS IMPASSABLE: the shore is the eastern edge of the
             # world. Walk into the sea and he is pushed back to the sand.
