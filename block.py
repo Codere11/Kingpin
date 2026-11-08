@@ -12,59 +12,78 @@ import math
 BUILDABLE = ("wood", "hide")
 
 
-def _wood_block(screen, x, y):
-    """A 1x1 plank block, like a Minecraft plank."""
-    pygame.draw.rect(screen, (118, 78, 44), (x, y, TILE, TILE))
-    pygame.draw.rect(screen, (78, 50, 28), (x, y, TILE, TILE), 2)
-    # a little depth: light top-left edge, dark bottom-right edge
-    pygame.draw.line(screen, (156, 110, 62), (x + 1, y + 1), (x + TILE - 2, y + 1), 2)
-    pygame.draw.line(screen, (156, 110, 62), (x + 1, y + 1), (x + 1, y + TILE - 2), 2)
-    pygame.draw.line(screen, (60, 38, 22), (x + 2, y + TILE - 2), (x + TILE - 2, y + TILE - 2), 2)
-    pygame.draw.line(screen, (60, 38, 22), (x + TILE - 2, y + 2), (x + TILE - 2, y + TILE - 2), 2)
-    for i in range(2):
-        yy = y + 9 + i * 12
-        pygame.draw.line(screen, (78, 50, 28), (x + 3, yy), (x + TILE - 3, yy), 1)
-    pygame.draw.line(screen, (78, 50, 28), (x + TILE // 2, y + 2), (x + TILE // 2, y + 8), 1)
+# colours: fill, light bevel, dark shadow, grain/edge
+_COLORS = {
+    "wood": {"fill": (118, 78, 44), "light": (156, 110, 62),
+             "dark": (60, 38, 22), "edge": (78, 50, 28)},
+    "hide": {"fill": (124, 86, 54), "light": (166, 122, 74),
+             "dark": (66, 42, 26), "edge": (82, 54, 34)},
+}
 
 
-def _hide_block(screen, x, y):
-    """A placed hide: a full-block skin (rectangle, the whole square) with
-    the bottom hem of a teepee along its base edge."""
-    hide = (124, 86, 54)      # tanned hide
-    hide_l = (166, 122, 74)   # light edge / stitching
-    hide_d = (82, 54, 34)     # dark edge / hem
-    # the full skin, the whole block wide
-    pygame.draw.rect(screen, hide, (x, y, TILE, TILE))
-    pygame.draw.rect(screen, hide_d, (x, y, TILE, TILE), 2)
-    # depth: light top-left, dark bottom-right
-    pygame.draw.line(screen, hide_l, (x + 1, y + 1), (x + TILE - 2, y + 1), 2)
-    pygame.draw.line(screen, hide_l, (x + 1, y + 1), (x + 1, y + TILE - 2), 2)
-    pygame.draw.line(screen, (66, 42, 26), (x + 2, y + TILE - 2),
-                     (x + TILE - 2, y + TILE - 2), 2)
-    # THE BOTTOM HEM OF A TEEPEE: a stitched band along the very bottom.
-    hem = y + TILE - 7
-    pygame.draw.rect(screen, hide_d, (x + 1, hem, TILE - 2, 6))
-    for i in range(2, TILE - 3, 4):
-        pygame.draw.line(screen, hide_l, (x + i, hem + 2), (x + i, hem + 4), 1)
-    # the little ground-fringe under the hem
-    for i in range(2, TILE - 2, 4):
-        pygame.draw.line(screen, hide_d, (x + i, y + TILE - 2),
-                         (x + i, y + TILE - 1), 1)
+def _fill_block(screen, x, y, kind):
+    """The block's face only -- no border, so a row stays one solid wall."""
+    c = _COLORS[kind]
+    pygame.draw.rect(screen, c["fill"], (x, y, TILE, TILE))
+    if kind == "wood":
+        for i in range(2):
+            yy = y + 9 + i * 12
+            pygame.draw.line(screen, c["edge"], (x + 3, yy), (x + TILE - 3, yy), 1)
+        pygame.draw.line(screen, c["edge"], (x + TILE // 2, y + 2),
+                         (x + TILE // 2, y + 8), 1)
+    elif kind == "hide":
+        hem = y + TILE - 7
+        pygame.draw.rect(screen, c["edge"], (x + 1, hem, TILE - 2, 6))
+        for i in range(2, TILE - 3, 4):
+            pygame.draw.line(screen, c["light"], (x + i, hem + 2),
+                             (x + i, hem + 4), 1)
+        for i in range(2, TILE - 2, 4):
+            pygame.draw.line(screen, c["edge"], (x + i, y + TILE - 2),
+                             (x + i, y + TILE - 1), 1)
+
+
+def _edges(screen, x, y, kind, up, down, left, right):
+    """Only the EXPOSED sides get the bevel/shadow; a neighbour on a side
+    means no line there, so a row is one continuous wall."""
+    c = _COLORS[kind]
+    if not up:
+        pygame.draw.line(screen, c["light"], (x + 1, y + 1),
+                         (x + TILE - 2, y + 1), 2)
+    if not left:
+        pygame.draw.line(screen, c["light"], (x + 1, y + 1),
+                         (x + 1, y + TILE - 2), 2)
+    if not down:
+        pygame.draw.line(screen, c["dark"], (x + 2, y + TILE - 2),
+                         (x + TILE - 2, y + TILE - 2), 2)
+    if not right:
+        pygame.draw.line(screen, c["dark"], (x + TILE - 2, y + 2),
+                         (x + TILE - 2, y + TILE - 2), 2)
 
 
 def draw_blocks(screen, blocks, cam_x, cam_y, view):
-    """Every placed block, snapped to its square."""
+    """Every placed block, snapped to its square; a row merges into one wall
+    with the shadow only around its outside."""
+    keys = set(blocks)
+    # all the faces first, so no edge ever covers a neighbour's face
     for (tx, ty), kind in blocks.items():
         wx = tx * TILE
         wy = ty * TILE
         if not view.collidepoint(wx + TILE / 2.0, wy + TILE / 2.0):
             continue
-        x = wx - cam_x
-        y = wy - cam_y
-        if kind == "wood":
-            _wood_block(screen, int(x), int(y))
-        elif kind == "hide":
-            _hide_block(screen, int(x), int(y))
+        if kind not in _COLORS:
+            kind = "wood"
+        _fill_block(screen, int(wx - cam_x), int(wy - cam_y), kind)
+    # then only the exposed edges
+    for (tx, ty), kind in blocks.items():
+        wx = tx * TILE
+        wy = ty * TILE
+        if not view.collidepoint(wx + TILE / 2.0, wy + TILE / 2.0):
+            continue
+        if kind not in _COLORS:
+            kind = "wood"
+        _edges(screen, int(wx - cam_x), int(wy - cam_y), kind,
+               (tx, ty - 1) in keys, (tx, ty + 1) in keys,
+               (tx - 1, ty) in keys, (tx + 1, ty) in keys)
 
 
 def draw_grid(screen, cam_x, cam_y, vw, vh, wmouse_x, wmouse_y):
