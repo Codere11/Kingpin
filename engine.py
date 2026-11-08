@@ -1923,6 +1923,11 @@ def run(g):
                             g.amount = random.randint(1, 2)
                             g.inventory.add("raw_meat", g.amount)
                             g.toast(f"Shot a rabbit   +{g.amount} raw meat")
+                    elif obj.kind == "bison":
+                        if g.died:
+                            g.inventory.add("raw_meat", random.randint(5, 10))
+                            g.inventory.add("hide", random.randint(30, 50))
+                            g.toast("Shot a bison   +meat +hides")
                     elif obj.kind == "villager":
                         if (obj.village is not None
                                 and not village_mod.self_defence(obj)):
@@ -1987,6 +1992,9 @@ def run(g):
                     g.spawn_wolf()
                 if sum(1 for r in g.rabbits if r.alive) < 6:
                     g.spawn_rabbit()
+                if sum(1 for e in g.enemies
+                       if getattr(e, "kind", "") == "bison" and e.alive) < 6:
+                    g.spawn_bison()
             # A NATION FILLS ITS OWN HOLES. Every few seconds each nation looks
             # down its list of towns, and sends men with no trade to the ones
             # short of hands. A village that has been emptied therefore fills

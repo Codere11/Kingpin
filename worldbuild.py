@@ -347,6 +347,28 @@ def spawn_rabbit(player, world, rabbits, biomes, math, random, Rabbit) -> None:
         float(world.temperature(rx, ry)), float(world.humidity(rx, ry)))))
 
 
+def spawn_bison(player, world, enemies, biomes, math, random, Bison) -> None:
+    """A HERD of bison, anywhere but the desert. No regional variants. They
+    stand together, so a hit on one turns the whole nearby herd."""
+    for _ in range(24):
+        angle = random.uniform(0.0, 2.0 * math.pi)
+        dist = random.uniform(1800.0, 4200.0)
+        hx = player.x + math.cos(angle) * dist
+        hy = player.y + math.sin(angle) * dist
+        import world as _world
+        if hx > _world.coast_x(hy, world.seed):
+            continue                     # no bison in the sea
+        t = float(world.temperature(hx, hy))
+        h = float(world.humidity(hx, hy))
+        if biomes.biome_name(t, h) == "desert":
+            continue                     # bison do not live in the desert
+        for _ in range(random.randint(3, 5)):
+            ox = random.uniform(-80.0, 80.0)
+            oy = random.uniform(-80.0, 80.0)
+            enemies.append(Bison(hx + ox, hy + oy))
+        return
+
+
 def main_capital(villages):
     """The seat: the town whose king is the Dictator."""
     best = None

@@ -111,6 +111,8 @@ REGISTRY: dict[str, ItemDef] = {
     "cooked_meat": ItemDef("cooked_meat", "Cooked Meat",
                            "Hot and filling. Restores you completely.",
                            stackable=True, max_stack=20),
+    "hide": ItemDef("hide", "Hide", "A thick bison hide. Traders pay well for these.",
+                    stackable=True, max_stack=50),
 }
 
 
@@ -582,6 +584,22 @@ def _draw_raw_meat(s: int) -> pygame.Surface:
     return surf
 
 
+def _draw_hide(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    hide, hide_d = (108, 70, 44), (70, 44, 28)
+    hide_l = (136, 92, 56)
+    body = [(0.50, 0.08), (0.74, 0.16), (0.86, 0.36), (0.78, 0.56),
+            (0.88, 0.72), (0.72, 0.86), (0.50, 0.92), (0.28, 0.86),
+            (0.12, 0.72), (0.22, 0.56), (0.14, 0.36), (0.26, 0.16)]
+    _poly(surf, hide_d, body, s)
+    inner = [(x * 0.92 + 0.04, y * 0.92 + 0.04) for x, y in body]
+    _poly(surf, hide, inner, s)
+    pygame.draw.ellipse(surf, hide_l, (0.30 * s, 0.32 * s, 0.40 * s, 0.36 * s))
+    for yy in (0.38, 0.48, 0.58, 0.68):
+        pygame.draw.line(surf, hide_d, _pt((0.34, yy), s), _pt((0.66, yy), s), 1)
+    return surf
+
+
 def _draw_cooked_meat(s: int) -> pygame.Surface:
     surf = _canvas(s)
     meat, meat_d = (156, 92, 48), (104, 56, 26)
@@ -642,6 +660,7 @@ _DRAWERS = {
     "bread": _draw_bread,
     "raw_meat": _draw_raw_meat,
     "cooked_meat": _draw_cooked_meat,
+    "hide": _draw_hide,
 }
 
 _cache: dict[tuple[str, int], pygame.Surface] = {}

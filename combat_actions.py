@@ -138,6 +138,10 @@ def use_axe(g, kills) -> int:
                     pass
             enemy.take_damage(melee)
             if _was_alive and not getattr(enemy, "alive", True):
+                if getattr(enemy, "kind", "") == "bison":
+                    g.inventory.add("raw_meat", random.randint(5, 10))
+                    g.inventory.add("hide", random.randint(30, 50))
+                    g.toast("Killed a bison   +meat +hides")
                 try:
                     import detain as _dk
                     _dk.militia_killed(g.player, enemy, list(g.enemies),

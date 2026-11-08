@@ -89,7 +89,7 @@ import corpse as corpse_mod
 import folders as folders_mod
 import manhunt
 from combat import Combat, segment_circle_hit
-from creatures import (Patrol, Rabbit, Soldier, Wolf, is_trader,
+from creatures import (Bison, Patrol, Rabbit, Soldier, Wolf, is_trader,
                        choose_target as
                        creatures_choose_target, make_squad,
                        set_time as creatures_set_time)
@@ -681,6 +681,10 @@ def main() -> None:
         worldbuild.spawn_rabbit(g.player, g.world, g.rabbits, biomes, math, random,
                                 Rabbit)
 
+    def spawn_bison() -> None:
+        worldbuild.spawn_bison(g.player, g.world, g.enemies, biomes, math, random,
+                               Bison)
+
     # NO PATROLS. The gangs out on the map were removed in favour of the two
     # standing guards at each gate -- but this line kept spawning three of them
     # at the start of every game, and they and their shotguns were still out
@@ -689,6 +693,8 @@ def main() -> None:
         spawn_wolf()
     for _ in range(5):
         spawn_rabbit()
+    for _ in range(2):
+        spawn_bison()
     # ...and the death screen's own typeface, which was being built for the
     # first time in the frame the player died -- three SysFonts, a visible
     # stop at the worst possible moment. The size comes from the screen, not
@@ -1687,6 +1693,7 @@ def main() -> None:
     g.spawn_patrol = spawn_patrol
     g.spawn_rabbit = spawn_rabbit
     g.spawn_wolf = spawn_wolf
+    g.spawn_bison = spawn_bison
     g.speed_button = speed_button
     g.tick_conquest = tick_conquest
     g.tick_news = tick_news

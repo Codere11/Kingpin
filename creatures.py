@@ -734,6 +734,127 @@ class Rabbit:
         pygame.draw.line(screen, line, (hx, hy - 2), (hx + 2, hy - 9), 2)
 
 
+class Bison(Enemy):
+    """A bison: passive, keeps its distance from you, and only charges when
+    one of the herd is hit. Drops meat (5x a rabbit) and hides."""
+    kind = "bison"
+    BISONS: list = []          # the whole herd, for the herd-aggro rule
+
+    def __init__(self, x: float, y: float) -> None:
+        super().__init__(x, y)
+        self.team = ("bison", None)
+        self.max_health = stats.PLAYER_MAX_HEALTH     # as much health as a man
+        self.health = self.max_health
+        self.radius = 13
+        self.speed = 100.0                            # twice a man's walk
+        self.melee_damage = 2.0 * (35.0 / 3.0)        # double a man's punch
+        self.aggro = False
+        self.graze_timer = random.uniform(0.5, 2.0)
+        self.fire_cd = 0.0
+        Bison.BISONS = [b for b in Bison.BISONS if b.alive]   # drop the dead
+        Bison.BISONS.append(self)
+
+    def take_damage(self, amount: int, tranq: bool = False) -> bool:
+        dead = super().take_damage(amount, tranq)
+        if not dead and not getattr(self, "dead", False):
+            # THE HERD TURNS ON THE ATTACKER: every bison nearby charges.
+            for b in Bison.BISONS:
+                if b is not self and b.alive:
+                    if math.hypot(b.x - self.x, b.y - self.y) < 520.0:
+                        b.aggro = True
+            self.aggro = True
+        return dead
+
+    def update(self, dt: float, target, combat, occluders=None,
+               speed_scale: float = 1.0, view_scale: float = 1.0,
+               visible: bool = True, colliders=None) -> None:
+        self._colliders = colliders or []
+        if self.hit_flash > 0.0:
+            self.hit_flash = max(0.0, self.hit_flash - dt)
+        if not self.alive:
+            return
+        if self.aggro:
+            self._charge(dt, target)
+            return
+        # PASSIVE: keep a respectful distance from the player, else graze.
+        if target is not None and not getattr(target, "dead", False):
+            dx, dy = self.x - target.x, self.y - target.y
+            d = math.hypot(dx, dy)
+            if d < 220.0:
+                ux, uy = (dx / d, dy / d)
+                self.x += ux * self.speed * 0.75 * dt
+                self.y += uy * self.speed * 0.75 * dt
+                self.facing = (ux, uy)
+                return
+        self.graze_timer -= dt
+        if self.graze_timer <= 0.0:
+            self.graze_timer = random.uniform(1.0, 3.0)
+            ang = random.uniform(0.0, 2.0 * math.pi)
+            r = random.uniform(20.0, 140.0)
+            self.target = (self.home[0] + math.cos(ang) * r,
+                           self.home[1] + math.sin(ang) * r)
+        tx, ty = self.target
+        dx, dy = tx - self.x, ty - self.y
+        d = math.hypot(dx, dy)
+        if d > 6.0:
+            self.x += dx / d * self.speed * 0.3 * dt
+            self.y += dy / d * self.speed * 0.3 * dt
+            self.facing = (dx / d, dy / d)
+
+    def _charge(self, dt: float, target) -> None:
+        if target is None:
+            target = getattr(self, "_player", None)
+        if target is None or not getattr(target, "alive", True):
+            self.aggro = False
+            return
+        dx, dy = target.x - self.x, target.y - self.y
+        d = math.hypot(dx, dy) or 1.0
+        ux, uy = dx / d, dy / d
+        self.facing = (ux, uy)
+        self.x += ux * self.speed * dt
+        self.y += uy * self.speed * dt
+        self.fire_cd -= dt
+        if d <= 44.0 and self.fire_cd <= 0.0:
+            self.fire_cd = 1.0
+            if hasattr(target, "take_damage"):
+                target.take_damage(max(1, int(round(self.melee_damage))))
+
+    def draw(self, screen, cam_x, cam_y):
+        sx, sy = self.x - cam_x, self.y - cam_y
+        fx, fy = self.facing
+        coat = (110, 72, 44)
+        coat_d = (70, 44, 26)
+        hump = (164, 114, 62)
+        head = (82, 52, 30)
+        horn = (214, 196, 164)
+        horn_d = (150, 128, 96)
+        eye = (12, 9, 7)
+        if self.hit_flash > 0.0:
+            coat = hump = head = (240, 236, 230)
+        pygame.draw.ellipse(screen, (16, 13, 10), (sx - 15, sy - 3, 32, 10))
+        pygame.draw.line(screen, coat_d, (sx - fx * 14, sy - fy * 14),
+                         (sx - fx * 22, sy - fy * 22), 3)
+        pygame.draw.circle(screen, coat_d, (int(sx), int(sy)), 14)
+        pygame.draw.circle(screen, coat, (int(sx), int(sy)), 13)
+        hx0, hy0 = int(sx - fx * 4), int(sy - fy * 4)
+        pygame.draw.ellipse(screen, hump, (hx0 - 8, hy0 - 7, 16, 14))
+        hx, hy = sx + fx * 13, sy + fy * 13
+        pygame.draw.circle(screen, coat_d, (int(hx), int(hy)), 9)
+        pygame.draw.circle(screen, head, (int(hx), int(hy)), 8)
+        # two thick curved horns, sweeping forward
+        for sgn in (1, -1):
+            cx, cy = int(hx), int(hy + sgn * 8)
+            rect = pygame.Rect(cx - 6, cy - 5, 16, 10)
+            if sgn == 1:
+                pygame.draw.arc(screen, horn_d, rect, -1.15, -0.05, 4)
+                pygame.draw.arc(screen, horn, rect, -1.15, -0.05, 2)
+            else:
+                pygame.draw.arc(screen, horn_d, rect, 0.05, 1.15, 4)
+                pygame.draw.arc(screen, horn, rect, 0.05, 1.15, 2)
+        pygame.draw.circle(screen, eye, (int(hx), int(hy - 4)), 2)
+        pygame.draw.circle(screen, eye, (int(hx), int(hy + 4)), 2)
+
+
 def make_squad(nation, x: float, y: float, count: int = 3, color=None):
     """Soldiers that follow the player -- the army you get when you enlist."""
     squad = []
