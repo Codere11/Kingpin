@@ -783,11 +783,11 @@ def hair(screen, hx: float, hy: float, r: int) -> None:
         r = int(r)
         hx, hy = float(hx), float(hy)
         # the halo of hair around the top, sides and jaw
-        pygame.draw.circle(screen, NAT_HAIR, (int(hx), int(hy - r * 0.1)), r + 2)
-        # a short fringe under the jaw, NOT down the back
+        pygame.draw.circle(screen, NAT_HAIR, (int(hx), int(hy - r * 0.1)), r + 3)
+        # a longer fringe under the jaw -- the long hair, still not the body
         pygame.draw.rect(screen, NAT_HAIR,
-                         (int(hx - r - 1), int(hy + r * 0.55),
-                          int(2 * r + 2), int(r * 0.6)), border_radius=3)
+                         (int(hx - r - 2), int(hy + r * 0.4),
+                          int(2 * r + 4), int(r * 0.9)), border_radius=4)
         # a shine strand over the crown
         pygame.draw.arc(screen, NAT_HAIR_SH,
                         (int(hx - r), int(hy - r - 2), int(2 * r), int(2 * r)),
@@ -798,24 +798,22 @@ def hair(screen, hx: float, hy: float, r: int) -> None:
 
 def feather(screen, hx: float, hy: float, r: int,
             fx: float = 0.0, fy: float = 0.0) -> None:
-    """A single styled feather at the back of the head, lying away from the
-    facing. Drawn AFTER the face, on top of the hair."""
+    """A single styled feather PINNED to the back-left of the head. It does
+    not turn with the facing -- the eyes do that; the feather stays fixed."""
     try:
         r = int(r)
         hx, hy = float(hx), float(hy)
-        n = (fx * fx + fy * fy) ** 0.5 or 1.0
-        ux, uy = fx / n, fy / n
-        bx = hx - ux * r * 0.45          # base of the feather, on the hair
-        by = hy - r * 0.75 - uy * r * 0.15
-        qx = bx - ux * r * 1.15          # the tip, out behind him
-        qy = by - uy * r * 0.4
+        bx = hx - r * 0.45          # fixed base, back-left of the crown
+        by = hy - r * 0.72
+        qx = bx - r * 1.05          # fixed tip, out to the back-left
+        qy = by - r * 0.45
         pygame.draw.line(screen, NAT_QUILL, (int(bx), int(by)), (int(qx), int(qy)), 1)
         pygame.draw.line(screen, NAT_FEATHER, (int(bx), int(by) - 1),
                          (int(qx), int(qy) - 1), 2)
         pygame.draw.line(screen, NAT_FEATHER, (int(bx), int(by) + 1),
                          (int(qx), int(qy) + 1), 2)
         pygame.draw.line(screen, NAT_FEATHER_TIP, (int(qx), int(qy)),
-                         (int(qx - ux * r * 0.35), int(qy - uy * r * 0.15)), 2)
+                         (int(qx - r * 0.35), int(qy - r * 0.15)), 2)
     except Exception:
         pass
 
