@@ -566,8 +566,8 @@ def run(g):
                     if g._held_id in ("wood",) and g.hotbar.slot_at(event.pos) is None:
                         try:
                             import block as _block
-                            _wx = g.cam_x + g.wmouse_x
-                            _wy = g.cam_y + g.wmouse_y
+                            _wx = g.cam_x + event.pos[0] / ZOOM
+                            _wy = g.cam_y + event.pos[1] / ZOOM
                             _tx = int(_wx // _block.TILE)
                             _ty = int(_wy // _block.TILE)
                             if _block.place_block(g, _tx, _ty, g._held_id):
@@ -1232,10 +1232,22 @@ def run(g):
             g.solids += [(wp.rect, (96, 92, 88)) for v in g.visible_villages
                        for wp in v.workplaces]
             g.solids += [(wp.rect, (96, 92, 88)) for wp in g.placed_work]
+            # PLACED BLOCKS ARE SOLID: they collide like any wall.
+            try:
+                import block as _block
+                g._block_cols = []
+                for (btx, bty) in getattr(g, "built_blocks", {}):
+                    _br = pygame.Rect(btx * _block.TILE, bty * _block.TILE,
+                                      _block.TILE, _block.TILE)
+                    if _br.inflate(60, 60).collidepoint(g.player.x, g.player.y):
+                        g._block_cols.append(_br)
+            except Exception:
+                g._block_cols = []
             if not g.player.dead:
                 g.player.x, g.player.y = resolve_circle_rects(
                     g.player.x, g.player.y, g.player.radius,
-                    g.grid.near(g.player.x, g.player.y, g.player.radius + 6.0))
+                    g.grid.near(g.player.x, g.player.y, g.player.radius + 6.0)
+                    + g._block_cols)
             # THE OCEAN IS IMPASSABLE: the shore is the eastern edge of the
             # world. Walk into the sea and he is pushed back to the sand.
             try:

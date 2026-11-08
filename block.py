@@ -14,12 +14,16 @@ BUILDABLE = ("wood",)
 def _wood_block(screen, x, y):
     """A 1x1 plank block, like a Minecraft plank."""
     pygame.draw.rect(screen, (118, 78, 44), (x, y, TILE, TILE))
-    pygame.draw.rect(screen, (78, 50, 28), (x, y, TILE, TILE), 1)
-    for i in range(3):
-        yy = y + 5 + i * 9
-        pygame.draw.line(screen, (78, 50, 28), (x + 2, yy), (x + TILE - 2, yy), 1)
-    # side seams so the planks read as separate boards
-    pygame.draw.line(screen, (78, 50, 28), (x + TILE // 2, y), (x + TILE // 2, y + 5), 1)
+    pygame.draw.rect(screen, (78, 50, 28), (x, y, TILE, TILE), 2)
+    # a little depth: light top-left edge, dark bottom-right edge
+    pygame.draw.line(screen, (156, 110, 62), (x + 1, y + 1), (x + TILE - 2, y + 1), 2)
+    pygame.draw.line(screen, (156, 110, 62), (x + 1, y + 1), (x + 1, y + TILE - 2), 2)
+    pygame.draw.line(screen, (60, 38, 22), (x + 2, y + TILE - 2), (x + TILE - 2, y + TILE - 2), 2)
+    pygame.draw.line(screen, (60, 38, 22), (x + TILE - 2, y + 2), (x + TILE - 2, y + TILE - 2), 2)
+    for i in range(2):
+        yy = y + 9 + i * 12
+        pygame.draw.line(screen, (78, 50, 28), (x + 3, yy), (x + TILE - 3, yy), 1)
+    pygame.draw.line(screen, (78, 50, 28), (x + TILE // 2, y + 2), (x + TILE // 2, y + 8), 1)
 
 
 def draw_blocks(screen, blocks, cam_x, cam_y, view):
