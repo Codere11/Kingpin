@@ -17,6 +17,7 @@ import nemesis
 import plog
 from interior import (Interior, BARREL_H, BARREL_W, BREW_H, BREW_W, LAB_H, LAB_W, WORKSHOP_H, WORKSHOP_W)
 import stall as stall_mod
+from world import TILE
 
 
 def placement_pos(player, inside_house, inside_mine, cam_x, cam_y,
@@ -50,7 +51,8 @@ def can_place(rect, sight, player, inside_house, built_houses,
     return True
 
 
-def own_things(built_plots, placed_work, built_gates, built_fences, built_houses):
+def own_things(built_plots, placed_work, built_gates, built_fences, built_houses,
+               built_blocks=None):
     """Everything of HIS a click could take down, smallest first."""
     out = []
     for _r in built_plots:
@@ -63,20 +65,31 @@ def own_things(built_plots, placed_work, built_gates, built_fences, built_houses
         out.append((_r, "fence", _r))
     for _h in built_houses:
         out.append((_h.rect, "house", _h))
+    if built_blocks:
+        for (_tx, _ty) in built_blocks:
+            _r = pygame.Rect(_tx * TILE, _ty * TILE, TILE, TILE)
+            out.append((_r, "plank", (_tx, _ty)))
     return out
 
 
 def demolish_at(wx, wy, player, built_plots, built_gates, built_fences,
-                built_houses, placed_work, mark_dirty, inventory, stall_mod) -> str:
+                built_houses, placed_work, mark_dirty, inventory, stall_mod,
+                built_blocks=None) -> str:
     """ONE CLICK TAKES ONE THING OF HIS DOWN -- the smallest under it."""
     hits = [(r.w * r.h, kind, r, obj) for (r, kind, obj) in
             own_things(built_plots, placed_work, built_gates, built_fences,
-                       built_houses)
+                       built_houses, built_blocks)
             if r.collidepoint(wx, wy)]
     if not hits:
         return ""
     hits.sort(key=lambda h: h[0])
     _area, kind, rect, obj = hits[0]
+    if kind == "plank":
+        if built_blocks is not None:
+            built_blocks.pop(obj, None)
+        inventory.add("wood", 1)
+        mark_dirty()
+        return "Plank taken down  +1 wood"
     if kind == "plot":
         if rect in built_plots:
             built_plots.remove(rect)

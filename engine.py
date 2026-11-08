@@ -3219,6 +3219,12 @@ def run(g):
         g.occluders += [house.sight_rect for house in g.built_houses
                       if (house.x - g.player.x) ** 2 + (house.y - g.player.y) ** 2
                       < (g.reach + max(house.w, house.h)) ** 2]
+        # Placed planks block sight like tree trunks.
+        for (_tx, _ty) in getattr(g, "built_blocks", {}):
+            _br = pygame.Rect(_tx * TILE, _ty * TILE, TILE, TILE)
+            if _br.colliderect(pygame.Rect(g.player.x - g.reach, g.player.y - g.reach,
+                                           g.reach * 2, g.reach * 2)):
+                g.occluders.append(_br)
         g.near_trees = sorted(g.draw_trees,
                             key=lambda t: (t.x - g.player.x) ** 2 + (t.y - g.player.y) ** 2)
         g.soft: list[pygame.Rect] = []

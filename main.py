@@ -924,12 +924,12 @@ def main() -> None:
 
     def _own_things():
         return placement.own_things(g.built_plots, g.placed_work, g.built_gates,
-                                    g.built_fences, g.built_houses)
+                                    g.built_fences, g.built_houses, g.built_blocks)
 
     def demolish_at(wx: float, wy: float) -> str:
         return placement.demolish_at(wx, wy, g.player, g.built_plots, g.built_gates,
                                      g.built_fences, g.built_houses, g.placed_work,
-                                     mark_dirty, g.inventory, stall_mod)
+                                     mark_dirty, g.inventory, stall_mod, g.built_blocks)
 
     def salary_chest():
         return placement.salary_chest(g.built_houses, hubs, g.hub_world)
