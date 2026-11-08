@@ -28,19 +28,28 @@ def _wood_block(screen, x, y):
 
 
 def _hide_block(screen, x, y):
-    """A placed hide: the side of an Indian tent -- a triangle."""
-    hide = (112, 74, 46)
-    hide_l = (150, 104, 62)
-    hide_d = (72, 46, 28)
-    peak = (x + TILE // 2, y + 2)
-    bl = (x + 3, y + TILE - 2)
-    br = (x + TILE - 3, y + TILE - 2)
-    pygame.draw.polygon(screen, hide, [peak, bl, br])
-    pygame.draw.polygon(screen, hide_d, [peak, bl, br], 2)
-    # the tent pole
-    pygame.draw.line(screen, hide_l, (peak[0], peak[1] + 1), (peak[0], y + TILE - 4), 1)
-    # the door slit at the base
-    pygame.draw.line(screen, hide_d, (peak[0], y + TILE - 8), (peak[0], y + TILE - 2), 2)
+    """A placed hide: a full-block skin (rectangle, the whole square) with
+    the bottom hem of a teepee along its base edge."""
+    hide = (124, 86, 54)      # tanned hide
+    hide_l = (166, 122, 74)   # light edge / stitching
+    hide_d = (82, 54, 34)     # dark edge / hem
+    # the full skin, the whole block wide
+    pygame.draw.rect(screen, hide, (x, y, TILE, TILE))
+    pygame.draw.rect(screen, hide_d, (x, y, TILE, TILE), 2)
+    # depth: light top-left, dark bottom-right
+    pygame.draw.line(screen, hide_l, (x + 1, y + 1), (x + TILE - 2, y + 1), 2)
+    pygame.draw.line(screen, hide_l, (x + 1, y + 1), (x + 1, y + TILE - 2), 2)
+    pygame.draw.line(screen, (66, 42, 26), (x + 2, y + TILE - 2),
+                     (x + TILE - 2, y + TILE - 2), 2)
+    # THE BOTTOM HEM OF A TEEPEE: a stitched band along the very bottom.
+    hem = y + TILE - 7
+    pygame.draw.rect(screen, hide_d, (x + 1, hem, TILE - 2, 6))
+    for i in range(2, TILE - 3, 4):
+        pygame.draw.line(screen, hide_l, (x + i, hem + 2), (x + i, hem + 4), 1)
+    # the little ground-fringe under the hem
+    for i in range(2, TILE - 2, 4):
+        pygame.draw.line(screen, hide_d, (x + i, y + TILE - 2),
+                         (x + i, y + TILE - 1), 1)
 
 
 def draw_blocks(screen, blocks, cam_x, cam_y, view):
