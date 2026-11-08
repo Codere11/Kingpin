@@ -1023,7 +1023,9 @@ def main() -> None:
             _TEST_TRAIN=g._TEST_TRAIN, corpse_mod=corpse_mod, now=g.now, crop=crop,
             world=g.world, wildcrop=wildcrop, ore_field=g.ore_field,
             enemies=g.enemies, rabbits=g.rabbits, built_houses=g.built_houses,
-            _TRUTH=g._TRUTH, _draws=g._draws, plog=plog)
+            _TRUTH=g._TRUTH, _draws=g._draws, plog=plog,
+            inventory=g.inventory, built_blocks=g.built_blocks,
+            wmouse_x=g.wmouse_x, wmouse_y=g.wmouse_y)
         render.draw_exterior(_g, cx, cy, show_names, target)
 
 
