@@ -361,10 +361,10 @@ class Player:
         right = (sx + fy * 4, sy - fx * 4)
         pygame.draw.polygon(screen, (34, 30, 26), (tip, left, right))
 
-        # torso
-        body = (238, 228, 228) if self.hit_flash > 0.0 else (54, 74, 122)
+        # torso -- a native hide tunic, like every other civilian
+        body = (238, 228, 228) if self.hit_flash > 0.0 else (162, 120, 76)
         pygame.draw.circle(screen, body, (sx, sy), 11)
-        pygame.draw.circle(screen, (30, 44, 74), (sx, sy), 11, 2)
+        pygame.draw.circle(screen, (108, 78, 48), (sx, sy), 11, 2)
 
         if held is not None:
             self._draw_held(screen, held, sx, sy, fx, fy, self.swing_progress)
