@@ -11,7 +11,11 @@ def load() -> pygame.Surface:
     if _SURF is not None:
         return _SURF
     path = os.path.join(os.path.dirname(__file__), "ship.png")
-    img = pygame.image.load(path).convert_alpha()
+    img = pygame.image.load(path)
+    try:
+        img = img.convert_alpha()
+    except Exception:
+        img = img.convert()
     _SURF = pygame.transform.scale(img, (128, 96))
     return _SURF
 

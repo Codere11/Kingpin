@@ -427,20 +427,28 @@ class GroundRenderer:
                                     (sx - r * 0.5, sy - r * 0.4, r, r * 0.8))
 
     def _coarse_color(self, cx: int, cy: int) -> tuple[int, int, int]:
-        """Cheap plausible fill for a not-yet-generated chunk (no black pops)."""
+        """Cheap plausible fill for a not-yet-generated chunk (no black pops).
+        The ocean and the beach get their REAL colour even before the chunk is
+        built, so the sea is never a black or green gap under the ship."""
         cached = self._coarse.get((cx, cy))
         if cached is not None:
             return cached
-        t = float(self.world.temperature(np.float32(cx * CHUNK + CHUNK / 2),
-                                         np.float32(cy * CHUNK + CHUNK / 2)))
-        h = float(self.world.humidity(np.float32(cx * CHUNK + CHUNK / 2),
-                                      np.float32(cy * CHUNK + CHUNK / 2)))
-        dark, lite, _spec, _dens = biomes.mix(t, h)
-        r = int((dark[0] + lite[0]) * 0.5)
-        g = int((dark[1] + lite[1]) * 0.5)
-        b = int((dark[2] + lite[2]) * 0.5)
-        self._coarse[(cx, cy)] = (r, g, b)
-        return (r, g, b)
+        mx = cx * CHUNK + CHUNK / 2.0
+        my = cy * CHUNK + CHUNK / 2.0
+        _c = coast_x(my, self.world.seed)
+        if mx > _c:
+            col = tuple(int(v) for v in WATER)
+        elif mx > _c - SAND_W:
+            col = tuple(int(v) for v in SAND)
+        else:
+            t = float(self.world.temperature(np.float32(mx), np.float32(my)))
+            h = float(self.world.humidity(np.float32(mx), np.float32(my)))
+            dark, lite, _spec, _dens = biomes.mix(t, h)
+            col = (int((dark[0] + lite[0]) * 0.5),
+                   int((dark[1] + lite[1]) * 0.5),
+                   int((dark[2] + lite[2]) * 0.5))
+        self._coarse[(cx, cy)] = col
+        return col
 
     def invalidate_tile(self, tx: int, ty: int,
                         immediate: bool = True) -> None:
