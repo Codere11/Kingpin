@@ -44,18 +44,19 @@ def draw_grid(screen, cam_x, cam_y, vw, vh, wmouse_x, wmouse_y):
     ty1 = int((cam_y + vh) // TILE) + 1
     for tx in range(tx0, tx1 + 1):
         x = int(tx * TILE - cam_x)
-        pygame.draw.line(overlay, (240, 240, 240, 28), (x, 0), (x, vh), 1)
+        pygame.draw.line(overlay, (255, 255, 255, 90), (x, 0), (x, vh), 1)
     for ty in range(ty0, ty1 + 1):
         y = int(ty * TILE - cam_y)
-        pygame.draw.line(overlay, (240, 240, 240, 28), (0, y), (vw, y), 1)
-    # the square under the mouse
+        pygame.draw.line(overlay, (255, 255, 255, 90), (0, y), (vw, y), 1)
+    # the square under the mouse: a BRIGHT white outline
     wx = cam_x + wmouse_x
     wy = cam_y + wmouse_y
     tx = int(wx // TILE)
     ty = int(wy // TILE)
     x = int(tx * TILE - cam_x)
     y = int(ty * TILE - cam_y)
-    pygame.draw.rect(overlay, (255, 255, 255, 110), (x, y, TILE, TILE), 2)
+    pygame.draw.rect(overlay, (255, 255, 255, 255), (x, y, TILE, TILE), 2)
+    pygame.draw.rect(overlay, (0, 0, 0, 160), (x - 1, y - 1, TILE + 2, TILE + 2), 1)
     screen.blit(overlay, (0, 0))
 
 
