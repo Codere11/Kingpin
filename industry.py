@@ -493,12 +493,7 @@ class Workplace:
         self.y = float(y)
         self._rng_seed = seed & 0xFFFFFFFF
         self.rng = random.Random(self._rng_seed)
-        self.w, self.h = ((136, 112) if kind == "mine"
-                          else (96, 66) if kind == "lab"
-                          else (116, 78) if kind == "brewery"
-                          else (38, 62) if kind == "dummy"
-                          else (44, 60) if kind == "target"
-                          else (122, 110))
+        self.w, self.h = (64, 64)
         # WHAT A POST LOOKS LIKE WHILE IT IS BEING WORKED: the dummy takes a
         # blow, the target takes a round. Both are timers the frame drains.
         self.train_flash = 0.0

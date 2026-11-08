@@ -234,7 +234,7 @@ class Stall:
         self.y = float(y)
         self._rng_seed = int(seed) & 0xFFFFFFFF
         self.rng = random.Random(self._rng_seed)
-        self.w, self.h = 96, 64
+        self.w, self.h = 64, 64
         self.rect = pygame.Rect(int(x - self.w / 2), int(y - self.h / 2),
                                self.w, self.h)
         self.base_y = y + self.h / 2.0
