@@ -19,7 +19,8 @@ def award_levels(skills, player) -> None:
 
 
 def clamp_world(player, world_half: float) -> None:
-    """The world is finite, and the loading screen builds all of it."""
+    """The world is procedurally infinite; only the Minecraft-style border at
+    a huge figure stops a man. This is the only wall."""
     player.x = min(max(player.x, -world_half), world_half)
     player.y = min(max(player.y, -world_half), world_half)
 

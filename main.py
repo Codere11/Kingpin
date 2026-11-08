@@ -169,10 +169,9 @@ CORE_HALF = 100000          # THE SETTLED COUNTRY: unchanged, all of it
 # are generated and lived at load; everything beyond is generated, chunk by
 # chunk, as he reaches it.
 SIM_RADIUS = 2.0 * SPACING
-# FIVE TIMES THE LENGTH AND FIVE TIMES THE WIDTH: each side is 1,000,000 px
-# across, the settled country stays where it always was, in the middle of it,
-# and the ring around it is the Siberian waste.
-WORLD_HALF = CORE_HALF * 5
+# THE MINECRAFT-STYLE WORLD BORDER. The world is procedurally infinite in the
+# west; the only wall is this huge figure, far beyond anything a man will walk.
+WORLD_BORDER = 30_000_000
 
 
 def _present(dest, src, w, h):
@@ -802,7 +801,7 @@ def main() -> None:
             pass
 
     def clamp_world() -> None:
-        hudtime.clamp_world(g.player, WORLD_HALF)
+        hudtime.clamp_world(g.player, WORLD_BORDER)
 
     def try_talk() -> bool:
         return life.try_talk(g._TRUTH, village_mod, pygame, g.cam_x, g.cam_y, ZOOM,
@@ -1127,7 +1126,7 @@ def main() -> None:
         return hudtime.day_phase(g.now, DAY_LENGTH)
 
     def _nearest_town():
-        return interact.nearest_town(g.player, g.villages, WORLD_HALF)
+        return interact.nearest_town(g.player, g.villages, WORLD_BORDER)
 
     def speed_button() -> pygame.Rect:
         return hudtime.speed_button(g.vw, g.vh)

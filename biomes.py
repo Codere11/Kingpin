@@ -211,12 +211,11 @@ WASTE_HALF = CORE_HALF * 5.0               # five times the LENGTH: 500,000
 
 
 def _waste_ramp(x, y) -> float:
-    """0 inside the old country, 1 at the frozen edge."""
-    d = max(abs(float(x)), abs(float(y)))
-    if d <= CORE_HALF:
-        return 0.0
-    t = (d - CORE_HALF) / max(1.0, (WASTE_HALF - CORE_HALF))
-    return 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
+    """There is no frozen rim any more. The whole west is normal, infinite
+    procedural country; the only border is the Minecraft-style world border at
+    a huge figure. This stays as a named hook so callers that asked about the
+    waste (wild plants, density) simply get the answer 'none'."""
+    return 0.0
 
 
 def temperature(x, y, seed: int):
@@ -225,17 +224,13 @@ def temperature(x, y, seed: int):
         ys = np.asarray(y, np.float32)
         v = fbm(xs * TEMP_SCALE, ys * TEMP_SCALE, seed + 71, octaves=3)
         t = np.clip((v - 0.5) * 2.15 + 0.5, 0.0, 1.0)
-        d = np.maximum(np.abs(xs), np.abs(ys))
-        ramp = np.clip((d - CORE_HALF) / max(1.0, (WASTE_HALF - CORE_HALF)),
-                       0.0, 1.0)
-        return t * (1.0 - 0.88 * ramp)          # Siberia past the old edge
+        return t
     key = (float(x), float(y), seed)
     got = _TEMP_MEMO.get(key)
     if got is None:
         v = fbm(np.float32(key[0]) * TEMP_SCALE, np.float32(key[1]) * TEMP_SCALE,
                 seed + 71, octaves=3)
         got = float(np.clip((float(v) - 0.5) * 2.15 + 0.5, 0.0, 1.0))
-        got *= (1.0 - 0.88 * _waste_ramp(key[0], key[1]))
         if len(_TEMP_MEMO) < _MEMO_CAP:
             _TEMP_MEMO[key] = got
     return got
