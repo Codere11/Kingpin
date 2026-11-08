@@ -866,7 +866,8 @@ def main() -> None:
             player=g.player, skills=g.skills, inventory=g.inventory, combat=g.combat,
             enemies=g.enemies, blood=g.blood, rabbits=g.rabbits, hub_world=g.hub_world,
             truth=g._TRUTH, trees=g.trees, built_fences=g.built_fences,
-            built_gates=g.built_gates, visible_villages=g.visible_villages,
+            built_gates=g.built_gates, built_blocks=g.built_blocks,
+            visible_villages=g.visible_villages,
             work_lanes=g._WORK, now=g.now,
             toast=toast, mark_dirty=mark_dirty, pay_share=pay_share,
             commit_crime=commit_crime, see_murder=_see_murder, banish=banish)

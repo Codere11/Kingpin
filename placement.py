@@ -28,8 +28,8 @@ def placement_pos(player, inside_house, inside_mine, cam_x, cam_y,
         mx, my = pygame.mouse.get_pos()
     else:
         mx, my = wmouse_x, wmouse_y
-    return (round((cam_x + mx) / 8.0) * 8.0,
-            round((cam_y + my) / 8.0) * 8.0)
+    return (round((cam_x + mx) / TILE) * TILE,
+            round((cam_y + my) / TILE) * TILE)
 
 
 def can_place(rect, sight, player, inside_house, built_houses,
