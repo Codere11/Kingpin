@@ -142,7 +142,8 @@ def write(g) -> None:
             "aboard": list(getattr(g.train[0], "aboard", []) or []),
             "player_aboard": bool(getattr(g.player, "aboard", False)),
         }),
-        "world": worldio.world_to_data(g.villages),
+        "world": (worldio.world_to_data(g.villages)
+                   + list(getattr(g.villages, "_frozen", {}).values())),
     }
     import chunksave
     if not chunksave.save(payload):

@@ -211,6 +211,33 @@ def _total_houses(towns) -> int:
     return max(1, sum(len(getattr(v, "houses", ())) for v in towns))
 
 
+def freeze_far_villages(villages, px: float, py: float, radius: float) -> int:
+    """Serialize and drop every village further than `radius` from the player.
+
+    A frozen village is not simulated: it leaves the cache, the people register
+    and the lanes, and its full state is kept in `villages._frozen` until the
+    player walks back to its cell, when get() rebuilds it and overlays this
+    state. Returns how many froze.
+    """
+    import worldio
+    frozen = 0
+    for (gx, gy), v in list(villages._cache.items()):
+        try:
+            if math.hypot(v.x - px, v.y - py) <= radius:
+                continue
+        except Exception:
+            continue
+        try:
+            villages._frozen[(gx, gy)] = worldio.village_to_data(v)
+        except Exception:
+            continue
+        del villages._cache[(gx, gy)]
+        frozen += 1
+    if frozen:
+        village_mod.rebuild_people(villages)
+    return frozen
+
+
 
 
 import economy

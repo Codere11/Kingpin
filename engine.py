@@ -1050,6 +1050,25 @@ def run(g):
             # cut when that set changes and at no other time.
             g._lane_ids = tuple(sorted(id(v) for v in g.visible_villages))
             g._lane_timer -= g.dt
+            # ---- FREEZE SETTLEMENTS THAT LEFT THE SIMULATED DISTANCE -------
+            # A village further than FREEZE_RADIUS is serialized and dropped
+            # from the live world; its full state sits in villages._frozen and
+            # is overlaid when the player walks back to its cell.
+            g._freeze_timer = getattr(g, "_freeze_timer", 5.0) - g.dt
+            if g._freeze_timer <= 0.0:
+                g._freeze_timer = 5.0
+                try:
+                    import worldbuild as _wb
+                    import math as _m
+                    _rad = getattr(g, "FREEZE_RADIUS", 3.0 * g.SPACING)
+                    _froze = _wb.freeze_far_villages(g.villages, g.player.x,
+                                                      g.player.y, _rad)
+                    if _froze:
+                        # force a re-cut next frame so the lanes drop the frozen
+                        g._lane_seen = None
+                        g._lane_timer = 0.0
+                except Exception:
+                    pass
             if g._lane_timer <= 0.0 and g._lane_ids != g._lane_seen:
                 g._lane_seen = g._lane_ids
                 g._lane_timer = 4.0

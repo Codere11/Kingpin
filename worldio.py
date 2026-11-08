@@ -86,66 +86,68 @@ def _restore(obj, blob) -> None:
             pass
 
 
+def village_to_data(v) -> dict:
+    """One settlement's full state, in the shape world_from_data expects."""
+    people = []
+    for n in v.npcs:
+        house = None
+        if getattr(n, "home_house", None) is not None:
+            try:
+                house = v.houses.index(n.home_house)
+            except ValueError:
+                house = None
+        work = None
+        if getattr(n, "workplace", None) is not None:
+            try:
+                work = v.workplaces.index(n.workplace)
+            except ValueError:
+                work = None
+        ref = getattr(n, "refuge", None)
+        sig = (n.job, n.alive, getattr(n, "ranged", False),
+               len(n.stock), len(n.grade), sum(n.stock.values()),
+               len(getattr(n, "tool_orders", ()) or ()),
+               getattr(n, "levied", False), getattr(n, "defender", False),
+               getattr(n, "is_mayor", False))
+        got = _BULK.get(id(n))
+        if got is None or got[0] != sig:
+            got = (sig, _bulk(n))
+            _BULK[id(n)] = got
+        state = dict(got[1])
+        state["x"] = n.x
+        state["y"] = n.y
+        state["coins"] = n.coins
+        state["hunger"] = n.hunger
+        state["health"] = n.health
+        people.append({
+            "id": n.id, "state": state, "house": house, "work": work,
+            # skills are an object, not a number: a life's practice has
+            # to be carried across by hand.
+            "skills": [n.skills.farming, n.skills.movement,
+                       n.skills.axe, n.skills.shooting],
+            "village": ("%d,%d" % (n.village.gx, n.village.gy)
+                        if getattr(n, "village", None) is not None else None),
+            "bond": getattr(getattr(n, "bond_partner", None), "id", None),
+            "refuge": ("%d,%d" % (ref.gx, ref.gy) if ref is not None else None),
+        })
+    houses = [{"warmth": float(getattr(h, "warmth", 1.0)),
+               "door_broken": bool(getattr(h, "door_broken", False)),
+               "occupants": [getattr(o, "id", None) for o in
+                             getattr(h, "occupants", ())]}
+              for h in v.houses]
+    return {
+        "gx": v.gx, "gy": v.gy,
+        "state": _plain(v),
+        "houses": houses,
+        "workers": [getattr(w.worker, "id", None) for w in v.workplaces],
+        "mayor": getattr(getattr(v, "mayor", None), "id", None),
+        "king": getattr(getattr(v, "king", None), "id", None),
+        "people": people,
+    }
+
+
 def world_to_data(villages) -> list:
     """The whole world's state, people and all, in a shape a load can use."""
-    out = []
-    for (gx, gy), v in villages._cache.items():
-        people = []
-        for n in v.npcs:
-            house = None
-            if getattr(n, "home_house", None) is not None:
-                try:
-                    house = v.houses.index(n.home_house)
-                except ValueError:
-                    house = None
-            work = None
-            if getattr(n, "workplace", None) is not None:
-                try:
-                    work = v.workplaces.index(n.workplace)
-                except ValueError:
-                    work = None
-            ref = getattr(n, "refuge", None)
-            sig = (n.job, n.alive, getattr(n, "ranged", False),
-                   len(n.stock), len(n.grade), sum(n.stock.values()),
-                   len(getattr(n, "tool_orders", ()) or ()),
-                   getattr(n, "levied", False), getattr(n, "defender", False),
-                   getattr(n, "is_mayor", False))
-            got = _BULK.get(id(n))
-            if got is None or got[0] != sig:
-                got = (sig, _bulk(n))
-                _BULK[id(n)] = got
-            state = dict(got[1])
-            state["x"] = n.x
-            state["y"] = n.y
-            state["coins"] = n.coins
-            state["hunger"] = n.hunger
-            state["health"] = n.health
-            people.append({
-                "id": n.id, "state": state, "house": house, "work": work,
-                # skills are an object, not a number: a life's practice has
-                # to be carried across by hand.
-                "skills": [n.skills.farming, n.skills.movement,
-                           n.skills.axe, n.skills.shooting],
-                "village": ("%d,%d" % (n.village.gx, n.village.gy)
-                            if getattr(n, "village", None) is not None else None),
-                "bond": getattr(getattr(n, "bond_partner", None), "id", None),
-                "refuge": ("%d,%d" % (ref.gx, ref.gy) if ref is not None else None),
-            })
-        houses = [{"warmth": float(getattr(h, "warmth", 1.0)),
-                   "door_broken": bool(getattr(h, "door_broken", False)),
-                   "occupants": [getattr(o, "id", None) for o in
-                                 getattr(h, "occupants", ())]}
-                  for h in v.houses]
-        out.append({
-            "gx": gx, "gy": gy,
-            "state": _plain(v),
-            "houses": houses,
-            "workers": [getattr(w.worker, "id", None) for w in v.workplaces],
-            "mayor": getattr(getattr(v, "mayor", None), "id", None),
-            "king": getattr(getattr(v, "king", None), "id", None),
-            "people": people,
-        })
-    return out
+    return [village_to_data(v) for v in villages._cache.values()]
 
 
 _WORLD_CACHE_VERSION = 5        # bump when the shape of a VILLAGE changes...
@@ -234,6 +236,13 @@ def world_from_data(villages, blob) -> None:
         # never been part of the world, and eighteen thousand people with them.
         v = villages._cache.get((rec["gx"], rec["gy"]))
         if v is None:
+            # A FROZEN SETTLEMENT. Its cell is not built (the player is far
+            # from it), so its state waits in _frozen until get() rebuilds the
+            # cell and overlays this record.
+            try:
+                villages._frozen[(int(rec["gx"]), int(rec["gy"]))] = rec
+            except Exception:
+                pass
             continue
         _restore(v, rec.get("state"))
         # WHERE A TOWN IS, IS NOT STATE. `_restore` copied x and y off the save,

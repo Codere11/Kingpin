@@ -169,6 +169,11 @@ CORE_HALF = 100000          # THE SETTLED COUNTRY: unchanged, all of it
 # are generated and lived at load; everything beyond is generated, chunk by
 # chunk, as he reaches it.
 SIM_RADIUS = 2.0 * SPACING
+# THE FREEZE RADIUS. A settlement further than this from the player is frozen:
+# serialized and dropped from the live world, to wake exactly as it was when he
+# returns. Larger than SIM_RADIUS, so a town is not frozen the moment it is
+# built.
+FREEZE_RADIUS = 3.0 * SPACING
 # THE MINECRAFT-STYLE WORLD BORDER. The world is procedurally infinite in the
 # west; the only wall is this huge figure, far beyond anything a man will walk.
 WORLD_BORDER = 30_000_000
@@ -244,6 +249,8 @@ def main() -> None:
     g.interior_vision = Vision(cone_deg=175.0, max_dist=560.0, downscale=3)
     g.villages = Villages(g.world.seed)
     g.ground.villages_v = g.villages
+    g.SPACING = SPACING
+    g.FREEZE_RADIUS = FREEZE_RADIUS
     g.trees = Trees(g.world.seed)
     g.world.trees = g.trees            # so loggers can find the woods to cut
     set_forest(g.trees)              # villages stake out a woodlot as they build

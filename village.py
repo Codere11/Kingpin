@@ -4197,6 +4197,10 @@ class Villages:
     def __init__(self, seed: int = 20240501) -> None:
         self.seed = seed
         self._cache: dict[tuple[int, int], Village] = {}
+        # FROZEN SETTLEMENTS: the full state of a village that has left the
+        # simulated distance, kept so it resumes exactly when the player
+        # returns. Keyed by cell, each value is a worldio village record.
+        self._frozen: dict[tuple[int, int], dict] = {}
         self.trade_active: set = set()    # villages with a trader on the road
         self.trader_deaths = 0            # traders lost, and lost on the road
         self.trader_kills_away = 0
@@ -4214,6 +4218,15 @@ class Villages:
             village = Village(gx, gy, self.seed)
             village.registry = self
             self._cache[(gx, gy)] = village
+            # A FROZEN TOWN WAKES AS IT WAS. The seed rebuilds its shape; the
+            # frozen record overlays everything that has happened since.
+            _rec = self._frozen.pop((gx, gy), None)
+            if _rec is not None:
+                try:
+                    import worldio
+                    worldio.world_from_data(self, [_rec])
+                except Exception:
+                    pass
         return village
 
     # NOTE: prefetch() and warm() used to live here. Both laid out a village
