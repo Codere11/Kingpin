@@ -293,6 +293,7 @@ def build(g, cx: float, cy: float, seed: int):
 
     # the settlement, for anything that needs to find it later
     settlement = type("NativeSettlement", (), {
+        "name": "Native settlement",
         "x": cx, "y": cy, "seed": seed,
         "people": people, "farmers": farmers, "warriors": warriors,
         "fireplace": fire, "teepees": tp_centers,

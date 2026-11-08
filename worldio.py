@@ -13,7 +13,7 @@ import persist
 from village import village_center
 
 
-_STATE_SKIP = {"id", "name", "village", "home_house", "home_door",
+_STATE_SKIP = {"id", "village", "home_house", "home_door",
                "bond_partner", "workplace", "refuge", "social_target",
                "guards", "patrol", "npcs", "houses", "workplaces", "mayor",
                "king", "registry", "rng", "_rng", "image", "_atlas", "rect",
@@ -324,5 +324,27 @@ def world_from_data(villages, blob) -> None:
                         if p["id"] == n.id), None)
             if pid:
                 n.bond_partner = by_id.get(pid)
+
+    # KEEP THE NAME COUNTER AHEAD OF EVERY RESTORED NUMBER, so a town built
+    # after load never reuses a number a saved or frozen town already holds.
+    _mx = int(getattr(villages, "_name_counter", 0) or 0)
+    for _v in villages._cache.values():
+        _nm = getattr(_v, "name", "")
+        if _nm.startswith("Settlement "):
+            try:
+                _mx = max(_mx, int(_nm.split(" ")[1]))
+            except Exception:
+                pass
+    for _rec in blob:
+        _nm = (_rec.get("state") or {}).get("name", "")
+        if _nm.startswith("Settlement "):
+            try:
+                _mx = max(_mx, int(_nm.split(" ")[1]))
+            except Exception:
+                pass
+    try:
+        villages._name_counter = _mx
+    except Exception:
+        pass
 
 

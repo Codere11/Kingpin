@@ -247,17 +247,9 @@ NATION_COLORS = [rich(c) for c in ((176, 62, 58), (62, 96, 176), (74, 138, 74), 
 
 
 def village_name(gx: int, gy: int, seed: int = 0) -> str:
-    """A settlement's name -- and a CAPITAL is named for its leader: <name>grad."""
-    code = ((gx * 73856093) ^ (gy * 19349663)
-            ^ (seed * 2654435761)) & 0xFFFFFFFF
-    try:
-        import nations as _nations
-        if _nations.is_capital_cell(gx, gy, SPACING):
-            leader = FIRST_NAMES[(code // 7) % len(FIRST_NAMES)]
-            return leader + "grad"
-    except Exception:
-        pass
-    return SETTLEMENT_NAMES[code % len(SETTLEMENT_NAMES)]
+    """A settlement's base name. The number is assigned by the registry when
+    the settlement is first built; this is just the plain word."""
+    return "Settlement"
 
 
 def is_military(npc) -> bool:
@@ -4201,6 +4193,10 @@ class Villages:
         # simulated distance, kept so it resumes exactly when the player
         # returns. Keyed by cell, each value is a worldio village record.
         self._frozen: dict[tuple[int, int], dict] = {}
+        # THE NEXT PLAIN SETTLEMENT NUMBER. Names are "Settlement 1",
+        # "Settlement 2", ...; a restored town keeps its saved number, and the
+        # counter is bumped past any number already taken.
+        self._name_counter = 0
         self.trade_active: set = set()    # villages with a trader on the road
         self.trader_deaths = 0            # traders lost, and lost on the road
         self.trader_kills_away = 0
@@ -4227,6 +4223,19 @@ class Villages:
                     worldio.world_from_data(self, [_rec])
                 except Exception:
                     pass
+            # A PLAIN, SEQUENTIAL NAME. A restored town keeps the number it was
+            # saved under; a new town takes the next one.
+            _name = getattr(village, "name", "")
+            if _name.startswith("Settlement "):
+                try:
+                    _n = int(_name.split(" ")[1])
+                    if _n > self._name_counter:
+                        self._name_counter = _n
+                except Exception:
+                    pass
+            else:
+                self._name_counter += 1
+                village.name = "Settlement %d" % self._name_counter
         return village
 
     # NOTE: prefetch() and warm() used to live here. Both laid out a village
