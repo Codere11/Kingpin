@@ -492,6 +492,7 @@ class Soldier(Enemy):
         # patrols were the one body of people drawn on their own path, so they
         # were the one body of people with no face at all.
         _hx, _hy = sx + fx * 2, sy + fy * 2 - 2
+        face.hair(screen, _hx, _hy, 8)          # long hair behind the head
         pygame.draw.circle(screen, (214, 172, 132), (int(_hx), int(_hy)), 8)
         pygame.draw.circle(screen, (140, 104, 76), (int(_hx), int(_hy)), 8, 1)
         face.draw(screen, _hx, _hy, 8, fx, fy,
@@ -499,11 +500,10 @@ class Soldier(Enemy):
                                starved=getattr(self, "hunger", 0.0)
                                >= face.STARVED_HUNGER),
                   vet=face.vet_tier(self.skills.axe, self.skills.shooting))
-        # EVERY SOLDIER OF THE REPUBLIC WEARS THE CAP: gate guards, patrols,
-        # the standing army, a marching column, the crown's hunting party.
+        face.feather(screen, _hx, _hy, 8, fx, fy)
+        # WAR PAINT ACROSS THE EYES: every soldier wears it.
         if getattr(self, "kind", "") == "soldier":
-            face.cap(screen, _hx, _hy, 8, fx, fy,
-                     blue=bool(getattr(self, "is_militia", False)))
+            face.war_paint(screen, _hx, _hy, 8, fx, fy)
         if getattr(self, "sleep_t", 0.0) > 0.0:
             try:
                 fnt = pygame.font.SysFont("dejavusans", 12, bold=True)

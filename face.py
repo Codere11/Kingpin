@@ -49,6 +49,14 @@ CROWN_D = (146, 108, 30)    # the darker gold it is edged in
 TOOTH = (238, 236, 228)     # two of them, at the top of it
 LID = None                  # filled with the skin at draw time
 
+# -- NATIVE HAIR, FEATHER AND WAR PAINT (the republic is a native one) ------
+NAT_HAIR = (30, 20, 14)        # long black hair
+NAT_HAIR_SH = (58, 40, 26)     # a shine strand
+NAT_FEATHER = (240, 240, 244)  # the white feather vane
+NAT_FEATHER_TIP = (196, 40, 36)  # its red tip
+NAT_QUILL = (110, 84, 56)      # the quill
+NAT_PAINT = (188, 40, 30)      # war paint across the eyes
+
 # Where the features sit, as a fraction of the head's radius.
 EYE_SIDE = 0.50             # half the distance between the eyes, of r
 EYE_UP = 0.20               # the eye line, above the middle
@@ -763,6 +771,75 @@ def draw(screen, hx: float, hy: float, r: int, fx: float = 0.0,
         surf = sprite(r, d, mood, vet)
         screen.blit(surf, (int(hx) - surf.get_width() // 2,
                            int(hy) - surf.get_height() // 2))
+    except Exception:
+        pass
+
+
+def hair(screen, hx: float, hy: float, r: int) -> None:
+    """Long black hair framing the head, and only a little below the face.
+    Drawn BEFORE the head skin and face, so it frames them rather than
+    covering them -- and it never runs down the body."""
+    try:
+        r = int(r)
+        hx, hy = float(hx), float(hy)
+        # the halo of hair around the top, sides and jaw
+        pygame.draw.circle(screen, NAT_HAIR, (int(hx), int(hy - r * 0.1)), r + 2)
+        # a short fringe under the jaw, NOT down the back
+        pygame.draw.rect(screen, NAT_HAIR,
+                         (int(hx - r - 1), int(hy + r * 0.55),
+                          int(2 * r + 2), int(r * 0.6)), border_radius=3)
+        # a shine strand over the crown
+        pygame.draw.arc(screen, NAT_HAIR_SH,
+                        (int(hx - r), int(hy - r - 2), int(2 * r), int(2 * r)),
+                        math.pi, math.pi * 1.55, 2)
+    except Exception:
+        pass
+
+
+def feather(screen, hx: float, hy: float, r: int,
+            fx: float = 0.0, fy: float = 0.0) -> None:
+    """A single styled feather at the back of the head, lying away from the
+    facing. Drawn AFTER the face, on top of the hair."""
+    try:
+        r = int(r)
+        hx, hy = float(hx), float(hy)
+        n = (fx * fx + fy * fy) ** 0.5 or 1.0
+        ux, uy = fx / n, fy / n
+        bx = hx - ux * r * 0.45          # base of the feather, on the hair
+        by = hy - r * 0.75 - uy * r * 0.15
+        qx = bx - ux * r * 1.15          # the tip, out behind him
+        qy = by - uy * r * 0.4
+        pygame.draw.line(screen, NAT_QUILL, (int(bx), int(by)), (int(qx), int(qy)), 1)
+        pygame.draw.line(screen, NAT_FEATHER, (int(bx), int(by) - 1),
+                         (int(qx), int(qy) - 1), 2)
+        pygame.draw.line(screen, NAT_FEATHER, (int(bx), int(by) + 1),
+                         (int(qx), int(qy) + 1), 2)
+        pygame.draw.line(screen, NAT_FEATHER_TIP, (int(qx), int(qy)),
+                         (int(qx - ux * r * 0.35), int(qy - uy * r * 0.15)), 2)
+    except Exception:
+        pass
+
+
+def war_paint(screen, hx: float, hy: float, r: int,
+              fx: float = 0.0, fy: float = 0.0) -> None:
+    """A thin stripe of red war paint across the eye area. The eyes stay
+    visible ON TOP of it, so the paint never crosses them."""
+    try:
+        r = int(r)
+        hx, hy = float(hx), float(hy)
+        sep = max(3, int(round(r * EYE_SIDE)))
+        wr = max(2, int(round(r * WHITE_R)))
+        pr = max(1, int(round(r * PUPIL_R)))
+        ix, iy = int(round(hx)), int(round(hy - r * EYE_UP))
+        hw = int(r * 0.55)
+        pygame.draw.line(screen, NAT_PAINT, (ix - hw, iy), (ix + hw, iy), 3)
+        # the eyes on top, so the stripe reads as paint AROUND them, not over
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            pygame.draw.circle(screen, WHITE, (cx, iy), wr)
+            pygame.draw.circle(screen, EYE,
+                               (cx + int(round(fx * wr * 0.55)),
+                                iy + int(round(fy * wr * 0.55))), pr)
     except Exception:
         pass
 

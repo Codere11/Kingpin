@@ -2378,9 +2378,10 @@ class NPC:
             body = (74, 78, 76) if not flash else (242, 232, 232)
         pygame.draw.circle(screen, body, (int(sx), int(sy)), 10)
         pygame.draw.circle(screen, (44, 40, 36), (int(sx), int(sy)), 10, 2)
+        head_r = 8
+        face.hair(screen, hx, hy, head_r)          # long hair behind the head
         pygame.draw.circle(screen, (216, 172, 132), (int(hx), int(hy)), 8)
         pygame.draw.circle(screen, (150, 112, 82), (int(hx), int(hy)), 8, 1)
-        head_r = 8
 
         # ONE FACE FOR EVERYBODY, drawn to the head he happens to have -- and
         # the WORKING face while the work is actually happening. The flag is
@@ -2396,15 +2397,13 @@ class NPC:
         # together -- drawn UNDER the mood, so a veteran keeps his beard.
         vet = face.vet_tier(self.skills.axe, self.skills.shooting)
         face.draw(screen, hx, hy, head_r, fx, fy, mood, vet=vet)
+        face.feather(screen, hx, hy, head_r, fx, fy)   # the styled feather
         if getattr(self, "is_stalin", False):
-            # THE DICTATOR: the walrus moustache, and the cap in the
-            # republic's own red with a gold star.
+            # THE OLD MAN keeps the moustache; his cap is gone with the republic.
             face.moustache(screen, hx, hy, head_r)
-            face.cap(screen, hx, hy, head_r, fx, fy, red=True)
-        elif is_military(self):
-            # MILITIA WEAR THE DARK BLUE CAP; soldiers the olive one.
-            face.cap(screen, hx, hy, head_r, fx, fy,
-                     blue=bool(getattr(self, "militia", False)))
+        if is_military(self):
+            # WAR PAINT ACROSS THE EYES, for the soldiers alone.
+            face.war_paint(screen, hx, hy, head_r, fx, fy)
         if getattr(self, "sleep_t", 0.0) > 0.0:
             try:
                 fnt = pygame.font.SysFont("dejavusans", 12, bold=True)

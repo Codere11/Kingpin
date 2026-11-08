@@ -135,11 +135,13 @@ class Corpse:
         body = grey(self.clothing)
         pygame.draw.circle(screen, body, (int(sx), int(sy)), 10)
         pygame.draw.circle(screen, (44, 40, 36), (int(sx), int(sy)), 10, 2)
+        face.hair(screen, hx, hy, 8)
         pygame.draw.circle(screen, grey((216, 172, 132)), (int(hx), int(hy)), 8)
         pygame.draw.circle(screen, (150, 112, 82), (int(hx), int(hy)), 8, 1)
         # THE DEAD FACE: X for each eye, tongue out -- and greying with him
         try:
             face.draw(screen, hx, hy, 8, fx, fy, "dead")
+            face.feather(screen, hx, hy, 8, fx, fy)
         except Exception:
             pass
 

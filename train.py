@@ -160,12 +160,15 @@ class Knocked:
         pygame.draw.circle(screen, (44, 40, 36), (x, y), 10, 2)
         hx = x + int(math.cos(self.angle) * 8)
         hy = y + int(math.sin(self.angle) * 8)
+        import face
+        face.hair(screen, hx, hy, 7)
         pygame.draw.circle(screen, (216, 172, 132), (hx, hy), 7)
         pygame.draw.circle(screen, (150, 112, 82), (hx, hy), 7, 1)
         try:
-            import face
             face.draw(screen, hx, hy, 7, math.cos(self.angle),
                       math.sin(self.angle), "dead")     # the game's own X
+            face.feather(screen, hx, hy, 7,
+                         math.cos(self.angle), math.sin(self.angle))
         except Exception:
             pass
 
