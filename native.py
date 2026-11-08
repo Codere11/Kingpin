@@ -110,6 +110,35 @@ def _clear_wild(g, cx: float, cy: float, radius: float) -> None:
         pass
 
 
+def _clear_ore(g, cx: float, cy: float, radius: float) -> None:
+    """No iron chunk inside the settlement: ore cells within the ring are
+    erased from the field's presence and cache, so none ever renders."""
+    ore = getattr(g, "ore_field", None)
+    if ore is None:
+        return
+    try:
+        import ore as _ore
+        cell = getattr(_ore, "CELL", 260)
+        x0 = int(math.floor((cx - radius) / cell))
+        x1 = int(math.floor((cx + radius) / cell))
+        y0 = int(math.floor((cy - radius) / cell))
+        y1 = int(math.floor((cy + radius) / cell))
+        for gy in range(y0, y1 + 1):
+            for gx in range(x0, x1 + 1):
+                ch = ore.chunk(gx, gy)
+                # +40 clears a chunk whose sprite overlaps the ring's edge,
+                # so no ore even touches the settlement's boundary.
+                if ch is not None and math.hypot(ch.x - cx, ch.y - cy) <= radius + 40.0:
+                    try:
+                        ore._cache[(gx, gy)] = None
+                        ore._presence[(gx, gy)] = None
+                        ore.mined.add((gx, gy))
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+
 def build(g, cx: float, cy: float, seed: int):
     """Lay a whole native settlement around (cx, cy) and return it.
 
@@ -173,6 +202,7 @@ def build(g, cx: float, cy: float, seed: int):
     clearance = max_r + CLEAR_BLOCKS * TILE
     _clear_trees(g, cx, cy, clearance)
     _clear_wild(g, cx, cy, clearance)
+    _clear_ore(g, cx, cy, clearance)
 
     # -- the fireplace at the middle ----------------------------------------
     fire = industry.Workplace("fireplace", cx, cy, seed ^ 0xF1A)

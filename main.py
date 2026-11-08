@@ -1195,6 +1195,7 @@ def main() -> None:
             hub_world=g.hub_world, train=g._TEST_TRAIN, camp_walls=g.camp_walls,
             width=WIDTH, height=HEIGHT, zoom=ZOOM, now=g.now, kills=g.kills,
             world=g.world, observer_=g.observer_, active_chaos=g.active_chaos,
+            compass_state=g.compass_state, ore_field=g.ore_field,
             ground=g.ground, cam_x=g.cam_x, cam_y=g.cam_y, skills=g.skills, trees=g.trees)
         savegame.restore(_g)
         g.now, g.kills = _g.now, _g.kills
@@ -1267,16 +1268,17 @@ def main() -> None:
     except Exception as _pe:
         plog.log("WORLD-ERROR", repr(_pe)[:200])
 
-    # THE NATIVE SETTLEMENT: teepees and fields around a fireplace, a few
-    # blocks to the player's right. He wakes facing south, so his right is
-    # west -- inland, away from the ocean and the Crown's ship. Built AFTER
-    # the population pass, so its people are not cut away as strangers.
+    # THE NATIVE SETTLEMENT: teepees and fields around a fireplace, three
+    # hundred blocks inland from the coastline -- away from the sea and the
+    # Crown's ship. Built AFTER the population pass, so its people are not cut
+    # away as strangers.
     g.native_settlement = None
     try:
         import native as _native
+        import world as _w
         _nseed = (int(g.world.seed) ^ 0x7E7E) & 0xFFFFFFFF
-        g.native_settlement = _native.build(g, g.player.x - 8 * 32.0,
-                                            g.player.y, _nseed)
+        _ns_x = _w.coast_x(0.0, g.world.seed) - 300 * 32.0
+        g.native_settlement = _native.build(g, _ns_x, g.player.y, _nseed)
         plog.log("NATIVE", "settlement at %.0f,%.0f  people %d"
                  % (g.native_settlement.x, g.native_settlement.y,
                     g.native_settlement.people))

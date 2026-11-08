@@ -421,9 +421,9 @@ def restore(g) -> None:
         plog.log("STUMPS", "restored", len(_stumps))
     ch = data.get("compass_home")
     if ch:
-        compass_state.home = (float(ch[0]), float(ch[1]))
+        g.compass_state.home = (float(ch[0]), float(ch[1]))
     for cx, cy in data.get("ore", []):
-        ore_field.mined.add((int(cx), int(cy)))
+        g.ore_field.mined.add((int(cx), int(cy)))
     for tx, ty, kind in data.get("tiles", []):
         g.world.set_tile(int(tx), int(ty), kind)
     # The ground was already built from the seed before any of this was
