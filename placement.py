@@ -159,9 +159,9 @@ def hub_stall(player, stall_mod):
 
 def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
     """THE RECT THE GHOST SHOWS for the thing he is placing."""
-    _sizes = {"lab": (96, 66), "brewery": (116, 78),
-              "smith": (122, 110), "mine": (136, 112),
-              "stall": (96, 64)}
+    _sizes = {"lab": (64, 64), "brewery": (64, 64),
+              "smith": (64, 64), "mine": (64, 64),
+              "stall": (64, 64), "dummy": (64, 64), "target": (64, 64)}
     if placing in _sizes:
         _w, _h = _sizes[placing]
         rect = pygame.Rect(int(x - _w / 2), int(y - _h / 2), _w, _h)
@@ -269,7 +269,7 @@ def try_place(g):
         if not g.can_place(rect, sight):
             g.toast("Can't build there")
             return
-        if not hubs.land_ok(rect, g.villages.g.villages, g.hub_world.hubs,
+        if not hubs.land_ok(rect, g.villages.villages, g.hub_world.hubs,
                            g.player.x, g.player.y):
             g.toast("Not your land -- the wild, or your own hub")
             return
@@ -291,7 +291,7 @@ def try_place(g):
                                            g.player.x, g.player.y)
             if _yard is not None:
                 _wild = True
-                for _v in (list(g.villages.g.villages)
+                for _v in (list(g.villages.villages)
                            + list(getattr(g.hub_world, "hubs", ()))):
                     _fr = getattr(_v, "fence_rect", None)
                     if _fr is not None and _fr.colliderect(
@@ -363,7 +363,7 @@ def try_place(g):
         return
     if placing in ("lab", "brewery", "smith", "mine", "dummy", "target"):
         _wp = industry.Workplace(placing, x, y, random.randrange(1 << 30))
-        if not hubs.land_ok(_wp.rect, g.villages.g.villages, g.hub_world.hubs,
+        if not hubs.land_ok(_wp.rect, g.villages.villages, g.hub_world.hubs,
                            g.player.x, g.player.y):
             g.toast("Not your land -- the wild, or your own hub")
             return
@@ -508,11 +508,18 @@ def draw_placing(g):
     colour = (126, 224, 148) if ok else (226, 96, 84)
     rr = pygame.Rect(box.x - g.cam_x, box.y - g.cam_y, box.w, box.h)
     sr = pygame.Rect(sight.x - g.cam_x, sight.y - g.cam_y, sight.w, sight.h)
-    fill = pygame.Surface(rr.size, pygame.SRCALPHA)
-    fill.fill((colour[0], colour[1], colour[2], 48))
-    g.screen.blit(fill, rr.topleft)
-    pygame.draw.rect(g.screen, colour, sr, 2)
-    pygame.draw.rect(g.screen, colour, rr, 2)
+    _bench = g.placing in ("lab", "brewery", "smith", "mine", "stall",
+                          "dummy", "target")
+    if _bench:
+        # THE SAME WHITE OUTLINE AS A PLANK, over the 2x2 squares it takes.
+        pygame.draw.rect(g.screen, (255, 255, 255), rr, 2)
+        pygame.draw.rect(g.screen, (0, 0, 0), rr.inflate(2, 2), 1)
+    else:
+        fill = pygame.Surface(rr.size, pygame.SRCALPHA)
+        fill.fill((colour[0], colour[1], colour[2], 48))
+        g.screen.blit(fill, rr.topleft)
+        pygame.draw.rect(g.screen, colour, sr, 2)
+        pygame.draw.rect(g.screen, colour, rr, 2)
     hint_text = "Click to place   ·   right-click to cancel"
     if g.placing in ("fence", "gate"):
         hint_text = "Click to place   ·   R to rotate   ·   right-click to cancel"
@@ -526,7 +533,7 @@ def draw_placing(g):
         _ex, _ey = px_, py_
         _drag = pygame.Rect(int(min(_sx, _ex)), int(min(_sy, _ey)),
                             int(abs(_ex - _sx)), int(abs(_ey - _sy)))
-        _ok = hubs.land_ok(_drag, g.villages.g.villages, g.hub_world.hubs,
+        _ok = hubs.land_ok(_drag, g.villages.villages, g.hub_world.hubs,
                            g.player.x, g.player.y)
         _col = (126, 224, 148) if _ok else (226, 96, 84)
         _dr = pygame.Rect(_drag.x - g.cam_x, _drag.y - g.cam_y,
