@@ -109,6 +109,7 @@ def write(g) -> None:
         "yard_work": [[wp.kind, wp.x, wp.y] for wp in g.placed_work
                       if not getattr(wp, "is_stall", False)
                       and not getattr(wp, "camp", False)
+                      and not getattr(wp, "native", False)
                       and abs(getattr(wp, "x", 0.0)) < 400000.0
                       and abs(getattr(wp, "y", 0.0)) < 400000.0],
         "stalls": stall_mod.to_data(g.player),

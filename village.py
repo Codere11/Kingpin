@@ -4207,36 +4207,11 @@ class Villages:
         return list(self._cache.values())
 
     def get(self, gx: int, gy: int) -> Village:
-        if gx >= 0:
-            return None      # the ocean east of the coast holds no settlement
-        village = self._cache.get((gx, gy))
-        if village is None:
-            village = Village(gx, gy, self.seed)
-            village.registry = self
-            self._cache[(gx, gy)] = village
-            # A FROZEN TOWN WAKES AS IT WAS. The seed rebuilds its shape; the
-            # frozen record overlays everything that has happened since.
-            _rec = self._frozen.pop((gx, gy), None)
-            if _rec is not None:
-                try:
-                    import worldio
-                    worldio.world_from_data(self, [_rec])
-                except Exception:
-                    pass
-            # A PLAIN, SEQUENTIAL NAME. A restored town keeps the number it was
-            # saved under; a new town takes the next one.
-            _name = getattr(village, "name", "")
-            if _name.startswith("Settlement "):
-                try:
-                    _n = int(_name.split(" ")[1])
-                    if _n > self._name_counter:
-                        self._name_counter = _n
-                except Exception:
-                    pass
-            else:
-                self._name_counter += 1
-                village.name = "Settlement %d" % self._name_counter
-        return village
+        # THE OLD SOVIET SETTLEMENTS ARE GONE. The world now holds only
+        # native settlements -- teepees and fields around a fireplace, built by
+        # native.py as the player reaches them. Nothing on the old lattice is
+        # laid out any more.
+        return None
 
     # NOTE: prefetch() and warm() used to live here. Both laid out a village
     # during play, one per frame, at 50-81 ms each -- a stutter that walked

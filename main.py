@@ -251,6 +251,7 @@ def main() -> None:
     g.ground.villages_v = g.villages
     g.SPACING = SPACING
     g.FREEZE_RADIUS = FREEZE_RADIUS
+    g.SIM_RADIUS = SIM_RADIUS
     g.trees = Trees(g.world.seed)
     g.world.trees = g.trees            # so loggers can find the woods to cut
     set_forest(g.trees)              # villages stake out a woodlot as they build
@@ -1278,20 +1279,29 @@ def main() -> None:
     except Exception as _pe:
         plog.log("WORLD-ERROR", repr(_pe)[:200])
 
-    # THE NATIVE SETTLEMENT: teepees and fields around a fireplace, three
-    # hundred blocks inland from the coastline -- away from the sea and the
-    # Crown's ship. Built AFTER the population pass, so its people are not cut
-    # away as strangers.
+    # THE NATIVE SETTLEMENTS: the home camp three hundred blocks inland, plus
+    # every lattice cell within the simulated distance, each a ring of teepees
+    # and fields around a fire. Built AFTER the population pass.
+    g.native_settlements = {}
     g.native_settlement = None
     try:
         import native as _native
         import world as _w
         _nseed = (int(g.world.seed) ^ 0x7E7E) & 0xFFFFFFFF
         _ns_x = _w.coast_x(0.0, g.world.seed) - 300 * 32.0
-        g.native_settlement = _native.build(g, _ns_x, g.player.y, _nseed)
-        plog.log("NATIVE", "settlement at %.0f,%.0f  people %d"
-                 % (g.native_settlement.x, g.native_settlement.y,
-                    g.native_settlement.people))
+        _home = _native.build(g, _ns_x, g.player.y, _nseed)
+        _home.cell = None
+        g.native_settlements["home"] = _home
+        g.native_settlement = _home
+        _made = _native.ensure_near(g, g.player.x, g.player.y, SIM_RADIUS)
+        plog.log("NATIVE", "home at %.0f,%.0f + %d native settlements"
+                 % (_home.x, _home.y, len(_made)))
+        # The fields are tilled earth baked into the ground: rebuild the ground
+        # ONCE, around the player, now that every camp is down.
+        try:
+            g.ground.refresh_around(g.player.x, g.player.y, WIDTH, HEIGHT)
+        except Exception:
+            pass
     except Exception as _ne:
         plog.log("NATIVE-ERROR", repr(_ne)[:200])
 

@@ -15,27 +15,9 @@ import village as village_mod
 
 
 def world_cells():
-    """Every village cell whose centre lies inside the world."""
-    import main
-    out = []
-    n = int(main.CORE_HALF / main.SPACING) + 1
-    # ONE RING FURTHER OUT THAN THE WORLD. A village near the edge has
-    # neighbours just past it, and the trade route planner peeks at all eight
-    # surrounding cells with villages.get() -- which BUILDS the ones that are
-    # missing. So every trader's first run laid out villages beyond the world,
-    # 600 ms at a time, inside a frame. That is what the world cache's
-    # neighbour ring now prevents: everything the planner can look at is laid
-    # out at load, and it never has to build one.
-    for gx in range(-n - 2, n + 2):
-        if gx >= 0:
-            continue        # the ocean east of the coast has no settlements
-        for gy in range(-n - 2, n + 2):
-            cx, cy = (gx + 0.5) * main.SPACING, (gy + 0.5) * main.SPACING
-            if (-main.CORE_HALF - main.SPACING * 1.5 <= cx <= main.CORE_HALF + main.SPACING * 1.5
-                    and -main.CORE_HALF - main.SPACING * 1.5 <= cy
-                    <= main.CORE_HALF + main.SPACING * 1.5):
-                out.append((gx, gy))
-    return out
+    """There are no old settlement cells any more -- the world holds only
+    native settlements. The loading screen has nothing to lay out."""
+    return []
 
 
 def load_world(screen, clock, villages, world=None) -> None:

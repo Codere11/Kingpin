@@ -1069,6 +1069,13 @@ def run(g):
                         g._lane_timer = 0.0
                 except Exception:
                     pass
+                # Native settlements appear as the player reaches their cells.
+                try:
+                    import native as _nat
+                    _nat.ensure_near(g, g.player.x, g.player.y,
+                                     getattr(g, "SIM_RADIUS", 110000.0))
+                except Exception:
+                    pass
             if g._lane_timer <= 0.0 and g._lane_ids != g._lane_seen:
                 g._lane_seen = g._lane_ids
                 g._lane_timer = 4.0

@@ -206,6 +206,7 @@ def build(g, cx: float, cy: float, seed: int):
 
     # -- the fireplace at the middle ----------------------------------------
     fire = industry.Workplace("fireplace", cx, cy, seed ^ 0xF1A)
+    fire.native = True                      # a camp's fire, not the player's
     g.placed_work.append(fire)
 
     # -- the teepees, real blocks -------------------------------------------
@@ -233,14 +234,9 @@ def build(g, cx: float, cy: float, seed: int):
                 world.set_plot(ctx + dx, cty + dy, kind, now - age)
         field_centres_tiles.append((ctx, cty, kind))
 
-    # The soil under a field is tilled earth, not grass. The plots are baked
-    # into the ground, so the ground under the whole settlement is rebuilt
-    # now -- otherwise the crops stand on grass.
-    try:
-        g.ground.refresh_around(cx - clearance, cy - clearance,
-                                clearance * 2.0, clearance * 2.0)
-    except Exception:
-        pass
+    # (The ground is rebuilt ONCE after every camp is placed -- see the caller
+    # -- not per camp, which would clear and regenerate the world's chunks for
+    # each settlement.)
 
     # -- the people ---------------------------------------------------------
     farmers = []
@@ -257,6 +253,7 @@ def build(g, cx: float, cy: float, seed: int):
                             name=_NAMES[i % len(_NAMES)],
                             npc_id="native_f_%d" % i, role="Farmer")
         n.job = "farmer"
+        n.native = True
         n.stock[food_item] = 6
         n.home = (n.x, n.y)
         n.target = (n.x, n.y)
@@ -274,6 +271,7 @@ def build(g, cx: float, cy: float, seed: int):
                             npc_id="native_w_%d" % i, role="Warrior")
         n.defender = True
         n.weapon = "axe"
+        n.native = True
         n.stock[food_item] = 6
         n.home = (n.x, n.y)
         n.target = (n.x, n.y)
@@ -300,5 +298,45 @@ def build(g, cx: float, cy: float, seed: int):
         "fields": field_centres_tiles,
         "food_kind": food_kind, "leaf_kind": leaf_kind,
         "clearance": clearance,
+        "native": True,
     })()
     return settlement
+
+
+def ensure_near(g, px: float, py: float, radius: float):
+    """Build a native settlement on every lattice cell within `radius` of the
+    player, once each. Returns the settlements made this call.
+
+    The world is native now: as he walks west, camps of teepees and fields
+    appear, one per settlement cell, exactly where the old Soviet towns used
+    to stand.
+    """
+    import village as _v
+    reg = getattr(g, "native_settlements", None)
+    if reg is None:
+        reg = {}
+        g.native_settlements = reg
+    made = []
+    x0 = int(math.floor((px - radius) / _v.SPACING))
+    x1 = int(math.floor((px + radius) / _v.SPACING))
+    y0 = int(math.floor((py - radius) / _v.SPACING))
+    y1 = int(math.floor((py + radius) / _v.SPACING))
+    for gy in range(y0, y1 + 1):
+        for gx in range(x0, x1 + 1):
+            if gx >= 0:
+                continue                    # the ocean holds no camp
+            if (gx, gy) in reg:
+                continue
+            try:
+                cx, cy = _v.village_center(gx, gy, g.world.seed)
+            except Exception:
+                cx, cy = (gx + 0.5) * _v.SPACING, (gy + 0.5) * _v.SPACING
+            if math.hypot(cx - px, cy - py) > radius:
+                continue
+            _seed = ((gx * 73856093) ^ (gy * 19349663)
+                     ^ (int(g.world.seed) * 2654435761)) & 0xFFFFFFFF
+            ns = build(g, cx, cy, _seed)
+            ns.cell = (gx, gy)
+            reg[(gx, gy)] = ns
+            made.append(ns)
+    return made
