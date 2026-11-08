@@ -755,6 +755,7 @@ def main() -> None:
     g.built_plots: list = []          # plots he has drawn on his own ground
     g.plot_start = [None]             # where the plot drag began
     g.built_fences: list = []
+    g.built_blocks: dict = {}         # (tx, ty) -> kind: Minecraft-style 1x1 blocks
     # THE CAMP'S WALL IS NOT THE PLAYER'S FENCE. Kept out of `built_fences`
     # (which the axe may chop and the save file remembers) and drawn and
     # collided with separately: a wall you can hack a hole in is not a prison.

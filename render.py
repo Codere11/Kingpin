@@ -155,6 +155,18 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
             _plog.log("SHIP-DRAW-ERROR", repr(_ship_err)[:160])
         except Exception:
             pass
+    # MINECRAFT-STYLE BLOCKS, snapped to the 1x1 squares.
+    try:
+        import block as _block
+        _block.draw_blocks(target, getattr(g, "built_blocks", {}), cx, cy, view)
+    except Exception:
+        pass
+    # THE 1x1 GRID MESH when a buildable is in the hand.
+    if getattr(g, "_held_id", None) in _block.BUILDABLE:
+        try:
+            _block.draw_grid(target, cx, cy, g.vw, g.vh, g.wmouse_x, g.wmouse_y)
+        except Exception:
+            pass
     if getattr(g.player, "aboard", False):
         # RIDING: the permanent way is drawn OVER the ground, and the
         # engine over the rail.

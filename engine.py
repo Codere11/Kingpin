@@ -562,6 +562,22 @@ def run(g):
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     g._held = g.inventory.selected_stack()
                     g._held_id = g._held.defn.id if g._held else None
+                    # A BUILDABLE IN THE HAND: LEFT CLICK PLACES A 1x1 BLOCK.
+                    if g._held_id in ("wood",):
+                        try:
+                            import block as _block
+                            _wx = g.cam_x + g.wmouse_x
+                            _wy = g.cam_y + g.wmouse_y
+                            _tx = int(_wx // _block.TILE)
+                            _ty = int(_wy // _block.TILE)
+                            if _block.place_block(g, _tx, _ty, g._held_id):
+                                g.toast("Placed a plank")
+                            else:
+                                g.toast("No room or no wood")
+                        except Exception:
+                            pass
+                        g.consumed = True
+                        break
                     if g._held_id == "secret_folder":
                         # A DEAD AGENT'S MAIL, OPENED BY A CLICK IN THE HAND.
                         g._pay = getattr(g._held, "payload", None)
