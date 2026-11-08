@@ -165,6 +165,10 @@ def draw_crosshair(screen: pygame.Surface, mx: int, my: int) -> None:
 
 
 CORE_HALF = 100000          # THE SETTLED COUNTRY: unchanged, all of it
+# THE SIMULATED DISTANCE. Settlements within this radius of the player's spawn
+# are generated and lived at load; everything beyond is generated, chunk by
+# chunk, as he reaches it.
+SIM_RADIUS = 2.0 * SPACING
 # FIVE TIMES THE LENGTH AND FIVE TIMES THE WIDTH: each side is 1,000,000 px
 # across, the settled country stays where it always was, in the middle of it,
 # and the ring around it is the Siberian waste.

@@ -7,6 +7,7 @@ rule that makes the country exactly a thousand souls. Extracted from main.py.
 from __future__ import annotations
 
 import random
+import math
 
 import pygame
 import plog
@@ -46,7 +47,22 @@ def load_world(screen, clock, villages, world=None) -> None:
     are identical; they are simply all made now, once, with a bar to watch.
     """
     import main
+    import world as _world
     cells = world_cells()
+    # THE SIMULATED DISTANCE. Only the settlements within this of the player's
+    # beach are generated now; the rest are generated lazily, when he reaches
+    # them, by Villages.get().
+    _sim_x = _world.coast_x(0.0, (world.seed if world is not None else 20240501)) - 44.0
+    _sim_y = 0.0
+    near = []
+    for (gx, gy) in cells:
+        try:
+            _vx, _vy = village_mod.village_center(gx, gy, villages.seed)
+        except Exception:
+            _vx, _vy = (gx + 0.5) * main.SPACING, (gy + 0.5) * main.SPACING
+        if math.hypot(_vx - _sim_x, _vy - _sim_y) <= main.SIM_RADIUS:
+            near.append((gx, gy))
+    cells = near
     font = pygame.font.SysFont("dejavusans", 24, bold=True)
     small = pygame.font.SysFont("dejavusans", 15, bold=True)
     clock = pygame.time.Clock()
@@ -177,55 +193,18 @@ def set_world_population(villages, target: int = 1000) -> int:
     towns = list(villages.villages)
     if not towns:
         return 0
-    total = sum(len(v.npcs) for v in towns)
-    _born = _cut = 0
-    if total != target:
-        kept = 0
-        for i, v in enumerate(towns):
-            if i == len(towns) - 1:
-                want = max(1, target - kept)          # the last takes the rest
-            else:
-                # by HOUSES, so a big town keeps a big population
-                houses = max(1, len(getattr(v, "houses", ())))
-                want = max(1, int(round(float(target) * houses
-                                        / float(_total_houses(towns)))))
-            if len(v.npcs) > want:
-                _cut += len(v.npcs) - want
-                v.npcs[:] = v.npcs[:want]
-            elif len(v.npcs) < want:
-                # A TOWN BELOW ITS SHARE IS FILLED, not left short. Trimming
-                # only ever took people away, so a world built at 883 stayed
-                # at 883 and a save of 535 stayed at 535.
-                _born += _grow_town(v, want - len(v.npcs))
-            # THE CAP MUST COVER THE TOWN BEFORE THE REGISTER IS REBUILT.
-            # `rebuild_people` keeps a town's men only up to its CAPACITY, and
-            # this ran BEFORE the capacity was raised -- so every man just
-            # grown was cut away again in the same call. 883 -> 1000 -> 883.
-            v.capacity = max(int(getattr(v, "capacity", 0)), len(v.npcs))
-            kept += len(v.npcs)
-        village_mod.rebuild_people(villages)
-    # THE CAP IS SET WHETHER OR NOT ANYTHING WAS TRIMMED. Leaving it out when
-    # the count already equalled the target is how a world of exactly 1,000
-    # people grew to 1,032 inside one day: the towns still held a capacity from
-    # the build, and a town grows back to its capacity.
-    # THE CAP IS THE TOWN'S SHARE, NOT ITS LUCK. A town whose capacity is
-    # exactly what it holds can never take a birth back after a hard winter;
-    # its SHARE is what it is allowed to grow to.
-    houses_all = float(_total_houses(towns))
+    total = 0
     for v in towns:
-        share = int(round(float(target) * max(1, len(getattr(v, "houses", ())))
-                          / houses_all))
-        # THE CAP IS THE SHARE -- not the old capacity, which came from a
-        # smaller world and let the sum of ceilings reach 1,119.
-        v.capacity = max(share, len(v.npcs))
-    _fin = sum(len(v.npcs) for v in villages.villages)
+        # A VILLAGE KEEPS THE PEOPLE ITS OWN SEED MADE, and its capacity is
+        # that number: nothing is distributed, trimmed or grown, because the
+        # world is generated lazily and there is no fixed total to share out.
+        v.capacity = max(1, len(v.npcs))
+        total += len(v.npcs)
     try:
-        plog.log("POP", "entry", total, "target", target, "grown", _born,
-                 "cut", _cut, "final", _fin,
-                 "capacities", sum(int(getattr(v, "capacity", 0)) for v in towns))
+        plog.log("POP", "towns", len(towns), "people", total)
     except Exception:
         pass
-    return _fin
+    return total
 
 
 def _total_houses(towns) -> int:
