@@ -162,11 +162,14 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
     except Exception:
         pass
     # THE 1x1 GRID MESH when a buildable is in the hand.
-    if getattr(g, "_held_id", None) in _block.BUILDABLE:
-        try:
+    try:
+        import block as _block
+        _sel = g.inventory.selected_stack()
+        _sel_id = _sel.defn.id if _sel else None
+        if _sel_id in _block.BUILDABLE:
             _block.draw_grid(target, cx, cy, g.vw, g.vh, g.wmouse_x, g.wmouse_y)
-        except Exception:
-            pass
+    except Exception:
+        pass
     if getattr(g.player, "aboard", False):
         # RIDING: the permanent way is drawn OVER the ground, and the
         # engine over the rail.

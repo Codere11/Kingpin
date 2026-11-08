@@ -563,7 +563,7 @@ def run(g):
                     g._held = g.inventory.selected_stack()
                     g._held_id = g._held.defn.id if g._held else None
                     # A BUILDABLE IN THE HAND: LEFT CLICK PLACES A 1x1 BLOCK.
-                    if g._held_id in ("wood",):
+                    if g._held_id in ("wood",) and g.hotbar.slot_at(event.pos) is None:
                         try:
                             import block as _block
                             _wx = g.cam_x + g.wmouse_x
