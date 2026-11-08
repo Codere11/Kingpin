@@ -135,9 +135,10 @@ def build(g, cx: float, cy: float, seed: int):
     # -- the teepee ring -----------------------------------------------------
     # spaced so a 5x5 (160 px) teepee never touches its neighbour, even after
     # the block anchoring rounds each teepee up to half a tile towards the
-    # other (the +16 px covers that rounding on both sides).
-    chord = 5 * TILE + 16.0
-    ring = max(6.0, chord / max(0.001, 2.0 * math.sin(math.pi / n_teepees))
+    # other. Seven tiles of chord and a floor of eight give clear lanes
+    # between teepees whatever the headcount.
+    chord = 7 * TILE
+    ring = max(8.0, chord / max(0.001, 2.0 * math.sin(math.pi / n_teepees))
                / TILE)
     tp_centers = []
     for i in range(n_teepees):
@@ -202,16 +203,26 @@ def build(g, cx: float, cy: float, seed: int):
                 world.set_plot(ctx + dx, cty + dy, kind, now - age)
         field_centres_tiles.append((ctx, cty, kind))
 
+    # The soil under a field is tilled earth, not grass. The plots are baked
+    # into the ground, so the ground under the whole settlement is rebuilt
+    # now -- otherwise the crops stand on grass.
+    try:
+        g.ground.refresh_around(cx - clearance, cy - clearance,
+                                clearance * 2.0, clearance * 2.0)
+    except Exception:
+        pass
+
     # -- the people ---------------------------------------------------------
     farmers = []
     warriors = []
     _s = seed ^ 0x6E17
     for i in range(n_farmers):
-        # a farmer stands by his field
+        # a farmer stands between the teepees and his fields
         ang = rng.uniform(0.0, 2.0 * math.pi)
-        fx, fy = cx + math.cos(ang) * field_ring, cy + math.sin(ang) * field_ring
-        n = village_mod.NPC(fx + rng.uniform(-40, 40),
-                            fy + rng.uniform(-40, 40),
+        mid = (ring + 3.0) * TILE
+        fx, fy = cx + math.cos(ang) * mid, cy + math.sin(ang) * mid
+        n = village_mod.NPC(fx + rng.uniform(-30, 30),
+                            fy + rng.uniform(-30, 30),
                             _s ^ (i * 2654435761),
                             name=_NAMES[i % len(_NAMES)],
                             npc_id="native_f_%d" % i, role="Farmer")
@@ -224,10 +235,10 @@ def build(g, cx: float, cy: float, seed: int):
         farmers.append(n)
         g._observe_npcs.append(n)             # drawn with the natives
     for i in range(n_warriors):
-        # a warrior stands by the fire, watching
+        # a warrior stands right at the fire, watching
         ang = rng.uniform(0.0, 2.0 * math.pi)
-        wx = cx + math.cos(ang) * (ring * TILE * 0.55)
-        wy = cy + math.sin(ang) * (ring * TILE * 0.55)
+        wx = cx + math.cos(ang) * TILE
+        wy = cy + math.sin(ang) * TILE
         n = village_mod.NPC(wx, wy, _s ^ ((i + 1000) * 2654435761),
                             name=_NAMES[(n_farmers + i) % len(_NAMES)],
                             npc_id="native_w_%d" % i, role="Warrior")
@@ -239,6 +250,16 @@ def build(g, cx: float, cy: float, seed: int):
         n.wear = biomes.npc_wear(temp, hum)
         warriors.append(n)
         g._observe_npcs.append(n)
+
+    # The settlement's people stand where they were placed: they are drawn
+    # here (and by the native list), not walked by the town lanes, so they do
+    # not drift off to a distant market or road.
+    for _n in farmers + warriors:
+        try:
+            if _n in village_mod.PEOPLE:
+                village_mod.PEOPLE.remove(_n)
+        except Exception:
+            pass
 
     # the settlement, for anything that needs to find it later
     settlement = type("NativeSettlement", (), {

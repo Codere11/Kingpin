@@ -640,10 +640,17 @@ class Workplace:
             r = self.rng.randint(5, 7)
             pygame.draw.circle(surf, (118, 112, 106), (sx, sy), r)
             pygame.draw.circle(surf, (70, 66, 62), (sx, sy), r, 1)
-        # the embers / fire
-        pygame.draw.circle(surf, (250, 150, 50), (int(cx), int(cy)), 12)
-        pygame.draw.circle(surf, (250, 205, 90), (int(cx), int(cy)), 7)
-        pygame.draw.circle(surf, (255, 238, 150), (int(cx), int(cy)), 3)
+        # the embers / fire -- big and bright, so the heart of the camp reads
+        # from across the field
+        pygame.draw.circle(surf, (250, 150, 50), (int(cx), int(cy)), 16)
+        pygame.draw.circle(surf, (250, 205, 90), (int(cx), int(cy)), 11)
+        pygame.draw.circle(surf, (255, 238, 150), (int(cx), int(cy)), 6)
+        # a soft halo of firelight over the stones
+        halo = pygame.Surface((44, 44), pygame.SRCALPHA)
+        for _r in range(22, 0, -2):
+            _a = max(0, 26 - _r)
+            pygame.draw.circle(halo, (255, 160, 60, _a), (22, 22), _r)
+        surf.blit(halo, (int(cx - 22), int(cy - 22)))
         # two logs crossed on the embers
         pygame.draw.line(surf, (96, 62, 36), (int(cx - 11), int(cy + 6)),
                          (int(cx + 11), int(cy - 6)), 3)
