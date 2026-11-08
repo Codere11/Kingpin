@@ -1303,6 +1303,20 @@ def main() -> None:
     g.player.settled_at = None
     g.player.job = None
     load_now()
+    # THE COAST IS WHERE HE WAKES, whatever the save says. Re-applied AFTER
+    # the load, because the save's old position is the last word otherwise and
+    # drags him back inland, away from the ship and the ocean.
+    import world as _world
+    g.player.x = _world.coast_x(0.0, g.world.seed) - 44.0
+    g.player.y = 0.0
+    g.cam_x = g.player.x - WIDTH / (2.0 * ZOOM)
+    g.cam_y = g.player.y - HEIGHT / (2.0 * ZOOM)
+    # Rebuild the ground under him NOW and force the static layer to recompose,
+    # so the ocean, sand and ship are actually on screen from the first frame.
+    try:
+        g.ground.refresh_around(g.player.x, g.player.y, WIDTH, HEIGHT)
+    except Exception:
+        pass
     # AN AXE IN HIS HAND, ONCE THE SAVE HAS HAD ITS SAY. The starting kit is
     # added before the save is read -- so a restored pack overwrote it and a
     # man who loaded a game had no axe at all. Anyone with nothing to cut with
