@@ -782,12 +782,12 @@ def hair(screen, hx: float, hy: float, r: int) -> None:
     try:
         r = int(r)
         hx, hy = float(hx), float(hy)
-        # the halo of hair around the top, sides and jaw
-        pygame.draw.circle(screen, NAT_HAIR, (int(hx), int(hy - r * 0.1)), r + 3)
-        # a longer fringe under the jaw -- the long hair, still not the body
+        # a thick halo of long hair around the top, sides and just below the jaw
+        pygame.draw.circle(screen, NAT_HAIR, (int(hx), int(hy - r * 0.05)), r + 4)
+        # a short fringe under the jaw -- slightly below the face, not the body
         pygame.draw.rect(screen, NAT_HAIR,
-                         (int(hx - r - 2), int(hy + r * 0.4),
-                          int(2 * r + 4), int(r * 0.9)), border_radius=4)
+                         (int(hx - r), int(hy + r * 0.55),
+                          int(2 * r), int(r * 0.7)), border_radius=3)
         # a shine strand over the crown
         pygame.draw.arc(screen, NAT_HAIR_SH,
                         (int(hx - r), int(hy - r - 2), int(2 * r), int(2 * r)),

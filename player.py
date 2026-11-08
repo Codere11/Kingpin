@@ -361,17 +361,16 @@ class Player:
         right = (sx + fy * 4, sy - fx * 4)
         pygame.draw.polygon(screen, (34, 30, 26), (tip, left, right))
 
-        # torso -- a native hide tunic, like every other civilian
-        body = (238, 228, 228) if self.hit_flash > 0.0 else (162, 120, 76)
+        # torso
+        body = (238, 228, 228) if self.hit_flash > 0.0 else (54, 74, 122)
         pygame.draw.circle(screen, body, (sx, sy), 11)
-        pygame.draw.circle(screen, (108, 78, 48), (sx, sy), 11, 2)
+        pygame.draw.circle(screen, (30, 44, 74), (sx, sy), 11, 2)
 
         if held is not None:
             self._draw_held(screen, held, sx, sy, fx, fy, self.swing_progress)
 
         # head last so it sits on top
         _hx, _hy = sx + fx * 2, sy + fy * 2 - 2
-        face.hair(screen, _hx, _hy, 9)
         pygame.draw.circle(screen, (222, 178, 138), (_hx, _hy), 9)
         pygame.draw.circle(screen, (150, 108, 78), (_hx, _hy), 9, 1)
         # THE DART HAS HIM: he lies there with the sleep rising off him.
@@ -382,7 +381,6 @@ class Player:
                  else face.mood_of(self.hurt_flash, self.attack_flash,
                                    starved=self.hunger <= face.STARVED_SATIETY))
         face.draw(screen, _hx, _hy, 9, fx, fy, _mood)
-        face.feather(screen, _hx, _hy, 9, fx, fy)
         # THE WAITING BAR, just below him -- the swing, or the reload.
         #
         # THE SAME BAR FOR BOTH, because they are the same thing to look at: a
