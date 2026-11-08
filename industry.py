@@ -520,6 +520,8 @@ class Workplace:
             return self._render_dummy()
         if self.kind == "target":
             return self._render_target()
+        if self.kind == "fireplace":
+            return self._render_fireplace()
         return self._render_smith()
 
     @property
@@ -621,6 +623,33 @@ class Workplace:
         for (ax, ay) in ((cx - 5, cy - 4), (cx + 4, cy + 3)):
             pygame.draw.line(img, (168, 146, 96), (ax - 6, ay - 8), (ax, ay), 1)
         return img
+
+    def _render_fireplace(self) -> pygame.Surface:
+        """A ring of stones around a glowing fire, drawn top-down."""
+        w, h, pad = self.w, self.h, 18
+        surf = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+        cx, cy = pad + w / 2.0, pad + h / 2.0
+        # ash bed
+        pygame.draw.ellipse(surf, (70, 62, 56, 220), (cx - 20, cy - 18, 40, 36))
+        # the stones, in a ring
+        import math as _m
+        for i in range(9):
+            a = _m.pi * 2 * i / 9
+            sx = int(cx + _m.cos(a) * 17)
+            sy = int(cy + _m.sin(a) * 15)
+            r = self.rng.randint(5, 7)
+            pygame.draw.circle(surf, (118, 112, 106), (sx, sy), r)
+            pygame.draw.circle(surf, (70, 66, 62), (sx, sy), r, 1)
+        # the embers / fire
+        pygame.draw.circle(surf, (250, 150, 50), (int(cx), int(cy)), 12)
+        pygame.draw.circle(surf, (250, 205, 90), (int(cx), int(cy)), 7)
+        pygame.draw.circle(surf, (255, 238, 150), (int(cx), int(cy)), 3)
+        # two logs crossed on the embers
+        pygame.draw.line(surf, (96, 62, 36), (int(cx - 11), int(cy + 6)),
+                         (int(cx + 11), int(cy - 6)), 3)
+        pygame.draw.line(surf, (96, 62, 36), (int(cx - 11), int(cy - 5)),
+                         (int(cx + 11), int(cy + 7)), 3)
+        return surf
 
     def _render_brewery(self) -> pygame.Surface:
         """A brewing table with barrels racked beside it."""
@@ -725,3 +754,16 @@ class Workplace:
                                max(1, int(3 + 7 * (1.0 - k))), 1)
             pygame.draw.circle(screen, (242, 226, 150), (int(cx), int(cy)),
                                max(1, int(1 + 3 * k)))
+        if self.kind == "fireplace":
+            # THE FIRE FLICKERS: a few tongue-flames dance over the embers.
+            _t = pygame.time.get_ticks() / 1000.0
+            import math as _fm
+            for _i in range(3):
+                _ph = _t * (3.0 + _i * 1.7) + _i * 2.1
+                _fx = sx + _fm.sin(_ph) * (2.0 + _i)
+                _fy = sy - _fm.cos(_ph * 0.8) * (3.0 + _i) - 6.0
+                _py = [(int(_fx), int(_fy - 6 - _i * 2)),
+                       (int(_fx - 2 - _i), int(_fy)),
+                       (int(_fx + 2 + _i), int(_fy))]
+                pygame.draw.polygon(screen, (250, 160 + _i * 20, 60),
+                                    _py)

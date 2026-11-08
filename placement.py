@@ -162,7 +162,8 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
     """THE RECT THE GHOST SHOWS for the thing he is placing."""
     _sizes = {"lab": (64, 64), "brewery": (64, 64),
               "smith": (64, 64), "mine": (64, 64),
-              "stall": (64, 64), "dummy": (64, 64), "target": (64, 64)}
+              "stall": (64, 64), "dummy": (64, 64), "target": (64, 64),
+              "fireplace": (64, 64)}
     if placing in _sizes:
         _w, _h = _sizes[placing]
         rect = pygame.Rect(int(x - _w / 2), int(y - _h / 2), _w, _h)
@@ -362,7 +363,8 @@ def try_place(g):
         placing = None
         pygame.mouse.set_visible(False)
         return
-    if placing in ("lab", "brewery", "smith", "mine", "dummy", "target"):
+    if placing in ("lab", "brewery", "smith", "mine", "dummy", "target",
+                   "fireplace"):
         _wp = industry.Workplace(placing, x, y, random.randrange(1 << 30))
         if not hubs.land_ok(_wp.rect, g.villages.villages, g.hub_world.hubs,
                            g.player.x, g.player.y):
@@ -510,7 +512,7 @@ def draw_placing(g):
     rr = pygame.Rect(box.x - g.cam_x, box.y - g.cam_y, box.w, box.h)
     sr = pygame.Rect(sight.x - g.cam_x, sight.y - g.cam_y, sight.w, sight.h)
     _bench = g.placing in ("lab", "brewery", "smith", "mine", "stall",
-                          "dummy", "target")
+                          "dummy", "target", "fireplace")
     if _bench:
         # THE SAME WHITE OUTLINE AS A PLANK, over the 2x2 squares it takes.
         pygame.draw.rect(g.screen, (255, 255, 255), rr, 2)

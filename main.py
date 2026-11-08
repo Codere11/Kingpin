@@ -1143,8 +1143,13 @@ def main() -> None:
                                      night_factor, SLEEP_TIME, pygame)
 
     def draw_night() -> None:
-        life.draw_night(night_factor, g.vision, g.interior_vision, g.shade_cache, g.vw,
-                        g.vh, g.screen, draw_status)
+        # EVERY FIREPLACE IS A LIGHT: pass its on-screen position so the night
+        # shade is cut open around it.
+        _lights = [(wp.x - g.cam_x, wp.y - g.cam_y)
+                   for wp in getattr(g, "placed_work", ())
+                   if getattr(wp, "kind", "") == "fireplace"]
+        life.draw_night(night_factor, g.vision, g.interior_vision, g.shade_cache,
+                        g.vw, g.vh, g.screen, draw_status, _lights)
 
     def draw_status() -> None:
         hudtime.draw_status(g.screen, g.font, g.hud_status, g.vw)

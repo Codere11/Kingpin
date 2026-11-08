@@ -64,18 +64,41 @@ def try_sleep(inside_house, player, math, reach, toast, night_factor,
     return sleep_time
 
 
+# a fireplace lights this many world pixels around itself (5 tiles)
+FIRE_LIGHT_RADIUS = 5 * 32.0
+
+
+def _punch_light(shade: pygame.Surface, lx: float, ly: float,
+                radius: float, strength: int) -> None:
+    """Cut a radial hole in the night shade around a light source. The shade's
+    per-pixel alpha is the darkness; BLEND_RGBA_SUB subtracts the glow's alpha,
+    so the middle is lit and the edge falls off to full dark."""
+    size = int(radius * 2)
+    glow = pygame.Surface((max(2, size), max(2, size)), pygame.SRCALPHA)
+    steps = 48
+    for i in range(steps):
+        t = i / float(steps - 1)
+        r = max(1, int(radius * (1.0 - t)))
+        a = int(strength * t)
+        pygame.draw.circle(glow, (0, 0, 0, a), (int(radius), int(radius)), r)
+    shade.blit(glow, (int(lx - radius), int(ly - radius)),
+               special_flags=pygame.BLEND_RGBA_SUB)
+
+
 def draw_night(night_factor, vision, interior_vision, shade_cache, vw, vh,
-               screen, draw_status) -> None:
+               screen, draw_status, lights=()) -> None:
     night = night_factor()
     vision.cone_deg = 175.0 - 55.0 * night
     interior_vision.cone_deg = 175.0 - 55.0 * night
     if night > 0.03:
         shade = shade_cache.get((vw, vh))
-        if shade is None:
-            shade = pygame.Surface((vw, vh))
-            shade.fill((10, 14, 32))
+        if shade is None or shade.get_flags() & pygame.SRCALPHA == 0:
+            shade = pygame.Surface((vw, vh), pygame.SRCALPHA)
             shade_cache[(vw, vh)] = shade
-        shade.set_alpha(int(195 * night))
+        alpha = int(195 * night)
+        shade.fill((10, 14, 32, alpha))
+        for (lx, ly) in lights:
+            _punch_light(shade, lx, ly, FIRE_LIGHT_RADIUS, alpha)
         screen.blit(shade, (0, 0))
     draw_status()
 

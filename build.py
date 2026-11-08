@@ -30,6 +30,8 @@ BUILDINGS = [
     # post is what makes him better than a man with a gun.
     {"id": "dummy", "name": "Training dummy", "wood": 40, "where": "outside"},
     {"id": "target", "name": "Archery target", "wood": 60, "where": "outside"},
+    # A FIREPLACE: twenty wood, and it lights the night around it.
+    {"id": "fireplace", "name": "Fireplace", "wood": 20, "where": "outside"},
     # A FORGE IS IRON -- not wood alone.
     {"id": "smith", "name": "Forge", "wood": 0,
      "cost": {"iron": 300}, "where": "outside"},
@@ -213,6 +215,26 @@ def fence_icon(size: int = 46) -> pygame.Surface:
     return s
 
 
+def fireplace_icon(size: int = 46) -> pygame.Surface:
+    """A ring of stones with a fire in it."""
+    import math as _m
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    cx, cy = size // 2, size // 2
+    for i in range(8):
+        a = _m.pi * 2 * i / 8
+        sx = cx + int(_m.cos(a) * size * 0.32)
+        sy = cy + int(_m.sin(a) * size * 0.32)
+        pygame.draw.circle(s, (118, 112, 106), (sx, sy), int(size * 0.10))
+        pygame.draw.circle(s, (70, 66, 62), (sx, sy), int(size * 0.10), 1)
+    pygame.draw.circle(s, (250, 170, 60), (cx, cy), int(size * 0.15))
+    pygame.draw.circle(s, (252, 224, 120), (cx, cy), int(size * 0.09))
+    pygame.draw.line(s, (96, 62, 36), (cx - int(size * 0.18), cy + int(size * 0.08)),
+                     (cx + int(size * 0.18), cy - int(size * 0.08)), 3)
+    pygame.draw.line(s, (96, 62, 36), (cx - int(size * 0.18), cy - int(size * 0.06)),
+                     (cx + int(size * 0.18), cy + int(size * 0.10)), 3)
+    return s
+
+
 def gate_icon(size: int = 46) -> pygame.Surface:
     s = pygame.Surface((size, size), pygame.SRCALPHA)
     for x in (size * 0.16, size * 0.76):
@@ -331,6 +353,7 @@ class BuildMenu:
                        "mine": workshop_icon, "plot": fence_icon,
                        "stall": stall_icon,
                        "dummy": dummy_icon, "target": target_icon,
+                       "fireplace": fireplace_icon,
                        "demolish": fence_icon,
                        "fence": fence_icon, "gate": gate_icon}[building["id"]]
             icon = icon_fn(rect.height - 14)
