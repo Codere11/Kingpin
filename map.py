@@ -59,9 +59,43 @@ _CACHE: dict = {}
 _THREADS: dict = {}
 _VIEW = {"cx": 0.0, "cy": 0.0, "half": WORLD_HALF}
 
-CHART_PX = 56            # cells across the chart
-CHART_SAMPLES = 4        # 4 x 4 noise samples per cell, averaged
-CHART_KEEP = 12          # charts remembered, then the oldest is dropped
+CHART_PX = 140            # cells across the chart
+CHART_SAMPLES = 1         # one sample per cell: the chart classifies, not blends
+CHART_KEEP = 12           # charts remembered, then the oldest is dropped
+
+# biome surface classes
+CLS_SNOW, CLS_DESERT, CLS_FOREST, CLS_OCEAN = 0, 1, 2, 3
+OCEAN_RGB = (16, 38, 74)
+PAPER_RGB = (47, 45, 41)
+BORDER_RGB = (8, 8, 10)
+
+
+def _tree_icon(surf: pygame.Surface, x: int, y: int, snow: bool = False) -> None:
+    """A tiny tree: green, or a snow-covered one in white."""
+    canopy = (232, 238, 244) if snow else (58, 118, 66)
+    pygame.draw.rect(surf, (96, 76, 58), (x, y + 1, 2, 3))
+    pygame.draw.polygon(surf, canopy, [(x - 3, y + 1), (x + 4, y + 1),
+                                       (x, y - 3)])
+
+
+def _cactus_icon(surf: pygame.Surface, x: int, y: int) -> None:
+    """A tiny saguaro, for the desert."""
+    col = (72, 148, 84)
+    pygame.draw.rect(surf, col, (x, y - 3, 2, 5))
+    pygame.draw.rect(surf, col, (x - 2, y - 1, 2, 1))
+    pygame.draw.rect(surf, col, (x - 2, y - 2, 1, 2))
+    pygame.draw.rect(surf, col, (x + 2, y - 1, 2, 1))
+    pygame.draw.rect(surf, col, (x + 3, y - 2, 1, 2))
+
+
+def _campfire(screen: pygame.Surface, px: int, py: int) -> None:
+    """A campfire mark: crossed logs under a little flame."""
+    pygame.draw.line(screen, (104, 72, 44), (px - 6, py + 5), (px + 6, py - 5), 2)
+    pygame.draw.line(screen, (104, 72, 44), (px - 6, py - 5), (px + 6, py + 5), 2)
+    pygame.draw.polygon(screen, (250, 150, 50), [(px, py - 7), (px - 4, py - 1),
+                                                 (px + 4, py - 1)])
+    pygame.draw.polygon(screen, (255, 224, 100), [(px, py - 5), (px - 2, py - 1),
+                                                  (px + 2, py - 1)])
 
 
 def _chart(world, cx: float, cy: float, half: float):
@@ -88,7 +122,7 @@ def _chart(world, cx: float, cy: float, half: float):
     got = _CACHE.get(key)
     if got is not None:
         return got
-    n = CHART_PX * CHART_SAMPLES
+    n = CHART_PX
     x0, y0 = cx - half, cy - half
     step = (2.0 * half) / n
     coords = x0 + (np.arange(n, dtype=np.float32) + 0.5) * step
@@ -100,18 +134,50 @@ def _chart(world, cx: float, cy: float, half: float):
     except Exception:
         temps = np.full((n, n), 0.5, dtype=np.float32)
         hums = np.full((n, n), 0.5, dtype=np.float32)
-    surf = pygame.Surface((CHART_PX, CHART_PX))
-    for j in range(CHART_PX):
-        for i in range(CHART_PX):
-            bt = float(temps[j * CHART_SAMPLES:(j + 1) * CHART_SAMPLES,
-                              i * CHART_SAMPLES:(i + 1) * CHART_SAMPLES].mean())
-            bh = float(hums[j * CHART_SAMPLES:(j + 1) * CHART_SAMPLES,
-                             i * CHART_SAMPLES:(i + 1) * CHART_SAMPLES].mean())
-            try:
-                c = biomes.mix(bt, bh)[0]
-            except Exception:
-                c = (52, 62, 44)
-            surf.set_at((i, j), (int(c[0]), int(c[1]), int(c[2])))
+    # THE COAST, DARK BLUE SEA, and the three big biomes: snow, desert, and
+    # regular forest. Everything is classified per cell, then drawn sparse and
+    # old-school: paper ground, black biome borders, tiny icons and grass lines.
+    import world as _world
+    _coast = _world.coast_x(gy, seed)
+    _ocean = gx > _coast
+    cls = np.where(_ocean, CLS_OCEAN,
+                   np.where(temps < 0.32, CLS_SNOW,
+                            np.where((temps > 0.62) & (hums < 0.34), CLS_DESERT,
+                                     CLS_FOREST))).astype(np.int8)
+    surf = pygame.Surface((n, n))
+    for j in range(n):
+        for i in range(n):
+            surf.set_at((i, j), OCEAN_RGB if cls[j, i] == CLS_OCEAN else PAPER_RGB)
+    # BOLD BLACK BORDERS where one biome meets another (and at the shore).
+    for j in range(n):
+        for i in range(n):
+            k = cls[j, i]
+            if i + 1 < n and cls[j, i + 1] != k:
+                surf.set_at((i, j), BORDER_RGB)
+                surf.set_at((i + 1, j), BORDER_RGB)
+            if j + 1 < n and cls[j + 1, i] != k:
+                surf.set_at((i, j), BORDER_RGB)
+                surf.set_at((i, j + 1), BORDER_RGB)
+    # SPARSE MINI LINES: grass-green, sand-yellow, or snow-white strokes.
+    for j in range(1, n, 3):
+        for i in range(1, n, 3):
+            k = cls[j, i]
+            if k == CLS_SNOW:
+                pygame.draw.line(surf, (238, 242, 248), (i, j), (i + 2, j), 1)
+            elif k == CLS_DESERT:
+                pygame.draw.line(surf, (222, 196, 120), (i, j), (i + 2, j), 1)
+            elif k == CLS_FOREST:
+                pygame.draw.line(surf, (110, 168, 92), (i, j), (i + 2, j), 1)
+    # AND THE SPARSER ICONS: tree, cactus, snow tree.
+    for j in range(4, n, 9):
+        for i in range(4, n, 9):
+            k = cls[j, i]
+            if k == CLS_SNOW:
+                _tree_icon(surf, i, j, snow=True)
+            elif k == CLS_DESERT:
+                _cactus_icon(surf, i, j)
+            elif k == CLS_FOREST:
+                _tree_icon(surf, i, j, snow=False)
     if len(_CACHE) >= CHART_KEEP:
         _CACHE.pop(next(iter(_CACHE)))
     _CACHE[key] = surf
@@ -169,7 +235,7 @@ def handle_input(dt: float, player, mouse_pos=None, wheel: int = 0) -> None:
 
 
 def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
-         settlements=()) -> None:
+         settlements=(), natives=()) -> None:
     """The world as far as the view reaches: EVERY town and EVERY hub on it.
 
     The map used to pin exactly two places -- the nearest town and the nearest
@@ -200,7 +266,7 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
         screen.blit(charting, (x0 + size // 2 - charting.get_width() // 2,
                                y0 + size // 2 - charting.get_height() // 2))
     else:
-        screen.blit(pygame.transform.smoothscale(chart, (size, size)), (x0, y0))
+        screen.blit(pygame.transform.scale(chart, (size, size)), (x0, y0))
     # BEYOND THE WORLD IS NOT DARK, IT IS UNCHARTED. The paper shows through.
     if view_half > WORLD_HALF:
         inset = int((view_half - WORLD_HALF) / (2.0 * view_half) * size)
@@ -283,6 +349,28 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
                                      bold=True)
     for _v in settlements or ():
         mark(_v.x, _v.y, (214, 198, 156), _v.name.split()[0], "settlement")
+    # NATIVE CAMPS: a campfire on the paper, one per settlement already
+    # generated within the simulated distance.
+    for _n in natives or ():
+        _px, _py = at(_n.x, _n.y)
+        if x0 - 2 <= _px <= x0 + size + 2 and y0 - 2 <= _py <= y0 + size + 2:
+            _campfire(screen, int(_px), int(_py))
+            _lbl = small_font.render("camp", True, (250, 248, 240))
+            _sd = small_font.render("camp", True, (10, 9, 8))
+            for _tx, _ty in ((_px + 9, _py - _lbl.get_height() // 2),
+                             (_px - 9 - _lbl.get_width(), _py - _lbl.get_height() // 2),
+                             (_px - _lbl.get_width() // 2, _py - 16),
+                             (_px - _lbl.get_width() // 2, _py + 10)):
+                _r = pygame.Rect(_tx, _ty, _lbl.get_width(), _lbl.get_height())
+                if (_r.left < x0 or _r.right > x0 + size
+                        or _r.top < y0 or _r.bottom > y0 + size):
+                    continue
+                if any(_r.colliderect(o) for o in taken):
+                    continue
+                taken.append(_r)
+                screen.blit(_sd, (_tx + 1, _ty + 1))
+                screen.blit(_lbl, (_tx, _ty))
+                break
     for _h in hub_list or ():
         _mine = getattr(_h, "is_player_hub", False)
         _lab = (getattr(_h, "name", "hold") if _mine else "camp")

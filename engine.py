@@ -3044,7 +3044,8 @@ def run(g):
                     mapmod.handle_input(g.dt, g.player, wheel=g._wh)
                     mapmod.draw(g.screen, g.world, g.player, g._nearest_town(),
                                 g.hub_world.hubs,
-                                settlements=list(g.villages.villages))
+                                settlements=list(g.villages.villages),
+                                natives=list(getattr(g, "native_settlements", {}).values()))
                 except Exception:
                     import traceback as _tb; _tb.print_exc()
             pygame.display.flip()
@@ -3482,7 +3483,8 @@ def run(g):
                 mapmod.handle_input(g.dt, g.player, wheel=g._wh2)
                 mapmod.draw(g.screen, g.world, g.player, g._nearest_town(),
                             g.hub_world.hubs,
-                            settlements=list(g.villages.villages))
+                            settlements=list(g.villages.villages),
+                            natives=list(getattr(g, "native_settlements", {}).values()))
             except Exception:
                 pass
 
