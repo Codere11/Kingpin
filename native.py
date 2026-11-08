@@ -21,6 +21,12 @@ import village as village_mod
 from world import TILE
 
 
+# a native camp is a small place: they sit about this far apart, shaken by a
+# little jitter, and are generated this far around the player
+NATIVE_SPACING = 20000.0      # ~20 km between camps
+NATIVE_JITTER = 0.22          # fraction of the spacing, either way
+NATIVE_RADIUS = 40000.0       # generate camps within this of the player
+
 # a teepee sleeps this many people
 PER_TEEPEE = 2
 
@@ -36,6 +42,15 @@ MAX_LEAF_FIELDS = 2
 _NAMES = ("Awan", "Kiona", "Takoda", "Yuma", "Nashoba", "Chenoa",
           "Migina", "Ohanzee", "Sikya", "Winona", "Elan", "Kohana",
           "Mato", "Nokomis", "Odakota", "Shilah")
+
+
+def native_center(gx: int, gy: int, seed: int):
+    """A native camp's centre: a 20 km lattice, shaken by jitter."""
+    code = (gx * 73856093) ^ (gy * 19349663) ^ (seed * 2654435761)
+    rng = random.Random(code & 0xFFFFFFFF)
+    jx = rng.uniform(-NATIVE_SPACING * NATIVE_JITTER, NATIVE_SPACING * NATIVE_JITTER)
+    jy = rng.uniform(-NATIVE_SPACING * NATIVE_JITTER, NATIVE_SPACING * NATIVE_JITTER)
+    return (gx + 0.5) * NATIVE_SPACING + jx, (gy + 0.5) * NATIVE_SPACING + jy
 
 
 def teepee_blocks(tx: int, ty: int) -> dict:
@@ -65,21 +80,23 @@ def _clear_trees(g, cx: float, cy: float, radius: float) -> None:
     try:
         import trees as _trees
         cell = getattr(_trees, "CELL", 180)
-        for t in list(trees.near(cx, cy, radius)):
-            if math.hypot(t.x - cx, t.y - cy) > radius:
-                continue
-            gx = int(math.floor(t.x / cell))
-            gy = int(math.floor(t.y / cell))
-            try:
+        x0 = int(math.floor((cx - radius) / cell))
+        x1 = int(math.floor((cx + radius) / cell))
+        y0 = int(math.floor((cy - radius) / cell))
+        y1 = int(math.floor((cy + radius) / cell))
+        for gy in range(y0, y1 + 1):
+            for gx in range(x0, x1 + 1):
+                # mark the cell bare WITHOUT generating its tree -- a camp needs
+                # clear ground, and laying out hundreds of trees just to remove
+                # them is the slow part of founding one.
                 trees._cache[(gx, gy)] = None
                 trees._presence[(gx, gy)] = None
-            except Exception:
-                pass
-            try:
-                if t in getattr(trees, "_stumps", ()):
+        for t in list(getattr(trees, "_stumps", ())):
+            if math.hypot(t.x - cx, t.y - cy) <= radius:
+                try:
                     trees._stumps.remove(t)
-            except Exception:
-                pass
+                except Exception:
+                    pass
         for t in list(getattr(trees, "_planted", ())):
             if math.hypot(t.x - cx, t.y - cy) <= radius:
                 try:
@@ -125,16 +142,10 @@ def _clear_ore(g, cx: float, cy: float, radius: float) -> None:
         y1 = int(math.floor((cy + radius) / cell))
         for gy in range(y0, y1 + 1):
             for gx in range(x0, x1 + 1):
-                ch = ore.chunk(gx, gy)
-                # +40 clears a chunk whose sprite overlaps the ring's edge,
-                # so no ore even touches the settlement's boundary.
-                if ch is not None and math.hypot(ch.x - cx, ch.y - cy) <= radius + 40.0:
-                    try:
-                        ore._cache[(gx, gy)] = None
-                        ore._presence[(gx, gy)] = None
-                        ore.mined.add((gx, gy))
-                    except Exception:
-                        pass
+                # mark the cell empty WITHOUT generating its chunk
+                ore._cache[(gx, gy)] = None
+                ore._presence[(gx, gy)] = None
+                ore.mined.add((gx, gy))
     except Exception:
         pass
 
@@ -303,35 +314,35 @@ def build(g, cx: float, cy: float, seed: int):
     return settlement
 
 
-def ensure_near(g, px: float, py: float, radius: float):
-    """Build a native settlement on every lattice cell within `radius` of the
+def ensure_near(g, px: float, py: float, radius: float = NATIVE_RADIUS):
+    """Build a native settlement on every 20 km cell within `radius` of the
     player, once each. Returns the settlements made this call.
 
     The world is native now: as he walks west, camps of teepees and fields
-    appear, one per settlement cell, exactly where the old Soviet towns used
-    to stand.
+    appear, about twenty kilometres apart, each a little off its lattice point.
     """
-    import village as _v
     reg = getattr(g, "native_settlements", None)
     if reg is None:
         reg = {}
         g.native_settlements = reg
     made = []
-    x0 = int(math.floor((px - radius) / _v.SPACING))
-    x1 = int(math.floor((px + radius) / _v.SPACING))
-    y0 = int(math.floor((py - radius) / _v.SPACING))
-    y1 = int(math.floor((py + radius) / _v.SPACING))
+    _home = getattr(g, "native_settlement", None)
+    x0 = int(math.floor((px - radius) / NATIVE_SPACING))
+    x1 = int(math.floor((px + radius) / NATIVE_SPACING))
+    y0 = int(math.floor((py - radius) / NATIVE_SPACING))
+    y1 = int(math.floor((py + radius) / NATIVE_SPACING))
     for gy in range(y0, y1 + 1):
         for gx in range(x0, x1 + 1):
             if gx >= 0:
                 continue                    # the ocean holds no camp
             if (gx, gy) in reg:
                 continue
-            try:
-                cx, cy = _v.village_center(gx, gy, g.world.seed)
-            except Exception:
-                cx, cy = (gx + 0.5) * _v.SPACING, (gy + 0.5) * _v.SPACING
+            cx, cy = native_center(gx, gy, g.world.seed)
             if math.hypot(cx - px, cy - py) > radius:
+                continue
+            # the home camp already stands on its own ground: do not build
+            # another camp right on top of it
+            if _home is not None and math.hypot(cx - _home.x, cy - _home.y) < NATIVE_SPACING * 0.4:
                 continue
             _seed = ((gx * 73856093) ^ (gy * 19349663)
                      ^ (int(g.world.seed) * 2654435761)) & 0xFFFFFFFF

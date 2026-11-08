@@ -1293,15 +1293,9 @@ def main() -> None:
         _home.cell = None
         g.native_settlements["home"] = _home
         g.native_settlement = _home
-        _made = _native.ensure_near(g, g.player.x, g.player.y, SIM_RADIUS)
+        _made = _native.ensure_near(g, g.player.x, g.player.y, _native.NATIVE_RADIUS)
         plog.log("NATIVE", "home at %.0f,%.0f + %d native settlements"
                  % (_home.x, _home.y, len(_made)))
-        # The fields are tilled earth baked into the ground: rebuild the ground
-        # ONCE, around the player, now that every camp is down.
-        try:
-            g.ground.refresh_around(g.player.x, g.player.y, WIDTH, HEIGHT)
-        except Exception:
-            pass
     except Exception as _ne:
         plog.log("NATIVE-ERROR", repr(_ne)[:200])
 

@@ -1073,7 +1073,7 @@ def run(g):
                 try:
                     import native as _nat
                     _nat.ensure_near(g, g.player.x, g.player.y,
-                                     getattr(g, "SIM_RADIUS", 110000.0))
+                                     _nat.NATIVE_RADIUS)
                 except Exception:
                     pass
             if g._lane_timer <= 0.0 and g._lane_ids != g._lane_seen:
