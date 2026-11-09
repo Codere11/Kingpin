@@ -1065,6 +1065,44 @@ class NPC:
         self._did_work()
         return True
 
+    def _pockets(self):
+        """A conquered worker's real pack (an Inventory), made lazily from the
+        stock dict he was born with. Village and native farmers keep using the
+        plain stock dict, so this returns None for them."""
+        if not getattr(self, "conquered", False):
+            return None
+        try:
+            import work as _work
+            return _work.bag(self)
+        except Exception:
+            return None
+
+    def _count_item(self, item: str) -> int:
+        p = self._pockets()
+        if p is not None:
+            return int(p.count_of(item))
+        return int(self.stock.get(item, 0) or 0)
+
+    def _give_item(self, item: str, n: int) -> None:
+        if n <= 0:
+            return
+        p = self._pockets()
+        if p is not None:
+            p.add(item, int(n))
+        else:
+            self.stock[item] = self.stock.get(item, 0) + int(n)
+
+    def _take_item(self, item: str, n: int = 1) -> bool:
+        """Take n of an item out of the pack/stock. True if it was all there."""
+        p = self._pockets()
+        if p is not None:
+            return bool(p.consume(item, int(n)))
+        have = int(self.stock.get(item, 0) or 0)
+        if have < n:
+            return False
+        self.stock[item] = have - int(n)
+        return True
+
     def _native_idle(self, dt: float) -> None:
         """An extra farmer with no post: he chills, strolling around the camp."""
         camp = getattr(self, "native_camp", None)
@@ -1588,6 +1626,12 @@ class NPC:
                         and now - plot.planted_at >= _grow):
                     todo.setdefault("harvest", (ttx, tty, tkind))
             elif state == "fertile":
+                # A CONQUERED FARMER NEEDS THE SEED IN HIS POCKETS to sow; a
+                # native farmer sows what the camp's own fields already carry.
+                if getattr(self, "conquered", False):
+                    _seed = crop.CROP_SEED.get(tkind)
+                    if _seed is not None and self._count_item(_seed) <= 0:
+                        continue
                 todo.setdefault("plant", (ttx, tty, tkind))   # ready for the seed
             elif state == "dirt":
                 todo.setdefault("water", (ttx, tty, tkind))   # dug but dry
@@ -1641,6 +1685,11 @@ class NPC:
                           % (getattr(self, "name", "?"), plot.kind, ttx, tty))
                 economy.harvest(village, self, plot.kind, self.rng)
                 self.skills.gain_farming(0.02)  # reaping hones the hand, slowly
+                # the conquered farmer keeps a seed or two for the next sowing
+                if getattr(self, "conquered", False):
+                    _seed = crop.CROP_SEED.get(plot.kind)
+                    if _seed is not None:
+                        self._give_item(_seed, 1 + (1 if self.rng.random() < 0.5 else 0))
             world.set_plot(ttx, tty, "grass", None)     # the soil is spent
         elif action == "till":
             if not self._swing_tool():
@@ -1649,6 +1698,10 @@ class NPC:
         elif action == "water":
             world.set_plot(ttx, tty, "fertile", None)
         else:                                    # plant the seed for that cell
+            if getattr(self, "conquered", False):
+                _seed = crop.CROP_SEED.get(tkind)
+                if _seed is not None and not self._take_item(_seed, 1):
+                    return True                 # no seed in his pockets: cannot sow
             world.set_plot(ttx, tty, tkind, now,
                            crop.grow_seconds(self.skills.farming))
         ground = getattr(world, "ground", None)

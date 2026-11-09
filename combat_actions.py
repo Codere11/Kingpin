@@ -347,6 +347,14 @@ def click_a_man(g, at=None):
         d = math.hypot(_n.x - wx, _n.y - wy)
         if d < bd:
             best, bd = _n, d
+    # THE PLAYER'S OWN CONQUERED PEOPLE are candidates too: they are not in
+    # any village's list, so a click on them used to fall through to nothing.
+    for _n in list(getattr(g, "_native_people", ())):
+        if not getattr(_n, "alive", True) or not getattr(_n, "conquered", False):
+            continue
+        d = math.hypot(_n.x - wx, _n.y - wy)
+        if d < bd:
+            best, bd = _n, d
     # NOTHING WITHIN 48 PX? THEN ANY CLICK NEAR HIM OPENS HIM. There is
     # exactly one truth-teller in the world; if you are standing beside him
     # and you click, that click is for him -- no distance arithmetic, no
@@ -362,6 +370,10 @@ def click_a_man(g, at=None):
     if getattr(best, "is_truth_teller", False):
         g.dialogue_panel.open(best, g.player, g.main_capital()[0])
         g.toast("%s looks at you." % getattr(best, "name", "He"))
+    elif getattr(best, "conquered", False):
+        # HIS OWN WORKER: pockets first, then trade.
+        g.dialogue_panel.open(best, g.player, g.main_capital()[0])
+        g.toast("%s is yours." % getattr(best, "name", "He"))
     else:
         g.open_trade(best)
     pygame.mouse.set_visible(True)

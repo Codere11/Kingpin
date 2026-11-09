@@ -649,7 +649,7 @@ def run(g):
                     pygame.mouse.set_visible(False)
                 elif _d == "pack":
                     g._wn = g.dialogue_panel.npc
-                    if g._wn is not None and getattr(g._wn, "pack", None) is not None:
+                    if g._wn is not None:
                         g.worker_panel = ChestPanel(
                             g.inventory, work.bag(g._wn),
                             top_rows=4, top_label=getattr(g._wn, "name", "PACK"))

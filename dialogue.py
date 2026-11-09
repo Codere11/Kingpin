@@ -269,6 +269,14 @@ class Dialogue:
         npc = self.npc
         if npc is None:
             return ""
+        if getattr(npc, "conquered", False):
+            # HIS OWN CONQUERED WORKER: pockets first, then trade.
+            if which == 1:
+                self.answer = "%s: \"Help yourself.\"" % self.who
+                return "pack"
+            if which == 2:
+                return "trade"
+            return ""
         if which == 1:
             return "trade"
         if which == 2:
@@ -664,21 +672,29 @@ class Dialogue:
 
         # ---- the questions -------------------------------------------
         dname = dictator_name(self.capital)
-        options = [
-            (1, "1.   Wanna trade?"),
-            (2, "2.   What do you think about %s?" % dname),
-            (3, "3.   What do you think about me?"),
-            (4, "4.   Like to have fun?"),
-            (5, "5.   Any news?"),
-        ]
+        if getattr(self.npc, "conquered", False):
+            options = [
+                (1, "1.   Show me your pockets."),
+                (2, "2.   Wanna trade?"),
+            ]
+        else:
+            options = [
+                (1, "1.   Wanna trade?"),
+                (2, "2.   What do you think about %s?" % dname),
+                (3, "3.   What do you think about me?"),
+                (4, "4.   Like to have fun?"),
+                (5, "5.   Any news?"),
+            ]
         # ALWAYS THERE. Whether he will take it is his answer, not a missing
         # option: eighteen men in twenty have a trade, and a player who cannot
-        # see the question thinks the game has none.
-        if not (self.player is not None
-                and work.is_employed(self.player, self.npc)):
-            options.append((6, "6.   Looking for work?"))
-        if self.player is not None and work.is_employed(self.player, self.npc):
-            options.append((7, "7.   About work..."))
+        # see the question thinks the game has none. A conquered worker has his
+        # own two options above and no hire/fire page.
+        if not getattr(self.npc, "conquered", False):
+            if not (self.player is not None
+                    and work.is_employed(self.player, self.npc)):
+                options.append((6, "6.   Looking for work?"))
+            if self.player is not None and work.is_employed(self.player, self.npc):
+                options.append((7, "7.   About work..."))
         self.rows = []
         y = panel.y + 66
         if self.page == "hire":

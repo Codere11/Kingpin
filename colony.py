@@ -150,6 +150,7 @@ def spawn_conquered(g, farmers: int = 3, loggers: int = 2) -> None:
         n.native_camp = camp
         n.stock["bread"] = 60
         n.stock["shovel"] = 1
+        n.stock["wheat_seed"] = 5        # to sow his first field
         n.tool_uses = 100
         n.speed = n.rng.uniform(95.0, 115.0)
         n.wear = biomes.npc_wear(temp, hum)
