@@ -51,6 +51,31 @@ class Chest:
         pygame.draw.circle(screen, (60, 42, 26), (sx, r.centery), 3)
 
 
+class SignPost:
+    """A 1x1 sign-post: set how many conquered people work each job."""
+
+    def __init__(self, x: float, y: float) -> None:
+        self.x = float(x)
+        self.y = float(y)
+        self.w = self.h = TILE
+        self.rect = pygame.Rect(int(x - TILE / 2), int(y - TILE / 2), TILE, TILE)
+        self.sight_rect = self.rect.inflate(40, 40)
+        self.base_y = y
+        self.farmers = 0               # how many people farm
+        self.loggers = 0               # how many log
+        self.owner = None
+
+    def draw(self, screen: pygame.Surface, cam_x: float, cam_y: float) -> None:
+        sx = int(round(self.x - cam_x))
+        sy = int(round(self.y - cam_y))
+        pygame.draw.circle(screen, (120, 92, 60), (sx, sy), 5)
+        pygame.draw.rect(screen, (110, 82, 52), (sx - 2, sy - 13, 4, 13))
+        pygame.draw.rect(screen, (150, 120, 80), (sx - 8, sy - 15, 16, 8),
+                         border_radius=2)
+        pygame.draw.rect(screen, (90, 66, 42), (sx - 8, sy - 15, 16, 8), 1,
+                         border_radius=2)
+
+
 def placement_pos(player, inside_house, inside_mine, cam_x, cam_y,
                   wmouse_x, wmouse_y):
     """The room is 1:1 indoors; the world is ZOOM'd outdoors."""
@@ -83,7 +108,7 @@ def can_place(rect, sight, player, inside_house, built_houses,
 
 
 def own_things(built_plots, placed_work, built_gates, built_fences, built_houses,
-               built_blocks=None, built_chests=None):
+               built_blocks=None, built_chests=None, built_signs=None):
     """Everything of HIS a click could take down, smallest first."""
     out = []
     for _r in built_plots:
@@ -103,16 +128,19 @@ def own_things(built_plots, placed_work, built_gates, built_fences, built_houses
     if built_chests:
         for _ch in built_chests:
             out.append((_ch.rect, "chest", _ch))
+    if built_signs:
+        for _sg in built_signs:
+            out.append((_sg.rect, "sign", _sg))
     return out
 
 
 def demolish_at(wx, wy, player, built_plots, built_gates, built_fences,
                 built_houses, placed_work, mark_dirty, inventory, stall_mod,
-                built_blocks=None, built_chests=None) -> str:
+                built_blocks=None, built_chests=None, built_signs=None) -> str:
     """ONE CLICK TAKES ONE THING OF HIS DOWN -- the smallest under it."""
     hits = [(r.w * r.h, kind, r, obj) for (r, kind, obj) in
             own_things(built_plots, placed_work, built_gates, built_fences,
-                       built_houses, built_blocks, built_chests)
+                       built_houses, built_blocks, built_chests, built_signs)
             if r.collidepoint(wx, wy)]
     if not hits:
         return ""
@@ -137,6 +165,11 @@ def demolish_at(wx, wy, player, built_plots, built_gates, built_fences,
                     _n += _st.count
         mark_dirty()
         return ("Chest taken down -- %d items returned" % _n) if _n else "Chest taken down"
+    if kind == "sign":
+        if obj in built_signs:
+            built_signs.remove(obj)
+        mark_dirty()
+        return "Sign-post taken down"
     if kind == "plot":
         if rect in built_plots:
             built_plots.remove(rect)
@@ -209,7 +242,7 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
     _sizes = {"lab": (64, 64), "brewery": (64, 64),
               "smith": (64, 64), "mine": (64, 64),
               "stall": (64, 64), "dummy": (64, 64), "target": (64, 64),
-              "fireplace": (64, 64), "chest": (32, 64)}
+              "fireplace": (64, 64), "chest": (32, 64), "sign": (32, 32)}
     if placing in _sizes:
         _w, _h = _sizes[placing]
         rect = pygame.Rect(int(x - _w / 2), int(y - _h / 2), _w, _h)
@@ -406,6 +439,34 @@ def try_place(g):
         g.placed_work.append(_st)
         g.mark_dirty()
         g.toast("Market stall built   -%d wood" % int(_cost.get("wood", 0)))
+        placing = None
+        pygame.mouse.set_visible(False)
+        return
+    if placing == "sign":
+        if not hubs.land_ok(rect, g.villages.villages, g.hub_world.hubs,
+                           g.player.x, g.player.y):
+            g.toast("Not your land -- the wild, or your own hub")
+            return
+        if not g.can_place(rect, sight):
+            g.toast("No clear ground here")
+            return
+        _cost = g.build_materials("sign")
+        if not g.test_mode:
+            for _it, _q in _cost.items():
+                if g.inventory.count_of(_it) < _q:
+                    g.toast("Need %d %s" % (_q, _it))
+                    placing = None
+                    pygame.mouse.set_visible(False)
+                    return
+            for _it, _q in _cost.items():
+                g.inventory.consume(_it, _q)
+        _sg = SignPost(x, y)
+        _sg.owner = g.player
+        if not hasattr(g, "built_signs"):
+            g.built_signs = []
+        g.built_signs.append(_sg)
+        g.mark_dirty()
+        g.toast("Sign-post built")
         placing = None
         pygame.mouse.set_visible(False)
         return

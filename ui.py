@@ -643,6 +643,101 @@ class ConfirmMenu:
                             rect.centery - t.get_height() // 2))
 
 
+class SignPanel:
+    """The sign-post: how many conquered people farm, log, or go unemployed.
+    A click on [-] / [+] moves one person between the jobs."""
+
+    def __init__(self, sign, camp, sync) -> None:
+        self.sign = sign
+        self.camp = camp
+        self.sync = sync
+        self.hover = None
+        self.font = pygame.font.SysFont("dejavusans", 20, bold=True)
+        self.font_small = pygame.font.SysFont("dejavusans", 15, bold=True)
+
+    def _total(self) -> int:
+        return len(getattr(self.camp, "people", ()) or ())
+
+    def _rects(self, sw: int, sh: int):
+        w, h = 380, 236
+        x0, y0 = (sw - w) // 2, (sh - h) // 2
+        panel = pygame.Rect(x0, y0, w, h)
+        rows = []
+        for i, (label, key) in enumerate((("Farmers", "farmers"),
+                                          ("Loggers", "loggers"))):
+            ry = y0 + 66 + i * 52
+            minus = pygame.Rect(x0 + w - 150, ry, 40, 34)
+            plus = pygame.Rect(x0 + w - 52, ry, 40, 34)
+            rows.append((label, key, minus, plus, ry))
+        return panel, rows
+
+    def handle_event(self, event):
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return None
+        _panel, rows = self._rects(*surface.get_size())
+        total = self._total()
+        if event.type == pygame.MOUSEMOTION:
+            self.hover = None
+            for _label, key, minus, plus, _ry in rows:
+                if minus.collidepoint(event.pos):
+                    self.hover = (key, -1)
+                elif plus.collidepoint(event.pos):
+                    self.hover = (key, +1)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for _label, key, minus, plus, _ry in rows:
+                if minus.collidepoint(event.pos):
+                    setattr(self.sign, key, max(0, int(getattr(self.sign, key, 0)) - 1))
+                    self.sync()
+                    return "changed"
+                if plus.collidepoint(event.pos):
+                    f = int(getattr(self.sign, "farmers", 0))
+                    l = int(getattr(self.sign, "loggers", 0))
+                    if f + l < total:
+                        setattr(self.sign, key,
+                                (f + 1) if key == "farmers" else (l + 1))
+                        self.sync()
+                    return "changed"
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            return "close"
+        return None
+
+    def draw(self, screen: pygame.Surface) -> None:
+        sw, sh = screen.get_size()
+        panel, rows = self._rects(sw, sh)
+        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 155))
+        screen.blit(shade, (0, 0))
+        board = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pygame.draw.rect(board, (20, 20, 24, 244), board.get_rect(), border_radius=12)
+        pygame.draw.rect(board, BORDER, board.get_rect(), width=2, border_radius=12)
+        screen.blit(board, panel.topleft)
+
+        title = self.font.render("JOBS", True, TEXT)
+        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 18))
+        total = self._total()
+        f = int(getattr(self.sign, "farmers", 0))
+        l = int(getattr(self.sign, "loggers", 0))
+        for label, key, minus, plus, ry in rows:
+            val = f if key == "farmers" else l
+            t = self.font_small.render("%s" % label, True, (206, 184, 122))
+            screen.blit(t, (panel.left + 26, ry + 8))
+            for rect, sym, hkey in ((minus, "-", (key, -1)), (plus, "+", (key, +1))):
+                hovered = (self.hover == hkey)
+                pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
+                                 rect, border_radius=6)
+                pygame.draw.rect(screen, ACCENT if hovered else BORDER, rect,
+                                 width=2, border_radius=6)
+                tt = self.font.render(sym, True, TEXT)
+                screen.blit(tt, (rect.centerx - tt.get_width() // 2,
+                                 rect.centery - tt.get_height() // 2))
+            n = self.font.render(str(val), True, TEXT)
+            screen.blit(n, (minus.left - 40 - n.get_width(), ry + 8))
+        unemp = max(0, total - f - l)
+        u = self.font_small.render("Unemployed:  %d" % unemp, True, (176, 168, 152))
+        screen.blit(u, (panel.left + 26, panel.bottom - 40))
+
+
 class PauseMenu:
     """Escape menu: Respawn or Exit game (Esc resumes)."""
 

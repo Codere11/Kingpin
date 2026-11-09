@@ -1166,6 +1166,9 @@ class NPC:
             if world is not None:
                 self._work_orchard(dt, world, now)
             return
+        if _nat and getattr(self, "native_role", "") == "unemployed":
+            self._native_idle(dt)
+            return
         if _nat and getattr(self, "native_role", "") == "farmer":
             self._native_share()
             if self._deposit_to_chest(dt):

@@ -50,6 +50,8 @@ def make_camp(g) -> object:
         "g": g,                    # so a worker can clear trees/blocks/plants
         "workers": [],             # the conquered FARMERS
         "loggers": [],             # the conquered LOGGERS
+        "unemployed": [],          # conquered, not assigned to a job
+        "people": [],              # every conquered person (the pool)
     })()
     return camp
 
@@ -106,43 +108,68 @@ def sync_camp(g) -> None:
 
 def conquer_camp(g, native_camp) -> None:
     """All of a native camp's warriors are dead: the camp is the player's now.
-    Its farmers join his workforce -- most as farmers, a couple as loggers for
-    the orchards -- and stop being hostile (the warriors are all gone)."""
+    Its farmers join his pool of conquered people; the sign-post (or a plain
+    default) decides how many of them farm, log, or go unemployed."""
     if getattr(native_camp, "conquered", False):
         return
     native_camp.conquered = True
     pc = getattr(g, "player_camp", None)
     if pc is None:
         return
-    farmers = [n for n in (getattr(native_camp, "farmers", ()) or ())
-               if getattr(n, "alive", True)]
-    n_log = min(2, max(0, len(farmers) // 3))
-    for i, n in enumerate(farmers):
+    for n in (getattr(native_camp, "farmers", ()) or ()):
+        if not getattr(n, "alive", True):
+            continue
         n.conquered = True
         n.native_camp = pc
         n._log_tree = None
         n.orchard_plot = None
         n.farm_plot = None
         n.stock["wheat_seed"] = n.stock.get("wheat_seed", 0) + 3
-        if i < n_log:
-            n.native_role = "logger"
-            n.job = "logger"
-            n.stock["axe"] = n.stock.get("axe", 0) + 1
-            if n not in pc.loggers:
-                pc.loggers.append(n)
-        else:
-            n.native_role = "farmer"
-            n.job = "farmer"
-            if n not in pc.workers:
-                pc.workers.append(n)
+        if n not in pc.people:
+            pc.people.append(n)
     try:
-        sync_camp(g)
+        sync_jobs(g)
     except Exception:
         pass
     try:
         g.toast("The settlement is yours.")
     except Exception:
         pass
+
+
+def sync_jobs(g) -> None:
+    """Reassign every conquered person from the sign-post's counts: the first
+    N farm, the next M log, the rest are unemployed. With no sign-post, all of
+    them farm. Then plots are handed out one to a worker."""
+    camp = getattr(g, "player_camp", None)
+    if camp is None:
+        return
+    people = list(getattr(camp, "people", ()) or ())
+    sign = None
+    for s in getattr(g, "built_signs", ()) or ():
+        sign = s
+        break
+    n_farmer = int(getattr(sign, "farmers", 0) or 0) if sign is not None else len(people)
+    n_logger = int(getattr(sign, "loggers", 0) or 0) if sign is not None else 0
+    camp.workers = []
+    camp.loggers = []
+    camp.unemployed = []
+    for i, n in enumerate(people):
+        n.orchard_plot = None
+        n.farm_plot = None
+        if i < n_farmer:
+            n.native_role = "farmer"
+            n.job = "farmer"
+            camp.workers.append(n)
+        elif i < n_farmer + n_logger:
+            n.native_role = "logger"
+            n.job = "logger"
+            camp.loggers.append(n)
+        else:
+            n.native_role = "unemployed"
+            n.job = None
+            camp.unemployed.append(n)
+    sync_camp(g)
 
 
 def _drop_tree(camp, key) -> None:

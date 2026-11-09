@@ -34,6 +34,8 @@ BUILDINGS = [
     {"id": "fireplace", "name": "Fireplace", "wood": 20, "where": "outside"},
     # A CHEST: 1x2 on the mesh, 64 slots -- double the player's 32.
     {"id": "chest", "name": "Chest", "wood": 50, "where": "outside"},
+    # A SIGN-POST: set how many conquered people work each job.
+    {"id": "sign", "name": "Sign-post", "wood": 20, "where": "outside"},
     # A FORGE IS IRON -- not wood alone.
     {"id": "smith", "name": "Forge", "wood": 0,
      "cost": {"iron": 300}, "where": "outside"},
@@ -288,6 +290,16 @@ def chest_icon(size: int = 46) -> pygame.Surface:
     return s
 
 
+def sign_icon(size: int = 46) -> pygame.Surface:
+    """A sign-post, top-down: a board on a post."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.circle(s, (120, 92, 60), (size // 2, size // 2), 5)
+    pygame.draw.rect(s, (110, 82, 52), (size // 2 - 2, size // 2 - 13, 4, 13))
+    pygame.draw.rect(s, (150, 120, 80), (size // 2 - 8, size // 2 - 15, 16, 8), border_radius=2)
+    pygame.draw.rect(s, (90, 66, 42), (size // 2 - 8, size // 2 - 15, 16, 8), 1, border_radius=2)
+    return s
+
+
 # THE SETTLEMENT CATEGORY: things the player designates for the camp, not
 # builds with his own hands. A field grows crops; an orchard grows trees.
 SETTLEMENT_BUILDINGS = [
@@ -434,6 +446,7 @@ class BuildMenu:
                        "field": field_icon,
                        "orchard": orchard_icon,
                        "chest": chest_icon,
+                       "sign": sign_icon,
                        "demolish": fence_icon,
                        "fence": fence_icon, "gate": gate_icon}[building["id"]]
             icon = icon_fn(rect.height - 14)

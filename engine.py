@@ -256,6 +256,20 @@ def run(g):
                     pygame.mouse.set_visible(False)
                 else:
                     g.chest_panel.handle_event(event)
+            elif g.sign_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                                                                  pygame.K_ESCAPE):
+                    g.sign_open = False
+                    g.sign_panel = None
+                    g.sign_post = None
+                    pygame.mouse.set_visible(False)
+                else:
+                    _r = g.sign_panel.handle_event(event)
+                    if _r == "close":
+                        g.sign_open = False
+                        g.sign_panel = None
+                        g.sign_post = None
+                        pygame.mouse.set_visible(False)
             elif g.workshop_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
@@ -539,6 +553,12 @@ def run(g):
                     # THE COUNTER IS A CHEST, AND WHATEVER IS IN IT IS FOR SALE.
                     g.stall_open = True
                     g.stall_panel = MarketPanel(g.inventory, g.near_stall())
+                    pygame.mouse.set_visible(True)
+                elif g.near_sign() is not None:
+                    _sg = g.near_sign()
+                    g.sign_post = _sg
+                    g.sign_panel = SignPanel(_sg, g.player_camp, g.sync_jobs)
+                    g.sign_open = True
                     pygame.mouse.set_visible(True)
                 elif g.near_chest_building() is not None:
                     # A CHEST HE BUILT: double the player's space, filled by
@@ -3174,6 +3194,8 @@ def run(g):
                 g.worker_panel.draw(g.screen)
             if g.chest_open:
                 g.chest_panel.draw(g.screen)
+            if g.sign_open:
+                g.sign_panel.draw(g.screen)
             if g.workshop_open:
                 g.workshop_menu.draw(g.screen)
             if g.trade_open:
@@ -3293,6 +3315,8 @@ def run(g):
                 _wp.draw(g.screen, g.cam_x, g.cam_y)
             for _ch in (() if g._inside_now else g.built_chests):
                 _ch.draw(g.screen, g.cam_x, g.cam_y)
+            for _sg in (() if g._inside_now else g.built_signs):
+                _sg.draw(g.screen, g.cam_x, g.cam_y)
             # HIS PLOTS ARE ALWAYS MARKED, and while the build menu is open or
             # he is placing something they are LIT -- so he can see the ground
             # he has already staked before he stakes more.
@@ -3641,6 +3665,8 @@ def run(g):
         # change and NOTHING ON SCREEN.
         if g.chest_open:
             g.chest_panel.draw(g.screen)
+        if g.sign_open:
+            g.sign_panel.draw(g.screen)
         if g.worker_panel_open:
             g.worker_panel.draw(g.screen)
         if g.stall_open:

@@ -109,7 +109,7 @@ from trade import TradeMenu
 from workshop import WorkshopMenu
 from trees import Trees
 from ui import (ChestPanel, ConfirmMenu, FolderPanel, Hotbar,
-                InventoryPanel, MarketPanel, PauseMenu)
+                InventoryPanel, MarketPanel, PauseMenu, SignPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
                      nation_name, village_center)
@@ -708,6 +708,10 @@ def main() -> None:
     g.inventory_open = False
     g.chest_open = False
     g.chest_panel = None
+    # THE SIGN-POST: how many conquered people work each job.
+    g.sign_open = False
+    g.sign_panel = None
+    g.sign_post = None
     # A HIRED MAN'S PACK, OPENED THE WAY A CHEST IS.
     g.worker_panel_open = False
     g.worker_panel = None
@@ -763,6 +767,7 @@ def main() -> None:
     g.built_houses: list[House] = []
     g.placed_work: list = []          # the four trades, out of doors, on his land
     g.built_chests: list = []          # the 1x2 chests he has built
+    g.built_signs: list = []           # the sign-posts that set job counts
     g.built_plots: list = []          # plots he has drawn on his own ground
     g.plot_start = [None]             # where the plot drag began
     g.built_fences: list = []
@@ -937,13 +942,13 @@ def main() -> None:
     def _own_things():
         return placement.own_things(g.built_plots, g.placed_work, g.built_gates,
                                     g.built_fences, g.built_houses, g.built_blocks,
-                                    g.built_chests)
+                                    g.built_chests, g.built_signs)
 
     def demolish_at(wx: float, wy: float) -> str:
         return placement.demolish_at(wx, wy, g.player, g.built_plots, g.built_gates,
                                      g.built_fences, g.built_houses, g.placed_work,
                                      mark_dirty, g.inventory, stall_mod, g.built_blocks,
-                                     g.built_chests)
+                                     g.built_chests, g.built_signs)
 
     def salary_chest():
         return placement.salary_chest(g.built_houses, hubs, g.hub_world)
@@ -1129,6 +1134,13 @@ def main() -> None:
         for _ch in getattr(g, "built_chests", ()):
             if math.hypot(g.player.x - _ch.x, g.player.y - _ch.y) < 64.0:
                 return _ch
+        return None
+
+    def near_sign():
+        """The nearest sign-post he has built, or None."""
+        for _sg in getattr(g, "built_signs", ()):
+            if math.hypot(g.player.x - _sg.x, g.player.y - _sg.y) < 56.0:
+                return _sg
         return None
 
     def near_brew() -> bool:
@@ -1371,6 +1383,7 @@ def main() -> None:
         g.sync_player_camp = _colony.sync_camp
         g.next_field_kind = _colony.next_kind
         g.conquer_camp = _colony.conquer_camp
+        g.sync_jobs = _colony.sync_jobs
         # NO PEOPLE ARE HANDED TO THE PLAYER AT SPAWN. A conquered workforce
         # is WON: clear a native settlement's warriors and its farmers are his.
         plog.log("COLONY", "camp ready, empty")
@@ -1547,6 +1560,7 @@ def main() -> None:
         
         
         g.inventory_open = g.trade_open = g.board_open = g.chest_open = False
+        g.sign_open = False
         g.worker_panel_open = False
         g.stall_open = False
         g.body_open = False
@@ -1715,6 +1729,7 @@ def main() -> None:
     g.near_brew = near_brew
     g.near_chest = near_chest
     g.near_chest_building = near_chest_building
+    g.near_sign = near_sign
     g.near_fireplace = near_fireplace
     g.near_lab = near_lab
     g.near_stall = near_stall
