@@ -1287,6 +1287,21 @@ def main() -> None:
     except Exception as _ne:
         plog.log("NATIVE-ERROR", repr(_ne)[:200])
 
+    # ONE COTTON PLANT, RIGHT BESIDE THE SPAWN, full grown so it can be seen
+    # and felt the moment he opens his eyes. A few steps inland, on grass.
+    try:
+        import crop as _crop
+        _ctx = int((g.player.x - 4 * 32.0) // TILE)
+        _cty = int(g.player.y // TILE)
+        g.world.set_plot(_ctx, _cty, "cotton",
+                         g.now - _crop.GROW_SECONDS)
+        try:
+            g.ground.invalidate_tile(_ctx, _cty)
+        except Exception:
+            pass
+    except Exception as _e:
+        plog.log("COTTON-SPAWN", repr(_e)[:120])
+
     # THE MAN WHO ANSWERS QUESTIONS IS NOT A CASUALTY OF A SAVE LOAD.
     # `load_now` rebuilds every town's roll up to its capacity, and he is the
     # LAST man appended to his town -- so the cap dropped him, and he survived
