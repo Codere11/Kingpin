@@ -89,7 +89,7 @@ import corpse as corpse_mod
 import folders as folders_mod
 import manhunt
 from combat import Combat, segment_circle_hit
-from creatures import (Bison, Patrol, Rabbit, Soldier, Wolf, is_trader,
+from creatures import (Bison, Horse, Patrol, Rabbit, Soldier, Wolf, is_trader,
                        choose_target as
                        creatures_choose_target, make_squad,
                        set_time as creatures_set_time)
@@ -641,6 +641,7 @@ def main() -> None:
     except Exception as _eh:
         plog.log("CROWD-HOOK-ERR", repr(_eh)[:120])
     g.rabbits: list[Rabbit] = []
+    g.horses: list[Horse] = []
     g.patrols: list[Patrol] = []
     g.player.nation = None
     g.player.squad = []
@@ -680,6 +681,10 @@ def main() -> None:
         worldbuild.spawn_rabbit(g.player, g.world, g.rabbits, biomes, math, random,
                                 Rabbit)
 
+    def spawn_horse() -> None:
+        worldbuild.spawn_horse(g.player, g.world, g.horses, biomes, math, random,
+                               Horse)
+
     def spawn_bison() -> None:
         worldbuild.spawn_bison(g.player, g.world, g.enemies, biomes, math, random,
                                Bison)
@@ -692,6 +697,8 @@ def main() -> None:
         spawn_wolf()
     for _ in range(5):
         spawn_rabbit()
+    for _ in range(2):
+        spawn_horse()
     for _ in range(2):
         spawn_bison()
     # ...and the death screen's own typeface, which was being built for the
@@ -880,7 +887,8 @@ def main() -> None:
         
         _g = SimpleNamespace(
             player=g.player, skills=g.skills, inventory=g.inventory, combat=g.combat,
-            enemies=g.enemies, blood=g.blood, rabbits=g.rabbits, hub_world=g.hub_world,
+            enemies=g.enemies, blood=g.blood, rabbits=g.rabbits, horses=g.horses,
+            hub_world=g.hub_world,
             truth=g._TRUTH, trees=g.trees, built_fences=g.built_fences,
             built_gates=g.built_gates, built_blocks=g.built_blocks,
             visible_villages=g.visible_villages,
@@ -1094,7 +1102,7 @@ def main() -> None:
             camp_walls=g.camp_walls, built_gates=g.built_gates, player=g.player,
             _TEST_TRAIN=g._TEST_TRAIN, corpse_mod=corpse_mod, now=g.now, crop=crop,
             world=g.world, wildcrop=wildcrop, ore_field=g.ore_field,
-            enemies=g.enemies, rabbits=g.rabbits, built_houses=g.built_houses,
+            enemies=g.enemies, rabbits=g.rabbits, horses=g.horses, built_houses=g.built_houses,
             _TRUTH=g._TRUTH, _draws=g._draws, plog=plog,
             inventory=g.inventory, built_blocks=g.built_blocks,
             wmouse_x=g.wmouse_x, wmouse_y=g.wmouse_y,
@@ -1754,6 +1762,7 @@ def main() -> None:
     g.settle_reload = settle_reload
     g.spawn_patrol = spawn_patrol
     g.spawn_rabbit = spawn_rabbit
+    g.spawn_horse = spawn_horse
     g.spawn_wolf = spawn_wolf
     g.spawn_bison = spawn_bison
     g.speed_button = speed_button

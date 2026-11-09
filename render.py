@@ -88,6 +88,9 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
     for rabbit in g.rabbits:
         if view.collidepoint(rabbit.x, rabbit.y):
             items.append((rabbit.y, lambda r=rabbit: r.draw(target, cx, cy)))
+    for horse in getattr(g, "horses", ()):
+        if view.collidepoint(horse.x, horse.y):
+            items.append((horse.y, lambda h=horse: h.draw(target, cx, cy)))
     # ...AND THE PLAYER'S OWN, drawn whether or not any village is in
     # sight. This block used to sit INSIDE the village loop, so a house
     # built out in the open was never drawn at all: solid, enterable, and

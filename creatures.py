@@ -734,6 +734,96 @@ class Rabbit:
         pygame.draw.line(screen, line, (hx, hy - 2), (hx + 2, hy - 9), 2)
 
 
+class Horse:
+    """A horse: a harmless, skittish beast that wanders the plains and flees
+    from people. Killable, but drops nothing for now."""
+    kind = "horse"
+    SPRITES = None                      # coat -> pre-scaled pygame surface
+    COAT_FILES = {"brown": "horse.png", "black": "horse_black.png",
+                  "white": "horse_white.png", "palomino": "horse_palomino.png"}
+    DRAW = 80                           # on-screen size of the whole sprite
+
+    def __init__(self, x: float, y: float, coat: str = "brown") -> None:
+        self.x = float(x)
+        self.y = float(y)
+        self.coat = coat
+        self.home = (float(x), float(y))
+        self.team = ("horse", None)
+        self.facing = (0.0, -1.0)
+        self.radius = 15
+        self.max_health = 70
+        self.health = 70
+        self.speed = 190.0
+        self.hit_flash = 0.0
+        self.flee_timer = 0.0
+        self.graze_timer = random.uniform(0.5, 2.0)
+        self.target = (self.x, self.y)
+
+    @property
+    def alive(self) -> bool:
+        return self.health > 0
+
+    take_damage = Enemy.take_damage
+
+    def _sprite(self):
+        if Horse.SPRITES is None:
+            Horse.SPRITES = {}
+            for coat, fn in Horse.COAT_FILES.items():
+                try:
+                    img = pygame.image.load(fn).convert_alpha()
+                    Horse.SPRITES[coat] = pygame.transform.smoothscale(
+                        img, (Horse.DRAW, Horse.DRAW))
+                except Exception:
+                    Horse.SPRITES[coat] = None
+        return Horse.SPRITES.get(self.coat)
+
+    def update(self, dt: float, threat=None, colliders=None) -> None:
+        if self.hit_flash > 0.0:
+            self.hit_flash = max(0.0, self.hit_flash - dt)
+        if not self.alive:
+            return
+        # SKITTISH: a person near spooks it into a run.
+        if threat is not None and not getattr(threat, "dead", False):
+            dx, dy = self.x - threat.x, self.y - threat.y
+            d = math.hypot(dx, dy)
+            if d < 260.0:
+                self.flee_timer = 1.4
+                if d > 1e-4:
+                    self.x += dx / d * self.speed * dt
+                    self.y += dy / d * self.speed * dt
+                    self.facing = (dx / d, dy / d)
+                return
+        self.flee_timer = max(0.0, self.flee_timer - dt)
+        # GRAZE: pick a new spot near home now and then, then amble to it.
+        self.graze_timer -= dt
+        if self.graze_timer <= 0.0:
+            self.graze_timer = random.uniform(1.0, 3.0)
+            ang = random.uniform(0.0, 2.0 * math.pi)
+            r = random.uniform(30.0, 200.0)
+            self.target = (self.home[0] + math.cos(ang) * r,
+                           self.home[1] + math.sin(ang) * r)
+        tx, ty = self.target
+        dx, dy = tx - self.x, ty - self.y
+        d = math.hypot(dx, dy)
+        if d > 8.0:
+            self.x += dx / d * self.speed * 0.35 * dt
+            self.y += dy / d * self.speed * 0.35 * dt
+            self.facing = (dx / d, dy / d)
+
+    def draw(self, screen, cam_x, cam_y):
+        img = self._sprite()
+        sx, sy = self.x - cam_x, self.y - cam_y
+        if img is None:
+            # fallback if the PNG is missing: a plain top-down oval
+            pygame.draw.ellipse(screen, (120, 90, 56),
+                                (sx - 13, sy - 22, 26, 44))
+            return
+        fx, fy = self.facing
+        deg = math.degrees(math.atan2(fy, fx))
+        rot = pygame.transform.rotate(img, -(deg + 90.0))
+        screen.blit(rot, rot.get_rect(center=(int(sx), int(sy))))
+
+
 class Bison(Enemy):
     """A bison: passive, keeps its distance from you, and only charges when
     one of the herd is hit. Drops meat (5x a rabbit) and hides."""

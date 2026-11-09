@@ -160,6 +160,13 @@ def use_axe(g, kills) -> int:
                 amount = random.randint(1, 2)
                 g.inventory.add("raw_meat", amount)
                 g.toast(f"Caught a rabbit   +{amount} raw meat")
+    # A HORSE IS KILLABLE BUT GIVES NOTHING -- for now it is just a creature.
+    for horse in getattr(g, "horses", ()):
+        if horse.alive and in_arc(horse.x, horse.y, horse.radius):
+            died = horse.take_damage(melee)
+            g.blood.spawn(horse.x, horse.y, 8, 14.0)
+            if died:
+                g.toast("Felled a horse")
     # EVERY MAN THE BLADE REACHES IS CUT -- once each.
     #
     # This walked only the towns in view, so the men of a criminal hut and

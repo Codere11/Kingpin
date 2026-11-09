@@ -335,6 +335,30 @@ def spawn_rabbit(player, world, rabbits, biomes, math, random, Rabbit) -> None:
         float(world.temperature(rx, ry)), float(world.humidity(rx, ry)))))
 
 
+def spawn_horse(player, world, horses, biomes, math, random, Horse) -> None:
+    """A small band of horses, on grass away from the sea. No regional coats;
+    the coat is rolled from the four sprites."""
+    for _ in range(12):
+        angle = random.uniform(0.0, 2.0 * math.pi)
+        dist = random.uniform(300.0, 1200.0)
+        hx = player.x + math.cos(angle) * dist
+        hy = player.y + math.sin(angle) * dist
+        import world as _world
+        if hx > _world.coast_x(hy, world.seed):
+            continue                     # no horses in the sea
+        t = float(world.temperature(hx, hy))
+        h = float(world.humidity(hx, hy))
+        if biomes.biome_name(t, h) == "desert":
+            continue                     # horses graze where grass grows
+        coat = random.choice(("brown", "brown", "black", "white", "palomino"))
+        n = random.randint(2, 4)
+        for _ in range(n):
+            ox = random.uniform(-70.0, 70.0)
+            oy = random.uniform(-70.0, 70.0)
+            horses.append(Horse(hx + ox, hy + oy, coat))
+        return
+
+
 def spawn_bison(player, world, enemies, biomes, math, random, Bison) -> None:
     """A HERD of bison, anywhere but the desert. No regional variants. They
     stand together, so a hit on one turns the whole nearby herd."""

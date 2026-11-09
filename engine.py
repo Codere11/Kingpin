@@ -1465,6 +1465,8 @@ def run(g):
                 patrol.update(g.dt)
             for rabbit in g.rabbits:
                 rabbit.update(g.dt, None if g.player.dead else g.player, g.grid)
+            for horse in g.horses:
+                horse.update(g.dt, None if g.player.dead else g.player, g.grid)
             g.enemy_grid.build([e for e in g.enemies if e.alive])
             # THE BEASTS, PICKED OUT ONCE A FRAME. _predator_near() used to walk
             # the whole enemy list -- every wolf AND every soldier -- per man,
@@ -2045,6 +2047,9 @@ def run(g):
             for rabbit in g.rabbits:
                 if rabbit.alive:
                     g.combatants.append((rabbit, rabbit.team))
+            for horse in g.horses:
+                if horse.alive:
+                    g.combatants.append((horse, horse.team))
             for village in g.visible_villages + [v for v in g.sieges
                                                if v not in g.visible_villages]:
                 for npc in village.npcs:
@@ -2196,6 +2201,9 @@ def run(g):
             for rabbit in g.rabbits[:]:
                 if not rabbit.alive:
                     g.rabbits.remove(rabbit)
+            for horse in g.horses[:]:
+                if not horse.alive:
+                    g.horses.remove(horse)
             for village in g.visible_villages:
                 if any(not npc.alive for npc in village.npcs):
                     village.last_death = g.now          # births wait for peace
@@ -2213,6 +2221,8 @@ def run(g):
                     g.spawn_wolf()
                 if sum(1 for r in g.rabbits if r.alive) < 6:
                     g.spawn_rabbit()
+                if sum(1 for h in g.horses if h.alive) < 3:
+                    g.spawn_horse()
                 if sum(1 for e in g.enemies
                        if getattr(e, "kind", "") == "bison" and e.alive) < 6:
                     g.spawn_bison()
