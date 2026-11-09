@@ -26,6 +26,8 @@ CRAFTS = [
     {"id": "ammo", "name": "Ammo",
      "cost": {"iron": industry.AMMO_IRON, "wood": industry.AMMO_WOOD},
      "yield": 1},
+    # A BED, out of the cotton you grow.
+    {"id": "bed", "name": "Bed", "cost": {"cotton": 30}},
 ]
 
 _COST = {c["id"]: c["cost"] for c in CRAFTS}

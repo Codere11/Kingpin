@@ -118,6 +118,8 @@ REGISTRY: dict[str, ItemDef] = {
     "cotton_seed": ItemDef("cotton_seed", "Cotton Seeds",
                            "Plant in fertile soil; grows cotton.",
                            stackable=True, max_stack=100),
+    "bed": ItemDef("bed", "Bed", "A cotton bed. Place it and sleep.",
+                   stackable=True, max_stack=10),
 }
 
 
@@ -624,6 +626,31 @@ def _draw_cotton_seed(s: int) -> pygame.Surface:
     return _draw_seeds(s, (176, 136, 78), (124, 90, 50))
 
 
+def _draw_bed(s: int) -> pygame.Surface:
+    """A small bed, top-down: mattress, blanket and a pillow."""
+    surf = _canvas(s)
+    wood = (118, 78, 44)
+    wood_d = (78, 50, 28)
+    blanket = (196, 120, 88)
+    blanket_d = (150, 84, 60)
+    sheet = (240, 238, 232)
+    pillow = (252, 250, 246)
+    # frame
+    pygame.draw.rect(surf, wood_d, (0.16 * s, 0.30 * s, 0.68 * s, 0.46 * s), border_radius=int(0.04 * s))
+    pygame.draw.rect(surf, wood, (0.19 * s, 0.33 * s, 0.62 * s, 0.40 * s), border_radius=int(0.03 * s))
+    # mattress/sheet
+    pygame.draw.rect(surf, sheet, (0.22 * s, 0.36 * s, 0.56 * s, 0.34 * s), border_radius=int(0.03 * s))
+    # pillow at the head
+    pygame.draw.rect(surf, pillow, (0.22 * s, 0.36 * s, 0.14 * s, 0.34 * s), border_radius=int(0.04 * s))
+    pygame.draw.rect(surf, (200, 198, 192), (0.22 * s, 0.36 * s, 0.14 * s, 0.34 * s), 1, border_radius=int(0.04 * s))
+    # blanket folded over the foot half
+    pygame.draw.rect(surf, blanket_d, (0.46 * s, 0.36 * s, 0.32 * s, 0.34 * s), border_radius=int(0.03 * s))
+    pygame.draw.rect(surf, blanket, (0.48 * s, 0.38 * s, 0.28 * s, 0.30 * s), border_radius=int(0.02 * s))
+    for yy in (0.42, 0.50, 0.58):
+        pygame.draw.line(surf, blanket_d, (0.48 * s, yy * s), (0.76 * s, yy * s), 1)
+    return surf
+
+
 def _draw_cooked_meat(s: int) -> pygame.Surface:
     surf = _canvas(s)
     meat, meat_d = (156, 92, 48), (104, 56, 26)
@@ -687,6 +714,7 @@ _DRAWERS = {
     "hide": _draw_hide,
     "cotton": _draw_cotton,
     "cotton_seed": _draw_cotton_seed,
+    "bed": _draw_bed,
 }
 
 _cache: dict[tuple[str, int], pygame.Surface] = {}

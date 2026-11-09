@@ -9,7 +9,7 @@ import math
 
 
 # what counts as a block you can place in the hand
-BUILDABLE = ("wood", "hide")
+BUILDABLE = ("wood", "hide", "bed")
 
 
 # colours: fill, light bevel, dark shadow, grain/edge
@@ -60,6 +60,23 @@ def _edges(screen, x, y, kind, up, down, left, right):
                          (x + TILE - 2, y + TILE - 2), 2)
 
 
+def _bed_block(screen, x, y):
+    """A 1x1 bed: mattress, folded blanket and a pillow, top-down."""
+    wood = (118, 78, 44)
+    wood_d = (78, 50, 28)
+    sheet = (240, 238, 232)
+    pillow = (252, 250, 246)
+    blanket = (196, 120, 88)
+    blanket_d = (150, 84, 60)
+    pygame.draw.rect(screen, wood_d, (x + 3, y + 5, TILE - 6, TILE - 10), border_radius=2)
+    pygame.draw.rect(screen, wood, (x + 5, y + 7, TILE - 10, TILE - 14), border_radius=2)
+    pygame.draw.rect(screen, sheet, (x + 7, y + 9, TILE - 14, TILE - 18), border_radius=2)
+    pygame.draw.rect(screen, pillow, (x + 7, y + 9, 6, TILE - 18), border_radius=2)
+    pygame.draw.rect(screen, (200, 198, 192), (x + 7, y + 9, 6, TILE - 18), 1, border_radius=2)
+    pygame.draw.rect(screen, blanket_d, (x + 16, y + 9, TILE - 23, TILE - 18), border_radius=2)
+    pygame.draw.rect(screen, blanket, (x + 17, y + 11, TILE - 25, TILE - 22), border_radius=2)
+
+
 def draw_blocks(screen, blocks, cam_x, cam_y, view):
     """Every placed block, snapped to its square; a row merges into one wall
     with the shadow only around its outside."""
@@ -69,6 +86,9 @@ def draw_blocks(screen, blocks, cam_x, cam_y, view):
         wx = tx * TILE
         wy = ty * TILE
         if not view.collidepoint(wx + TILE / 2.0, wy + TILE / 2.0):
+            continue
+        if kind == "bed":
+            _bed_block(screen, int(wx - cam_x), int(wy - cam_y))
             continue
         if kind not in _COLORS:
             kind = "wood"
