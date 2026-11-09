@@ -1032,6 +1032,22 @@ class NPC:
                 self.mood = min(100.0, getattr(self, "mood", 50.0) + 2.0)
                 break
 
+    def _native_idle(self, dt: float) -> None:
+        """An extra farmer with no post: he chills, strolling around the camp."""
+        camp = getattr(self, "native_camp", None)
+        speed = getattr(self, "speed", 60.0)
+        if getattr(self, "_idle_timer", 0.0) <= 0.0:
+            if camp is not None:
+                ang = self.rng.uniform(0.0, 2.0 * math.pi)
+                r = self.rng.uniform(2.0, 6.0) * TILE
+                self.target = (camp.x + math.cos(ang) * r, camp.y + math.sin(ang) * r)
+            self._idle_timer = self.rng.uniform(2.0, 5.0)
+        else:
+            self._idle_timer -= dt
+        tx, ty = self.target
+        if math.hypot(tx - self.x, ty - self.y) > 8.0:
+            self._walk_toward(tx, ty, speed * 0.6, dt)
+
     def update(self, dt: float, threat=None, colliders=None, combat=None,
                night: bool = False, world=None, now: float = 0.0,
                phase: str = "home") -> None:
@@ -1050,7 +1066,10 @@ class NPC:
             return
         if _nat and getattr(self, "native_role", "") == "farmer":
             self._native_share()
-            if world is not None and self.farm_plot is not None:
+            if self.farm_plot is None:
+                self._native_idle(dt)
+                return
+            if world is not None:
                 if self._work_field(dt, world, now):
                     return
             return
