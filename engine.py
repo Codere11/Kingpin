@@ -380,15 +380,22 @@ def run(g):
                     g.field_start[0] = None
                     pygame.mouse.set_visible(False)
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    g.field_start[0] = (g.cam_x + g.wmouse_x,
-                                        g.cam_y + g.wmouse_y)
+                    # snap the first corner to the 1x1 mesh
+                    _wx = g.cam_x + g.wmouse_x
+                    _wy = g.cam_y + g.wmouse_y
+                    g.field_start[0] = (int(_wx // 32) * 32,
+                                        int(_wy // 32) * 32)
                 elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     if g.field_start[0] is not None:
                         _sx, _sy = g.field_start[0]
                         _ex = g.cam_x + g.wmouse_x
                         _ey = g.cam_y + g.wmouse_y
-                        _r = pygame.Rect(int(min(_sx, _ex)), int(min(_sy, _ey)),
-                                         int(abs(_ex - _sx)), int(abs(_ey - _sy)))
+                        _tx0, _ty0 = int(_sx // 32), int(_sy // 32)
+                        _tx1, _ty1 = int(_ex // 32), int(_ey // 32)
+                        _r = pygame.Rect(min(_tx0, _tx1) * 32,
+                                         min(_ty0, _ty1) * 32,
+                                         (abs(_tx0 - _tx1) + 1) * 32,
+                                         (abs(_ty0 - _ty1) + 1) * 32)
                         if _r.w > 8 and _r.h > 8:
                             g.field_designations.append(_r)
                             g.toast("Field designated  (%d x %d)" % (_r.w, _r.h))
@@ -3337,14 +3344,16 @@ def run(g):
         g.eye_y = g._src.y - g.cam_y + g._src.facing[1] * 5.0
         g.foliage = g.trees.foliage(g._src.x, g._src.y)
         g._cone0 = g.vision.cone_deg
-        if g._watch:
+        if g._watch or g.field_design:
             g.vision.cone_deg = 360.0
         g.mask = g.vision.build(g.vw, g.vh, g.eye_x, g.eye_y, g._ang,
                             g.screen_occluders, g.screen_soft, 1.0 - 0.25 * g.foliage)
         g.screen.blit(g.mask, (0, 0))
-        if g._watch:
+        if g._watch or g.field_design:
             g.vision.cone_deg = g._cone0
-        g.draw_night()
+        # A SETTLEMENT VIEW IS LIT FROM ABOVE: no first-person cone, no night.
+        if not g.field_design:
+            g.draw_night()
 
         g.selected = g.inventory.selected_stack()
         g._sel0 = g.inventory.selected_stack()      # never rely on a name that a
