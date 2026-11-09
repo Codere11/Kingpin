@@ -41,7 +41,11 @@ MAX_LEAF_FIELDS = 2
 
 _NAMES = ("Awan", "Kiona", "Takoda", "Yuma", "Nashoba", "Chenoa",
           "Migina", "Ohanzee", "Sikya", "Winona", "Elan", "Kohana",
-          "Mato", "Nokomis", "Odakota", "Shilah")
+          "Mato", "Nokomis", "Odakota", "Shilah", "Hania", "Kanti",
+          "Lakota", "Mika", "Nita", "Onawa", "Peta", "Sakari",
+          "Tala", "Uzumati", "Wakanda", "Yansa", "Ahiga", "Chaska",
+          "Dakota", "Enapay", "Honovi", "Istas", "Kitchi", "Lomasi",
+          "Mona", "Nodin", "Ojinjintka", "Paytah", "Sahale", "Tahatan")
 
 
 def native_center(gx: int, gy: int, seed: int):
@@ -304,6 +308,7 @@ def build(g, cx: float, cy: float, seed: int):
         "fields": field_centres_tiles,
         "food_kind": food_kind, "leaf_kind": leaf_kind,
         "clearance": clearance,
+        "food_store": {food_item: 20},
         "native": True,
     })()
     # They stay in the people register, so they are lived: they walk, work,

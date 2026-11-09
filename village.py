@@ -1008,16 +1008,18 @@ class NPC:
         if d > 0.5:
             self.facing = (dx / d, dy / d)
 
-    def _native_step(self, dt: float) -> None:
-        """A native camp man's own step: farmers farm, warriors patrol."""
+    def _native_step(self, dt: float, world=None, now=None) -> None:
+        """A native camp man's own step: farmers farm, warriors patrol, and
+        the hungry are fed from the camp's store."""
         camp = getattr(self, "native_camp", None)
         if camp is None:
             return
+        self._native_share()
         speed = getattr(self, "speed", 60.0)
         if getattr(self, "native_role", "") == "warrior":
-            ang = getattr(self, "_orbit", 0.0) + 0.25 * dt
+            ang = getattr(self, "_orbit", 0.0) + 0.30 * dt
             self._orbit = ang
-            r = 3.0 * TILE
+            r = 4.0 * TILE
             self._walk_toward(camp.x + math.cos(ang) * r,
                               camp.y + math.sin(ang) * r, speed, dt)
         else:
@@ -1026,14 +1028,59 @@ class NPC:
                 self.work_flash = max(self.work_flash, 0.3)
                 if self._native_work <= 0.0:
                     self._native_work = 0.0
+                    self._do_farm_action(world, now)
                     self._pick_field()
             else:
                 tx, ty = self.target
                 if math.hypot(tx - self.x, ty - self.y) < 18.0:
-                    self._native_work = self.rng.uniform(2.0, 5.0)
+                    self._native_work = self.rng.uniform(1.5, 4.0)
                     self.work_flash = 1.0
                 else:
                     self._walk_toward(tx, ty, speed, dt)
+
+    def _do_farm_action(self, world, now) -> None:
+        """Till, sow, or reap the field tile he is standing on."""
+        camp = getattr(self, "native_camp", None)
+        if world is None or camp is None:
+            return
+        tx = int(math.floor(self.target[0] / TILE))
+        ty = int(math.floor(self.target[1] / TILE))
+        food_kind = getattr(camp, "food_kind", "wheat")
+        food_item = crop.FOOD_ITEM.get(food_kind, "bread")
+        plot = world.plot_at(tx, ty)
+        kind = getattr(plot, "kind", None)
+        if kind is None or kind == "grass":
+            world.set_plot(tx, ty, "fertile", None)               # till
+        elif kind == "fertile":
+            world.set_plot(tx, ty, food_kind, now or 0.0)         # sow
+        elif kind in crop.FOOD_KINDS and plot is not None:
+            planted = plot.planted_at or 0.0
+            if (now or 0.0) - planted >= crop.GROW_SECONDS:
+                n = self.rng.randint(2, 5)
+                self.stock[food_item] = self.stock.get(food_item, 0) + n
+                store = getattr(camp, "food_store", None)
+                if isinstance(store, dict):
+                    store[food_item] = store.get(food_item, 0) + n
+                world.set_plot(tx, ty, "fertile", None)           # reap
+
+    def _native_share(self) -> None:
+        """The hungry are fed from the camp's store; the fed share what they
+        have. One loaf at a time, so nobody hoards while another starves."""
+        camp = getattr(self, "native_camp", None)
+        if camp is None:
+            return
+        store = getattr(camp, "food_store", None)
+        if not isinstance(store, dict) or not store:
+            return
+        if getattr(self, "hunger", 0.0) > 55.0:
+            for item, qty in list(store.items()):
+                if qty <= 0:
+                    continue
+                store[item] = qty - 1
+                self.stock[item] = self.stock.get(item, 0) + 1
+                self.hunger = max(0.0, getattr(self, "hunger", 0.0) - 8.0)
+                self.mood = min(100.0, getattr(self, "mood", 50.0) + 2.0)
+                break
 
     def update(self, dt: float, threat=None, colliders=None, combat=None,
                night: bool = False, world=None, now: float = 0.0,
@@ -1046,7 +1093,7 @@ class NPC:
         # warriors patrol a ring around the fire. They live in the register and
         # are driven by their camp, not by a town schedule.
         if getattr(self, "native", False) and getattr(self, "native_camp", None) is not None:
-            self._native_step(dt)
+            self._native_step(dt, world, now)
             return
         # THE BODY GROWS WITH THE SKILL, checked once a second and not once a
         # frame: a thousand men a tick is not where a float compare belongs.
