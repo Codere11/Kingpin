@@ -410,7 +410,15 @@ def run(g):
                     _wy = g.cam_y + g.wmouse_y
                     g.field_start[0] = (int(_wx // 32) * 32,
                                         int(_wy // 32) * 32)
-                elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    g.field_del[0] = False
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                    # right-drag: DELETE the fields this rectangle touches
+                    _wx = g.cam_x + g.wmouse_x
+                    _wy = g.cam_y + g.wmouse_y
+                    g.field_start[0] = (int(_wx // 32) * 32,
+                                        int(_wy // 32) * 32)
+                    g.field_del[0] = True
+                elif event.type == pygame.MOUSEBUTTONUP and event.button in (1, 3):
                     if g.field_start[0] is not None:
                         _sx, _sy = g.field_start[0]
                         _ex = g.cam_x + g.wmouse_x
@@ -421,10 +429,18 @@ def run(g):
                                          min(_ty0, _ty1) * 32,
                                          (abs(_tx0 - _tx1) + 1) * 32,
                                          (abs(_ty0 - _ty1) + 1) * 32)
-                        if _r.w > 8 and _r.h > 8:
+                        if g.field_del[0]:
+                            _kept = [f for f in g.field_designations
+                                     if not _r.colliderect(f)]
+                            _n = len(g.field_designations) - len(_kept)
+                            g.field_designations = _kept
+                            if _n:
+                                g.toast("Cleared %d field%s" % (_n, "" if _n == 1 else "s"))
+                        elif _r.w > 8 and _r.h > 8:
                             g.field_designations.append(_r)
                             g.toast("Field designated  (%d x %d)" % (_r.w, _r.h))
                         g.field_start[0] = None
+                        g.field_del[0] = False
                 # swallow every other key/click while designating
                 continue
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_e:

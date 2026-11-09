@@ -753,6 +753,7 @@ def main() -> None:
     # camera pans like a city-management view; drag a rectangle to designate.
     g.field_design = False
     g.field_start = [None]            # one corner of the field being drawn
+    g.field_del = [False]             # right-drag: deleting, not adding
     g.field_designations: list = []   # pygame.Rects, one per field
     g.built_houses: list[House] = []
     g.placed_work: list = []          # the four trades, out of doors, on his land
@@ -1017,9 +1018,13 @@ def main() -> None:
                              int(abs(_ex - _sx)), int(abs(_ey - _sy)))
             _sr = pygame.Rect(int(_r.x - g.cam_x), int(_r.y - g.cam_y), _r.w, _r.h)
             _glow = pygame.Surface((max(1, _sr.w), max(1, _sr.h)), pygame.SRCALPHA)
-            _glow.fill((200, 220, 120, 80))
+            if g.field_del[0]:
+                _glow.fill((220, 90, 70, 80))
+                pygame.draw.rect(g.screen, (240, 120, 90), _sr, 2)
+            else:
+                _glow.fill((200, 220, 120, 80))
+                pygame.draw.rect(g.screen, (230, 240, 160), _sr, 2)
             g.screen.blit(_glow, _sr.topleft)
-            pygame.draw.rect(g.screen, (230, 240, 160), _sr, 2)
 
     def render_backdrop(house):
         return houseroom.render_backdrop(house, pygame, g.vw, g.vh, g.ground,
