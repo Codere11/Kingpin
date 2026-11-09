@@ -1329,9 +1329,9 @@ class NPC:
         # worked five tiles out of twenty-five for ever, grew no leaf, and the
         # artisan upstream of him starved for stock. The order now rotates by
         # one each action, so a ripe harvest cannot starve the tilling.
-        _turn = int(getattr(self, "_field_turn", 0))
+        # HARVEST FIRST, so a ripe field is reaped tile after tile -- about one
+        # a second -- and tilling/planting only happens once nothing is ripe.
         _order = ["harvest", "plant", "water", "till"]
-        _order = _order[_turn % 4:] + _order[:_turn % 4]
         task = None
         for action in _order:
             if action in todo:
@@ -1383,11 +1383,6 @@ class NPC:
             # frame. The worker thread does it instead.
             ground.invalidate_tile(ttx, tty, immediate=False)
         self._did_work()           # planted, watered, reaped or broke ground
-        self.pause = 0.12          # a quick pair of hands
-        # the rotation advances only now, after a finished action -- not every
-        # tick while he is still walking to the tile (that made him switch
-        # targets each frame and twitch between four tiles, never reaching one)
-        self._field_turn = _turn + 1
         return True
 
     def _did_work(self) -> None:

@@ -267,13 +267,14 @@ def build(g, cx: float, cy: float, seed: int):
     rng.shuffle(_name_pool)                 # each camp gets its own names
     _s = seed ^ 0x6E17
     for i in range(n_farmers):
-        # a farmer stands between the teepees and his fields, and walks out to
-        # work them
-        ang = rng.uniform(0.0, 2.0 * math.pi)
-        mid = (ring + 5.0) * TILE
-        fx, fy = cx + math.cos(ang) * mid, cy + math.sin(ang) * mid
-        n = village_mod.NPC(fx + rng.uniform(-40, 40),
-                            fy + rng.uniform(-40, 40),
+        # a farmer starts right beside his assigned food field, so he is
+        # reaping within a second of the game starting, not walking 700 px to it
+        _fi = i % max(1, len(food_plots))
+        _fx, _fy, _fk = (food_plots[_fi] if food_plots
+                         else (int(cx // TILE), int(cy // TILE), food_kind))
+        fx = _fx * TILE + TILE / 2.0 + rng.uniform(-48, 48)
+        fy = _fy * TILE + TILE / 2.0 + rng.uniform(-48, 48)
+        n = village_mod.NPC(fx, fy,
                             _s ^ (i * 2654435761),
                             name=_name_pool[i % len(_name_pool)],
                             npc_id="native_f_%d_%d" % (int(cx), i), role="Farmer")
@@ -284,7 +285,7 @@ def build(g, cx: float, cy: float, seed: int):
         n.stock["shovel"] = 1
         n.tool_uses = 100
         n.home = (n.x, n.y)
-        n.speed = rng.uniform(55.0, 80.0)
+        n.speed = rng.uniform(95.0, 115.0)
         n.wear = biomes.npc_wear(temp, hum)
         farmers.append(n)
         g._observe_npcs.append(n)             # drawn with the natives
