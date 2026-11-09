@@ -752,10 +752,11 @@ def main() -> None:
     # SETTLEMENT DESIGNATION: pick 'Field' and the player freezes while the
     # camera pans like a city-management view; drag a rectangle to designate.
     g.field_design = False
+    g.field_mode = "field"          # what the current designation lays: field|orchard
     g.field_start = [None]            # one corner of the field being drawn
     g.field_raw = [None]              # the un-snapped click, to tell click from drag
     g.field_del = [False]             # right-drag: deleting, not adding
-    g.field_designations: list = []   # [{"rect": Rect, "kind": crop}], one per field
+    g.field_designations: list = []   # [{"rect","type","kind"}], one per designation
     g.player_camp = None              # the conquered settlement (colony.py)
     g.sync_player_camp = None
     g.next_field_kind = None
@@ -1004,32 +1005,40 @@ def main() -> None:
         placement.draw_placing(_g)
 
     def draw_field_design() -> None:
-        """While designating a field: the rectangle being dragged, every field
-        already designated with its crop symbol, drawn over the world."""
+        """While designating: the rectangle being dragged, every field with
+        its crop symbol and every orchard with a tree symbol, over the world."""
         if not g.field_design:
             return
         for fd in g.field_designations:
             _r = fd["rect"]
+            _is_orchard = fd.get("type") == "orchard"
             _sr = pygame.Rect(int(_r.x - g.cam_x), int(_r.y - g.cam_y), _r.w, _r.h)
             _glow = pygame.Surface((max(1, _sr.w), max(1, _sr.h)), pygame.SRCALPHA)
-            _glow.fill((120, 160, 80, 70))
+            _glow.fill((96, 150, 70, 70) if _is_orchard else (120, 160, 80, 70))
             g.screen.blit(_glow, _sr.topleft)
-            pygame.draw.rect(g.screen, (140, 190, 90), _sr, 2)
-            # THE CROP SYMBOL on the field: bread for wheat, the boll for
-            # cotton -- whatever is being grown there.
+            pygame.draw.rect(g.screen, (120, 180, 88) if _is_orchard else (140, 190, 90), _sr, 2)
             try:
-                _sym = crop.FIELD_SYMBOL.get(fd["kind"])
-                if _sym is not None:
-                    _sz = min(32, max(16, _r.w, _r.h))
-                    _ic = items.icon(_sym, _sz)
-                    _cx = int(_r.centerx - g.cam_x)
-                    _cy = int(_r.centery - g.cam_y)
-                    # a light disc so the symbol reads on any ground
-                    pygame.draw.circle(g.screen, (245, 244, 232),
-                                       (_cx, _cy), int(_sz * 0.62))
-                    pygame.draw.circle(g.screen, (120, 118, 108),
-                                       (_cx, _cy), int(_sz * 0.62), 2)
-                    g.screen.blit(_ic, _ic.get_rect(center=(_cx, _cy)))
+                _cx = int(_r.centerx - g.cam_x)
+                _cy = int(_r.centery - g.cam_y)
+                if _is_orchard:
+                    # A TREE marks an orchard -- no crop choice to cycle.
+                    _sz = min(30, max(16, _r.w, _r.h))
+                    pygame.draw.circle(g.screen, (245, 244, 232), (_cx, _cy), int(_sz * 0.62))
+                    pygame.draw.circle(g.screen, (120, 118, 108), (_cx, _cy), int(_sz * 0.62), 2)
+                    pygame.draw.line(g.screen, (120, 84, 50),
+                                     (_cx, _cy + int(_sz * 0.18)), (_cx, _cy + int(_sz * 0.55)), 3)
+                    pygame.draw.circle(g.screen, (40, 84, 44), (_cx, _cy), int(_sz * 0.42))
+                    pygame.draw.circle(g.screen, (56, 108, 54), (_cx, _cy), int(_sz * 0.42), 2)
+                else:
+                    _sym = crop.FIELD_SYMBOL.get(fd["kind"])
+                    if _sym is not None:
+                        _sz = min(32, max(16, _r.w, _r.h))
+                        _ic = items.icon(_sym, _sz)
+                        pygame.draw.circle(g.screen, (245, 244, 232),
+                                           (_cx, _cy), int(_sz * 0.62))
+                        pygame.draw.circle(g.screen, (120, 118, 108),
+                                           (_cx, _cy), int(_sz * 0.62), 2)
+                        g.screen.blit(_ic, _ic.get_rect(center=(_cx, _cy)))
             except Exception:
                 pass
         if g.field_start[0] is not None:

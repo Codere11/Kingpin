@@ -344,10 +344,11 @@ def run(g):
                     g.choice = g.build_menu.handle_event(event)
                     if g.choice is not None:
                         g.build_menu_open = False
-                        if g.choice == "field":
+                        if g.choice in ("field", "orchard"):
                             # SETTLEMENT MODE: freeze the player, free the camera,
-                            # and let him drag out a field designation.
+                            # and let him drag out a field/orchard designation.
                             g.field_design = True
+                            g.field_mode = g.choice
                             g.field_start[0] = None
                             pygame.mouse.set_visible(True)
                         else:
@@ -428,19 +429,21 @@ def run(g):
                     _raw = g.field_raw[0]
                     _moved = math.hypot(_ex - _raw[0], _ey - _raw[1]) if _raw is not None else 999.0
                     if _moved < 6.0:
-                        # A CLICK on an existing field cycles what it grows.
+                        # A CLICK on an existing FIELD cycles what it grows;
+                        # an orchard has no crop choice.
                         for fd in g.field_designations:
                             if fd["rect"].collidepoint(_ex, _ey):
-                                fd["kind"] = (g.next_field_kind(fd["kind"])
-                                               if g.next_field_kind else "wheat")
-                                g.toast("Field grows: %s" % fd["kind"])
-                                if g.sync_player_camp:
-                                    g.sync_player_camp(g)
+                                if fd.get("type") != "orchard":
+                                    fd["kind"] = (g.next_field_kind(fd["kind"])
+                                                   if g.next_field_kind else "wheat")
+                                    g.toast("Field grows: %s" % fd["kind"])
+                                    if g.sync_player_camp:
+                                        g.sync_player_camp(g)
                                 break
                         g.field_start[0] = None
                         g.field_raw[0] = None
                     else:
-                        # A DRAG designates a new field (bread is the base).
+                        # A DRAG designates a new field (bread base) or orchard.
                         _sx, _sy = g.field_start[0]
                         _tx0, _ty0 = int(_sx // 32), int(_sy // 32)
                         _tx1, _ty1 = int(_ex // 32), int(_ey // 32)
@@ -449,8 +452,12 @@ def run(g):
                                          (abs(_tx0 - _tx1) + 1) * 32,
                                          (abs(_ty0 - _ty1) + 1) * 32)
                         if _r.w > 8 and _r.h > 8:
-                            g.field_designations.append({"rect": _r, "kind": "wheat"})
-                            g.toast("Field designated  (%d x %d)" % (_r.w, _r.h))
+                            if g.field_mode == "orchard":
+                                g.field_designations.append({"rect": _r, "type": "orchard", "kind": "orchard"})
+                                g.toast("Orchard designated  (%d x %d)" % (_r.w, _r.h))
+                            else:
+                                g.field_designations.append({"rect": _r, "type": "field", "kind": "wheat"})
+                                g.toast("Field designated  (%d x %d)" % (_r.w, _r.h))
                             if g.sync_player_camp:
                                 g.sync_player_camp(g)
                         g.field_start[0] = None
@@ -472,16 +479,21 @@ def run(g):
                             f = fd["rect"]
                             _ix = max(f.x, _r.x); _iy = max(f.y, _r.y)
                             _ix2 = min(f.right, _r.right); _iy2 = min(f.bottom, _r.bottom)
+
+                            def _piece(pr):
+                                return {"rect": pr, "type": fd.get("type", "field"),
+                                        "kind": fd.get("kind", "wheat")}
+
                             if _ix < _ix2 and _iy < _iy2:
                                 _n += 1
                                 if _iy > f.y:
-                                    _out.append({"rect": pygame.Rect(f.x, f.y, f.w, _iy - f.y), "kind": fd["kind"]})
+                                    _out.append(_piece(pygame.Rect(f.x, f.y, f.w, _iy - f.y)))
                                 if _iy2 < f.bottom:
-                                    _out.append({"rect": pygame.Rect(f.x, _iy2, f.w, f.bottom - _iy2), "kind": fd["kind"]})
+                                    _out.append(_piece(pygame.Rect(f.x, _iy2, f.w, f.bottom - _iy2)))
                                 if _ix > f.x:
-                                    _out.append({"rect": pygame.Rect(f.x, _iy, _ix - f.x, _iy2 - _iy), "kind": fd["kind"]})
+                                    _out.append(_piece(pygame.Rect(f.x, _iy, _ix - f.x, _iy2 - _iy)))
                                 if _ix2 < f.right:
-                                    _out.append({"rect": pygame.Rect(_ix2, _iy, f.right - _ix2, _iy2 - _iy), "kind": fd["kind"]})
+                                    _out.append(_piece(pygame.Rect(_ix2, _iy, f.right - _ix2, _iy2 - _iy)))
                             else:
                                 _out.append(fd)
                         g.field_designations = _out
@@ -691,9 +703,9 @@ def run(g):
                     g._held = g.inventory.selected_stack()
                     g._held_id = g._held.defn.id if g._held else None
                     # A BUILDABLE IN THE HAND: LEFT CLICK PLACES A 1x1 BLOCK.
+                    import block as _block
                     if g._held_id in _block.BUILDABLE and g.hotbar.slot_at(event.pos) is None:
                         try:
-                            import block as _block
                             _wx = g.cam_x + event.pos[0] / ZOOM
                             _wy = g.cam_y + event.pos[1] / ZOOM
                             _tx = int(_wx // _block.TILE)

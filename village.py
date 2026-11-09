@@ -175,6 +175,7 @@ TRADERS_PER_VILLAGE = 3    # caravans a village keeps on the road
 _FOREST = None             # set once by main, so villages can find their woods
 _TRADE_GRID = None         # allocated once, rebuilt per village per step
 LOG_CHOP_SECONDS = 3.0    # how long a logger takes to drop one tree
+ORCHARD_GROW_SECONDS = 180.0   # a sapling to a full tree, like a wild stump
 BIRTH_BOND = 18.0                    # seconds of evening friendship before a child
 PEACE_DELAY = 30.0                   # no children until this long after a death
 
@@ -642,6 +643,7 @@ class NPC:
         self.reload_timer = 0.0
         self.shoot_skill = self.rng.uniform(0.1, 0.8)
         self.farm_plot = None        # fixed plot this villager tends
+        self.orchard_plot = None     # fixed orchard the logger works
         self.job = None              # "miner" / "smith" / "logger"
         self.workplace = None
         self.produce_acc = 0.0
@@ -1065,6 +1067,10 @@ class NPC:
         if _nat and getattr(self, "native_role", "") == "warrior":
             self._native_step(dt, world, now)
             return
+        if _nat and getattr(self, "native_role", "") == "logger":
+            if world is not None:
+                self._work_orchard(dt, world, now)
+            return
         if _nat and getattr(self, "native_role", "") == "farmer":
             self._native_share()
             if self.farm_plot is None:
@@ -1393,6 +1399,133 @@ class NPC:
         except Exception:
             pass
         return False
+
+    def _grow_orchard(self, camp, now: float) -> None:
+        """Saplings grow toward their full size over ORCHARD_GROW_SECONDS,
+        exactly like a wild stump putting up a new tree. Idempotent and
+        time-based, so every logger's tick may call it."""
+        state = getattr(camp, "orchard_state", None)
+        if not state:
+            return
+        for key, st in list(state.items()):
+            tree = st.get("tree")
+            if tree is None or getattr(tree, "felled", False):
+                continue
+            target = float(st.get("target_r", 72.0))
+            if tree.canopy_r >= target:
+                continue
+            planted_at = float(st.get("planted_at", now))
+            frac = min(1.0, (now - planted_at) / ORCHARD_GROW_SECONDS)
+            r = 24.0 + (target - 24.0) * frac
+            if abs(r - tree.canopy_r) < 0.05:
+                continue
+            tree.canopy_r = r
+            try:
+                import trees as _trees
+                tree.size_class = min(range(len(_trees.SIZES)),
+                                     key=lambda i: abs(_trees.SIZES[i] - r))
+            except Exception:
+                pass
+            trunk_w = max(10, int(r * 0.24))
+            tree.trunk_rect = pygame.Rect(tree.x - trunk_w / 2.0,
+                                          tree.y - trunk_w * 0.6,
+                                          trunk_w, trunk_w * 1.5)
+
+    def _work_orchard(self, dt: float, world, now: float) -> bool:
+        """An orchard logger: plant a sapling on a bare tile, let it grow,
+        cut a full tree down with the axe (the same chop as the player), and
+        replant -- the orchard's own wood ends up in the camp's store."""
+        camp = getattr(self, "native_camp", None)
+        if camp is None:
+            return False
+        g = getattr(camp, "g", None)
+        self._grow_orchard(camp, now)
+        job = getattr(self, "orchard_plot", None)
+        plots = getattr(camp, "orchard_plots", None) or ()
+        if job is None or job >= len(plots):
+            self._native_idle(dt)
+            return True
+        ctx, cty = plots[job]
+        tiles = camp.orchard_tiles.get((ctx, cty), ())
+        state = getattr(camp, "orchard_state", None)
+        if state is None:
+            state = {}
+            camp.orchard_state = state
+        cut_tile = None
+        plant_tile = None
+        for (tx, ty) in tiles:
+            st = state.get((tx, ty))
+            tree = st.get("tree") if st else None
+            if tree is None or getattr(tree, "felled", False):
+                if plant_tile is None:
+                    plant_tile = (tx, ty)
+            elif tree.canopy_r >= float(st.get("target_r", 72.0)):
+                if cut_tile is None:
+                    cut_tile = (tx, ty)
+        if cut_tile is None and plant_tile is None:
+            # nothing to do: every sapling is still growing
+            tx = ctx * TILE + TILE / 2.0
+            ty = cty * TILE + TILE / 2.0
+            if math.hypot(tx - self.x, ty - self.y) > 40.0:
+                self._step_toward(tx, ty, dt, 0.7)
+            return True
+        ttx, tty = cut_tile if cut_tile is not None else plant_tile
+        tx = ttx * TILE + TILE / 2.0
+        ty = tty * TILE + TILE / 2.0
+        if math.hypot(tx - self.x, ty - self.y) > 14.0:
+            self._step_toward(tx, ty, dt)
+            return True
+        if cut_tile is not None:
+            st = state.get((ttx, tty))
+            tree = st.get("tree") if st else None
+            if tree is None:
+                return True
+            self.facing = (0.0, 1.0)
+            self.chop_timer += dt
+            if self.chop_timer >= LOG_CHOP_SECONDS / (1.0 + self.skills.axe):
+                if not self._swing_tool("axe"):
+                    return True
+                self.chop_timer = 0.0
+                # drop the tree out of the world (no stump: he replants a
+                # sapling himself, like a field worker sows the next crop)
+                trees_obj = getattr(g, "trees", None) if g is not None else None
+                planted = getattr(trees_obj, "_planted", None) if trees_obj is not None else None
+                if planted is not None:
+                    try:
+                        planted.remove(tree)
+                    except ValueError:
+                        pass
+                economy.cut_wood(camp, self,
+                                 self.rng.randint(FELL_LOGS_MIN, FELL_LOGS_MAX))
+                state.pop((ttx, tty), None)
+                self._did_work()
+                self.skills.gain_axe()
+            return True
+        # PLANT A SAPLING: a smaller version of the tree, straight into the
+        # ground -- no tilling, no watering.
+        if g is None:
+            return True
+        trees_obj = getattr(g, "trees", None)
+        if trees_obj is None:
+            return True
+        wx = ttx * TILE + TILE / 2.0
+        wy = tty * TILE + TILE / 2.0
+        try:
+            import biomes as _bio
+            _t = float(_bio.temperature(wx, wy, int(getattr(g.world, "seed", 1))))
+            snowy = _t < 0.34
+        except Exception:
+            snowy = False
+        species = "conifer" if snowy else "broadleaf"
+        try:
+            tree = trees_obj.plant(wx, wy, 24.0, variant=self.rng.randrange(8),
+                                   species=species, snowy=snowy)
+        except TypeError:
+            tree = trees_obj.plant(wx, wy, 24.0, species=species, snowy=snowy)
+        state[(ttx, tty)] = {"tree": tree, "target_r": self.rng.uniform(56.0, 90.0),
+                             "planted_at": now}
+        self._did_work()
+        return True
 
     def _work_field(self, dt: float, world, now: float) -> bool:
         """Tend the assigned field one action at a time: harvest a ripe crop,

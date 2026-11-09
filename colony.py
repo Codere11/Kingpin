@@ -1,12 +1,18 @@
-"""THE PLAYER'S OWN SETTLEMENT: conquered people and the fields they work.
+"""THE PLAYER'S OWN SETTLEMENT: conquered people and the ground they work.
 
-`g.field_designations` is a list of dicts, one per designated field::
+`g.field_designations` is a list of dicts, one per designation::
 
-    {"rect": pygame.Rect (grid-aligned, world px), "kind": crop kind}
+    {"rect": Rect, "type": "field",    "kind": crop}    a crop field
+    {"rect": Rect, "type": "orchard"}                    a tree orchard
 
-The player's camp object holds the same fields in the shape the farming
-machinery already knows (`farm_plots` + `farm_tiles`), rebuilt by `sync_camp`
-every time a field is added, deleted, or its crop type is changed.
+The camp object keeps two sets of farming handles:
+
+  * fields   -> `farm_plots` + `farm_tiles`  (worked by farmers)
+  * orchards -> `orchard_plots` + `orchard_tiles` + `orchard_state`
+                (worked by loggers)
+
+`sync_camp` rebuilds all of them from the designations every time a field or
+orchard is added, deleted, resized or has its crop changed.
 """
 import math
 
@@ -24,13 +30,16 @@ def next_kind(kind: str) -> str:
 
 
 def make_camp(g) -> object:
-    """The conquered camp: plain store/ledger + farm handles, no village."""
+    """The conquered camp: plain store/ledger + field/orchard handles."""
     camp = type("PlayerCamp", (), {
         "name": "Settlement",
         "x": float(getattr(g.player, "x", 0.0)),
         "y": float(getattr(g.player, "y", 0.0)),
         "farm_plots": [],          # [(ctx, cty, kind)] one entry per field
         "farm_tiles": {},          # (ctx, cty) -> [(tx, ty, kind)]
+        "orchard_plots": [],       # [(ctx, cty)] one entry per orchard
+        "orchard_tiles": {},       # (ctx, cty) -> [(tx, ty)]
+        "orchard_state": {},       # (tx, ty) -> {"tree": Tree, "target_r": float}
         "ledger_goods": {"bread": 20},
         "ledger_lots": {},
         "ledger_grade": {},
@@ -39,82 +48,146 @@ def make_camp(g) -> object:
         "native": True,
         "conquered": True,
         "g": g,                    # so a worker can clear trees/blocks/plants
-        "workers": [],             # the conquered NPCs who farm these fields
+        "workers": [],             # the conquered FARMERS
+        "loggers": [],             # the conquered LOGGERS
     })()
     return camp
+
+
+def _tiles_of(rect, kind=None):
+    """Every 1x1 tile of a grid-aligned rect, with the centre tile first."""
+    tx0 = int(rect.x // 32)
+    ty0 = int(rect.y // 32)
+    tx1 = int((rect.x + rect.w) // 32)
+    ty1 = int((rect.y + rect.h) // 32)
+    ctx = int((rect.x + rect.w / 2.0) // 32)
+    cty = int((rect.y + rect.h / 2.0) // 32)
+    tiles = [(tx, ty) for ty in range(ty0, ty1) for tx in range(tx0, tx1)]
+    return (ctx, cty), tiles
 
 
 def sync_camp(g) -> None:
     """Rebuild the camp's farming handles from the current designations.
 
-    One field = one plot = one worker (the same rule as the native camps).
+    One field = one farmer; one orchard = one logger. Extra workers idle.
     """
     camp = getattr(g, "player_camp", None)
     if camp is None:
         return
     plots = []
     tiles = {}
+    orchards = []
+    orchard_tiles = {}
     for fd in g.field_designations:
         r = fd["rect"]
-        kind = fd["kind"]
-        ctx = int((r.x + r.w / 2.0) // 32)
-        cty = int((r.y + r.h / 2.0) // 32)
-        tx0 = int(r.x // 32)
-        ty0 = int(r.y // 32)
-        tx1 = int((r.x + r.w) // 32)
-        ty1 = int((r.y + r.h) // 32)
-        tl = []
-        for tx in range(tx0, tx1):
-            for ty in range(ty0, ty1):
-                tl.append((tx, ty, kind))
-        plots.append((ctx, cty, kind))
-        tiles[(ctx, cty)] = tl
+        if fd.get("type") == "orchard":
+            (ctx, cty), tl = _tiles_of(r)
+            orchards.append((ctx, cty))
+            orchard_tiles[(ctx, cty)] = tl
+        else:
+            kind = fd.get("kind", "wheat")
+            (ctx, cty), tl = _tiles_of(r, kind)
+            plots.append((ctx, cty, kind))
+            tiles[(ctx, cty)] = [(tx, ty, kind) for (tx, ty) in tl]
     camp.farm_plots = plots
     camp.farm_tiles = tiles
+    camp.orchard_plots = orchards
+    camp.orchard_tiles = orchard_tiles
+    # prune orchard trees that are no longer inside a designated orchard
+    keep_tiles = {t for tl in orchard_tiles.values() for t in tl}
+    for key in [k for k in camp.orchard_state if k not in keep_tiles]:
+        _drop_tree(camp, key)
+    # ONE WORKER, ONE PLOT
     for i, n in enumerate(camp.workers):
         n.farm_plot = i if i < len(plots) else None
+    for i, n in enumerate(camp.loggers):
+        n.orchard_plot = i if i < len(orchards) else None
 
 
-def spawn_conquered(g, n: int = 3) -> None:
-    """Three conquered farmers beside the player, his own field hands."""
+def _drop_tree(camp, key) -> None:
+    """Remove an orchard tree from the world and the state (no stump)."""
+    st = camp.orchard_state.pop(key, None)
+    tree = st.get("tree") if st else None
+    if tree is None:
+        return
+    g = getattr(camp, "g", None)
+    trees = getattr(g, "trees", None)
+    planted = getattr(trees, "_planted", None) if trees is not None else None
+    if planted is not None:
+        try:
+            planted.remove(tree)
+        except ValueError:
+            pass
+
+
+def spawn_conquered(g, farmers: int = 3, loggers: int = 2) -> None:
+    """Conquered field hands beside the player: farmers for fields, loggers
+    for orchards."""
     import biomes
     import village as village_mod
     camp = getattr(g, "player_camp", None)
     if camp is None:
         return
-    if camp.workers:                     # already here
+    if camp.workers or camp.loggers:       # already here
         return
     px, py = float(g.player.x), float(g.player.y)
     seed = int(getattr(g.world, "seed", 1))
     temp = float(biomes.temperature(px, py, seed))
     hum = float(biomes.humidity(px, py, seed))
     _s = seed ^ 0xC0FFEE
-    for i in range(n):
-        # inland (west) of the player, in a loose line: the coast runs
-        # north-south right beside the spawn, so east would be the sea.
+    # inland (west) of the player, in a loose line: the coast runs north-south
+    # right beside the spawn, so east would be the sea.
+    for i in range(farmers):
         fx = px - 90.0 - i * 45.0
         fy = py + (i - 1) * 55.0
-        npc = village_mod.NPC(fx, fy, _s ^ (i * 2654435761),
-                              name="Conquered %d" % (i + 1),
-                              npc_id="conquered_%d" % i, role="Farmer")
-        npc.native = True
-        npc.native_role = "farmer"
-        npc.conquered = True
-        npc.job = "farmer"
-        npc.native_camp = camp
-        npc.stock["bread"] = 60
-        npc.stock["shovel"] = 1
-        npc.tool_uses = 100
-        npc.speed = npc.rng.uniform(95.0, 115.0)
-        npc.wear = biomes.npc_wear(temp, hum)
-        npc.home = (npc.x, npc.y)
-        camp.workers.append(npc)
-        if npc not in getattr(g, "_observe_npcs", ()):
-            g._observe_npcs.append(npc)
+        n = village_mod.NPC(fx, fy, _s ^ (i * 2654435761),
+                            name="Conquered %d" % (i + 1),
+                            npc_id="conquered_%d" % i, role="Farmer")
+        n.native = True
+        n.native_role = "farmer"
+        n.conquered = True
+        n.job = "farmer"
+        n.native_camp = camp
+        n.stock["bread"] = 60
+        n.stock["shovel"] = 1
+        n.tool_uses = 100
+        n.speed = n.rng.uniform(95.0, 115.0)
+        n.wear = biomes.npc_wear(temp, hum)
+        n.home = (n.x, n.y)
+        camp.workers.append(n)
+        if n not in getattr(g, "_observe_npcs", ()):
+            g._observe_npcs.append(n)
         _np = getattr(g, "_native_people", None)
         if _np is None:
             _np = []
             g._native_people = _np
-        if npc not in _np:
-            _np.append(npc)
+        if n not in _np:
+            _np.append(n)
+    for i in range(loggers):
+        fx = px - 90.0 - (farmers + i) * 45.0
+        fy = py + (i - 1) * 55.0
+        n = village_mod.NPC(fx, fy, _s ^ ((1000 + i) * 2654435761),
+                            name="Logger %d" % (i + 1),
+                            npc_id="conquered_log_%d" % i, role="Logger")
+        n.native = True
+        n.native_role = "logger"
+        n.conquered = True
+        n.job = "logger"
+        n.native_camp = camp
+        n.orchard_plot = None
+        n.stock["bread"] = 60
+        n.stock["axe"] = 1
+        n.tool_uses = 100
+        n.speed = n.rng.uniform(95.0, 115.0)
+        n.wear = biomes.npc_wear(temp, hum)
+        n.home = (n.x, n.y)
+        camp.loggers.append(n)
+        if n not in getattr(g, "_observe_npcs", ()):
+            g._observe_npcs.append(n)
+        _np = getattr(g, "_native_people", None)
+        if _np is None:
+            _np = []
+            g._native_people = _np
+        if n not in _np:
+            _np.append(n)
     sync_camp(g)

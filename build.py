@@ -261,10 +261,24 @@ def field_icon(size: int = 46) -> pygame.Surface:
     return s
 
 
+def orchard_icon(size: int = 46) -> pygame.Surface:
+    """An orchard: a few small tree crowns over grass."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.rect(s, (96, 118, 64), (0, 0, size, size), border_radius=4)
+    pygame.draw.rect(s, (120, 140, 80), (0, 0, size, size), 2, border_radius=4)
+    for (cx, cy, r) in ((0.30, 0.34, 0.16), (0.68, 0.36, 0.14), (0.50, 0.70, 0.18)):
+        pygame.draw.line(s, (110, 80, 50), (int(cx * size), int(cy * size)),
+                         (int(cx * size), int((cy + 0.18) * size)), 3)
+        pygame.draw.circle(s, (40, 84, 44), (int(cx * size), int(cy * size)), int(r * size))
+        pygame.draw.circle(s, (56, 108, 54), (int(cx * size), int(cy * size)), int(r * size), 2)
+    return s
+
+
 # THE SETTLEMENT CATEGORY: things the player designates for the camp, not
-# builds with his own hands. For now, one: a field.
+# builds with his own hands. A field grows crops; an orchard grows trees.
 SETTLEMENT_BUILDINGS = [
     {"id": "field", "name": "Field", "wood": 0, "where": "outside"},
+    {"id": "orchard", "name": "Orchard", "wood": 0, "where": "outside"},
 ]
 
 
@@ -404,6 +418,7 @@ class BuildMenu:
                        "dummy": dummy_icon, "target": target_icon,
                        "fireplace": fireplace_icon,
                        "field": field_icon,
+                       "orchard": orchard_icon,
                        "demolish": fence_icon,
                        "fence": fence_icon, "gate": gate_icon}[building["id"]]
             icon = icon_fn(rect.height - 14)
