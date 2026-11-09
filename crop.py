@@ -40,6 +40,18 @@ LEAF_KINDS = ("plant", "mushroom", "agave")
 FOOD_KINDS = ("wheat", "berries", "cactus")
 FIBRE_KINDS = ("cotton",)      # neither food nor leaf: cotton, spun into cloth
 
+# EVERY CROP A FIELD CAN GROW, in the order a field's type cycles. Bread is
+# the base: a fresh field is wheat, and each click moves on to the next crop.
+FIELD_KINDS = ("wheat", "berries", "cactus", "plant", "mushroom", "agave", "cotton")
+
+# the item whose icon sits on a field of each crop (bread for wheat, the
+# boll for cotton, and so on)
+FIELD_SYMBOL = {
+    "wheat": "bread", "berries": "berries", "cactus": "cactus_fruit",
+    "plant": "tobacco", "mushroom": "red_mushroom", "agave": "agave",
+    "cotton": "cotton",
+}
+
 # what each crop yields
 LEAF_ITEM = {"plant": "tobacco", "mushroom": "red_mushroom", "agave": "agave"}
 FOOD_ITEM = {"wheat": "bread", "berries": "berries", "cactus": "cactus_fruit"}

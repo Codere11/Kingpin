@@ -410,15 +410,52 @@ def run(g):
                     _wy = g.cam_y + g.wmouse_y
                     g.field_start[0] = (int(_wx // 32) * 32,
                                         int(_wy // 32) * 32)
+                    g.field_raw[0] = (_wx, _wy)
                     g.field_del[0] = False
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
-                    # right-drag: DELETE the fields this rectangle touches
+                    # right-drag: CUT the fields this rectangle touches
                     _wx = g.cam_x + g.wmouse_x
                     _wy = g.cam_y + g.wmouse_y
                     g.field_start[0] = (int(_wx // 32) * 32,
                                         int(_wy // 32) * 32)
+                    g.field_raw[0] = (_wx, _wy)
                     g.field_del[0] = True
-                elif event.type == pygame.MOUSEBUTTONUP and event.button in (1, 3):
+                elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    if g.field_start[0] is None:
+                        continue        # a button-up with no matching press
+                    _ex = g.cam_x + g.wmouse_x
+                    _ey = g.cam_y + g.wmouse_y
+                    _raw = g.field_raw[0]
+                    _moved = math.hypot(_ex - _raw[0], _ey - _raw[1]) if _raw is not None else 999.0
+                    if _moved < 6.0:
+                        # A CLICK on an existing field cycles what it grows.
+                        for fd in g.field_designations:
+                            if fd["rect"].collidepoint(_ex, _ey):
+                                fd["kind"] = (g.next_field_kind(fd["kind"])
+                                               if g.next_field_kind else "wheat")
+                                g.toast("Field grows: %s" % fd["kind"])
+                                if g.sync_player_camp:
+                                    g.sync_player_camp(g)
+                                break
+                        g.field_start[0] = None
+                        g.field_raw[0] = None
+                    else:
+                        # A DRAG designates a new field (bread is the base).
+                        _sx, _sy = g.field_start[0]
+                        _tx0, _ty0 = int(_sx // 32), int(_sy // 32)
+                        _tx1, _ty1 = int(_ex // 32), int(_ey // 32)
+                        _r = pygame.Rect(min(_tx0, _tx1) * 32,
+                                         min(_ty0, _ty1) * 32,
+                                         (abs(_tx0 - _tx1) + 1) * 32,
+                                         (abs(_ty0 - _ty1) + 1) * 32)
+                        if _r.w > 8 and _r.h > 8:
+                            g.field_designations.append({"rect": _r, "kind": "wheat"})
+                            g.toast("Field designated  (%d x %d)" % (_r.w, _r.h))
+                            if g.sync_player_camp:
+                                g.sync_player_camp(g)
+                        g.field_start[0] = None
+                        g.field_raw[0] = None
+                elif event.type == pygame.MOUSEBUTTONUP and event.button == 3:
                     if g.field_start[0] is not None:
                         _sx, _sy = g.field_start[0]
                         _ex = g.cam_x + g.wmouse_x
@@ -429,31 +466,31 @@ def run(g):
                                          min(_ty0, _ty1) * 32,
                                          (abs(_tx0 - _tx1) + 1) * 32,
                                          (abs(_ty0 - _ty1) + 1) * 32)
-                        if g.field_del[0]:
-                            # CUT OUT ONLY THE DRAGGED PIECE, not the whole field.
-                            _out, _n = [], 0
-                            for f in g.field_designations:
-                                _ix = max(f.x, _r.x); _iy = max(f.y, _r.y)
-                                _ix2 = min(f.right, _r.right); _iy2 = min(f.bottom, _r.bottom)
-                                if _ix < _ix2 and _iy < _iy2:
-                                    _n += 1
-                                    if _iy > f.y:
-                                        _out.append(pygame.Rect(f.x, f.y, f.w, _iy - f.y))
-                                    if _iy2 < f.bottom:
-                                        _out.append(pygame.Rect(f.x, _iy2, f.w, f.bottom - _iy2))
-                                    if _ix > f.x:
-                                        _out.append(pygame.Rect(f.x, _iy, _ix - f.x, _iy2 - _iy))
-                                    if _ix2 < f.right:
-                                        _out.append(pygame.Rect(_ix2, _iy, f.right - _ix2, _iy2 - _iy))
-                                else:
-                                    _out.append(f)
-                            g.field_designations = _out
-                            if _n:
-                                g.toast("Cleared %d area%s" % (_n, "" if _n == 1 else "s"))
-                        elif _r.w > 8 and _r.h > 8:
-                            g.field_designations.append(_r)
-                            g.toast("Field designated  (%d x %d)" % (_r.w, _r.h))
+                        # CUT OUT ONLY THE DRAGGED PIECE, not the whole field.
+                        _out, _n = [], 0
+                        for fd in g.field_designations:
+                            f = fd["rect"]
+                            _ix = max(f.x, _r.x); _iy = max(f.y, _r.y)
+                            _ix2 = min(f.right, _r.right); _iy2 = min(f.bottom, _r.bottom)
+                            if _ix < _ix2 and _iy < _iy2:
+                                _n += 1
+                                if _iy > f.y:
+                                    _out.append({"rect": pygame.Rect(f.x, f.y, f.w, _iy - f.y), "kind": fd["kind"]})
+                                if _iy2 < f.bottom:
+                                    _out.append({"rect": pygame.Rect(f.x, _iy2, f.w, f.bottom - _iy2), "kind": fd["kind"]})
+                                if _ix > f.x:
+                                    _out.append({"rect": pygame.Rect(f.x, _iy, _ix - f.x, _iy2 - _iy), "kind": fd["kind"]})
+                                if _ix2 < f.right:
+                                    _out.append({"rect": pygame.Rect(_ix2, _iy, f.right - _ix2, _iy2 - _iy), "kind": fd["kind"]})
+                            else:
+                                _out.append(fd)
+                        g.field_designations = _out
+                        if _n:
+                            g.toast("Cleared %d area%s" % (_n, "" if _n == 1 else "s"))
+                            if g.sync_player_camp:
+                                g.sync_player_camp(g)
                         g.field_start[0] = None
+                        g.field_raw[0] = None
                         g.field_del[0] = False
                 # swallow every other key/click while designating
                 continue

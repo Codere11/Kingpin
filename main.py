@@ -753,8 +753,12 @@ def main() -> None:
     # camera pans like a city-management view; drag a rectangle to designate.
     g.field_design = False
     g.field_start = [None]            # one corner of the field being drawn
+    g.field_raw = [None]              # the un-snapped click, to tell click from drag
     g.field_del = [False]             # right-drag: deleting, not adding
-    g.field_designations: list = []   # pygame.Rects, one per field
+    g.field_designations: list = []   # [{"rect": Rect, "kind": crop}], one per field
+    g.player_camp = None              # the conquered settlement (colony.py)
+    g.sync_player_camp = None
+    g.next_field_kind = None
     g.built_houses: list[House] = []
     g.placed_work: list = []          # the four trades, out of doors, on his land
     g.built_plots: list = []          # plots he has drawn on his own ground
@@ -1000,16 +1004,34 @@ def main() -> None:
         placement.draw_placing(_g)
 
     def draw_field_design() -> None:
-        """While designating a field: the rectangle being dragged, and every
-        field already designated, drawn over the world."""
+        """While designating a field: the rectangle being dragged, every field
+        already designated with its crop symbol, drawn over the world."""
         if not g.field_design:
             return
-        for _r in g.field_designations:
+        for fd in g.field_designations:
+            _r = fd["rect"]
             _sr = pygame.Rect(int(_r.x - g.cam_x), int(_r.y - g.cam_y), _r.w, _r.h)
             _glow = pygame.Surface((max(1, _sr.w), max(1, _sr.h)), pygame.SRCALPHA)
             _glow.fill((120, 160, 80, 70))
             g.screen.blit(_glow, _sr.topleft)
             pygame.draw.rect(g.screen, (140, 190, 90), _sr, 2)
+            # THE CROP SYMBOL on the field: bread for wheat, the boll for
+            # cotton -- whatever is being grown there.
+            try:
+                _sym = crop.FIELD_SYMBOL.get(fd["kind"])
+                if _sym is not None:
+                    _sz = min(32, max(16, _r.w, _r.h))
+                    _ic = items.icon(_sym, _sz)
+                    _cx = int(_r.centerx - g.cam_x)
+                    _cy = int(_r.centery - g.cam_y)
+                    # a light disc so the symbol reads on any ground
+                    pygame.draw.circle(g.screen, (245, 244, 232),
+                                       (_cx, _cy), int(_sz * 0.62))
+                    pygame.draw.circle(g.screen, (120, 118, 108),
+                                       (_cx, _cy), int(_sz * 0.62), 2)
+                    g.screen.blit(_ic, _ic.get_rect(center=(_cx, _cy)))
+            except Exception:
+                pass
         if g.field_start[0] is not None:
             _sx, _sy = g.field_start[0]
             _ex = g.cam_x + g.wmouse_x
@@ -1321,6 +1343,18 @@ def main() -> None:
                  % (_home.x, _home.y, len(_made)))
     except Exception as _ne:
         plog.log("NATIVE-ERROR", repr(_ne)[:200])
+
+    # THE PLAYER'S OWN SETTLEMENT: a camp and three conquered farmers beside
+    # him, ready to work whatever fields he designates.
+    try:
+        import colony as _colony
+        g.player_camp = _colony.make_camp(g)
+        g.sync_player_camp = _colony.sync_camp
+        g.next_field_kind = _colony.next_kind
+        _colony.spawn_conquered(g, 3)
+        plog.log("COLONY", "camp + %d conquered" % len(g.player_camp.workers))
+    except Exception as _ce:
+        plog.log("COLONY-ERROR", repr(_ce)[:200])
 
     # ONE COTTON PLANT, RIGHT BESIDE THE SPAWN, full grown so it can be seen
     # and picked the moment he opens his eyes. A WILD plant, like wild tobacco.

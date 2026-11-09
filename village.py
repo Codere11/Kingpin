@@ -619,6 +619,7 @@ class NPC:
         self.restock_timer = 600.0 if self.trade_demand == 0 else 0.0
         self.coins = self.rng.randint(20, 120)             # his own wallet
         self.defender = False
+        self.conquered = False        # 'Unconquered' until the player claims him
         self.weapon = None                                 # "rifle" or "axe"
         # WHO THIS MAN KNOWS TO BE A MURDERER. News in this world is CARRIED,
         # never broadcast: a man who saw a killing tells the village he runs
@@ -1325,7 +1326,7 @@ class NPC:
         for ttx, tty, tkind in village.farm_tiles[(ctx, cty)]:
             plot = world.plot_at(ttx, tty)
             state = plot.kind if plot is not None else None
-            if state in crop.FOOD_KINDS or state in crop.LEAF_KINDS:
+            if state in crop.FOOD_KINDS or state in crop.LEAF_KINDS or state in crop.FIBRE_KINDS:
                 # THE PLANTER'S HAND SETS THE TIME. A master brings a crop in
                 # in a minute; a green man takes three.
                 _grow = getattr(plot, "grow", None) or crop.GROW_SECONDS

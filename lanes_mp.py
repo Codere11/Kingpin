@@ -1611,6 +1611,11 @@ def start(world, villages, hub_world, player) -> Workers:
             i = id(n)
             if i in seen or i in got or not getattr(n, "alive", True):
                 continue
+            # NATIVE CAMP PEOPLE BELONG TO THE FRAME, not to a lane: the frame
+            # walks g._native_people every tick, so a lane copy would be a
+            # second body whose stale farm_plot wanders and fights the real one.
+            if getattr(n, "native", False):
+                continue
             got.add(i)
             settle_men.append(n)
         _W.settle = _W._spawn(
