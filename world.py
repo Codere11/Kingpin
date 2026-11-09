@@ -200,7 +200,7 @@ class GroundRenderer:
     def _worker_loop(self) -> None:
         while not self._stop:
             try:
-                _d2, cx, cy = self._jobs.get(timeout=0.25)
+                _tier, _d2, cx, cy = self._jobs.get(timeout=0.25)
             except queue.Empty:
                 continue
             key = (cx, cy)
@@ -228,14 +228,19 @@ class GroundRenderer:
                     while len(self._cache) > self.max_cached:
                         self._cache.popitem(last=False)
 
-    def request(self, cx: int, cy: int, d2: float = 0.0) -> bool:
-        """Ask the worker to build a chunk (no-op if cached or already queued)."""
+    def request(self, cx: int, cy: int, d2: float = 0.0, tier: int = 0) -> bool:
+        """Ask the worker to build a chunk (no-op if cached or already queued).
+
+        TIER IS THE PRIORITY: 0 = on screen right now, 1 = the near margin the
+        player is walking toward, 2 = background (farmer-tilled tiles nobody is
+        watching). On-screen ground is always built first.
+        """
         key = (cx, cy)
         with self._lock:
             if key in self._cache or key in self._queued:
                 return False
             self._queued.add(key)
-        self._jobs.put((d2, cx, cy))
+        self._jobs.put((tier, d2, cx, cy))
         return True
 
     def get(self, cx: int, cy: int):
@@ -487,12 +492,14 @@ class GroundRenderer:
             self._cache.pop(key, None)
             self._coarse.pop(key, None)
         if not immediate:
-            # the worker thread will rebuild these; the frame keeps its time
+            # the worker thread will rebuild these; the frame keeps its time.
+            # TIER 2: these are the fields the farmers are standing in, and
+            # nobody is watching -- on-screen ground always jumps the queue.
             for key in touched:
                 if key in self._queued:
                     continue
                 self._queued.add(key)
-                self._jobs.put((0, key[0], key[1]))
+                self._jobs.put((2, 0.0, key[0], key[1]))
             sc = getattr(self, "scatter", None)
             if sc is not None:
                 sc.invalidate_tile(tx, ty)
@@ -545,45 +552,40 @@ class GroundRenderer:
 
     def update(self, budget: int, cam_x: float, cam_y: float, vw: int, vh: int,
                margin: int = 3) -> int:
-        """Queue up to ``budget`` missing chunks, nearest the camera first, for
-        the worker to build. The near ring always comes first; only once it is
-        fully *built* does the ring reach further out, so the world slowly fills
-        in ahead of you without starving what is on screen."""
+        """Queue up to ``budget`` missing chunks for the worker, ON SCREEN FIRST.
+
+        Whatever the player is looking at (tier 0) is queued before the near
+        ring he might walk into (tier 1), so a fast pan or march never shows a
+        coarse blur while the worker is busy three chunks ahead of him."""
         ccx = cam_x + vw / 2.0
         ccy = cam_y + vh / 2.0
         with self._lock:
             self._cam = (ccx, ccy)
             if len(self._queued) > 80:         # worker is behind: stop adding
                 return 0
-            def uncached(m):
-                return [c for c in self.visible_chunks(cam_x, cam_y, vw, vh, margin=m)
-                        if c not in self._cache]
-            near = uncached(margin)
-            if not near:
-                # THE RING IS BUILT: STOP THERE. This used to reach further and
-                # further out -- margin 3, then 4, up to TWELVE chunks beyond
-                # what is on screen -- so the worker kept building ground
-                # images three thousand pixels away, for ground the player may
-                # never walk to, on a thread that competes with the frame for
-                # the same interpreter. What has to be instant is what is
-                # looked at, plus the static layer's half-screen margin; this
-                # near ring already covers that several times over.
-                self._margin = margin
-                missing = []
-            else:
-                self._margin = margin
-                missing = near
-            gaps = []
-            for cx, cy in missing:
-                if (cx, cy) in self._queued:
-                    continue
-                dx = cx * CHUNK + CHUNK / 2.0 - ccx
-                dy = cy * CHUNK + CHUNK / 2.0 - ccy
-                gaps.append((dx * dx + dy * dy, cx, cy))
-        gaps.sort()
-        for d2, cx, cy in gaps[:budget]:
-            self.request(cx, cy, d2)
-        return len(gaps)
+
+            def _gap(c):
+                dx = c[0] * CHUNK + CHUNK / 2.0 - ccx
+                dy = c[1] * CHUNK + CHUNK / 2.0 - ccy
+                return dx * dx + dy * dy
+
+            onscreen = [c for c in self.visible_chunks(cam_x, cam_y, vw, vh, margin=0)
+                        if c not in self._cache and c not in self._queued]
+            onscreen.sort(key=_gap)
+            ring = [c for c in self.visible_chunks(cam_x, cam_y, vw, vh, margin=margin)
+                    if c not in self._cache and c not in self._queued]
+            _ons = set(onscreen)
+            ring = [c for c in ring if c not in _ons]
+            ring.sort(key=_gap)
+            self._margin = margin
+        _n = 0
+        for cx, cy in onscreen[:budget]:
+            if self.request(cx, cy, 0.0, 0):
+                _n += 1
+        for cx, cy in ring[:max(0, budget - _n)]:
+            if self.request(cx, cy, 0.0, 1):
+                _n += 1
+        return _n
 
     def draw(self, screen: pygame.Surface, cam_x: float, cam_y: float,
              vw: int, vh: int) -> None:
@@ -593,7 +595,7 @@ class GroundRenderer:
             surf = self.get(cx, cy)
             if surf is None:
                 screen.fill(self._coarse_color(cx, cy), (sx, sy, CHUNK, CHUNK))
-                self.request(cx, cy)
+                self.request(cx, cy, 0.0, 0)     # on screen: top priority
             else:
                 screen.blit(surf, (sx, sy))
 
