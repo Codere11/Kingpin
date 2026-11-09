@@ -32,6 +32,8 @@ BUILDINGS = [
     {"id": "target", "name": "Archery target", "wood": 60, "where": "outside"},
     # A FIREPLACE: twenty wood, and it lights the night around it.
     {"id": "fireplace", "name": "Fireplace", "wood": 20, "where": "outside"},
+    # A CHEST: 1x2 on the mesh, 64 slots -- double the player's 32.
+    {"id": "chest", "name": "Chest", "wood": 50, "where": "outside"},
     # A FORGE IS IRON -- not wood alone.
     {"id": "smith", "name": "Forge", "wood": 0,
      "cost": {"iron": 300}, "where": "outside"},
@@ -274,6 +276,18 @@ def orchard_icon(size: int = 46) -> pygame.Surface:
     return s
 
 
+def chest_icon(size: int = 46) -> pygame.Surface:
+    """A top-down chest, 1x2: a lidded wooden box."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    r = pygame.Rect(int(size * 0.18), int(size * 0.14), int(size * 0.64), int(size * 0.72))
+    pygame.draw.rect(s, (128, 92, 56), r, border_radius=4)
+    pygame.draw.rect(s, (86, 60, 36), r, 3, border_radius=4)
+    pygame.draw.line(s, (74, 50, 30), (r.left + 4, r.centery), (r.right - 4, r.centery), 2)
+    pygame.draw.rect(s, (150, 110, 66), (r.left + 6, r.top + 6, r.w - 12, r.h // 2 - 6), border_radius=3)
+    pygame.draw.circle(s, (60, 42, 26), (r.centerx, r.centery), 3)
+    return s
+
+
 # THE SETTLEMENT CATEGORY: things the player designates for the camp, not
 # builds with his own hands. A field grows crops; an orchard grows trees.
 SETTLEMENT_BUILDINGS = [
@@ -419,6 +433,7 @@ class BuildMenu:
                        "fireplace": fireplace_icon,
                        "field": field_icon,
                        "orchard": orchard_icon,
+                       "chest": chest_icon,
                        "demolish": fence_icon,
                        "fence": fence_icon, "gate": gate_icon}[building["id"]]
             icon = icon_fn(rect.height - 14)

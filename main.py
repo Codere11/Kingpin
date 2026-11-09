@@ -762,6 +762,7 @@ def main() -> None:
     g.next_field_kind = None
     g.built_houses: list[House] = []
     g.placed_work: list = []          # the four trades, out of doors, on his land
+    g.built_chests: list = []          # the 1x2 chests he has built
     g.built_plots: list = []          # plots he has drawn on his own ground
     g.plot_start = [None]             # where the plot drag began
     g.built_fences: list = []
@@ -935,12 +936,14 @@ def main() -> None:
 
     def _own_things():
         return placement.own_things(g.built_plots, g.placed_work, g.built_gates,
-                                    g.built_fences, g.built_houses, g.built_blocks)
+                                    g.built_fences, g.built_houses, g.built_blocks,
+                                    g.built_chests)
 
     def demolish_at(wx: float, wy: float) -> str:
         return placement.demolish_at(wx, wy, g.player, g.built_plots, g.built_gates,
                                      g.built_fences, g.built_houses, g.placed_work,
-                                     mark_dirty, g.inventory, stall_mod, g.built_blocks)
+                                     mark_dirty, g.inventory, stall_mod, g.built_blocks,
+                                     g.built_chests)
 
     def salary_chest():
         return placement.salary_chest(g.built_houses, hubs, g.hub_world)
@@ -1120,6 +1123,13 @@ def main() -> None:
 
     def near_chest() -> bool:
         return houseuse.near_chest(g.player, g.inside_house)
+
+    def near_chest_building():
+        """The nearest 1x2 chest he has built, or None."""
+        for _ch in getattr(g, "built_chests", ()):
+            if math.hypot(g.player.x - _ch.x, g.player.y - _ch.y) < 64.0:
+                return _ch
+        return None
 
     def near_brew() -> bool:
         return houseuse.near_brew(g.player, g.inside_house)
@@ -1702,6 +1712,7 @@ def main() -> None:
     g.near_board = near_board
     g.near_brew = near_brew
     g.near_chest = near_chest
+    g.near_chest_building = near_chest_building
     g.near_fireplace = near_fireplace
     g.near_lab = near_lab
     g.near_stall = near_stall

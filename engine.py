@@ -540,6 +540,13 @@ def run(g):
                     g.stall_open = True
                     g.stall_panel = MarketPanel(g.inventory, g.near_stall())
                     pygame.mouse.set_visible(True)
+                elif g.near_chest_building() is not None:
+                    # A CHEST HE BUILT: double the player's space, filled by
+                    # the camp's workers as they carry their produce over.
+                    _ch = g.near_chest_building()
+                    g.chest_open = True
+                    g.chest_panel = ChestPanel(g.inventory, _ch.inventory)
+                    pygame.mouse.set_visible(True)
                 elif g.near_chest():
                     g.chest_open = True
                     g.chest_panel = ChestPanel(g.inventory, g.inside_house.interior.chest)
@@ -3284,6 +3291,8 @@ def run(g):
             # part of its ground; his are his, and have to be drawn.
             for _wp in (() if g._inside_now else g.placed_work):
                 _wp.draw(g.screen, g.cam_x, g.cam_y)
+            for _ch in (() if g._inside_now else g.built_chests):
+                _ch.draw(g.screen, g.cam_x, g.cam_y)
             # HIS PLOTS ARE ALWAYS MARKED, and while the build menu is open or
             # he is placing something they are LIT -- so he can see the ground
             # he has already staked before he stakes more.

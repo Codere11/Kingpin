@@ -20,6 +20,37 @@ import stall as stall_mod
 from world import TILE
 
 
+class Chest:
+    """A 1x2 chest on the mesh: 64 slots, double the player's 32."""
+
+    def __init__(self, x: float, y: float) -> None:
+        self.x = float(x)
+        self.y = float(y)
+        self.w, self.h = TILE, TILE * 2          # one tile wide, two tall
+        self.rect = pygame.Rect(int(x - self.w / 2), int(y - self.h / 2),
+                                self.w, self.h)
+        self.sight_rect = self.rect.inflate(48, 48)
+        self.base_y = y + self.h / 2.0
+        try:
+            from inventory import Inventory
+            self.inventory = Inventory(capacity=64)
+        except Exception:
+            self.inventory = None
+
+    def draw(self, screen: pygame.Surface, cam_x: float, cam_y: float) -> None:
+        sx = int(round(self.x - cam_x))
+        sy = int(round(self.y - cam_y))
+        r = pygame.Rect(sx - self.w // 2, sy - self.h // 2, self.w, self.h)
+        pygame.draw.rect(screen, (128, 92, 56), r, border_radius=4)
+        pygame.draw.rect(screen, (86, 60, 36), r, 3, border_radius=4)
+        pygame.draw.line(screen, (74, 50, 30), (r.left + 4, r.centery),
+                         (r.right - 4, r.centery), 2)
+        pygame.draw.rect(screen, (150, 110, 66),
+                         (r.left + 6, r.top + 6, r.w - 12, r.h // 2 - 6),
+                         border_radius=3)
+        pygame.draw.circle(screen, (60, 42, 26), (sx, r.centery), 3)
+
+
 def placement_pos(player, inside_house, inside_mine, cam_x, cam_y,
                   wmouse_x, wmouse_y):
     """The room is 1:1 indoors; the world is ZOOM'd outdoors."""
@@ -52,7 +83,7 @@ def can_place(rect, sight, player, inside_house, built_houses,
 
 
 def own_things(built_plots, placed_work, built_gates, built_fences, built_houses,
-               built_blocks=None):
+               built_blocks=None, built_chests=None):
     """Everything of HIS a click could take down, smallest first."""
     out = []
     for _r in built_plots:
@@ -69,16 +100,19 @@ def own_things(built_plots, placed_work, built_gates, built_fences, built_houses
         for (_tx, _ty) in built_blocks:
             _r = pygame.Rect(_tx * TILE, _ty * TILE, TILE, TILE)
             out.append((_r, "plank", (_tx, _ty)))
+    if built_chests:
+        for _ch in built_chests:
+            out.append((_ch.rect, "chest", _ch))
     return out
 
 
 def demolish_at(wx, wy, player, built_plots, built_gates, built_fences,
                 built_houses, placed_work, mark_dirty, inventory, stall_mod,
-                built_blocks=None) -> str:
+                built_blocks=None, built_chests=None) -> str:
     """ONE CLICK TAKES ONE THING OF HIS DOWN -- the smallest under it."""
     hits = [(r.w * r.h, kind, r, obj) for (r, kind, obj) in
             own_things(built_plots, placed_work, built_gates, built_fences,
-                       built_houses, built_blocks)
+                       built_houses, built_blocks, built_chests)
             if r.collidepoint(wx, wy)]
     if not hits:
         return ""
@@ -91,6 +125,18 @@ def demolish_at(wx, wy, player, built_plots, built_gates, built_fences,
         inventory.add(_bk, 1)
         mark_dirty()
         return "Taken down  +1 %s" % _bk
+    if kind == "chest":
+        # a chest keeps its contents: everything comes back to his pack
+        if obj in built_chests:
+            built_chests.remove(obj)
+        _n = 0
+        if getattr(obj, "inventory", None) is not None:
+            for _st in obj.inventory.slots:
+                if _st is not None:
+                    inventory.add(_st.defn.id, _st.count, _st.quality)
+                    _n += _st.count
+        mark_dirty()
+        return ("Chest taken down -- %d items returned" % _n) if _n else "Chest taken down"
     if kind == "plot":
         if rect in built_plots:
             built_plots.remove(rect)
@@ -163,7 +209,7 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
     _sizes = {"lab": (64, 64), "brewery": (64, 64),
               "smith": (64, 64), "mine": (64, 64),
               "stall": (64, 64), "dummy": (64, 64), "target": (64, 64),
-              "fireplace": (64, 64)}
+              "fireplace": (64, 64), "chest": (32, 64)}
     if placing in _sizes:
         _w, _h = _sizes[placing]
         rect = pygame.Rect(int(x - _w / 2), int(y - _h / 2), _w, _h)
@@ -360,6 +406,34 @@ def try_place(g):
         g.placed_work.append(_st)
         g.mark_dirty()
         g.toast("Market stall built   -%d wood" % int(_cost.get("wood", 0)))
+        placing = None
+        pygame.mouse.set_visible(False)
+        return
+    if placing == "chest":
+        if not hubs.land_ok(rect, g.villages.villages, g.hub_world.hubs,
+                           g.player.x, g.player.y):
+            g.toast("Not your land -- the wild, or your own hub")
+            return
+        if not g.can_place(rect, sight):
+            g.toast("No clear ground here")
+            return
+        _cost = g.build_materials("chest")
+        if not g.test_mode:
+            for _it, _q in _cost.items():
+                if g.inventory.count_of(_it) < _q:
+                    g.toast("Need %d %s" % (_q, _it))
+                    placing = None
+                    pygame.mouse.set_visible(False)
+                    return
+            for _it, _q in _cost.items():
+                g.inventory.consume(_it, _q)
+        _ch = Chest(x, y)
+        _ch.owner = g.player
+        if not hasattr(g, "built_chests"):
+            g.built_chests = []
+        g.built_chests.append(_ch)
+        g.mark_dirty()
+        g.toast("Chest built   -%d wood" % int(_cost.get("wood", 0)))
         placing = None
         pygame.mouse.set_visible(False)
         return

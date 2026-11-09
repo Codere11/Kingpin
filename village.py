@@ -644,6 +644,7 @@ class NPC:
         self.shoot_skill = self.rng.uniform(0.1, 0.8)
         self.farm_plot = None        # fixed plot this villager tends
         self.orchard_plot = None     # fixed orchard the logger works
+        self.carry = {}              # surplus he is walking to the chest
         self.job = None              # "miner" / "smith" / "logger"
         self.workplace = None
         self.produce_acc = 0.0
@@ -1035,6 +1036,35 @@ class NPC:
                 self.mood = min(100.0, getattr(self, "mood", 50.0) + 2.0)
                 break
 
+    def _camp_chest(self):
+        """The nearest chest in the player's settlement, or None."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None)
+        chests = getattr(g, "built_chests", None) if g is not None else None
+        if not chests:
+            return None
+        return min(chests, key=lambda c: (c.x - self.x) ** 2 + (c.y - self.y) ** 2)
+
+    def _deposit_to_chest(self, dt: float) -> bool:
+        """Carry the day's surplus to the chest and put it in, physically.
+        Returns True while he is on the way or stowing it."""
+        carry = getattr(self, "carry", None)
+        if not carry:
+            return False
+        chest = self._camp_chest()
+        if chest is None:
+            return False                 # no chest built: keep it in the pack
+        if math.hypot(chest.x - self.x, chest.y - self.y) > 22.0:
+            self._step_toward(chest.x, chest.y, dt)
+            return True
+        inv = getattr(chest, "inventory", None)
+        if inv is not None:
+            for item, n in list(carry.items()):
+                inv.add(item, int(n))
+        carry.clear()
+        self._did_work()
+        return True
+
     def _native_idle(self, dt: float) -> None:
         """An extra farmer with no post: he chills, strolling around the camp."""
         camp = getattr(self, "native_camp", None)
@@ -1068,11 +1098,15 @@ class NPC:
             self._native_step(dt, world, now)
             return
         if _nat and getattr(self, "native_role", "") == "logger":
+            if self._deposit_to_chest(dt):
+                return
             if world is not None:
                 self._work_orchard(dt, world, now)
             return
         if _nat and getattr(self, "native_role", "") == "farmer":
             self._native_share()
+            if self._deposit_to_chest(dt):
+                return
             if self.farm_plot is None:
                 self._native_idle(dt)
                 return

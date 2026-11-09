@@ -597,6 +597,18 @@ def store_add(village, item: str, n: int, grade: int = 3) -> None:
     store_grade(village, item)
 
 
+def store_or_carry(village, npc, item: str, n: int, grade: int = 3) -> None:
+    """A conquered worker's surplus goes into his CARRY BAG, to be walked to
+    the settlement's chest; everyone else's goes straight to the town store."""
+    if n <= 0:
+        return
+    carry = getattr(npc, "carry", None)
+    if carry is not None and getattr(village, "conquered", False):
+        carry[item] = carry.get(item, 0) + int(n)
+    else:
+        store_add(village, item, n, grade)
+
+
 def store_take(village, item: str, n: int) -> int:
     """Take n out, worst grade first: the poor leaf leaves before the good, so
     what is left in the store is as good as it looks."""
@@ -666,7 +678,7 @@ def harvest(village, npc, kind: str, rng) -> None:
         npc.stock[item] = npc.stock.get(item, 0) + keep
     rest = int(count) - keep
     if rest > 0:
-        store_add(village, item, rest, grade)
+        store_or_carry(village, npc, item, rest, grade)
 
 
 def farmer_keep(npc, item: str, count: int) -> int:
@@ -735,7 +747,7 @@ def cut_wood(village, npc, amount: int) -> None:
     if keep > 0:
         npc.stock["wood"] = npc.stock.get("wood", 0) + keep
     if rest > 0:
-        store_add(village, "wood", rest)
+        store_or_carry(village, npc, "wood", rest)
 
 
 # -- what a villager wants, and what he'll pay --------------------------------
