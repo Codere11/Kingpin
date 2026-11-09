@@ -989,16 +989,6 @@ class NPC:
             if self in v.npcs:
                 v.npcs.remove(self)
 
-    def _pick_field(self) -> None:
-        """Choose a field in his camp to walk out to and work."""
-        camp = getattr(self, "native_camp", None)
-        fields = getattr(camp, "fields", ()) if camp is not None else ()
-        if not fields:
-            self.target = (self.x, self.y)
-            return
-        fx, fy, _kind = fields[self.rng.randrange(len(fields))]
-        self.target = (fx * TILE + TILE / 2.0, fy * TILE + TILE / 2.0)
-
     def _walk_toward(self, tx: float, ty: float, speed: float, dt: float) -> None:
         dx, dy = tx - self.x, ty - self.y
         d = math.hypot(dx, dy) or 1.0
@@ -1009,59 +999,19 @@ class NPC:
             self.facing = (dx / d, dy / d)
 
     def _native_step(self, dt: float, world=None, now=None) -> None:
-        """A native camp man's own step: farmers farm, warriors patrol, and
-        the hungry are fed from the camp's store."""
+        """A native warrior's step: patrol a ring around the fire, and the
+        hungry are fed from the camp's store. Farmers do not use this -- they
+        run the game's own _work_field on their assigned plot."""
         camp = getattr(self, "native_camp", None)
         if camp is None:
             return
         self._native_share()
         speed = getattr(self, "speed", 60.0)
-        if getattr(self, "native_role", "") == "warrior":
-            ang = getattr(self, "_orbit", 0.0) + 0.30 * dt
-            self._orbit = ang
-            r = 4.0 * TILE
-            self._walk_toward(camp.x + math.cos(ang) * r,
-                              camp.y + math.sin(ang) * r, speed, dt)
-        else:
-            if getattr(self, "_native_work", 0.0) > 0.0:
-                self._native_work -= dt
-                self.work_flash = max(self.work_flash, 0.3)
-                if self._native_work <= 0.0:
-                    self._native_work = 0.0
-                    self._do_farm_action(world, now)
-                    self._pick_field()
-            else:
-                tx, ty = self.target
-                if math.hypot(tx - self.x, ty - self.y) < 18.0:
-                    self._native_work = self.rng.uniform(1.5, 4.0)
-                    self.work_flash = 1.0
-                else:
-                    self._walk_toward(tx, ty, speed, dt)
-
-    def _do_farm_action(self, world, now) -> None:
-        """Till, sow, or reap the field tile he is standing on."""
-        camp = getattr(self, "native_camp", None)
-        if world is None or camp is None:
-            return
-        tx = int(math.floor(self.target[0] / TILE))
-        ty = int(math.floor(self.target[1] / TILE))
-        food_kind = getattr(camp, "food_kind", "wheat")
-        food_item = crop.FOOD_ITEM.get(food_kind, "bread")
-        plot = world.plot_at(tx, ty)
-        kind = getattr(plot, "kind", None)
-        if kind is None or kind == "grass":
-            world.set_plot(tx, ty, "fertile", None)               # till
-        elif kind == "fertile":
-            world.set_plot(tx, ty, food_kind, now or 0.0)         # sow
-        elif kind in crop.FOOD_KINDS and plot is not None:
-            planted = plot.planted_at or 0.0
-            if (now or 0.0) - planted >= crop.GROW_SECONDS:
-                n = self.rng.randint(2, 5)
-                self.stock[food_item] = self.stock.get(food_item, 0) + n
-                store = getattr(camp, "food_store", None)
-                if isinstance(store, dict):
-                    store[food_item] = store.get(food_item, 0) + n
-                world.set_plot(tx, ty, "fertile", None)           # reap
+        ang = getattr(self, "_orbit", 0.0) + 0.30 * dt
+        self._orbit = ang
+        r = 4.0 * TILE
+        self._walk_toward(camp.x + math.cos(ang) * r,
+                          camp.y + math.sin(ang) * r, speed, dt)
 
     def _native_share(self) -> None:
         """The hungry are fed from the camp's store; the fed share what they
@@ -1069,7 +1019,7 @@ class NPC:
         camp = getattr(self, "native_camp", None)
         if camp is None:
             return
-        store = getattr(camp, "food_store", None)
+        store = getattr(camp, "ledger_goods", None)
         if not isinstance(store, dict) or not store:
             return
         if getattr(self, "hunger", 0.0) > 55.0:
@@ -1092,8 +1042,17 @@ class NPC:
         # NATIVE CAMP PEOPLE: farmers walk out to their fields and work them;
         # warriors patrol a ring around the fire. They live in the register and
         # are driven by their camp, not by a town schedule.
-        if getattr(self, "native", False) and getattr(self, "native_camp", None) is not None:
+        # NATIVE CAMP PEOPLE. Farmers run the game's own field work (till,
+        # water, sow, reap) on the camp's food plots; warriors patrol the fire.
+        _nat = getattr(self, "native", False)
+        if _nat and getattr(self, "native_role", "") == "warrior":
             self._native_step(dt, world, now)
+            return
+        if _nat and getattr(self, "native_role", "") == "farmer":
+            self._native_share()
+            if world is not None and self.farm_plot is not None:
+                if self._work_field(dt, world, now):
+                    return
             return
         # THE BODY GROWS WITH THE SKILL, checked once a second and not once a
         # frame: a thousand men a tick is not where a float compare belongs.
@@ -1339,11 +1298,12 @@ class NPC:
         plant fertile soil, water dug soil, or break fresh ground with a
         shovel. Returns True while it is busy with the field."""
         job: Any = self.farm_plot
-        if job is None or self.village is None or job >= len(self.village.farm_plots):
+        village = self.village if self.village is not None else getattr(self, "native_camp", None)
+        if job is None or village is None or job >= len(village.farm_plots):
             return False
-        ctx, cty, kind = self.village.farm_plots[job]
+        ctx, cty, kind = village.farm_plots[job]
         todo: dict = {}
-        for ttx, tty, tkind in self.village.farm_tiles[(ctx, cty)]:
+        for ttx, tty, tkind in village.farm_tiles[(ctx, cty)]:
             plot = world.plot_at(ttx, tty)
             state = plot.kind if plot is not None else None
             if state in crop.FOOD_KINDS or state in crop.LEAF_KINDS:
@@ -1401,10 +1361,10 @@ class NPC:
         if action == "harvest":
             plot = world.plot_at(ttx, tty)
             if plot is not None:
-                if getattr(self.village, "is_hub", False):
+                if getattr(village, "is_hub", False):
                     _note("FIELD   %s harvests %s at %d,%d"
                           % (getattr(self, "name", "?"), plot.kind, ttx, tty))
-                economy.harvest(self.village, self, plot.kind, self.rng)
+                economy.harvest(village, self, plot.kind, self.rng)
                 self.skills.gain_farming(0.02)  # reaping hones the hand, slowly
             world.set_plot(ttx, tty, "grass", None)     # the soil is spent
         elif action == "till":

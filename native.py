@@ -233,10 +233,13 @@ def build(g, cx: float, cy: float, seed: int):
 
     # -- the fields, already growing ----------------------------------------
     field_centres_tiles = []
+    food_plots = []
+    farm_tiles = {}
     for (wx, wy, kind) in field_centers:
         ctx = int(math.floor(wx / TILE))
         cty = int(math.floor(wy / TILE))
         span = 2 if kind == food_kind else 1
+        tiles = []
         for dx in range(-span, span + 1):
             for dy in range(-span, span + 1):
                 # never plant into the sea; the coast can wander in at a corner
@@ -247,7 +250,11 @@ def build(g, cx: float, cy: float, seed: int):
                     pass
                 age = crop.GROW_SECONDS * rng.uniform(0.50, 1.05)
                 world.set_plot(ctx + dx, cty + dy, kind, now - age)
+                tiles.append((ctx + dx, cty + dy, kind))
         field_centres_tiles.append((ctx, cty, kind))
+        if kind == food_kind:
+            food_plots.append((ctx, cty, kind))
+            farm_tiles[(ctx, cty)] = tiles
 
     # (The ground is rebuilt ONCE after every camp is placed -- see the caller
     # -- not per camp, which would clear and regenerate the world's chunks for
@@ -274,6 +281,8 @@ def build(g, cx: float, cy: float, seed: int):
         n.native = True
         n.native_role = "farmer"
         n.stock[food_item] = 60
+        n.stock["shovel"] = 1
+        n.tool_uses = 100
         n.home = (n.x, n.y)
         n.speed = rng.uniform(55.0, 80.0)
         n.wear = biomes.npc_wear(temp, hum)
@@ -308,15 +317,35 @@ def build(g, cx: float, cy: float, seed: int):
         "fields": field_centres_tiles,
         "food_kind": food_kind, "leaf_kind": leaf_kind,
         "clearance": clearance,
-        "food_store": {food_item: 20},
+        # a native camp looks like a village to the farmer's own _work_field:
+        # food plots and their tiles, and a plain store/ledger to hold the crop
+        "farm_plots": food_plots,
+        "farm_tiles": farm_tiles,
+        "ledger_goods": {food_item: 20},
+        "ledger_lots": {},
+        "ledger_grade": {},
+        "_day": 0,
+        "is_hub": False,
+        "field_claims": {},
         "native": True,
     })()
     # They stay in the people register, so they are lived: they walk, work,
-    # eat, and can fight. Tie each to his camp and give the farmers a field.
+    # eat, and can fight. Each farmer has his own food plot to tend -- the
+    # game's own _work_field decides what to do on it.
     for _n in farmers + warriors:
         _n.native_camp = settlement
-        if _n.native_role == "farmer":
-            _n._pick_field()
+    for _i, _n in enumerate(farmers):
+        _n.farm_plot = _i % max(1, len(food_plots))
+    # The frame owns these people and walks them itself, whatever the worker
+    # lanes are doing: they are not villagers of any town, so no lane claims
+    # them.
+    _np = getattr(g, "_native_people", None)
+    if _np is None:
+        _np = []
+        g._native_people = _np
+    for _n in farmers + warriors:
+        if _n not in _np:
+            _np.append(_n)
     return settlement
 
 

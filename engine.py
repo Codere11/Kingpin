@@ -2074,7 +2074,16 @@ def run(g):
                 g._pt2 = time.perf_counter()
                 g._PH["m"] += g._pt2 - g._pt1
                 g._phase = g.day_phase()
-                for _n in (g._LANE_PEOPLE if not g._W_ON else ()):
+                # The frame walks the lane people when the workers are off, and
+                # ALWAYS walks the native camp people -- they belong to no town
+                # and no worker lane, so they would otherwise stand still.
+                _frame = list(g._LANE_PEOPLE) if not g._W_ON else []
+                _seen = set(map(id, _frame))
+                for _n in getattr(g, "_native_people", ()):
+                    if id(_n) not in _seen:
+                        _frame.append(_n)
+                        _seen.add(id(_n))
+                for _n in _frame:
                     if not _n.alive:
                         g._dead_here = True
                         continue
