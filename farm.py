@@ -80,7 +80,8 @@ def plant(world, ground, inventory, tx: int, ty: int, now: float, toast,
 
 def kind_name(kind: str) -> str:
     """The item a crop grows into (used for messages)."""
-    return crop.LEAF_ITEM.get(kind) or crop.FOOD_ITEM.get(kind) or "crop"
+    return (crop.LEAF_ITEM.get(kind) or crop.FOOD_ITEM.get(kind)
+            or ("cotton" if kind in crop.FIBRE_KINDS else "crop"))
 
 
 def harvest(world, inventory, plot, now: float, toast, quality: int = 0,

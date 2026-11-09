@@ -726,6 +726,14 @@ def on_click(g):
             if (tx, ty) in g.village_plots and not g.tile_is_mine(tx, ty):
                 g.commit_crime()
         return
+    if plot is not None and plot.kind in crop.FIBRE_KINDS:
+        if farm.harvest(g.world, g.inventory, plot, g.now, g.toast,
+                        tx=tx, ty=ty, skill=g.skills.farming,
+                        share=g.pay_share):
+            g.skills.gain_farming(0.02)
+            if (tx, ty) in g.village_plots and not g.tile_is_mine(tx, ty):
+                g.commit_crime()
+        return
 
     wild = wildcrop.at(g.world, tx, ty, g.visible_villages)
     if wild is not None:

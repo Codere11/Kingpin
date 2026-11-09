@@ -104,6 +104,7 @@ class World:
         self.ground = None                                # set by main once built
         self.wild_removed: set[tuple[int, int]] = set()   # picked wild plants (legacy)
         self.wild_eaten: dict[tuple[int, int], float] = {}  # tile -> time it grows back
+        self.wild_forced: dict[tuple[int, int], tuple] = {}  # hand-placed wild plants
         self._kind_cache: dict[tuple[int, int], str] = {}    # terrain, once
         self.wild_cells: dict = {}                        # wild-plant cache
         self._lock = threading.Lock()                     # guards plots/overrides

@@ -124,6 +124,9 @@ def _plant(world, tx: int, ty: int):
 
 def at(world, tx: int, ty: int, villages=None):
     """(kind, stage) for a wild plant on this tile right now, or None."""
+    _forced = getattr(world, "wild_forced", {})
+    if (tx, ty) in _forced and not taken(world, tx, ty):
+        return _forced[(tx, ty)]
     if taken(world, tx, ty):
         return None
     got = _plant(world, tx, ty)
@@ -173,6 +176,14 @@ def visible(world, villages, cam_x: float, cam_y: float,
     x1 = int((cam_x + vw + pad) // TILE)
     y1 = int((cam_y + vh + pad) // TILE)
     out = []
+    # HAND-PLACED wild plants first (the cotton beside the spawn).
+    _forced = getattr(world, "wild_forced", {})
+    for (tx, ty), (kind, stage) in list(_forced.items()):
+        if not (x0 <= tx <= x1 and y0 <= ty <= y1):
+            continue
+        if taken(world, tx, ty):
+            continue
+        out.append((tx * TILE + TILE / 2.0, ty * TILE + TILE / 2.0, kind, stage))
     for cy in range(y0 // CELL, y1 // CELL + 1):
         for cx in range(x0 // CELL, x1 // CELL + 1):
             for tx, ty, kind, stage in _cell(world, cx, cy):
@@ -192,7 +203,17 @@ def visible(world, villages, cam_x: float, cam_y: float,
 def harvest(world, tx: int, ty: int, kind: str, stage: int,
             inventory, toast, share=None) -> None:
     """``share`` is called with (item, amount) for the crop -- see main.pay_share."""
-    if kind in crop.FOOD_KINDS:
+    if kind in crop.FIBRE_KINDS:
+        # COTTON: 5-10 cotton and 1-3 seeds. No quality system.
+        item = "cotton"
+        amount = random.randint(5, 10)
+        seeds = random.randint(1, 3)
+        inventory.add(item, amount)
+        if share is not None:
+            share(item, amount)
+        inventory.add("cotton_seed", seeds)
+        toast("Gathered %d cotton and %d cotton seeds" % (amount, seeds))
+    elif kind in crop.FOOD_KINDS:
         item = crop.FOOD_ITEM[kind]
         if kind == "wheat":
             amount = random.randint(1, 3)
@@ -228,7 +249,12 @@ def harvest(world, tx: int, ty: int, kind: str, stage: int,
                      items.get(seed).name.lower()))
         else:
             toast("Gathered %d wild %s" % (amount, items.get(item).name.lower()))
-    world.wild_eaten[(tx, ty)] = _NOW + REGEN      # back in one crop cycle
+    # a hand-placed plant is gone once picked; a seeded one regrows
+    _forced = getattr(world, "wild_forced", {})
+    if (tx, ty) in _forced:
+        _forced.pop((tx, ty), None)
+    else:
+        world.wild_eaten[(tx, ty)] = _NOW + REGEN      # back in one crop cycle
 
 
 def _nearest(world, x: float, y: float, radius: float):

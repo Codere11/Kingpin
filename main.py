@@ -1288,17 +1288,11 @@ def main() -> None:
         plog.log("NATIVE-ERROR", repr(_ne)[:200])
 
     # ONE COTTON PLANT, RIGHT BESIDE THE SPAWN, full grown so it can be seen
-    # and felt the moment he opens his eyes. A few steps inland, on grass.
+    # and picked the moment he opens his eyes. A WILD plant, like wild tobacco.
     try:
-        import crop as _crop
         _ctx = int((g.player.x - 4 * 32.0) // TILE)
         _cty = int(g.player.y // TILE)
-        g.world.set_plot(_ctx, _cty, "cotton",
-                         g.now - _crop.GROW_SECONDS)
-        try:
-            g.ground.invalidate_tile(_ctx, _cty)
-        except Exception:
-            pass
+        g.world.wild_forced[(_ctx, _cty)] = ("cotton", 3)
     except Exception as _e:
         plog.log("COTTON-SPAWN", repr(_e)[:120])
 
