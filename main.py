@@ -252,6 +252,7 @@ def main() -> None:
     g.SPACING = SPACING
     g.FREEZE_RADIUS = FREEZE_RADIUS
     g.SIM_RADIUS = SIM_RADIUS
+    g.zoom = ZOOM
     g.trees = Trees(g.world.seed)
     g.world.trees = g.trees            # so loggers can find the woods to cut
     set_forest(g.trees)              # villages stake out a woodlot as they build

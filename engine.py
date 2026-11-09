@@ -62,7 +62,7 @@ def run(g):
         g.dt = min(g.dt * g.time_scale, 0.5)          # test-mode speed-up
         g.vw, g.vh = g.screen.get_size()
         g.mouse_x, g.mouse_y = pygame.mouse.get_pos()          # window space
-        g.wmouse_x, g.wmouse_y = g.mouse_x / ZOOM, g.mouse_y / ZOOM  # world space
+        g.wmouse_x, g.wmouse_y = g.mouse_x / g.zoom, g.mouse_y / g.zoom  # world space
 
         # MOOD FROM MONEY: once a day, spread over the next minutes.
         try:
@@ -378,7 +378,32 @@ def run(g):
                                                                   pygame.K_b):
                     g.field_design = False
                     g.field_start[0] = None
+                    g.zoom = ZOOM          # back to the normal world zoom
                     pygame.mouse.set_visible(False)
+                elif event.type == pygame.MOUSEWHEEL:
+                    _old = g.zoom
+                    g.zoom = min(8.0, max(0.8, g.zoom * (1.25 if event.y > 0 else 1 / 1.25)))
+                    _wx = g.cam_x + g.mouse_x / _old
+                    _wy = g.cam_y + g.mouse_y / _old
+                    g.cam_x = _wx - g.mouse_x / g.zoom
+                    g.cam_y = _wy - g.mouse_y / g.zoom
+                elif event.type == pygame.KEYDOWN and event.key in (pygame.K_EQUALS,
+                                                                    pygame.K_PLUS,
+                                                                    pygame.K_KP_PLUS):
+                    _old = g.zoom
+                    g.zoom = min(8.0, g.zoom * 1.25)
+                    _wx = g.cam_x + g.mouse_x / _old
+                    _wy = g.cam_y + g.mouse_y / _old
+                    g.cam_x = _wx - g.mouse_x / g.zoom
+                    g.cam_y = _wy - g.mouse_y / g.zoom
+                elif event.type == pygame.KEYDOWN and event.key in (pygame.K_MINUS,
+                                                                    pygame.K_KP_MINUS):
+                    _old = g.zoom
+                    g.zoom = max(0.8, g.zoom / 1.25)
+                    _wx = g.cam_x + g.mouse_x / _old
+                    _wy = g.cam_y + g.mouse_y / _old
+                    g.cam_x = _wx - g.mouse_x / g.zoom
+                    g.cam_y = _wy - g.mouse_y / g.zoom
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     # snap the first corner to the 1x1 mesh
                     _wx = g.cam_x + g.wmouse_x
@@ -3120,7 +3145,7 @@ def run(g):
         if g.inside_mine is not None:
             g.vw, g.vh = g.scr_w, g.scr_h
         else:
-            g.vw, g.vh = (max(2, int(g.scr_w / ZOOM)), max(2, int(g.scr_h / ZOOM)))
+            g.vw, g.vh = (max(2, int(g.scr_w / g.zoom)), max(2, int(g.scr_h / g.zoom)))
             if g.view_surf is None or g.view_surf.get_size() != (g.vw, g.vh):
                 g.view_surf = pygame.Surface((g.vw, g.vh))
             g.screen = g.view_surf
@@ -3143,7 +3168,7 @@ def run(g):
                 - (1 if (_ks[pygame.K_a] or _ks[pygame.K_LEFT]) else 0)
             _dy = (1 if (_ks[pygame.K_s] or _ks[pygame.K_DOWN]) else 0) \
                 - (1 if (_ks[pygame.K_w] or _ks[pygame.K_UP]) else 0)
-            _sp = 900.0 * g.dt
+            _sp = 900.0 * g.dt * (ZOOM / g.zoom)
             g.cam_x += _dx * _sp
             g.cam_y += _dy * _sp
         elif g._look is not None and getattr(g._look, "alive", False):
