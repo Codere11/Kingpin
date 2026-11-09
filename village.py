@@ -992,6 +992,20 @@ class NPC:
             v.free_post(self)
             if self in v.npcs:
                 v.npcs.remove(self)
+        # A NATIVE WARRIOR DOWN: if he was the last, the camp is conquered and
+        # its farmers join the player's workforce.
+        if getattr(self, "native_role", "") == "warrior":
+            camp = getattr(self, "native_camp", None)
+            if camp is not None and not getattr(camp, "conquered", False):
+                warriors = getattr(camp, "warriors", None) or ()
+                if warriors and all(not getattr(w, "alive", True) for w in warriors):
+                    try:
+                        g = getattr(camp, "g", None)
+                        if g is not None:
+                            import colony as _colony
+                            _colony.conquer_camp(g, camp)
+                    except Exception:
+                        pass
 
     def _walk_toward(self, tx: float, ty: float, speed: float, dt: float) -> None:
         dx, dy = tx - self.x, ty - self.y
@@ -1004,12 +1018,23 @@ class NPC:
 
     def _native_step(self, dt: float, world=None, now=None) -> None:
         """A native warrior's step: patrol a ring around the fire, and the
-        hungry are fed from the camp's store. Farmers do not use this -- they
-        run the game's own _work_field on their assigned plot."""
+        hungry are fed from the camp's store. If the player walks into the
+        camp's reach the warrior fights him -- until the camp is conquered."""
         camp = getattr(self, "native_camp", None)
         if camp is None:
             return
         self._native_share()
+        # HOSTILE TO AN INTRUDER: an unconquered camp defends itself.
+        if not getattr(camp, "conquered", False):
+            g = getattr(camp, "g", None)
+            if g is not None:
+                player = getattr(g, "player", None)
+                if (player is not None and getattr(player, "alive", True)
+                        and not getattr(player, "dead", False)):
+                    d = math.hypot(player.x - self.x, player.y - self.y)
+                    if d < 260.0:
+                        self._fight(dt, player, getattr(g, "combat", None))
+                        return
         speed = getattr(self, "speed", 60.0)
         ang = getattr(self, "_orbit", 0.0) + 0.30 * dt
         self._orbit = ang

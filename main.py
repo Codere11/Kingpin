@@ -1370,8 +1370,10 @@ def main() -> None:
         g.player_camp = _colony.make_camp(g)
         g.sync_player_camp = _colony.sync_camp
         g.next_field_kind = _colony.next_kind
-        _colony.spawn_conquered(g, 3)
-        plog.log("COLONY", "camp + %d conquered" % len(g.player_camp.workers))
+        g.conquer_camp = _colony.conquer_camp
+        # NO PEOPLE ARE HANDED TO THE PLAYER AT SPAWN. A conquered workforce
+        # is WON: clear a native settlement's warriors and its farmers are his.
+        plog.log("COLONY", "camp ready, empty")
     except Exception as _ce:
         plog.log("COLONY-ERROR", repr(_ce)[:200])
 

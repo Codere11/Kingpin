@@ -104,6 +104,47 @@ def sync_camp(g) -> None:
         n.orchard_plot = i if i < len(orchards) else None
 
 
+def conquer_camp(g, native_camp) -> None:
+    """All of a native camp's warriors are dead: the camp is the player's now.
+    Its farmers join his workforce -- most as farmers, a couple as loggers for
+    the orchards -- and stop being hostile (the warriors are all gone)."""
+    if getattr(native_camp, "conquered", False):
+        return
+    native_camp.conquered = True
+    pc = getattr(g, "player_camp", None)
+    if pc is None:
+        return
+    farmers = [n for n in (getattr(native_camp, "farmers", ()) or ())
+               if getattr(n, "alive", True)]
+    n_log = min(2, max(0, len(farmers) // 3))
+    for i, n in enumerate(farmers):
+        n.conquered = True
+        n.native_camp = pc
+        n._log_tree = None
+        n.orchard_plot = None
+        n.farm_plot = None
+        n.stock["wheat_seed"] = n.stock.get("wheat_seed", 0) + 3
+        if i < n_log:
+            n.native_role = "logger"
+            n.job = "logger"
+            n.stock["axe"] = n.stock.get("axe", 0) + 1
+            if n not in pc.loggers:
+                pc.loggers.append(n)
+        else:
+            n.native_role = "farmer"
+            n.job = "farmer"
+            if n not in pc.workers:
+                pc.workers.append(n)
+    try:
+        sync_camp(g)
+    except Exception:
+        pass
+    try:
+        g.toast("The settlement is yours.")
+    except Exception:
+        pass
+
+
 def _drop_tree(camp, key) -> None:
     """Remove an orchard tree from the world and the state (no stump)."""
     st = camp.orchard_state.pop(key, None)
