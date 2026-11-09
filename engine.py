@@ -2583,8 +2583,10 @@ def run(g):
                 if g._wt is not None and getattr(g._wt, "alive", False):
                     g.ground.refresh_around(g._wt.x, g._wt.y, WIDTH, HEIGHT)
 
-            g.cam_x += (g._fx - g.vw / 2 - g.cam_x) * min(1.0, g.dt * 9.0)
-            g.cam_y += (g._fy - g.vh / 2 - g.cam_y) * min(1.0, g.dt * 9.0)
+            # SETTLEMENT VIEW: the camera is the player's pan, not a follower.
+            if not g.field_design:
+                g.cam_x += (g._fx - g.vw / 2 - g.cam_x) * min(1.0, g.dt * 9.0)
+                g.cam_y += (g._fy - g.vh / 2 - g.cam_y) * min(1.0, g.dt * 9.0)
 
             g.ground.update(6, g.cam_x, g.cam_y, g.vw, g.vh)   # worker builds ahead of us
             g.trees.update(g.now)                        # stumps grow back
