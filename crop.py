@@ -38,6 +38,7 @@ PHASE_SECONDS = GROW_SECONDS / 4.0        # 3 growth phases, then ripe
 
 LEAF_KINDS = ("plant", "mushroom", "agave")
 FOOD_KINDS = ("wheat", "berries", "cactus")
+FIBRE_KINDS = ("cotton",)      # neither food nor leaf: cotton, spun into cloth
 
 # what each crop yields
 LEAF_ITEM = {"plant": "tobacco", "mushroom": "red_mushroom", "agave": "agave"}
@@ -48,6 +49,7 @@ SEED_CROP = {
     "wheat_seed": "wheat", "seed_bag": "plant",
     "berry_seed": "berries", "mushroom_spore": "mushroom",
     "cactus_seed": "cactus", "agave_seed": "agave",
+    "cotton_seed": "cotton",
 }
 CROP_SEED = {crop: seed for seed, crop in SEED_CROP.items()}
 
@@ -93,7 +95,8 @@ def visible_plants(world: World, cam_x: float, cam_y: float,
             plot = get((tx, ty))
             if plot is None or plot.planted_at is None:
                 continue
-            if plot.kind not in LEAF_KINDS and plot.kind not in FOOD_KINDS:
+            if plot.kind not in LEAF_KINDS and plot.kind not in FOOD_KINDS \
+                    and plot.kind not in FIBRE_KINDS:
                 continue
             x = tx * TILE + TILE / 2.0
             y = ty * TILE + TILE / 2.0
@@ -270,6 +273,24 @@ def draw_cactus(screen, x, y, elapsed, cam_x, cam_y, biome=None):
         pygame.draw.circle(screen, (248, 176, 180), (fx - 1, fy - 1), 1)
 
 
+def draw_cotton(screen, x, y, elapsed, cam_x, cam_y, biome=None):
+    """The berry bush, but with white cotton bolls instead of red berries."""
+    sx = x - cam_x
+    sy = y - cam_y
+    p = min(1.0, max(0.0, elapsed / GROW_SECONDS))
+    st = stage(elapsed)
+    pygame.draw.ellipse(screen, (38, 58, 30), (sx - 10, sy - 3, 20, 7))
+    bush = 0.55 + 0.45 * p
+    for dx, dy, r, col in ((-6, -1, 8, (74, 126, 62)), (6, 0, 8, (60, 110, 54)),
+                           (0, -6, 9, (78, 132, 66)), (0, 3, 7, (56, 102, 50))):
+        pygame.draw.circle(screen, col, (int(sx + dx), int(sy + dy)),
+                           max(2, int(r * bush)))
+    if st >= 3:
+        for dx, dy in ((-6, -3), (5, -1), (0, 4), (-2, -9), (7, -8)):
+            pygame.draw.circle(screen, (248, 250, 252), (int(sx + dx), int(sy + dy)), 4)
+            pygame.draw.circle(screen, (200, 208, 218), (int(sx + dx), int(sy + dy)), 4, 1)
+
+
 _DRAWERS = {
     "plant": draw_plant,
     "mushroom": draw_mushroom,
@@ -277,4 +298,5 @@ _DRAWERS = {
     "wheat": draw_wheat,
     "berries": draw_berries,
     "cactus": draw_cactus,
+    "cotton": draw_cotton,
 }

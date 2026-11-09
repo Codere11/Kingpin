@@ -34,7 +34,8 @@ def water(world, ground, tx: int, ty: int, toast) -> bool:
     if plot.kind == "fertile":
         toast("Already watered")
         return False
-    if plot.kind in crop.LEAF_KINDS or plot.kind in crop.FOOD_KINDS:
+    if plot.kind in crop.LEAF_KINDS or plot.kind in crop.FOOD_KINDS \
+            or plot.kind in crop.FIBRE_KINDS:
         toast("Something is planted here")
         return False
     plot.kind = "fertile"
@@ -53,7 +54,8 @@ def plant(world, ground, inventory, tx: int, ty: int, now: float, toast,
     if plot is None:
         toast("Dig and water the ground first")
         return False
-    if plot.kind in crop.LEAF_KINDS or plot.kind in crop.FOOD_KINDS:
+    if plot.kind in crop.LEAF_KINDS or plot.kind in crop.FOOD_KINDS \
+            or plot.kind in crop.FIBRE_KINDS:
         toast("Already planted")
         return False
     if plot.kind != "fertile":
@@ -104,6 +106,14 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
         amount = max(1, int(round(random.randint(3, 6) * _scale)))
         seeds = random.randint(2, 5)
         inventory.add(item, amount, quality)
+        if share is not None:
+            share(item, amount)
+    elif kind in crop.FIBRE_KINDS:
+        # COTTON: 5-10 cotton, 1-3 cotton seeds. No quality system.
+        item = "cotton"
+        amount = random.randint(5, 10)
+        seeds = random.randint(1, 3)
+        inventory.add(item, amount)
         if share is not None:
             share(item, amount)
     else:

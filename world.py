@@ -75,9 +75,9 @@ def coast_x(y, seed):
 
 # plot kinds that count as worked / planted soil (must match crop.py)
 _WORKED = ("dirt", "fertile", "plant", "wheat", "berries", "mushroom",
-           "agave", "cactus")
+           "agave", "cactus", "cotton")
 _PLANTED = ("fertile", "plant", "wheat", "berries", "mushroom", "agave",
-            "cactus")
+            "cactus", "cotton")
 
 
 def _smoothstep(x, a, b):

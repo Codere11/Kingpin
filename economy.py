@@ -289,6 +289,8 @@ def crop_yield(kind: str, rng) -> tuple[str, int]:
         return "red_mushroom", rng.randint(4, 8)
     if kind == "agave":
         return "agave", rng.randint(4, 8)
+    if kind == "cotton":
+        return "cotton", rng.randint(5, 10)
     return "", 0
 
 

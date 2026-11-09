@@ -103,9 +103,14 @@ def _plant(world, tx: int, ty: int):
     # past its edge the ground thins out to a fiftieth of that, so a man who
     # walks out of the world finds snow and no dinner.
     if h % 1000 < density_at(x, y) and world.tile_kind(tx, ty) == "grass":
-        food, leaf = biomes.crop_kinds(float(biomes.temperature(x, y, world.seed)),
-                                       float(biomes.humidity(x, y, world.seed)))
-        got = (leaf if (h >> 8) & 1 else food, (h >> 4) % STAGES)
+        _t = float(biomes.temperature(x, y, world.seed))
+        _h = float(biomes.humidity(x, y, world.seed))
+        food, leaf = biomes.crop_kinds(_t, _h)
+        _kind = leaf if (h >> 8) & 1 else food
+        # COTTON grows wild in the savanna, one tile in four there.
+        if biomes.biome_name(_t, _h) == "savanna" and (h >> 4) % 4 == 0:
+            _kind = "cotton"
+        got = (_kind, (h >> 4) % STAGES)
         # NOTHING GROWS ON THE PERMANENT WAY.
         try:
             import rail
@@ -149,10 +154,12 @@ def _cell(world, cx: int, cy: int):
                 continue
             wx = tx * TILE + TILE / 2.0
             wy = ty * TILE + TILE / 2.0
-            food, leaf = biomes.crop_kinds(
-                float(biomes.temperature(wx, wy, world.seed)),
-                float(biomes.humidity(wx, wy, world.seed)))
+            _t = float(biomes.temperature(wx, wy, world.seed))
+            _h = float(biomes.humidity(wx, wy, world.seed))
+            food, leaf = biomes.crop_kinds(_t, _h)
             kind = leaf if (h >> 8) & 1 else food
+            if biomes.biome_name(_t, _h) == "savanna" and (h >> 4) % 4 == 0:
+                kind = "cotton"
             cached.append((tx, ty, kind, (h >> 4) % STAGES))
     world.wild_cells[key] = cached
     return cached

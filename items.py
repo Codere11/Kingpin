@@ -113,6 +113,11 @@ REGISTRY: dict[str, ItemDef] = {
                            stackable=True, max_stack=20),
     "hide": ItemDef("hide", "Hide", "A thick bison hide. Traders pay well for these.",
                     stackable=True, max_stack=50),
+    "cotton": ItemDef("cotton", "Cotton", "Fluffy white fibre. Spins into cloth.",
+                      stackable=True, max_stack=100),
+    "cotton_seed": ItemDef("cotton_seed", "Cotton Seeds",
+                           "Plant in fertile soil; grows cotton.",
+                           stackable=True, max_stack=100),
 }
 
 
@@ -600,6 +605,25 @@ def _draw_hide(s: int) -> pygame.Surface:
     return surf
 
 
+def _draw_cotton(s: int) -> pygame.Surface:
+    """A fluffy white cotton boll."""
+    surf = _canvas(s)
+    white, white_s, husk = (248, 250, 252), (224, 230, 238), (104, 70, 40)
+    c = 0.5 * s
+    pygame.draw.circle(surf, husk, (int(c), int(0.62 * s)), int(0.16 * s))
+    for dx, dy, r in ((0.0, -0.04, 0.30), (-0.14, -0.12, 0.22),
+                      (0.14, -0.12, 0.22), (-0.08, 0.06, 0.20),
+                      (0.08, 0.06, 0.20), (0.0, -0.22, 0.18)):
+        pygame.draw.circle(surf, white, (int(c + dx * s), int(c + dy * s)), int(r * s))
+    pygame.draw.circle(surf, white_s, (int(c + 0.08 * s), int(c + 0.10 * s)), int(0.12 * s))
+    pygame.draw.circle(surf, (255, 255, 255), (int(c - 0.08 * s), int(c - 0.16 * s)), int(0.08 * s))
+    return surf
+
+
+def _draw_cotton_seed(s: int) -> pygame.Surface:
+    return _draw_seeds(s, (176, 136, 78), (124, 90, 50))
+
+
 def _draw_cooked_meat(s: int) -> pygame.Surface:
     surf = _canvas(s)
     meat, meat_d = (156, 92, 48), (104, 56, 26)
@@ -661,6 +685,8 @@ _DRAWERS = {
     "raw_meat": _draw_raw_meat,
     "cooked_meat": _draw_cooked_meat,
     "hide": _draw_hide,
+    "cotton": _draw_cotton,
+    "cotton_seed": _draw_cotton_seed,
 }
 
 _cache: dict[tuple[str, int], pygame.Surface] = {}
