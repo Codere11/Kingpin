@@ -430,12 +430,26 @@ def run(g):
                                          (abs(_tx0 - _tx1) + 1) * 32,
                                          (abs(_ty0 - _ty1) + 1) * 32)
                         if g.field_del[0]:
-                            _kept = [f for f in g.field_designations
-                                     if not _r.colliderect(f)]
-                            _n = len(g.field_designations) - len(_kept)
-                            g.field_designations = _kept
+                            # CUT OUT ONLY THE DRAGGED PIECE, not the whole field.
+                            _out, _n = [], 0
+                            for f in g.field_designations:
+                                _ix = max(f.x, _r.x); _iy = max(f.y, _r.y)
+                                _ix2 = min(f.right, _r.right); _iy2 = min(f.bottom, _r.bottom)
+                                if _ix < _ix2 and _iy < _iy2:
+                                    _n += 1
+                                    if _iy > f.y:
+                                        _out.append(pygame.Rect(f.x, f.y, f.w, _iy - f.y))
+                                    if _iy2 < f.bottom:
+                                        _out.append(pygame.Rect(f.x, _iy2, f.w, f.bottom - _iy2))
+                                    if _ix > f.x:
+                                        _out.append(pygame.Rect(f.x, _iy, _ix - f.x, _iy2 - _iy))
+                                    if _ix2 < f.right:
+                                        _out.append(pygame.Rect(_ix2, _iy, f.right - _ix2, _iy2 - _iy))
+                                else:
+                                    _out.append(f)
+                            g.field_designations = _out
                             if _n:
-                                g.toast("Cleared %d field%s" % (_n, "" if _n == 1 else "s"))
+                                g.toast("Cleared %d area%s" % (_n, "" if _n == 1 else "s"))
                         elif _r.w > 8 and _r.h > 8:
                             g.field_designations.append(_r)
                             g.toast("Field designated  (%d x %d)" % (_r.w, _r.h))
