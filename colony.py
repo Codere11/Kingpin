@@ -38,6 +38,7 @@ def make_camp(g) -> object:
         "is_hub": False,
         "native": True,
         "conquered": True,
+        "g": g,                    # so a worker can clear trees/blocks/plants
         "workers": [],             # the conquered NPCs who farm these fields
     })()
     return camp

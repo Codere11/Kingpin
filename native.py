@@ -327,6 +327,7 @@ def build(g, cx: float, cy: float, seed: int):
         "is_hub": False,
         "field_claims": {},
         "native": True,
+        "g": g,          # the frame handle, for clearing trees/blocks/plants
     })()
     # They stay in the people register, so they are lived: they walk, work,
     # eat, and can fight. Each farmer has his own food plot to tend -- the

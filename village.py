@@ -1313,6 +1313,87 @@ class NPC:
         self.facing = (ux, uy)
         self.skills.gain_movement(self.speed * speed_scale * dt)
 
+    def _field_obstruction(self, ttx: int, tty: int, g, world):
+        """What stands on this field tile that must be cleared before farming:
+        'block', 'station', 'tree' or 'plant' -- or None if the tile is bare."""
+        wx = ttx * TILE + TILE / 2.0
+        wy = tty * TILE + TILE / 2.0
+        if g is not None:
+            bb = getattr(g, "built_blocks", None)
+            if bb and (ttx, tty) in bb:
+                return "block"
+            for wp in getattr(g, "placed_work", ()) or ():
+                r = getattr(wp, "rect", None)
+                if r is not None and r.collidepoint(wx, wy):
+                    return "station"
+            trees = getattr(g, "trees", None)
+            if trees is not None:
+                for tree in trees.near(wx, wy, TILE * 0.7):
+                    if not getattr(tree, "felled", False):
+                        return "tree"
+        try:
+            import wildcrop as _wc
+            if _wc.at(world, ttx, tty) is not None:
+                return "plant"
+        except Exception:
+            pass
+        return None
+
+    def _field_clear(self, ttx: int, tty: int, g, world, now: float) -> bool:
+        """Clear whatever stands on the tile and take it into the pack: wood
+        from a tree, the block he cuts down, the plant's own yield. A workbench
+        is demolished for nothing, exactly like the player's demolish."""
+        wx = ttx * TILE + TILE / 2.0
+        wy = tty * TILE + TILE / 2.0
+        if g is None:
+            return False
+        # A PLACED 1x1 BLOCK goes straight into his pack.
+        bb = getattr(g, "built_blocks", None)
+        if bb and (ttx, tty) in bb:
+            kind = bb.pop((ttx, tty))
+            self.stock[kind] = self.stock.get(kind, 0) + 1
+            return True
+        # A WORKBENCH is demolished for nothing.
+        for wp in list(getattr(g, "placed_work", ()) or ()):
+            r = getattr(wp, "rect", None)
+            if r is not None and r.collidepoint(wx, wy):
+                try:
+                    g.placed_work.remove(wp)
+                except Exception:
+                    pass
+                return True
+        # A STANDING TREE is felled for its wood.
+        trees = getattr(g, "trees", None)
+        if trees is not None:
+            for tree in trees.near(wx, wy, TILE * 0.7):
+                if not getattr(tree, "felled", False):
+                    trees.fell(tree, now)
+                    amt = self.rng.randint(10, 30)
+                    self.stock["wood"] = self.stock.get("wood", 0) + amt
+                    return True
+        # A WILD PLANT is picked for whatever it carried.
+        try:
+            import wildcrop as _wc
+            got = _wc.at(world, ttx, tty)
+            if got is not None:
+                kind, stage = got
+
+                class _Stock:
+                    __slots__ = ("npc",)
+
+                    def __init__(self, npc):
+                        self.npc = npc
+
+                    def add(self, item, amount, grade=None):
+                        self.npc.stock[item] = self.npc.stock.get(item, 0) + int(amount)
+
+                _wc.harvest(world, ttx, tty, kind, stage,
+                            _Stock(self), lambda *a, **k: None, None)
+                return True
+        except Exception:
+            pass
+        return False
+
     def _work_field(self, dt: float, world, now: float) -> bool:
         """Tend the assigned field one action at a time: harvest a ripe crop,
         plant fertile soil, water dug soil, or break fresh ground with a
@@ -1322,8 +1403,14 @@ class NPC:
         if job is None or village is None or job >= len(village.farm_plots):
             return False
         ctx, cty, kind = village.farm_plots[job]
+        g = getattr(village, "g", None)
         todo: dict = {}
         for ttx, tty, tkind in village.farm_tiles[(ctx, cty)]:
+            # CLEAR THE GROUND FIRST: a tree, a wild plant, a placed block, or
+            # a workbench in the way is removed before the tile can be farmed.
+            if self._field_obstruction(ttx, tty, g, world) is not None:
+                todo.setdefault("clear", (ttx, tty, None))
+                continue
             plot = world.plot_at(ttx, tty)
             state = plot.kind if plot is not None else None
             if state in crop.FOOD_KINDS or state in crop.LEAF_KINDS or state in crop.FIBRE_KINDS:
@@ -1351,7 +1438,7 @@ class NPC:
         # one each action, so a ripe harvest cannot starve the tilling.
         # HARVEST FIRST, so a ripe field is reaped tile after tile -- about one
         # a second -- and tilling/planting only happens once nothing is ripe.
-        _order = ["harvest", "plant", "water", "till"]
+        _order = ["clear", "harvest", "plant", "water", "till"]
         task = None
         for action in _order:
             if action in todo:
@@ -1377,7 +1464,9 @@ class NPC:
         if math.hypot(tx - self.x, ty - self.y) > 12.0:
             self._step_toward(tx, ty, dt)
             return True
-        if action == "harvest":
+        if action == "clear":
+            self._field_clear(ttx, tty, g, world, now)
+        elif action == "harvest":
             plot = world.plot_at(ttx, tty)
             if plot is not None:
                 if getattr(village, "is_hub", False):
