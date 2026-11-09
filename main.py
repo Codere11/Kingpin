@@ -748,6 +748,11 @@ def main() -> None:
     # the simulation's view: a region the size of the old world, around him.
     g.world_map = worldmap.WorldMap(g.world.seed, background=True)
     g.placing = None
+    # SETTLEMENT DESIGNATION: pick 'Field' and the player freezes while the
+    # camera pans like a city-management view; drag a rectangle to designate.
+    g.field_design = False
+    g.field_start = [None]            # one corner of the field being drawn
+    g.field_designations: list = []   # pygame.Rects, one per field
     g.built_houses: list[House] = []
     g.placed_work: list = []          # the four trades, out of doors, on his land
     g.built_plots: list = []          # plots he has drawn on his own ground
@@ -991,6 +996,29 @@ def main() -> None:
             can_place=can_place, placement_pos=placement_pos,
             placement_box=placement_box)
         placement.draw_placing(_g)
+
+    def draw_field_design() -> None:
+        """While designating a field: the rectangle being dragged, and every
+        field already designated, drawn over the world."""
+        if not g.field_design:
+            return
+        for _r in g.field_designations:
+            _sr = pygame.Rect(int(_r.x - g.cam_x), int(_r.y - g.cam_y), _r.w, _r.h)
+            _glow = pygame.Surface((max(1, _sr.w), max(1, _sr.h)), pygame.SRCALPHA)
+            _glow.fill((120, 160, 80, 70))
+            g.screen.blit(_glow, _sr.topleft)
+            pygame.draw.rect(g.screen, (140, 190, 90), _sr, 2)
+        if g.field_start[0] is not None:
+            _sx, _sy = g.field_start[0]
+            _ex = g.cam_x + g.wmouse_x
+            _ey = g.cam_y + g.wmouse_y
+            _r = pygame.Rect(int(min(_sx, _ex)), int(min(_sy, _ey)),
+                             int(abs(_ex - _sx)), int(abs(_ey - _sy)))
+            _sr = pygame.Rect(int(_r.x - g.cam_x), int(_r.y - g.cam_y), _r.w, _r.h)
+            _glow = pygame.Surface((max(1, _sr.w), max(1, _sr.h)), pygame.SRCALPHA)
+            _glow.fill((200, 220, 120, 80))
+            g.screen.blit(_glow, _sr.topleft)
+            pygame.draw.rect(g.screen, (230, 240, 160), _sr, 2)
 
     def render_backdrop(house):
         return houseroom.render_backdrop(house, pygame, g.vw, g.vh, g.ground,
@@ -1605,6 +1633,7 @@ def main() -> None:
     g.draw_news = draw_news
     g.draw_night = draw_night
     g.draw_placing = draw_placing
+    g.draw_field_design = draw_field_design
     g.draw_speed_button = draw_speed_button
     g.draw_status = draw_status
     g.enter_house = enter_house

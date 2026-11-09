@@ -344,8 +344,15 @@ def run(g):
                     g.choice = g.build_menu.handle_event(event)
                     if g.choice is not None:
                         g.build_menu_open = False
-                        g.placing = g.choice
-                        g.fence_horizontal = True
+                        if g.choice == "field":
+                            # SETTLEMENT MODE: freeze the player, free the camera,
+                            # and let him drag out a field designation.
+                            g.field_design = True
+                            g.field_start[0] = None
+                            pygame.mouse.set_visible(True)
+                        else:
+                            g.placing = g.choice
+                            g.fence_horizontal = True
             elif g.placing is not None:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE,
                                                                   pygame.K_b):
@@ -366,6 +373,28 @@ def run(g):
                     g._commit_plot()                        # ...and the other
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     g.try_place()
+            elif g.field_design:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_ESCAPE,
+                                                                  pygame.K_b):
+                    g.field_design = False
+                    g.field_start[0] = None
+                    pygame.mouse.set_visible(False)
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    g.field_start[0] = (g.cam_x + g.wmouse_x,
+                                        g.cam_y + g.wmouse_y)
+                elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    if g.field_start[0] is not None:
+                        _sx, _sy = g.field_start[0]
+                        _ex = g.cam_x + g.wmouse_x
+                        _ey = g.cam_y + g.wmouse_y
+                        _r = pygame.Rect(int(min(_sx, _ex)), int(min(_sy, _ey)),
+                                         int(abs(_ex - _sx)), int(abs(_ey - _sy)))
+                        if _r.w > 8 and _r.h > 8:
+                            g.field_designations.append(_r)
+                            g.toast("Field designated  (%d x %d)" % (_r.w, _r.h))
+                        g.field_start[0] = None
+                # swallow every other key/click while designating
+                continue
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_e:
                 plog.log("E-KEY", "board", g.near_board() is not None,
                          "stall", g.near_stall() is not None,
@@ -802,7 +831,7 @@ def run(g):
             g.night = g.night_factor() > 0.38
 
             g.keys = pygame.key.get_pressed()
-            if g.board_open:                       # reading the board: stand still
+            if g.board_open or g.field_design:      # reading the board / designating: stand still
                 g.keys = _NO_KEYS
             g.aim = (g.wmouse_x - (g.player.x - g.cam_x),
                    g.wmouse_y - (g.player.y - g.cam_y))   # the world mouse, not the window's
@@ -3098,6 +3127,16 @@ def run(g):
         g._look = g.observer_.target
         if g._inside_now:
             pass                      # the room's own branch sets the camera
+        elif g.field_design:
+            # SETTLEMENT MODE: the player is parked; the camera pans freely.
+            _ks = pygame.key.get_pressed()
+            _dx = (1 if (_ks[pygame.K_d] or _ks[pygame.K_RIGHT]) else 0) \
+                - (1 if (_ks[pygame.K_a] or _ks[pygame.K_LEFT]) else 0)
+            _dy = (1 if (_ks[pygame.K_s] or _ks[pygame.K_DOWN]) else 0) \
+                - (1 if (_ks[pygame.K_w] or _ks[pygame.K_UP]) else 0)
+            _sp = 900.0 * g.dt
+            g.cam_x += _dx * _sp
+            g.cam_y += _dy * _sp
         elif g._look is not None and getattr(g._look, "alive", False):
             g.cam_x = g._look.x - g.vw / 2.0
             g.cam_y = g._look.y - g.vh / 2.0
@@ -3348,6 +3387,10 @@ def run(g):
                     draw_alert(g.screen, g.ex, g.ey, g.now, enemy.phase)
 
             g.draw_placing()
+            try:
+                g.draw_field_design()
+            except Exception:
+                pass
 
             if not g.inventory_open:
                 draw_crosshair(g.screen, g.wmouse_x, g.wmouse_y)

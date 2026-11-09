@@ -249,10 +249,30 @@ def gate_icon(size: int = 46) -> pygame.Surface:
     return s
 
 
+def field_icon(size: int = 46) -> pygame.Surface:
+    """A tilled field, top-down: dark soil with a few green rows."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.rect(s, (72, 52, 34), (0, 0, size, size), border_radius=4)
+    pygame.draw.rect(s, (96, 70, 44), (0, 0, size, size), 2, border_radius=4)
+    for i in range(3):
+        yy = int(size * (0.25 + 0.25 * i))
+        pygame.draw.line(s, (110, 140, 72), (int(size * 0.12), yy),
+                         (int(size * 0.88), yy), 2)
+    return s
+
+
+# THE SETTLEMENT CATEGORY: things the player designates for the camp, not
+# builds with his own hands. For now, one: a field.
+SETTLEMENT_BUILDINGS = [
+    {"id": "field", "name": "Field", "wood": 0, "where": "outside"},
+]
+
+
 class BuildMenu:
     def __init__(self, inventory) -> None:
         self.inv = inventory
         self.where = "outside"
+        self.category = "personal"
         self.hover = -1
         self.free = False
         self.font_title = pygame.font.SysFont("dejavusans", 22, bold=True)
@@ -261,10 +281,14 @@ class BuildMenu:
 
     def open(self, where: str) -> None:
         self.where = where
+        self.category = "personal"
         self.hover = -1
 
+    def _buildings(self) -> list:
+        return SETTLEMENT_BUILDINGS if self.category == "settlement" else BUILDINGS
+
     def _visible(self) -> list[int]:
-        return [i for i, b in enumerate(BUILDINGS) if b["where"] == self.where]
+        return [i for i, b in enumerate(self._buildings()) if b["where"] == self.where]
 
     ROWS = 3                      # THREE ROWS OF BUILDINGS, ALWAYS
 
@@ -289,7 +313,7 @@ class BuildMenu:
         for i in range(n):
             r, c = i // cols, i % cols
             rows.append(pygame.Rect(x0 + pad + c * (cell_w + pad),
-                                    y0 + 50 + r * cell_h,
+                                    y0 + 66 + r * cell_h,
                                     cell_w, cell_h - 12))
         return pygame.Rect(x0, y0, width, height), rows, visible
 
@@ -298,25 +322,36 @@ class BuildMenu:
         and it used to read as affordable with an empty pocket."""
         if self.free:
             return True
-        for item, qty in build_materials(BUILDINGS[index]["id"]).items():
+        for item, qty in build_materials(self._buildings()[index]["id"]).items():
             if self.inv.count_of(item) < qty:
                 return False
         return True
+
+    def _tabs(self, panel):
+        w = panel.width // 2
+        return (pygame.Rect(panel.left + 8, panel.top + 34, w - 8, 24),
+                pygame.Rect(panel.left + w, panel.top + 34, w - 8, 24))
 
     def handle_event(self, event):
         surface = pygame.display.get_surface()
         if surface is None:
             return None
-        _, rows, visible = self._layout(*surface.get_size())
-        if event.type == pygame.MOUSEMOTION:
+        panel, rows, visible = self._layout(*surface.get_size())
+        tabs = self._tabs(panel)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i, tab in enumerate(tabs):
+                if tab.collidepoint(event.pos):
+                    self.category = ("personal", "settlement")[i]
+                    self.hover = -1
+                    return None
+            for i, rect in enumerate(rows):
+                if rect.collidepoint(event.pos) and self.affordable(visible[i]):
+                    return self._buildings()[visible[i]]["id"]
+        elif event.type == pygame.MOUSEMOTION:
             self.hover = -1
             for i, rect in enumerate(rows):
                 if rect.collidepoint(event.pos):
                     self.hover = i
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            for i, rect in enumerate(rows):
-                if rect.collidepoint(event.pos) and self.affordable(visible[i]):
-                    return BUILDINGS[visible[i]]["id"]
         return None
 
     def draw(self, screen: pygame.Surface) -> None:
@@ -333,12 +368,26 @@ class BuildMenu:
         screen.blit(board, panel.topleft)
 
         where = "indoors" if self.where == "inside" else "outdoors"
-        title = self.font_title.render("BUILD  (%s)" % where, True, (216, 216, 222))
+        title = self.font_title.render("BUILD", True, (216, 216, 222))
         screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 8))
 
+        # TWO CATEGORIES: Personal, and Settlement.
+        tabs = self._tabs(panel)
+        for i, (tab, label) in enumerate(zip(tabs, ("Personal", "Settlement"))):
+            active = self.category == ("personal", "settlement")[i]
+            pygame.draw.rect(screen, (222, 176, 88) if active else (44, 44, 52),
+                             tab, border_radius=6)
+            pygame.draw.rect(screen, (222, 176, 88) if active else (104, 104, 116),
+                             tab, 1, border_radius=6)
+            t = self.font_small.render(label, True,
+                                       (30, 30, 34) if active else (200, 200, 210))
+            screen.blit(t, (tab.centerx - t.get_width() // 2,
+                            tab.centery - t.get_height() // 2))
+
         wood = self.inv.count_of("wood")
+        buildings = self._buildings()
         for i, (bi, rect) in enumerate(zip(visible, rows)):
-            building = BUILDINGS[bi]
+            building = buildings[bi]
             ok = self.affordable(bi)
             hovered = (i == self.hover) and ok
             pygame.draw.rect(screen, (48, 46, 40) if hovered else (34, 34, 40),
@@ -354,6 +403,7 @@ class BuildMenu:
                        "stall": stall_icon,
                        "dummy": dummy_icon, "target": target_icon,
                        "fireplace": fireplace_icon,
+                       "field": field_icon,
                        "demolish": fence_icon,
                        "fence": fence_icon, "gate": gate_icon}[building["id"]]
             icon = icon_fn(rect.height - 14)
