@@ -989,12 +989,64 @@ class NPC:
             if self in v.npcs:
                 v.npcs.remove(self)
 
+    def _pick_field(self) -> None:
+        """Choose a field in his camp to walk out to and work."""
+        camp = getattr(self, "native_camp", None)
+        fields = getattr(camp, "fields", ()) if camp is not None else ()
+        if not fields:
+            self.target = (self.x, self.y)
+            return
+        fx, fy, _kind = fields[self.rng.randrange(len(fields))]
+        self.target = (fx * TILE + TILE / 2.0, fy * TILE + TILE / 2.0)
+
+    def _walk_toward(self, tx: float, ty: float, speed: float, dt: float) -> None:
+        dx, dy = tx - self.x, ty - self.y
+        d = math.hypot(dx, dy) or 1.0
+        step = min(d, speed * dt)
+        self.x += dx / d * step
+        self.y += dy / d * step
+        if d > 0.5:
+            self.facing = (dx / d, dy / d)
+
+    def _native_step(self, dt: float) -> None:
+        """A native camp man's own step: farmers farm, warriors patrol."""
+        camp = getattr(self, "native_camp", None)
+        if camp is None:
+            return
+        speed = getattr(self, "speed", 60.0)
+        if getattr(self, "native_role", "") == "warrior":
+            ang = getattr(self, "_orbit", 0.0) + 0.25 * dt
+            self._orbit = ang
+            r = 3.0 * TILE
+            self._walk_toward(camp.x + math.cos(ang) * r,
+                              camp.y + math.sin(ang) * r, speed, dt)
+        else:
+            if getattr(self, "_native_work", 0.0) > 0.0:
+                self._native_work -= dt
+                self.work_flash = max(self.work_flash, 0.3)
+                if self._native_work <= 0.0:
+                    self._native_work = 0.0
+                    self._pick_field()
+            else:
+                tx, ty = self.target
+                if math.hypot(tx - self.x, ty - self.y) < 18.0:
+                    self._native_work = self.rng.uniform(2.0, 5.0)
+                    self.work_flash = 1.0
+                else:
+                    self._walk_toward(tx, ty, speed, dt)
+
     def update(self, dt: float, threat=None, colliders=None, combat=None,
                night: bool = False, world=None, now: float = 0.0,
                phase: str = "home") -> None:
         if getattr(self, "sleep_t", 0.0) > 0.0:
             self.sleep_t = max(0.0, self.sleep_t - dt)
             self.moving = False
+            return
+        # NATIVE CAMP PEOPLE: farmers walk out to their fields and work them;
+        # warriors patrol a ring around the fire. They live in the register and
+        # are driven by their camp, not by a town schedule.
+        if getattr(self, "native", False) and getattr(self, "native_camp", None) is not None:
+            self._native_step(dt)
             return
         # THE BODY GROWS WITH THE SKILL, checked once a second and not once a
         # frame: a thousand men a tick is not where a float compare belongs.

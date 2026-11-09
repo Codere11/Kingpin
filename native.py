@@ -252,53 +252,48 @@ def build(g, cx: float, cy: float, seed: int):
     # -- the people ---------------------------------------------------------
     farmers = []
     warriors = []
+    _name_pool = list(_NAMES)
+    rng.shuffle(_name_pool)                 # each camp gets its own names
     _s = seed ^ 0x6E17
     for i in range(n_farmers):
-        # a farmer stands between the teepees and his fields
+        # a farmer stands between the teepees and his fields, and walks out to
+        # work them
         ang = rng.uniform(0.0, 2.0 * math.pi)
-        mid = (ring + 3.0) * TILE
+        mid = (ring + 5.0) * TILE
         fx, fy = cx + math.cos(ang) * mid, cy + math.sin(ang) * mid
-        n = village_mod.NPC(fx + rng.uniform(-30, 30),
-                            fy + rng.uniform(-30, 30),
+        n = village_mod.NPC(fx + rng.uniform(-40, 40),
+                            fy + rng.uniform(-40, 40),
                             _s ^ (i * 2654435761),
-                            name=_NAMES[i % len(_NAMES)],
-                            npc_id="native_f_%d" % i, role="Farmer")
+                            name=_name_pool[i % len(_name_pool)],
+                            npc_id="native_f_%d_%d" % (int(cx), i), role="Farmer")
         n.job = "farmer"
         n.native = True
-        n.stock[food_item] = 6
+        n.native_role = "farmer"
+        n.stock[food_item] = 60
         n.home = (n.x, n.y)
-        n.target = (n.x, n.y)
-        n.facing = (rng.uniform(-1, 1), rng.uniform(-1, 1))
+        n.speed = rng.uniform(55.0, 80.0)
         n.wear = biomes.npc_wear(temp, hum)
         farmers.append(n)
         g._observe_npcs.append(n)             # drawn with the natives
     for i in range(n_warriors):
-        # a warrior stands right at the fire, watching
+        # a warrior patrols a ring around the fire, watching out
         ang = rng.uniform(0.0, 2.0 * math.pi)
-        wx = cx + math.cos(ang) * TILE
-        wy = cy + math.sin(ang) * TILE
+        wx = cx + math.cos(ang) * (TILE * 2.5)
+        wy = cy + math.sin(ang) * (TILE * 2.5)
         n = village_mod.NPC(wx, wy, _s ^ ((i + 1000) * 2654435761),
-                            name=_NAMES[(n_farmers + i) % len(_NAMES)],
-                            npc_id="native_w_%d" % i, role="Warrior")
+                            name=_name_pool[(n_farmers + i) % len(_name_pool)],
+                            npc_id="native_w_%d_%d" % (int(cx), i), role="Warrior")
         n.defender = True
         n.weapon = "axe"
         n.native = True
-        n.stock[food_item] = 6
+        n.native_role = "warrior"
+        n.stock[food_item] = 60
         n.home = (n.x, n.y)
-        n.target = (n.x, n.y)
+        n.speed = rng.uniform(60.0, 90.0)
+        n._orbit = ang
         n.wear = biomes.npc_wear(temp, hum)
         warriors.append(n)
         g._observe_npcs.append(n)
-
-    # The settlement's people stand where they were placed: they are drawn
-    # here (and by the native list), not walked by the town lanes, so they do
-    # not drift off to a distant market or road.
-    for _n in farmers + warriors:
-        try:
-            if _n in village_mod.PEOPLE:
-                village_mod.PEOPLE.remove(_n)
-        except Exception:
-            pass
 
     # the settlement, for anything that needs to find it later
     settlement = type("NativeSettlement", (), {
@@ -311,6 +306,12 @@ def build(g, cx: float, cy: float, seed: int):
         "clearance": clearance,
         "native": True,
     })()
+    # They stay in the people register, so they are lived: they walk, work,
+    # eat, and can fight. Tie each to his camp and give the farmers a field.
+    for _n in farmers + warriors:
+        _n.native_camp = settlement
+        if _n.native_role == "farmer":
+            _n._pick_field()
     return settlement
 
 
