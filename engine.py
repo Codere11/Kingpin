@@ -3346,12 +3346,14 @@ def run(g):
         g._cone0 = g.vision.cone_deg
         if g._watch or g.field_design:
             g.vision.cone_deg = 360.0
-        g.mask = g.vision.build(g.vw, g.vh, g.eye_x, g.eye_y, g._ang,
-                            g.screen_occluders, g.screen_soft, 1.0 - 0.25 * g.foliage)
-        g.screen.blit(g.mask, (0, 0))
+        # SETTLEMENT VIEW IS LIT FROM ABOVE: no first-person cone, no night,
+        # the whole visible world (plus the pan's edge) rendered plain.
+        if not g.field_design:
+            g.mask = g.vision.build(g.vw, g.vh, g.eye_x, g.eye_y, g._ang,
+                                g.screen_occluders, g.screen_soft, 1.0 - 0.25 * g.foliage)
+            g.screen.blit(g.mask, (0, 0))
         if g._watch or g.field_design:
             g.vision.cone_deg = g._cone0
-        # A SETTLEMENT VIEW IS LIT FROM ABOVE: no first-person cone, no night.
         if not g.field_design:
             g.draw_night()
 

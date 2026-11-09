@@ -1053,7 +1053,8 @@ def main() -> None:
             _TRUTH=g._TRUTH, _draws=g._draws, plog=plog,
             inventory=g.inventory, built_blocks=g.built_blocks,
             wmouse_x=g.wmouse_x, wmouse_y=g.wmouse_y,
-            _observe_npcs=g._observe_npcs, _observe_soldiers=g._observe_soldiers)
+            _observe_npcs=g._observe_npcs, _observe_soldiers=g._observe_soldiers,
+            field_design=g.field_design)
         render.draw_exterior(_g, cx, cy, show_names, target)
 
 

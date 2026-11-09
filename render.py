@@ -156,12 +156,13 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
         except Exception:
             pass
     # THE 1x1 GRID MESH when a buildable is in the hand -- UNDER the blocks,
-    # so a placed row covers its own seam lines and stays one solid wall.
+    # so a placed row covers its own seam lines and stays one solid wall. It
+    # also shows while designating a settlement field.
     try:
         import block as _block
         _sel = g.inventory.selected_stack()
         _sel_id = _sel.defn.id if _sel else None
-        if _sel_id in _block.BUILDABLE:
+        if _sel_id in _block.BUILDABLE or getattr(g, "field_design", False):
             _block.draw_grid(target, cx, cy, g.vw, g.vh, g.wmouse_x, g.wmouse_y)
     except Exception:
         pass
