@@ -1211,7 +1211,7 @@ def main() -> None:
 
     def crown_pay() -> None:
         _earned = crown.pay(g)
-        g.toast("The Crown is paid -- %d coin." % int(_earned or 0))
+        g.toast("The Crown paid %d coin." % int(_earned or 0))
         g.mark_dirty()
 
     def open_horse(horse) -> None:
