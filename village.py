@@ -57,6 +57,7 @@ import crop
 import biomes
 import economy
 import guns
+import items
 import industry
 import interior
 import nations
@@ -645,6 +646,7 @@ class NPC:
         self.farm_plot = None        # fixed plot this villager tends
         self.orchard_plot = None     # fixed orchard the logger works
         self.carry = {}              # surplus he is walking to the chest
+        self.carry_grade = {}        # the grade of each carried item
         self.job = None              # "miner" / "smith" / "logger"
         self.workplace = None
         self.produce_acc = 0.0
@@ -1177,9 +1179,18 @@ class NPC:
             return True
         inv = getattr(chest, "inventory", None)
         if inv is not None:
+            grades = getattr(self, "carry_grade", {}) or {}
             for item, n in list(carry.items()):
-                inv.add(item, int(n))
+                g = grades.get(item)
+                _def = items.get(item)
+                if getattr(_def, "quality", False) and g is not None:
+                    inv.add(item, int(n), quality=int(g))
+                else:
+                    inv.add(item, int(n))
         carry.clear()
+        grades = getattr(self, "carry_grade", None)
+        if grades is not None:
+            grades.clear()
         self._did_work()
         return True
 

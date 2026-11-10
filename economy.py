@@ -599,12 +599,23 @@ def store_add(village, item: str, n: int, grade: int = 3) -> None:
 
 def store_or_carry(village, npc, item: str, n: int, grade: int = 3) -> None:
     """A conquered worker's surplus goes into his CARRY BAG, to be walked to
-    the settlement's chest; everyone else's goes straight to the town store."""
+    the settlement's chest; everyone else's goes straight to the town store.
+    THE GRADE TRAVELS WITH THE GOODS, so a master's leaf is still A-grade when
+    it comes out of the chest."""
     if n <= 0:
         return
     carry = getattr(npc, "carry", None)
     if carry is not None and getattr(village, "conquered", False):
-        carry[item] = carry.get(item, 0) + int(n)
+        old_n = int(carry.get(item, 0) or 0)
+        carry[item] = old_n + int(n)
+        # keep the bag's grade as a count-weighted blend of everything poured
+        # into it, so the chest inherits the right grade
+        cg = getattr(npc, "carry_grade", None)
+        if cg is None:
+            cg = {}
+            npc.carry_grade = cg
+        old_g = int(cg.get(item, grade))
+        cg[item] = quality.merge(old_g, old_n, int(grade), int(n))
     else:
         store_add(village, item, n, grade)
 
@@ -671,7 +682,7 @@ def harvest(village, npc, kind: str, rng) -> None:
         npc.stock["wheat"] = npc.stock.get("wheat", 0) + grain
     grade = 3
     if item in LEAF:                       # leaf has a grade; grain does not (yet)
-        grade = npc.skills.leaf_grade(npc.quality_cap)
+        grade = npc.skills.leaf_grade(getattr(npc, "quality_cap", 8))
         npc.grade[item] = grade
     keep = farmer_keep(npc, item, int(count))
     if keep > 0:
