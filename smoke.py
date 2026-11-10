@@ -13,8 +13,21 @@ class Smoke:
         self.sources: list[list] = []   # [x, y, time_left, emit_timer]
 
     def signal(self, x: float, y: float, seconds: float = 14.0) -> None:
-        """Light a smoke signal: a column that keeps pouring for `seconds`."""
+        """Light a smoke signal: an immediate burst, then a column that keeps
+        pouring for `seconds`."""
         self.sources.append([x, y, seconds, 0.0])
+        # THE ALARM IS VISIBLE AT ONCE: a first burst, then the steady column.
+        for _ in range(18):
+            a = random.uniform(0.0, 2.0 * math.pi)
+            r = random.uniform(0.0, 8.0)
+            self.parts.append([
+                x + math.cos(a) * r,
+                y + math.sin(a) * r - random.uniform(0.0, 20.0),
+                random.uniform(4.0, 10.0),
+                random.uniform(0.0, 2.0),
+                random.uniform(5.0, 9.0),
+                random.uniform(-10.0, 10.0),
+            ])
 
     def update(self, dt: float) -> None:
         # keep each source pouring while it is lit

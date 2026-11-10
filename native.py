@@ -172,7 +172,9 @@ def build(g, cx: float, cy: float, seed: int):
     food_item = crop.FOOD_ITEM.get(food_kind, "bread")
 
     people = rng.randint(10, 15)
-    n_warriors = max(2, int(round(people * 0.2)))
+    # THE TWO SOLDIERS: one stays with the axe, the other takes the bow once
+    # the war escalates.
+    n_warriors = 2
     n_farmers = people - n_warriors
     n_teepees = -(-people // PER_TEEPEE)      # ceil, two to a teepee
 
