@@ -1144,6 +1144,29 @@ class NPC:
         if math.hypot(tx - self.x, ty - self.y) > 8.0:
             self._walk_toward(tx, ty, speed * 0.6, dt)
 
+    def _work_animals(self, dt: float) -> None:
+        """The animal handler: feed the camp's livestock. He walks to the
+        hungriest tame beast and gives it a bite of stored food."""
+        camp = getattr(self, "native_camp", None)
+        if camp is None:
+            self._native_idle(dt)
+            return
+        animals = [a for a in (getattr(camp, "animals", ()) or ())
+                   if getattr(a, "alive", True)]
+        best = None
+        for a in animals:
+            if getattr(a, "food", 0) <= 0 and getattr(a, "hunger", 0.0) >= economy.EAT_AT:
+                if best is None or a.hunger > best.hunger:
+                    best = a
+        if best is None:
+            self._native_idle(dt)
+            return
+        if math.hypot(best.x - self.x, best.y - self.y) > 24.0:
+            self._step_toward(best.x, best.y, dt)
+            return
+        best.food = getattr(best, "food", 0) + 1
+        self._did_work()
+
     def update(self, dt: float, threat=None, colliders=None, combat=None,
                night: bool = False, world=None, now: float = 0.0,
                phase: str = "home") -> None:
@@ -1165,6 +1188,9 @@ class NPC:
                 return
             if world is not None:
                 self._work_orchard(dt, world, now)
+            return
+        if _nat and getattr(self, "native_role", "") == "animal_handler":
+            self._work_animals(dt)
             return
         if _nat and getattr(self, "native_role", "") == "unemployed":
             self._native_idle(dt)

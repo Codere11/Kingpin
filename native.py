@@ -308,11 +308,46 @@ def build(g, cx: float, cy: float, seed: int):
         warriors.append(n)
         g._observe_npcs.append(n)
 
+    # -- TAMED ANIMALS -------------------------------------------------------
+    # A settlement in two keeps livestock: 25% horses, 25% buffaloes, and half
+    # of all settlements keep none. They sleep on their own spots beside the
+    # fields, never run from people, and a handler feeds them.
+    animals = []
+    _roll = rng.random()
+    if _roll < 0.50:
+        try:
+            import creatures as _creatures
+        except Exception:
+            _creatures = None
+        _is_horse = _roll < 0.25
+        for i in range(rng.randint(2, 4)):
+            ang = rng.uniform(0.0, 2.0 * math.pi)
+            rr = field_ring + rng.uniform(-TILE * 3.0, TILE * 2.0)
+            ax = cx + math.cos(ang) * rr
+            ay = cy + math.sin(ang) * rr
+            if _creatures is None:
+                break
+            if _is_horse:
+                a = _creatures.Horse(ax, ay, rng.choice(('brown', 'black',
+                                                         'white', 'palomino')))
+                a.tamed = True
+                a.home = (ax, ay)
+                if a not in getattr(g, "horses", ()):
+                    g.horses.append(a)
+            else:
+                a = _creatures.Bison(ax, ay)
+                a.tamed = True
+                a.home = (ax, ay)
+                if a not in getattr(g, "enemies", ()):
+                    g.enemies.append(a)
+            animals.append(a)
+
     # the settlement, for anything that needs to find it later
     settlement = type("NativeSettlement", (), {
         "name": "Native settlement",
         "x": cx, "y": cy, "seed": seed,
         "people": people, "farmers": farmers, "warriors": warriors,
+        "animals": animals, "handlers": [],
         "fireplace": fire, "teepees": tp_centers,
         "fields": field_centres_tiles,
         "food_kind": food_kind, "leaf_kind": leaf_kind,
@@ -338,6 +373,23 @@ def build(g, cx: float, cy: float, seed: int):
         # ONE FIELD, ONE WORKER: the first farmers each take a plot, the rest
         # have no post and go idle (they chill and wander).
         _n.farm_plot = _i if _i < len(farm_plots) else None
+    # A SETTLEMENT WITH LIVESTOCK KEEPS ONE HANDLER TO FEED THEM.
+    if animals:
+        hx = cx + rng.uniform(-TILE * 3.0, TILE * 3.0)
+        hy = cy + rng.uniform(-TILE * 3.0, TILE * 3.0)
+        hn = village_mod.NPC(hx, hy, _s ^ ((6000 + 1) * 2654435761),
+                             name=_name_pool[(n_farmers + n_warriors) % len(_name_pool)],
+                             npc_id="native_ah_%d" % int(cx), role="Animal Handler")
+        hn.native = True
+        hn.native_role = "animal_handler"
+        hn.job = "animal_handler"
+        hn.native_camp = settlement
+        hn.stock[food_item] = 60
+        hn.home = (hn.x, hn.y)
+        hn.speed = rng.uniform(95.0, 115.0)
+        hn.wear = biomes.npc_wear(temp, hum)
+        settlement.handlers.append(hn)
+        g._observe_npcs.append(hn)
     # The frame owns these people and walks them itself, whatever the worker
     # lanes are doing: they are not villagers of any town, so no lane claims
     # them.
@@ -345,7 +397,7 @@ def build(g, cx: float, cy: float, seed: int):
     if _np is None:
         _np = []
         g._native_people = _np
-    for _n in farmers + warriors:
+    for _n in farmers + warriors + settlement.handlers:
         if _n not in _np:
             _np.append(_n)
     return settlement

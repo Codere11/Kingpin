@@ -768,6 +768,7 @@ class Horse:
         self.graze_timer = random.uniform(0.5, 2.0)
         self.hunger = random.uniform(0.0, 30.0)   # like a man's belly
         self.food = random.randint(0, 2)          # what it has stored
+        self.tamed = False                        # a settlement's livestock
         self.target = (self.x, self.y)
         Horse.HORSES = [h for h in Horse.HORSES if h.alive]
         Horse.HORSES.append(self)
@@ -819,8 +820,9 @@ class Horse:
         if self.hunger >= economy.STARVE_AT:
             self.health = 0
             return
-        # SKITTISH: a person near spooks it into a full run.
-        if threat is not None and not getattr(threat, "dead", False):
+        # SKITTISH: a person near spooks it into a full run -- a TAMED horse
+        # does not run from people.
+        if not getattr(self, "tamed", False) and threat is not None and not getattr(threat, "dead", False):
             dx, dy = self.x - threat.x, self.y - threat.y
             d = math.hypot(dx, dy)
             if d < 260.0:
@@ -830,8 +832,9 @@ class Horse:
                     self.facing = (dx / d, dy / d)
                 return
         self.flee_timer = max(0.0, self.flee_timer - dt)
-        # HUNGRY: go to the nearest plant and eat it up.
-        if self.hunger >= economy.EAT_AT and self.food <= 0:
+        # HUNGRY: go to the nearest plant and eat it up. The handler feeds a
+        # tamed horse, so it does not roam off to forage.
+        if not getattr(self, "tamed", False) and self.hunger >= economy.EAT_AT and self.food <= 0:
             if self._animal_forage(dt):
                 return
         # GRAZE: pick a new spot near home now and then, then amble to it.
@@ -839,7 +842,9 @@ class Horse:
         if self.graze_timer <= 0.0:
             self.graze_timer = random.uniform(1.0, 3.0)
             ang = random.uniform(0.0, 2.0 * math.pi)
-            r = random.uniform(30.0, 200.0)
+            # a tamed horse keeps close to its sleeping spot
+            r = (random.uniform(20.0, 70.0) if getattr(self, "tamed", False)
+                 else random.uniform(30.0, 200.0))
             self.target = (self.home[0] + math.cos(ang) * r,
                            self.home[1] + math.sin(ang) * r)
         tx, ty = self.target
@@ -881,12 +886,15 @@ class Bison(Enemy):
         self.graze_timer = random.uniform(0.5, 2.0)
         self.hunger = random.uniform(0.0, 30.0)   # like a man's belly
         self.food = random.randint(0, 2)          # what it has stored
+        self.tamed = False                        # a settlement's livestock
         self.fire_cd = 0.0
         Bison.BISONS = [b for b in Bison.BISONS if b.alive]   # drop the dead
         Bison.BISONS.append(self)
 
     def take_damage(self, amount: int, tranq: bool = False) -> bool:
         dead = super().take_damage(amount, tranq)
+        if getattr(self, "tamed", False):
+            return dead                # livestock never turns on the herd
         if not dead and not getattr(self, "dead", False):
             # THE HERD TURNS ON THE ATTACKER: every bison nearby charges.
             for b in Bison.BISONS:
@@ -928,11 +936,12 @@ class Bison(Enemy):
         if self.hunger >= economy.STARVE_AT:
             self.health = 0
             return
-        if self.aggro:
+        # A TAMED BISON never charges and never flees: it grazes at home.
+        if not getattr(self, "tamed", False) and self.aggro:
             self._charge(dt, target)
             return
         # PASSIVE: keep a respectful distance from the player, else graze.
-        if target is not None and not getattr(target, "dead", False):
+        if not getattr(self, "tamed", False) and target is not None and not getattr(target, "dead", False):
             dx, dy = self.x - target.x, self.y - target.y
             d = math.hypot(dx, dy)
             if d < 220.0:
@@ -941,15 +950,18 @@ class Bison(Enemy):
                 self._move(ux, uy, SPRINTER_MAX, dt)
                 self.facing = (ux, uy)
                 return
-        # HUNGRY: go to the nearest plant and eat it up.
-        if self.hunger >= economy.EAT_AT and self.food <= 0:
+        # HUNGRY: go to the nearest plant and eat it up. A tamed bison is fed
+        # by its handler, so it does not roam off to forage.
+        if not getattr(self, "tamed", False) and self.hunger >= economy.EAT_AT and self.food <= 0:
             if self._animal_forage(dt):
                 return
         self.graze_timer -= dt
         if self.graze_timer <= 0.0:
             self.graze_timer = random.uniform(1.0, 3.0)
             ang = random.uniform(0.0, 2.0 * math.pi)
-            r = random.uniform(20.0, 140.0)
+            # a tamed bison keeps close to its sleeping spot
+            r = (random.uniform(20.0, 70.0) if getattr(self, "tamed", False)
+                 else random.uniform(20.0, 140.0))
             self.target = (self.home[0] + math.cos(ang) * r,
                            self.home[1] + math.sin(ang) * r)
         tx, ty = self.target
