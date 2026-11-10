@@ -297,7 +297,7 @@ def build(g, cx: float, cy: float, seed: int):
                             name=_name_pool[(n_farmers + i) % len(_name_pool)],
                             npc_id="native_w_%d_%d" % (int(cx), i), role="Warrior")
         n.defender = True
-        n.weapon = "axe"
+        n.weapon = "bow" if (getattr(g, "war_escalated", False) and i == 1) else "axe"
         n.native = True
         n.native_role = "warrior"
         n.stock[food_item] = 60
@@ -415,6 +415,26 @@ def build(g, cx: float, cy: float, seed: int):
         if _n not in _np:
             _np.append(_n)
     return settlement
+
+
+def _role_warriors(s) -> None:
+    """After the war escalates: the first warrior stays with the axe, the
+    second takes up the bow."""
+    ws = getattr(s, "warriors", ()) or ()
+    for i, w in enumerate(ws):
+        if not getattr(w, "alive", True):
+            continue
+        w.weapon = "bow" if i == 1 else "axe"
+
+
+def escalate_war(g) -> None:
+    """The first smoke alarm arms every settlement: one melee warrior, one
+    bowman. New camps built later read g.war_escalated and do the same."""
+    if getattr(g, "war_escalated", False):
+        return
+    g.war_escalated = True
+    for s in getattr(g, "native_settlements", {}).values():
+        _role_warriors(s)
 
 
 def ensure_near(g, px: float, py: float, radius: float = NATIVE_RADIUS):

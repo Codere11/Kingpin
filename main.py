@@ -727,6 +727,7 @@ def main() -> None:
     g.crown_biome = "temperate"       # the spawn biome decides the first ask
     g.crown_chest = Inventory(capacity=64)
     g.smoke = smoke.Smoke()            # a smoke signal over a conquered fire
+    g.war_escalated = False            # once a smoke alarm goes up, bows come out
     g.crown_screen_open = False
     g.crown_screen = None
     g.crown_chest_open = False

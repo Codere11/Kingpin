@@ -1037,6 +1037,56 @@ class NPC:
         if d > 0.5:
             self.facing = (dx / d, dy / d)
 
+    def _line_blocked(self, g, x0, y0, x1, y1) -> bool:
+        """True if anything solid stands between the bowman and the player."""
+        try:
+            from physics import segment_rect_hit
+            for r in getattr(g, "occluders", ()) or ():
+                if segment_rect_hit(x0, y0, x1, y1, r):
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def _native_bowman_step(self, dt: float, player, combat, g) -> None:
+        """A bowman: keep his distance, step around anything in the way, and
+        loose one arrow a second at the player."""
+        dx, dy = player.x - self.x, player.y - self.y
+        dist = math.hypot(dx, dy) or 1.0
+        ux, uy = dx / dist, dy / dist
+        self.facing = (ux, uy)
+        preferred = 220.0
+        blocked = self._line_blocked(g, self.x, self.y, player.x, player.y)
+        self.attack_cd -= dt
+        if not blocked:
+            # one arrow a second, at the axe's own damage
+            if self.attack_cd <= 0.0:
+                self.attack_cd = 1.0
+                self._did_attack()
+                self.skills.gain_axe()
+                dmg = max(1, round((35.0 / 3.0) * self.skills.axe_damage_scale()))
+                if combat is not None:
+                    combat.fire(self.x + ux * 16.0, self.y + uy * 16.0,
+                                math.atan2(dy, dx), dist + 80.0,
+                                owner="enemy", damage=dmg, team=self.team)
+        # KEEP THE GAP, AND CLEAR THE LINE: back off when he is too close,
+        # close in when too far, and strafe around whatever blocks the shot.
+        if dist < 170.0:
+            self.x -= ux * self.combat_speed * dt
+            self.y -= uy * self.combat_speed * dt
+        elif dist > 260.0:
+            self.x += ux * self.combat_speed * dt
+            self.y += uy * self.combat_speed * dt
+        elif blocked:
+            px, py = -uy, ux
+            self.x += px * self.combat_speed * 0.8 * dt
+            self.y += py * self.combat_speed * 0.8 * dt
+        else:
+            # in range with a clear shot: sidestep a little, never stand still
+            px, py = -uy, ux
+            self.x += px * self.combat_speed * 0.25 * dt
+            self.y += py * self.combat_speed * 0.25 * dt
+
     def _native_step(self, dt: float, world=None, now=None) -> None:
         """A native warrior's step: patrol a ring around the fire, and the
         hungry are fed from the camp's store. If the player walks into the
@@ -1053,9 +1103,11 @@ class NPC:
                 if (player is not None and getattr(player, "alive", True)
                         and not getattr(player, "dead", False)):
                     d = math.hypot(player.x - self.x, player.y - self.y)
-                    if d < 260.0:
+                    _spot = 320.0 if getattr(self, "weapon", None) == "bow" else 260.0
+                    if d < _spot:
                         # THE CONFLICT STARTS: a smoke signal rises from the
-                        # fire, once, the moment a warrior spots the player.
+                        # fire, once, the moment a warrior spots the player --
+                        # and every settlement arms its bowmen.
                         if not getattr(camp, "conflict", False):
                             camp.conflict = True
                             _fire = getattr(camp, "fireplace", None)
@@ -1065,7 +1117,16 @@ class NPC:
                                     _smoke.signal(float(_fire.x), float(_fire.y))
                                 except Exception:
                                     pass
-                        self._fight(dt, player, getattr(g, "combat", None))
+                            try:
+                                import native as _nat
+                                _nat.escalate_war(g)
+                            except Exception:
+                                pass
+                        if getattr(self, "weapon", None) == "bow":
+                            self._native_bowman_step(dt, player,
+                                                     getattr(g, "combat", None), g)
+                        else:
+                            self._fight(dt, player, getattr(g, "combat", None))
                         return
         speed = getattr(self, "speed", 60.0)
         ang = getattr(self, "_orbit", 0.0) + 0.30 * dt
