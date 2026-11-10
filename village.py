@@ -1054,6 +1054,17 @@ class NPC:
                         and not getattr(player, "dead", False)):
                     d = math.hypot(player.x - self.x, player.y - self.y)
                     if d < 260.0:
+                        # THE CONFLICT STARTS: a smoke signal rises from the
+                        # fire, once, the moment a warrior spots the player.
+                        if not getattr(camp, "conflict", False):
+                            camp.conflict = True
+                            _fire = getattr(camp, "fireplace", None)
+                            _smoke = getattr(g, "smoke", None)
+                            if _fire is not None and _smoke is not None:
+                                try:
+                                    _smoke.signal(float(_fire.x), float(_fire.y))
+                                except Exception:
+                                    pass
                         self._fight(dt, player, getattr(g, "combat", None))
                         return
         speed = getattr(self, "speed", 60.0)

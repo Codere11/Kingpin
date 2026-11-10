@@ -1047,6 +1047,7 @@ def run(g):
                 if (not g.crown_intro_done and getattr(g, "_boot_left", [0])[0] <= 0):
                     g.crown_intro_done = True
                     g.open_crown_screen()
+                g.smoke.update(g.dt)
             except Exception:
                 pass
             creatures_set_time(g.now)
@@ -3428,6 +3429,8 @@ def run(g):
                 _sg.draw(g.screen, g.cam_x, g.cam_y)
             for _fb in (() if g._inside_now else g.built_foodboxes):
                 _fb.draw(g.screen, g.cam_x, g.cam_y)
+            if not g._inside_now:
+                g.smoke.draw(g.screen, g.cam_x, g.cam_y, g.vw, g.vh)
             # HIS PLOTS ARE ALWAYS MARKED, and while the build menu is open or
             # he is placing something they are LIT -- so he can see the ground
             # he has already staked before he stakes more.

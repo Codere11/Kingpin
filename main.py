@@ -50,6 +50,7 @@ import placement
 
 import crop
 import crown
+import smoke
 import biomes
 import board
 import boardapi
@@ -725,6 +726,7 @@ def main() -> None:
     g.crown_paid = False
     g.crown_biome = "temperate"       # the spawn biome decides the first ask
     g.crown_chest = Inventory(capacity=64)
+    g.smoke = smoke.Smoke()            # a smoke signal over a conquered fire
     g.crown_screen_open = False
     g.crown_screen = None
     g.crown_chest_open = False
