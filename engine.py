@@ -3792,6 +3792,8 @@ def run(g):
             g.crown_chest_panel.draw(g.screen)
         if g.horse_panel_open:
             g.horse_panel.draw(g.screen)
+        if g.workshop_open:
+            g.workshop_menu.draw(g.screen)
         if g.worker_panel_open:
             g.worker_panel.draw(g.screen)
         if g.stall_open:

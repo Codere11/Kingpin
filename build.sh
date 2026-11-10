@@ -47,6 +47,13 @@ fi
 echo "Building..."
 rm -rf "$DIST" GetWorld.spec __pycache__
 
+# Bundle every PNG asset beside the executable, absolute so PyInstaller's
+# workpath/specpath never shadows the glob.
+DATA_ARGS=()
+for _png in *.png; do
+    [ -e "$_png" ] && DATA_ARGS+=(--add-data "$PWD/$_png:.")
+done
+
 "$VENV/bin/pyinstaller" \
     --noconfirm \
     --onedir \
@@ -59,6 +66,7 @@ rm -rf "$DIST" GetWorld.spec __pycache__
     --exclude-module unittest \
     --exclude-module pydoc \
     --exclude-module doctest \
+    "${DATA_ARGS[@]}" \
     main.py 2>&1 | tail -1
 
 # Executable at the top level, with its runtime bundle next to it.
