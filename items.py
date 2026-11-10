@@ -31,6 +31,8 @@ REGISTRY: dict[str, ItemDef] = {
     "secret_folder": ItemDef("secret_folder", "Secret Folder",
                              "A dead agent's messages. Equip it and click."),
     "pickaxe": ItemDef("pickaxe", "Pickaxe", "Breaks iron out of the rock."),
+    "bow": ItemDef("bow", "Bow", "A wooden bow. Shoot arrows."),
+    "arrow": ItemDef("arrow", "Arrow", "Arrows. Ten per piece of wood.", stackable=True, max_stack=100),
     "compass": ItemDef("compass", "Compass", "Points home, or to the nearest village. Press F."),
     "iron": ItemDef("iron", "Iron", "Raw iron, straight from the ground. Crafting stock.",
                     stackable=True, max_stack=100),
@@ -529,6 +531,29 @@ def _draw_axe(s: int) -> pygame.Surface:
     return surf
 
 
+def _draw_bow(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    wood, wood_d = (122, 84, 46), (74, 50, 26)
+    string = (208, 202, 186)
+    rect = pygame.Rect(int(0.16 * s), int(0.12 * s), int(0.64 * s), int(0.76 * s))
+    pygame.draw.arc(surf, wood_d, rect, -math.pi / 2.0, math.pi / 2.0, int(0.11 * s))
+    pygame.draw.arc(surf, wood, rect, -math.pi / 2.0, math.pi / 2.0, int(0.06 * s))
+    sx = int(0.50 * s)
+    pygame.draw.line(surf, string, (sx, int(0.14 * s)), (sx, int(0.86 * s)), 2)
+    return surf
+
+
+def _draw_arrow(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    shaft, shaft_d = (150, 112, 66), (96, 70, 42)
+    head, fletch = (178, 184, 192), (226, 226, 232)
+    pygame.draw.line(surf, shaft_d, _pt((0.16, 0.50), s), _pt((0.86, 0.50), s), int(0.07 * s))
+    pygame.draw.line(surf, shaft, _pt((0.16, 0.50), s), _pt((0.86, 0.50), s), int(0.045 * s))
+    _poly(surf, head, [(0.84, 0.38), (1.00, 0.50), (0.84, 0.62)], s)
+    _poly(surf, fletch, [(0.20, 0.42), (0.10, 0.50), (0.20, 0.58)], s)
+    return surf
+
+
 def _draw_wood(s: int) -> pygame.Surface:
     surf = _canvas(s)
     bark, bark_d = (112, 76, 44), (70, 46, 26)
@@ -688,6 +713,8 @@ _DRAWERS = {
     "rifle": _draw_rifle,
     "shotgun": _draw_shotgun,
     "pickaxe": _draw_pickaxe,
+    "bow": _draw_bow,
+    "arrow": _draw_arrow,
     "compass": _draw_compass,
     "iron": _draw_iron,
     "berries": _draw_berries,
