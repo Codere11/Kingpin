@@ -1257,6 +1257,54 @@ class NPC:
         grade = int(round(sum(q * c for q, c in grades) / max(1, tot)))
         return taken, grade
 
+    def _food_chest(self):
+        """The nearest chest that actually holds food, respecting its lid
+        filter -- a tobacco-only chest has no food to give."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None)
+        chests = getattr(g, "built_chests", None) if g is not None else None
+        if not chests:
+            return None
+        best = None
+        for c in chests:
+            f = getattr(c, "filter", None)
+            if f is not None and f not in economy.FOOD:
+                continue
+            inv = getattr(c, "inventory", None)
+            if inv is None or sum(inv.count_of(i) for i in economy.FOOD) <= 0:
+                continue
+            d = (c.x - self.x) ** 2 + (c.y - self.y) ** 2
+            if best is None or d < best[0]:
+                best = (d, c)
+        return best[1] if best else None
+
+    def _fetch_food_from_chest(self, dt: float) -> bool:
+        """A hungry conquered worker eats from a chest: walk to it, take one
+        meal, eat it there. True while he is on the way or eating."""
+        if getattr(self, "hunger", 0.0) < economy.EAT_AT:
+            return False                 # not hungry
+        if economy.food_of(self) > 0:
+            return False                 # he still has his own food
+        chest = self._food_chest()
+        if chest is None:
+            return False                 # no chest, or none holds food
+        if math.hypot(chest.x - self.x, chest.y - self.y) > 20.0:
+            self._step_toward(chest.x, chest.y, dt)
+            return True
+        inv = getattr(chest, "inventory", None)
+        if inv is not None:
+            for item in economy.FOOD:
+                if inv.count_of(item) <= 0:
+                    continue
+                taken, _g = self._take_from_chest(chest, item, 1)
+                if taken <= 0:
+                    continue
+                self.hunger = max(0.0, getattr(self, "hunger", 0.0) - economy.EAT_BY)
+                self.mood = min(100.0, getattr(self, "mood", 50.0) + 1.0)
+                self._did_work()
+                return True
+        return True                      # at the chest, but it emptied on the walk
+
     def _work_artisan(self, dt: float) -> None:
         """An artisan on the bench: fetch 10 leaf from a chest, carry it to
         the bench, turn it into 10 finished goods, and walk those back to a
@@ -1544,6 +1592,10 @@ class NPC:
         # NATIVE CAMP PEOPLE. Farmers run the game's own field work (till,
         # water, sow, reap) on the camp's food plots; warriors patrol the fire.
         _nat = getattr(self, "native", False)
+        # A HUNGRY CONQUERED WORKER EATS FROM A CHEST, whatever his job.
+        if _nat and getattr(self, "conquered", False):
+            if self._fetch_food_from_chest(dt):
+                return
         if _nat and getattr(self, "native_role", "") == "warrior":
             self._native_step(dt, world, now)
             return
