@@ -1166,7 +1166,7 @@ def main() -> None:
         return houseuse.near_chest(g.player, g.inside_house)
 
     def near_chest_building():
-        """The nearest 1x2 chest he has built, or None."""
+        """The nearest 1x1 chest he has built, or None."""
         for _ch in getattr(g, "built_chests", ()):
             if math.hypot(g.player.x - _ch.x, g.player.y - _ch.y) < 64.0:
                 return _ch

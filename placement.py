@@ -24,14 +24,18 @@ class Chest:
     """A 1x1 chest on the mesh: 64 slots, double the player's 32."""
 
     def __init__(self, x: float, y: float) -> None:
-        self.x = float(x)
-        self.y = float(y)
-        self.w, self.h = TILE, TILE          # one tile each way
+        # A CHEST FILLS ONE SQUARE OF THE MESH, like a plank: the top-left
+        # corner lands on the snapped mesh corner and the whole 32x32 cell is
+        # the chest.
+        self.tx = int(x // TILE)
+        self.ty = int(y // TILE)
+        self.x = self.tx * TILE + TILE / 2.0
+        self.y = self.ty * TILE + TILE / 2.0
+        self.w, self.h = TILE, TILE
         self.filter = None                   # None = any; else only this item id
-        self.rect = pygame.Rect(int(x - self.w / 2), int(y - self.h / 2),
-                                self.w, self.h)
+        self.rect = pygame.Rect(self.tx * TILE, self.ty * TILE, TILE, TILE)
         self.sight_rect = self.rect.inflate(48, 48)
-        self.base_y = y + self.h / 2.0
+        self.base_y = self.y + self.h / 2.0
         try:
             from inventory import Inventory
             self.inventory = Inventory(capacity=64)
@@ -293,7 +297,12 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
               "foodbox": (32, 32), "workshop": (64, 64)}
     if placing in _sizes:
         _w, _h = _sizes[placing]
-        rect = pygame.Rect(int(x - _w / 2), int(y - _h / 2), _w, _h)
+        if _w == _h == TILE:
+            # A 1x1 CHEST/SIGN/FEED BOX FILLS ONE SQUARE OF THE MESH: its
+            # top-left sits on the snapped corner, exactly like a plank.
+            rect = pygame.Rect(int(x), int(y), _w, _h)
+        else:
+            rect = pygame.Rect(int(x - _w / 2), int(y - _h / 2), _w, _h)
         return (0.0, -1.0), rect, rect.inflate(70, 70)
     if placing == "plot":
         rect = pygame.Rect(int(x - 40), int(y - 40), 80, 80)
@@ -554,6 +563,24 @@ def try_place(g):
         if not g.can_place(rect, sight):
             g.toast("No clear ground here")
             return
+        # EACH CHEST OWNS ITS OWN SQUARE: never pile one on another, or on a
+        # plank, a sign or a feed box.
+        for _other in getattr(g, "built_chests", ()) or ():
+            if _other.rect.colliderect(rect):
+                g.toast("A chest is already on that square")
+                return
+        for _sg in getattr(g, "built_signs", ()) or ():
+            if _sg.rect.colliderect(rect):
+                g.toast("A sign-post is already on that square")
+                return
+        for _fb in getattr(g, "built_foodboxes", ()) or ():
+            if _fb.rect.colliderect(rect):
+                g.toast("A food box is already on that square")
+                return
+        for (_btx, _bty) in getattr(g, "built_blocks", {}) or {}:
+            if pygame.Rect(_btx * TILE, _bty * TILE, TILE, TILE).colliderect(rect):
+                g.toast("A block is already on that square")
+                return
         _cost = g.build_materials("chest")
         if not g.test_mode:
             for _it, _q in _cost.items():

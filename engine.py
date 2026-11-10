@@ -1591,6 +1591,11 @@ def run(g):
                                       _block.TILE, _block.TILE)
                     if _br.inflate(60, 60).collidepoint(g.player.x, g.player.y):
                         g._block_cols.append(_br)
+                # CHESTS ARE PHYSICAL TOO: a full mesh square you cannot walk
+                # through, the same as a plank.
+                for _ch in getattr(g, "built_chests", ()) or ():
+                    if _ch.rect.inflate(60, 60).collidepoint(g.player.x, g.player.y):
+                        g._block_cols.append(_ch.rect)
             except Exception:
                 g._block_cols = []
             if not g.player.dead:
