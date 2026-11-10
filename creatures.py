@@ -769,6 +769,11 @@ class Horse:
         self.hunger = random.uniform(0.0, 30.0)   # like a man's belly
         self.food = random.randint(0, 2)          # what it has stored
         self.tamed = False                        # a settlement's livestock
+        self.conquered = False                    # the player's own horse
+        self.delivering = False                   # running the Crown's goods to the ship
+        self.returning = False                    # coming back to its sleeping spot
+        self.pack = None                          # an Inventory, made on demand
+        self.g = None                             # the frame, for the ship and the Crown
         self.target = (self.x, self.y)
         Horse.HORSES = [h for h in Horse.HORSES if h.alive]
         Horse.HORSES.append(self)
@@ -811,10 +816,84 @@ class Horse:
         self.x += (ux * speed + sx * 140.0) * dt
         self.y += (uy * speed + sy * 140.0) * dt
 
+    def _pack(self):
+        """The horse's saddle bags: an Inventory, made the first time it is opened."""
+        p = getattr(self, "pack", None)
+        if p is None:
+            try:
+                from inventory import Inventory
+                self.pack = Inventory(32)
+            except Exception:
+                self.pack = None
+        return self.pack
+
+    def _do_delivery(self, dt: float, colliders=None) -> None:
+        """Run to the ship, offload, and come back to the sleeping spot.
+        Steering dodges whatever stands in the way, so it never gets stuck on
+        a wall or a tree trunk."""
+        g = getattr(self, "g", None)
+        if self.delivering:
+            if g is None:
+                self.delivering = False
+                return
+            sx, sy = g.ship_pos()
+            d = math.hypot(sx - self.x, sy - self.y)
+            if d < 52.0:
+                self._deliver(g)
+                self.delivering = False
+                self.returning = True
+                return
+            ux, uy = steering.steer(self, sx, sy, colliders or (), ())
+            self.x += ux * self.speed * 1.4 * dt
+            self.y += uy * self.speed * 1.4 * dt
+            self.facing = (ux, uy)
+            return
+        if self.returning:
+            hx, hy = self.home
+            d = math.hypot(hx - self.x, hy - self.y)
+            if d < 24.0:
+                self.returning = False
+                self.x, self.y = hx, hy
+                self.facing = (0.0, -1.0)
+                return
+            ux, uy = steering.steer(self, hx, hy, colliders or (), ())
+            self.x += ux * self.speed * 1.2 * dt
+            self.y += uy * self.speed * 1.2 * dt
+            self.facing = (ux, uy)
+            return
+
+    def _deliver(self, g) -> None:
+        """Pour the saddle bags into the Crown's chest; if the ask is met,
+        that is the payment."""
+        pack = self._pack()
+        chest = getattr(g, "crown_chest", None)
+        if pack is None or chest is None:
+            return
+        n = 0
+        for i in range(len(pack.slots)):
+            stack = pack.slots[i]
+            if stack is None:
+                continue
+            chest.add(stack.defn.id, stack.count, stack.quality)
+            n += stack.count
+            pack.slots[i] = None
+        try:
+            import crown as _crown
+            if _crown.satisfied(g):
+                g.crown_pay()
+            else:
+                g.toast("The horse delivered its load.")
+        except Exception:
+            pass
+
     def update(self, dt: float, threat=None, colliders=None) -> None:
         if self.hit_flash > 0.0:
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if not self.alive:
+            return
+        # RUNNING A DELIVERY: to the ship, then back to the sleeping spot.
+        if self.delivering or self.returning:
+            self._do_delivery(dt, colliders)
             return
         self._animal_hunger(dt)
         if self.hunger >= economy.STARVE_AT:

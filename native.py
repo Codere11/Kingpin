@@ -338,6 +338,7 @@ def build(g, cx: float, cy: float, seed: int):
                 a = _creatures.Horse(ax, ay, rng.choice(('brown', 'black',
                                                          'white', 'palomino')))
                 a.tamed = True
+                a.g = g
                 a.home = (ax, ay)
                 if a not in getattr(g, "horses", ()):
                     g.horses.append(a)

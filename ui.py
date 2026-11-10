@@ -810,6 +810,47 @@ class CrownScreen:
                         pay.centery - t.get_height() // 2))
 
 
+class HorsePanel:
+    """A conquered horse: its saddle bags open like a chest, with a Send to
+    ship button underneath."""
+
+    def __init__(self, player_inv, horse) -> None:
+        self.chest = ChestPanel(player_inv, horse._pack(),
+                                top_label=getattr(horse, "name", "HORSE") or "HORSE")
+        self.horse = horse
+        self.hover = False
+        self.font = pygame.font.SysFont("dejavusans", 16, bold=True)
+
+    def _button(self, sw: int, sh: int):
+        w, h = 200, 42
+        return pygame.Rect((sw - w) // 2, sh - 54, w, h)
+
+    def handle_event(self, event):
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return None
+        btn = self._button(*surface.get_size())
+        if event.type == pygame.MOUSEMOTION:
+            self.hover = btn.collidepoint(event.pos)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if btn.collidepoint(event.pos):
+                return "send"
+        return self.chest.handle_event(event)
+
+    def draw(self, screen: pygame.Surface) -> None:
+        self.chest.draw(screen)
+        sw, sh = screen.get_size()
+        btn = self._button(sw, sh)
+        hovered = self.hover
+        pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
+                         btn, border_radius=8)
+        pygame.draw.rect(screen, ACCENT if hovered else BORDER, btn, width=2,
+                         border_radius=8)
+        t = self.font.render("Send to ship", True, TEXT)
+        screen.blit(t, (btn.centerx - t.get_width() // 2,
+                        btn.centery - t.get_height() // 2))
+
+
 class PauseMenu:
     """Escape menu: Respawn or Exit game (Esc resumes)."""
 

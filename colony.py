@@ -52,6 +52,7 @@ def make_camp(g) -> object:
         "loggers": [],             # the conquered LOGGERS
         "unemployed": [],          # conquered, not assigned to a job
         "people": [],              # every conquered person (the pool)
+        "animals": [],             # the conquered livestock (horses, bison)
     })()
     return camp
 
@@ -127,6 +128,13 @@ def conquer_camp(g, native_camp) -> None:
         n.stock["wheat_seed"] = n.stock.get("wheat_seed", 0) + 3
         if n not in pc.people:
             pc.people.append(n)
+    # THE LIVESTOCK ARE HIS TOO: a conquered horse carries goods to the ship.
+    for a in (getattr(native_camp, "animals", ()) or ()):
+        if getattr(a, "alive", True):
+            a.conquered = True
+            a.g = g
+            if a not in getattr(pc, "animals", ()):
+                pc.animals.append(a)
     try:
         sync_jobs(g)
     except Exception:

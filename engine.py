@@ -304,6 +304,18 @@ def run(g):
                     pygame.mouse.set_visible(False)
                 else:
                     g.crown_chest_panel.handle_event(event)
+            elif g.horse_panel_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                                                                  pygame.K_ESCAPE):
+                    g.horse_panel.chest.close()
+                    g.horse_panel_open = False
+                    g.horse_panel = None
+                    g.horse_sel = None
+                    pygame.mouse.set_visible(False)
+                else:
+                    _r = g.horse_panel.handle_event(event)
+                    if _r == "send":
+                        g.send_horse()
             elif g.workshop_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
@@ -771,7 +783,20 @@ def run(g):
                         _wy = g.cam_y + event.pos[1] / ZOOM
                         if math.hypot(_wx - _shx, _wy - _shy) < 80.0:
                             g.open_crown_screen()
+                            g.consumed = True
                             break
+                    except Exception:
+                        pass
+                    # A CONQUERED HORSE: click opens its saddle bags.
+                    try:
+                        _wx = g.cam_x + event.pos[0] / ZOOM
+                        _wy = g.cam_y + event.pos[1] / ZOOM
+                        for _hh in list(getattr(g, "horses", ())):
+                            if getattr(_hh, "conquered", False) and getattr(_hh, "alive", True):
+                                if math.hypot(_wx - _hh.x, _wy - _hh.y) < 40.0:
+                                    g.open_horse(_hh)
+                                    g.consumed = True
+                                    break
                     except Exception:
                         pass
                     # A BUILDABLE IN THE HAND: LEFT CLICK PLACES A 1x1 BLOCK.
@@ -853,7 +878,7 @@ def run(g):
         # the log has a BLOCKED line, the line names what did it.
         if (g.inventory_open or g.trade_open or g.build_menu_open or g.chest_open
                 or g.workshop_open or g.confirm_open or g.pause_open or g.map_open
-                or g.crown_screen_open or g.crown_chest_open
+                or g.crown_screen_open or g.crown_chest_open or g.horse_panel_open
                 or g.placing is not None or g.inside_house is not None
                 or g.inside_mine is not None or g.board_open or g.smith_open):
             g._blk += g.dt
@@ -3266,6 +3291,8 @@ def run(g):
                 g.crown_screen.draw(g.screen)
             if g.crown_chest_open:
                 g.crown_chest_panel.draw(g.screen)
+            if g.horse_panel_open:
+                g.horse_panel.draw(g.screen)
             if g.workshop_open:
                 g.workshop_menu.draw(g.screen)
             if g.trade_open:
@@ -3741,6 +3768,8 @@ def run(g):
             g.crown_screen.draw(g.screen)
         if g.crown_chest_open:
             g.crown_chest_panel.draw(g.screen)
+        if g.horse_panel_open:
+            g.horse_panel.draw(g.screen)
         if g.worker_panel_open:
             g.worker_panel.draw(g.screen)
         if g.stall_open:

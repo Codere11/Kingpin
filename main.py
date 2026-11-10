@@ -109,8 +109,8 @@ from skills import Skills
 from trade import TradeMenu
 from workshop import WorkshopMenu
 from trees import Trees
-from ui import (ChestPanel, ConfirmMenu, CrownScreen, FolderPanel, Hotbar,
-                InventoryPanel, MarketPanel, PauseMenu, SignPanel)
+from ui import (ChestPanel, ConfirmMenu, CrownScreen, FolderPanel, HorsePanel,
+                Hotbar, InventoryPanel, MarketPanel, PauseMenu, SignPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
                      nation_name, village_center)
@@ -730,6 +730,10 @@ def main() -> None:
     g.crown_chest_open = False
     g.crown_chest_panel = None
     g.crown_intro_done = False
+    # A CONQUERED HORSE'S SADDLE BAGS, with the Send-to-ship button.
+    g.horse_panel_open = False
+    g.horse_panel = None
+    g.horse_sel = None
     # A HIRED MAN'S PACK, OPENED THE WAY A CHEST IS.
     g.worker_panel_open = False
     g.worker_panel = None
@@ -1182,6 +1186,23 @@ def main() -> None:
         g.toast("The Crown is paid -- you pass this round.")
         g.mark_dirty()
 
+    def open_horse(horse) -> None:
+        g.horse_sel = horse
+        g.horse_panel = HorsePanel(g.inventory, horse)
+        g.horse_panel_open = True
+        pygame.mouse.set_visible(True)
+
+    def send_horse() -> None:
+        h = g.horse_sel
+        if h is not None and getattr(h, "alive", True):
+            h.delivering = True
+            h.returning = False
+            g.toast("%s runs to the ship." % (getattr(h, "name", "Horse") or "Horse"))
+        g.horse_panel_open = False
+        g.horse_panel = None
+        g.horse_sel = None
+        pygame.mouse.set_visible(False)
+
     def near_brew() -> bool:
         return houseuse.near_brew(g.player, g.inside_house)
 
@@ -1604,6 +1625,7 @@ def main() -> None:
         g.sign_open = False
         g.crown_screen_open = False
         g.crown_chest_open = False
+        g.horse_panel_open = False
         g.worker_panel_open = False
         g.stall_open = False
         g.body_open = False
@@ -1777,6 +1799,8 @@ def main() -> None:
     g.open_crown_screen = open_crown_screen
     g.crown_demand = crown_demand
     g.crown_pay = crown_pay
+    g.open_horse = open_horse
+    g.send_horse = send_horse
     g.near_fireplace = near_fireplace
     g.near_lab = near_lab
     g.near_stall = near_stall
