@@ -8,6 +8,39 @@ import socio
 import grief
 
 
+def _bench_products(g, wp):
+    """(leaf item, product) pairs an artisan's bench in this biome can make.
+    Only the leaf that actually grows here is offered -- tobacco becomes
+    cigars, mushrooms become dried mushrooms, agave becomes mezcal."""
+    import crop
+    import biomes
+    t = g.world.temperature(wp.x, wp.y)
+    h = g.world.humidity(wp.x, wp.y)
+    leaf_crop = biomes.crop_kinds(t, h)[1]
+    leaf_item = crop.LEAF_ITEM.get(leaf_crop)
+    product = crop.LEAF_PRODUCT.get(leaf_crop)
+    return [(leaf_item, product)] if leaf_item and product else []
+
+
+def _set_bench_default(g, wp) -> None:
+    prods = _bench_products(g, wp)
+    if prods:
+        wp.leaf, wp.product = prods[0]
+    else:
+        wp.leaf = wp.product = None
+
+
+def _artisan_rects(g):
+    """(panel, left-arrow, right-arrow) for the artisan's bench panel."""
+    sw, sh = getattr(g, "vw", 1280), getattr(g, "vh", 720)
+    w, h = 460, 240
+    x0, y0 = (sw - w) // 2, (sh - h) // 2
+    cx = sw // 2
+    left = pygame.Rect(cx - 70, y0 + 68, 26, 26)
+    right = pygame.Rect(cx + 44, y0 + 68, 26, 26)
+    return pygame.Rect(x0, y0, w, h), left, right
+
+
 def run(g):
     import main as _main_module
     _g = globals()
@@ -205,6 +238,23 @@ def run(g):
                 elif (event.type == pygame.KEYDOWN
                       and event.key in (pygame.K_SPACE, pygame.K_RETURN)):
                     g.work_msg = g.work_action("")
+            elif g.artisan_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                                                                  pygame.K_ESCAPE):
+                    g.artisan_open = False
+                    if g.sync_jobs:
+                        g.sync_jobs(g)     # hand the bench to an unemployed man
+                    pygame.mouse.set_visible(False)
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    _panel, _l, _r = _artisan_rects(g)
+                    if _l.collidepoint(event.pos) or _r.collidepoint(event.pos):
+                        _prods = _bench_products(g, g.artisan_bench)
+                        if _prods:
+                            _cur = (getattr(g.artisan_bench, "leaf", None),
+                                    getattr(g.artisan_bench, "product", None))
+                            _idx = _prods.index(_cur) if _cur in _prods else 0
+                            _idx = (_idx + (1 if _r.collidepoint(event.pos) else -1)) % len(_prods)
+                            g.artisan_bench.leaf, g.artisan_bench.product = _prods[_idx]
             elif g.board_open:
                 if g.board_panel.handle_event(event):
                     g.board_open = False
@@ -490,11 +540,16 @@ def run(g):
                     _moved = math.hypot(_ex - _raw[0], _ey - _raw[1]) if _raw is not None else 999.0
                     if _moved < 6.0:
                         # A CLICK on an existing FIELD cycles what it grows;
-                        # an orchard has no crop choice.
+                        # an orchard has no crop choice. Only crops that grow
+                        # in the field's own biome are offered.
                         for fd in g.field_designations:
                             if fd["rect"].collidepoint(_ex, _ey):
                                 if fd.get("type") != "orchard":
-                                    fd["kind"] = (g.next_field_kind(fd["kind"])
+                                    _cx = fd["rect"].centerx
+                                    _cy = fd["rect"].centery
+                                    _t = g.world.temperature(_cx, _cy)
+                                    _h = g.world.humidity(_cx, _cy)
+                                    fd["kind"] = (g.next_field_kind(fd["kind"], _t, _h)
                                                    if g.next_field_kind else "wheat")
                                     g.toast("Field grows: %s" % fd["kind"])
                                     if g.sync_player_camp:
@@ -516,7 +571,11 @@ def run(g):
                                 g.field_designations.append({"rect": _r, "type": "orchard", "kind": "orchard"})
                                 g.toast("Orchard designated  (%d x %d)" % (_r.w, _r.h))
                             else:
-                                g.field_designations.append({"rect": _r, "type": "field", "kind": "wheat"})
+                                # a fresh field starts on the biome's food crop
+                                _t = g.world.temperature(_r.centerx, _r.centery)
+                                _h = g.world.humidity(_r.centerx, _r.centery)
+                                _base = g.first_field_kind(_t, _h) if g.first_field_kind else "wheat"
+                                g.field_designations.append({"rect": _r, "type": "field", "kind": _base})
                                 g.toast("Field designated  (%d x %d)" % (_r.w, _r.h))
                             if g.sync_player_camp:
                                 g.sync_player_camp(g)
@@ -616,7 +675,7 @@ def run(g):
                     # the camp's workers as they carry their produce over.
                     _ch = g.near_chest_building()
                     g.chest_open = True
-                    g.chest_panel = ChestPanel(g.inventory, _ch.inventory)
+                    g.chest_panel = ChestPanel(g.inventory, _ch.inventory, filter_owner=_ch)
                     pygame.mouse.set_visible(True)
                 elif g.near_chest():
                     g.chest_open = True
@@ -634,6 +693,12 @@ def run(g):
                     _wp = g.near_workplace()
                     if getattr(_wp, "kind", None) == "workshop":
                         g.workshop_open = True
+                        pygame.mouse.set_visible(True)
+                    elif getattr(_wp, "kind", None) == "lab":
+                        g.artisan_bench = _wp
+                        g.artisan_open = True
+                        if getattr(_wp, "product", None) is None:
+                            _set_bench_default(g, _wp)
                         pygame.mouse.set_visible(True)
                     else:
                         g.smith_shop = _wp
@@ -676,7 +741,7 @@ def run(g):
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
                   and not (g.inventory_open or g.trade_open or g.board_open
                            or g.chest_open or g.stall_open or g.worker_panel_open
-                           or g.workshop_open or g.smith_open or g.confirm_open
+                           or g.workshop_open or g.smith_open or g.artisan_open or g.confirm_open
                            or g.map_open or g.pause_open or g.build_menu_open
                            or g.dialogue_panel.open_ or g.placing is not None)):
                 # SPACE: LUNGE. A quarter of the wind, in the way he is holding
@@ -745,7 +810,7 @@ def run(g):
                 if (g.inventory_open or g.trade_open or g.board_open or g.chest_open
                         or g.worker_panel_open or g.stall_open or g.body_open
                         or g.folder_open
-                        or g.smith_open or g.workshop_open or g.confirm_open
+                        or g.smith_open or g.artisan_open or g.workshop_open or g.confirm_open
                         or g.map_open or g.build_menu_open or g.placing is not None):
                     g.close_modals()
                 elif g.pause_open:
@@ -890,7 +955,7 @@ def run(g):
                 or g.workshop_open or g.confirm_open or g.pause_open or g.map_open
                 or g.crown_screen_open or g.crown_chest_open or g.horse_panel_open
                 or g.placing is not None or g.inside_house is not None
-                or g.inside_mine is not None or g.board_open or g.smith_open):
+                or g.inside_mine is not None or g.board_open or g.smith_open or g.artisan_open):
             g._blk += g.dt
             # A MENU LEFT ALONE FOR TWENTY SECONDS RELEASES THE WORLD. Not a
             # fix for any particular panel -- a guarantee that no panel, known
@@ -925,7 +990,7 @@ def run(g):
                          % (g._HF[0] / max(1e-6, g._now_hf - g._HF[1])))
                 g._HF[0], g._HF[1] = 0, g._now_hf
             g.keys = pygame.key.get_pressed()
-            if g.board_open or g.smith_open:                       # reading the board: stand still
+            if g.board_open or g.smith_open or g.artisan_open:                       # reading the board: stand still
                 g.keys = _NO_KEYS
             # THE ROOM IS ZOOMED, SO THE AIM MUST BE. Reading the window
             # mouse against a zoomed camera skews every look by the zoom --
@@ -3701,6 +3766,34 @@ def run(g):
                 g.py = int(g.vh * 0.68)
                 g.screen.blit(g.plate, (g.px - 11, g.py - 3))
                 g.screen.blit(g.label, (g.px, g.py))
+            if g.artisan_open and g.artisan_bench is not None:
+                _panel, _l, _r = _artisan_rects(g)
+                _shade = pygame.Surface((g.vw, g.vh), pygame.SRCALPHA)
+                _shade.fill((0, 0, 0, 170))
+                g.screen.blit(_shade, (0, 0))
+                pygame.draw.rect(g.screen, (26, 26, 30), _panel, border_radius=10)
+                pygame.draw.rect(g.screen, (150, 118, 78), _panel, 2, border_radius=10)
+                _t = g.font.render("ARTISAN'S BENCH", True, (238, 224, 190))
+                g.screen.blit(_t, (_panel.centerx - _t.get_width() // 2, _panel.top + 12))
+                _leaf = getattr(g.artisan_bench, "leaf", None)
+                _prod = getattr(g.artisan_bench, "product", None)
+                _makes = "makes %s from %s" % (_prod or "-", _leaf or "-")
+                _m = g.font.render(_makes, True, (232, 200, 118))
+                g.screen.blit(_m, (_panel.centerx - _m.get_width() // 2, _panel.top + 42))
+                for _rr in (_l, _r):
+                    pygame.draw.rect(g.screen, (70, 60, 44), _rr, border_radius=4)
+                    pygame.draw.rect(g.screen, (150, 118, 78), _rr, 1, border_radius=4)
+                for _rr, _sym in ((_l, "<"), (_r, ">")):
+                    _s = g.font.render(_sym, True, (226, 200, 150))
+                    g.screen.blit(_s, (_rr.centerx - _s.get_width() // 2,
+                                        _rr.centery - _s.get_height() // 2))
+                _art = getattr(g.artisan_bench, "artisan", None)
+                _who = getattr(_art, "name", "no artisan assigned") if _art is not None else "no artisan assigned"
+                _w = g.font.render("artisan: %s" % _who, True, (216, 212, 200))
+                g.screen.blit(_w, (_panel.centerx - _w.get_width() // 2, _panel.top + 104))
+                _h = g.font.render("takes 10 leaf from a chest, makes 10 goods      [E] close",
+                                   True, (196, 226, 168))
+                g.screen.blit(_h, (_panel.centerx - _h.get_width() // 2, _panel.bottom - 28))
             if g.smith_open and g.smith_shop is not None:
                 g._w = g.smith_shop.worker
                 g._orders = list(getattr(g._w, "tool_orders", ()) or ())

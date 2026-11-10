@@ -61,6 +61,7 @@ import items
 import industry
 import interior
 import nations
+import quality
 import skills
 import wildcrop
 import physics
@@ -177,6 +178,7 @@ _FOREST = None             # set once by main, so villages can find their woods
 _TRADE_GRID = None         # allocated once, rebuilt per village per step
 LOG_CHOP_SECONDS = 3.0    # how long a logger takes to drop one tree
 ORCHARD_GROW_SECONDS = 180.0   # a sapling to a full tree, like a wild stump
+ARTISAN_BATCH_SECONDS = 4.0   # ten leaf into ten finished goods at the bench
 BIRTH_BOND = 18.0                    # seconds of evening friendship before a child
 PEACE_DELAY = 30.0                   # no children until this long after a death
 
@@ -1157,17 +1159,28 @@ class NPC:
                 break
 
     def _camp_chest(self):
-        """The nearest chest in the player's settlement, or None."""
+        """The nearest chest that will take what he carries. A chest with a
+        lid filter only takes its one kind; an 'Any' chest takes everything."""
         camp = getattr(self, "native_camp", None)
         g = getattr(camp, "g", None)
         chests = getattr(g, "built_chests", None) if g is not None else None
         if not chests:
             return None
-        return min(chests, key=lambda c: (c.x - self.x) ** 2 + (c.y - self.y) ** 2)
+        carry = getattr(self, "carry", {}) or {}
+        def _accepts(c):
+            f = getattr(c, "filter", None)
+            if f is None:
+                return True
+            return carry.get(f, 0) > 0
+        ok = [c for c in chests if _accepts(c)]
+        if not ok:
+            return None                 # no chest will take any of it
+        return min(ok, key=lambda c: (c.x - self.x) ** 2 + (c.y - self.y) ** 2)
 
     def _deposit_to_chest(self, dt: float) -> bool:
         """Carry the day's surplus to the chest and put it in, physically.
-        Returns True while he is on the way or stowing it."""
+        Returns True while he is on the way or stowing it. A filtered chest
+        only takes its own kind; the rest stays in the pack for another chest."""
         carry = getattr(self, "carry", None)
         if not carry:
             return False
@@ -1178,21 +1191,143 @@ class NPC:
             self._step_toward(chest.x, chest.y, dt)
             return True
         inv = getattr(chest, "inventory", None)
+        f = getattr(chest, "filter", None)
         if inv is not None:
             grades = getattr(self, "carry_grade", {}) or {}
             for item, n in list(carry.items()):
+                if f is not None and item != f:
+                    continue             # this chest only takes its one kind
                 g = grades.get(item)
                 _def = items.get(item)
                 if getattr(_def, "quality", False) and g is not None:
                     inv.add(item, int(n), quality=int(g))
                 else:
                     inv.add(item, int(n))
-        carry.clear()
-        grades = getattr(self, "carry_grade", None)
-        if grades is not None:
-            grades.clear()
-        self._did_work()
+                carry.pop(item, None)
+                grades.pop(item, None)
+        if not carry:
+            self._did_work()
         return True
+
+    def _chest_accepting(self, item: str):
+        """The nearest chest whose filter is None ('Any') or this item."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None)
+        chests = getattr(g, "built_chests", None) if g is not None else None
+        if not chests:
+            return None
+        ok = [c for c in chests if getattr(c, "filter", None) in (None, item)]
+        if not ok:
+            return None
+        return min(ok, key=lambda c: (c.x - self.x) ** 2 + (c.y - self.y) ** 2)
+
+    def _chest_with(self, item: str, n: int):
+        """The nearest chest that takes `item` and holds at least n of it."""
+        chest = self._chest_accepting(item)
+        if chest is None:
+            return None
+        inv = getattr(chest, "inventory", None)
+        if inv is not None and inv.count_of(item) >= n:
+            return chest
+        return None
+
+    def _take_from_chest(self, chest, item: str, n: int):
+        """Take up to n of item out of a chest; returns (taken, grade)."""
+        inv = getattr(chest, "inventory", None)
+        if inv is None:
+            return 0, 3
+        remaining = n
+        grades = []
+        for i, stack in enumerate(inv.slots):
+            if stack is None or stack.defn.id != item:
+                continue
+            take = min(remaining, stack.count)
+            q = stack.quality if stack.defn.quality else 3
+            grades.append((q, take))
+            stack.count -= take
+            remaining -= take
+            if stack.count <= 0:
+                inv.slots[i] = None
+            if remaining <= 0:
+                break
+        taken = n - remaining
+        if taken <= 0:
+            return 0, 3
+        tot = sum(c for _, c in grades)
+        grade = int(round(sum(q * c for q, c in grades) / max(1, tot)))
+        return taken, grade
+
+    def _work_artisan(self, dt: float) -> None:
+        """An artisan on the bench: fetch 10 leaf from a chest, carry it to
+        the bench, turn it into 10 finished goods, and walk those back to a
+        chest. The good's grade is the midpoint of his hand and the leaf's."""
+        bench = getattr(self, "artisan_bench", None)
+        if bench is None:
+            self._native_idle(dt)
+            return
+        product = getattr(bench, "product", None)
+        leaf = getattr(bench, "leaf", None)
+        if not product or not leaf:
+            self._native_idle(dt)
+            return
+        # 1. Deliver the finished article before fetching more leaf.
+        if self.carry.get(product, 0) > 0:
+            chest = self._chest_accepting(product)
+            if chest is None:
+                return                 # no chest will take it: hold it
+            if math.hypot(chest.x - self.x, chest.y - self.y) > 22.0:
+                self._step_toward(chest.x, chest.y, dt)
+                return
+            inv = getattr(chest, "inventory", None)
+            if inv is not None:
+                n = int(self.carry.get(product, 0))
+                g = self.carry_grade.get(product)
+                if getattr(items.get(product), "quality", False) and g is not None:
+                    inv.add(product, n, quality=int(g))
+                else:
+                    inv.add(product, n)
+                self.carry.pop(product, None)
+                self.carry_grade.pop(product, None)
+            return
+        # 2. With a full batch of leaf, work the bench.
+        if self.carry.get(leaf, 0) >= 10:
+            if math.hypot(bench.x - self.x, bench.y - self.y) > 22.0:
+                self._step_toward(bench.x, bench.y, dt)
+                return
+            self.produce_acc += dt
+            if self.produce_acc >= ARTISAN_BATCH_SECONDS:
+                self.produce_acc = 0.0
+                self.carry[leaf] = self.carry.get(leaf, 0) - 10
+                if self.carry.get(leaf, 0) <= 0:
+                    self.carry.pop(leaf, None)
+                    self.carry_grade.pop(leaf, None)
+                hands = self.skills.leaf_grade()
+                given = self.carry_grade.get(leaf, 3)
+                g = quality.clamp(int(round((hands + given) / 2.0)))
+                self.carry[product] = self.carry.get(product, 0) + 10
+                self.carry_grade[product] = g
+                self._did_work()
+                self.skills.gain_farming(0.05)
+            return
+        # 3. Fetch 10 leaf from the nearest chest that holds it.
+        chest = self._chest_with(leaf, 10)
+        if chest is None:
+            self._native_idle(dt)
+            return
+        if math.hypot(chest.x - self.x, chest.y - self.y) > 22.0:
+            self._step_toward(chest.x, chest.y, dt)
+            return
+        taken, g = self._take_from_chest(chest, leaf, 10)
+        if taken <= 0:
+            self._native_idle(dt)
+            return
+        old_n = int(self.carry.get(leaf, 0) or 0)
+        self.carry[leaf] = old_n + taken
+        if old_n == 0:
+            self.carry_grade[leaf] = g
+        else:
+            self.carry_grade[leaf] = quality.merge(
+                self.carry_grade.get(leaf, 3), old_n, g, taken)
 
     def _pockets(self):
         """A conquered worker's real pack (an Inventory), made lazily from the
@@ -1420,6 +1555,9 @@ class NPC:
             return
         if _nat and getattr(self, "native_role", "") == "animal_handler":
             self._work_animals(dt)
+            return
+        if _nat and getattr(self, "native_role", "") == "artisan":
+            self._work_artisan(dt)
             return
         if _nat and getattr(self, "native_role", "") == "unemployed":
             self._native_idle(dt)

@@ -56,6 +56,10 @@ FIELD_SYMBOL = {
 LEAF_ITEM = {"plant": "tobacco", "mushroom": "red_mushroom", "agave": "agave"}
 FOOD_ITEM = {"wheat": "bread", "berries": "berries", "cactus": "cactus_fruit"}
 
+# what an artisan's bench turns each leaf crop into -- the finished article
+LEAF_PRODUCT = {"plant": "cigar", "mushroom": "dried_mushroom", "agave": "mezcal"}
+LEAF_OF_PRODUCT = {v: k for k, v in LEAF_PRODUCT.items()}
+
 # every crop has its own seed, and every seed grows exactly one crop
 SEED_CROP = {
     "wheat_seed": "wheat", "seed_bag": "plant",
@@ -64,6 +68,18 @@ SEED_CROP = {
     "cotton_seed": "cotton",
 }
 CROP_SEED = {crop: seed for seed, crop in SEED_CROP.items()}
+
+
+def growable_kinds(t, h):
+    """The crops a field in this biome can grow, in the order they cycle on a
+    click. Snow keeps berries and mushrooms, the desert keeps cactus and agave,
+    everywhere else wheat and tobacco -- and cotton only on the savanna."""
+    import biomes
+    food, leaf = biomes.crop_kinds(t, h)
+    kinds = [food, leaf]
+    if biomes.biome_name(t, h) == "savanna":
+        kinds.append("cotton")
+    return kinds
 
 # the leaf plant takes its colour from where it grows
 LEAF_TINT = {

@@ -20,14 +20,24 @@ import crop
 import economy
 
 
-def next_kind(kind: str) -> str:
-    """The crop a field cycles to on the next click (bread is the base)."""
-    ks = crop.FIELD_KINDS
+def next_kind(kind: str, t: float, h: float) -> str:
+    """The crop a field cycles to on the next click. Only what actually grows
+    in that biome is offered -- no tobacco out of the snow, no agave in the
+    temperate lands."""
+    ks = crop.growable_kinds(t, h)
+    if not ks:
+        return "wheat"
     try:
         i = ks.index(kind)
     except ValueError:
         return ks[0]
     return ks[(i + 1) % len(ks)]
+
+
+def first_kind(t: float, h: float) -> str:
+    """The crop a brand-new field starts on: the biome's food crop."""
+    ks = crop.growable_kinds(t, h)
+    return ks[0] if ks else "wheat"
 
 
 def make_camp(g) -> object:
@@ -51,6 +61,7 @@ def make_camp(g) -> object:
         "g": g,                    # so a worker can clear trees/blocks/plants
         "workers": [],             # the conquered FARMERS
         "loggers": [],             # the conquered LOGGERS
+        "artisans": [],            # the conquered ARTISANS (on benches)
         "unemployed": [],          # conquered, not assigned to a job
         "people": [],              # every conquered person (the pool)
         "animals": [],             # the conquered livestock (horses, bison)
@@ -356,7 +367,8 @@ def conquer_camp(g, native_camp) -> None:
 def sync_jobs(g) -> None:
     """Reassign every conquered person from the sign-post's counts: the first
     N farm, the next M log, the rest are unemployed. With no sign-post, all of
-    them farm. Then plots are handed out one to a worker."""
+    them farm. Then plots are handed out one to a worker, and any bench with a
+    chosen product takes an artisan from the unemployed pool."""
     camp = getattr(g, "player_camp", None)
     if camp is None:
         return
@@ -373,6 +385,7 @@ def sync_jobs(g) -> None:
     for i, n in enumerate(people):
         n.orchard_plot = None
         n.farm_plot = None
+        n.artisan_bench = None
         if i < n_farmer:
             n.native_role = "farmer"
             n.job = "farmer"
@@ -385,7 +398,35 @@ def sync_jobs(g) -> None:
             n.native_role = "unemployed"
             n.job = None
             camp.unemployed.append(n)
+    sync_artisans(g)
     sync_camp(g)
+
+
+def sync_artisans(g) -> None:
+    """Every artisan's bench with a chosen product draws one man from the
+    unemployed pool to work it. Benches with no product stay empty."""
+    camp = getattr(g, "player_camp", None)
+    if camp is None:
+        return
+    camp.artisans = []
+    benches = [wp for wp in getattr(g, "placed_work", ()) or ()
+               if getattr(wp, "kind", None) == "lab" and getattr(wp, "product", None)]
+    for wp in benches:
+        wp.artisan = None
+    pool = list(getattr(camp, "unemployed", ()) or ())
+    for wp in benches:
+        u = next((n for n in pool if getattr(n, "artisan_bench", None) is None), None)
+        if u is None:
+            break
+        u.native_role = "artisan"
+        u.job = "artisan"
+        u.artisan_bench = wp
+        wp.artisan = u
+        camp.artisans.append(u)
+        try:
+            camp.unemployed.remove(u)
+        except ValueError:
+            pass
 
 
 def _drop_tree(camp, key) -> None:

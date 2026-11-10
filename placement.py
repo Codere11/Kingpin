@@ -27,6 +27,7 @@ class Chest:
         self.x = float(x)
         self.y = float(y)
         self.w, self.h = TILE, TILE          # one tile each way
+        self.filter = None                   # None = any; else only this item id
         self.rect = pygame.Rect(int(x - self.w / 2), int(y - self.h / 2),
                                 self.w, self.h)
         self.sight_rect = self.rect.inflate(48, 48)

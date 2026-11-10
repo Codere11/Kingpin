@@ -397,7 +397,7 @@ class ChestPanel:
 
     def __init__(self, player_inv: Inventory, chest_inv: Inventory,
                  slot: int = 40, pad: int = 5, top_rows: int | None = None,
-                 top_label: str = "CHEST") -> None:
+                 top_label: str = "CHEST", filter_owner=None) -> None:
         self.player = player_inv
         self.chest = chest_inv
         # THE OTHER CONTAINER IS NOT ALWAYS A CHEST. A hired man's pack holds
@@ -405,6 +405,10 @@ class ChestPanel:
         # opens on it, drawn at his size and under his name.
         self.top_rows = int(top_rows) if top_rows else self.CHEST_ROWS
         self.top_label = top_label
+        # A CHEST HE BUILT CARRIES A FILTER: only the item shown on the lid may
+        # go in ('Any' means everything). The Crown's chest and a man's pack
+        # have none, so filter_owner stays None for them.
+        self.filter_owner = filter_owner
         self.slot = slot
         self.pad = pad
         self.held: ItemStack | None = None
@@ -421,7 +425,10 @@ class ChestPanel:
         chest_h = self.top_rows * slot + (self.top_rows + 1) * pad
         player_h = self.PLAYER_ROWS * slot + (self.PLAYER_ROWS + 1) * pad
         title, gap = 22, 12
-        panel_h = title + chest_h + gap + title + player_h + 14
+        # A CHEST HE BUILT SHOWS ITS LID FILTER ABOVE THE GRID: 'Any' and two
+        # arrows. Everything else stacks from the top as before.
+        filter_h = 26 if self.filter_owner is not None else 0
+        panel_h = title + filter_h + chest_h + gap + title + player_h + 14
         x0 = (sw - board_w) // 2
         y0 = (sh - panel_h) // 2
 
@@ -429,9 +436,9 @@ class ChestPanel:
         for r in range(self.top_rows):
             for c in range(cols):
                 chest_rects.append(pygame.Rect(x0 + pad + c * (slot + pad),
-                                               y0 + title + pad + r * (slot + pad),
+                                               y0 + title + filter_h + pad + r * (slot + pad),
                                                slot, slot))
-        py = y0 + title + chest_h + gap + title
+        py = y0 + title + filter_h + chest_h + gap + title
         player_rects = []
         for r in range(self.PLAYER_ROWS):
             for c in range(cols):
@@ -453,10 +460,55 @@ class ChestPanel:
                 return ("player", i)
         return None
 
+    def _filter_list(self):
+        return [None] + list(items.REGISTRY.keys())
+
+    def _filter_index(self) -> int:
+        try:
+            return self._filter_list().index(getattr(self.filter_owner, "filter", None))
+        except ValueError:
+            return 0
+
+    def _filter_rects(self, sw: int, sh: int):
+        panel, _, _ = self._layout(sw, sh)
+        cx = panel.centerx
+        cy = panel.top + 22 + 13
+        return (pygame.Rect(cx - 60, cy - 9, 22, 22),
+                pygame.Rect(cx + 38, cy - 9, 22, 22),
+                pygame.Rect(cx - 34, cy - 11, 68, 24))
+
+    def _chest_allows(self, stack) -> bool:
+        """Whether a stack may be put INTO the chest under its current filter."""
+        if self.filter_owner is None or stack is None:
+            return True
+        f = getattr(self.filter_owner, "filter", None)
+        return f is None or stack.defn.id == f
+
+    def _handle_filter_click(self, event) -> bool:
+        """Left/right arrows next to the lid filter. True if consumed."""
+        if self.filter_owner is None or event.type != pygame.MOUSEBUTTONDOWN \
+                or event.button != 1:
+            return False
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return False
+        left, right, _ = self._filter_rects(*surface.get_size())
+        lst = self._filter_list()
+        i = self._filter_index()
+        if left.collidepoint(event.pos):
+            self.filter_owner.filter = lst[(i - 1) % len(lst)]
+            return True
+        if right.collidepoint(event.pos):
+            self.filter_owner.filter = lst[(i + 1) % len(lst)]
+            return True
+        return False
+
     def handle_event(self, event) -> None:
         if event.type == pygame.MOUSEMOTION:
             self.hover = self._slot_at(event.pos)
         elif event.type == pygame.MOUSEBUTTONDOWN:
+            if self._handle_filter_click(event):
+                return
             hit = self._slot_at(event.pos)
             if hit is None:
                 return
@@ -464,11 +516,15 @@ class ChestPanel:
             self._press = event.pos
             inv = self.chest if which == "chest" else self.player
             if event.button == 1:
+                if which == "chest" and not self._chest_allows(self.held):
+                    return
                 was_empty = self.held is None
                 self.held, inv.slots[index] = _place_left(self.held, inv.slots[index])
                 if was_empty and self.held is not None:
                     self.held_from = hit
             elif event.button == 3:
+                if which == "chest" and not self._chest_allows(self.held):
+                    return
                 self.held, inv.slots[index] = _place_right(self.held, inv.slots[index])
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             press, self._press = self._press, None
@@ -481,6 +537,8 @@ class ChestPanel:
             if hit is not None:
                 which, index = hit
                 inv = self.chest if which == "chest" else self.player
+                if which == "chest" and not self._chest_allows(self.held):
+                    return
                 self.held, inv.slots[index] = _place_left(self.held, inv.slots[index])
             else:
                 # DRAGGED OFF THE PANEL: PUT IT BACK, never into the void.
@@ -529,6 +587,22 @@ class ChestPanel:
 
         ct = self.font_title.render(self.top_label.upper(), True, (226, 200, 150))
         screen.blit(ct, (panel.centerx - ct.get_width() // 2, panel.top + 5))
+        # THE LID FILTER: what this chest will accept, with two arrows to turn
+        # it. 'Any' means everything may go in.
+        if self.filter_owner is not None:
+            left, right, mid = self._filter_rects(sw, sh)
+            f = getattr(self.filter_owner, "filter", None)
+            label = "ANY" if f is None else f.upper()
+            txt = self.font_small.render(label, True, (238, 224, 190))
+            screen.blit(txt, (mid.centerx - txt.get_width() // 2,
+                              mid.centery - txt.get_height() // 2))
+            for rr in (left, right):
+                pygame.draw.rect(screen, (70, 60, 44), rr, border_radius=4)
+                pygame.draw.rect(screen, BORDER, rr, width=1, border_radius=4)
+            for rr, sym in ((left, "<"), (right, ">")):
+                s = self.font_small.render(sym, True, (226, 200, 150))
+                screen.blit(s, (rr.centerx - s.get_width() // 2,
+                                rr.centery - s.get_height() // 2))
         # player title sits just above the player grid
         pt = self.font_title.render("INVENTORY", True, TEXT)
         player_top = player_rects[0].top - self.pad - 22 if player_rects else panel.centery

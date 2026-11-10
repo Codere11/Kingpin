@@ -760,6 +760,8 @@ def main() -> None:
     g.board_open = False
     g.smith_open = False
     g.smith_shop = None
+    g.artisan_open = False
+    g.artisan_bench = None
     g.work_cd = 0.0
     g.work_msg = ""
     g.inside_mine = None
@@ -789,6 +791,7 @@ def main() -> None:
     g.player_camp = None              # the conquered settlement (colony.py)
     g.sync_player_camp = None
     g.next_field_kind = None
+    g.first_field_kind = None
     g.built_houses: list[House] = []
     g.placed_work: list = []          # the four trades, out of doors, on his land
     g.built_chests: list = []          # the 1x2 chests he has built
@@ -1466,6 +1469,7 @@ def main() -> None:
         g.player_camp = _colony.make_camp(g)
         g.sync_player_camp = _colony.sync_camp
         g.next_field_kind = _colony.next_kind
+        g.first_field_kind = _colony.first_kind
         g.conquer_camp = _colony.conquer_camp
         g.sync_jobs = _colony.sync_jobs
         # NO PEOPLE ARE HANDED TO THE PLAYER AT SPAWN. A conquered workforce
