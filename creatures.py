@@ -46,6 +46,10 @@ WOLF_BITE = 5 * BEAST_SCALE           # was 5, and was half a villager's 10
 WOLF_SPEED = 168.0
 WOLF_HP = 52
 
+# A MAXIMUM-SKILLED PLAYER AT FULL SPRINT -- 240 * 1.7 * 1.5. Wild bisons and
+# horses run from you at exactly this speed, and ONLY when they are running.
+SPRINTER_MAX = 240.0 * 1.7 * 1.5
+
 # -- the pecking order --------------------------------------------------------
 # Six wolves in ten are weaklings, three are a fair fight, and one in ten is a
 # nightmare. WHICH wolves those are is reshuffled every period, and it is keyed
@@ -739,6 +743,7 @@ class Horse:
     from people. Killable, but drops nothing for now."""
     kind = "horse"
     SPRITES = None                      # coat -> pre-scaled pygame surface
+    HORSES: list = []                   # the whole herd, for separation
     COAT_FILES = {"brown": "horse.png", "black": "horse_black.png",
                   "white": "horse_white.png", "palomino": "horse_palomino.png"}
     DRAW = 80                           # on-screen size of the whole sprite
@@ -758,6 +763,8 @@ class Horse:
         self.flee_timer = 0.0
         self.graze_timer = random.uniform(0.5, 2.0)
         self.target = (self.x, self.y)
+        Horse.HORSES = [h for h in Horse.HORSES if h.alive]
+        Horse.HORSES.append(self)
 
     @property
     def alive(self) -> bool:
@@ -777,20 +784,39 @@ class Horse:
                     Horse.SPRITES[coat] = None
         return Horse.SPRITES.get(self.coat)
 
+    def _separation(self):
+        """A push away from herd mates, so horses never crowd onto one spot."""
+        px = py = 0.0
+        for h in Horse.HORSES:
+            if h is self or not h.alive:
+                continue
+            dx = self.x - h.x
+            dy = self.y - h.y
+            d = math.hypot(dx, dy)
+            if 0.01 < d < 60.0:
+                w = (60.0 - d) / 60.0
+                px += dx / d * w
+                py += dy / d * w
+        return px, py
+
+    def _move(self, ux: float, uy: float, speed: float, dt: float) -> None:
+        sx, sy = self._separation()
+        self.x += (ux * speed + sx * 140.0) * dt
+        self.y += (uy * speed + sy * 140.0) * dt
+
     def update(self, dt: float, threat=None, colliders=None) -> None:
         if self.hit_flash > 0.0:
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if not self.alive:
             return
-        # SKITTISH: a person near spooks it into a run.
+        # SKITTISH: a person near spooks it into a full run.
         if threat is not None and not getattr(threat, "dead", False):
             dx, dy = self.x - threat.x, self.y - threat.y
             d = math.hypot(dx, dy)
             if d < 260.0:
                 self.flee_timer = 1.4
                 if d > 1e-4:
-                    self.x += dx / d * self.speed * dt
-                    self.y += dy / d * self.speed * dt
+                    self._move(dx / d, dy / d, SPRINTER_MAX, dt)
                     self.facing = (dx / d, dy / d)
                 return
         self.flee_timer = max(0.0, self.flee_timer - dt)
@@ -806,8 +832,7 @@ class Horse:
         dx, dy = tx - self.x, ty - self.y
         d = math.hypot(dx, dy)
         if d > 8.0:
-            self.x += dx / d * self.speed * 0.35 * dt
-            self.y += dy / d * self.speed * 0.35 * dt
+            self._move(dx / d, dy / d, self.speed * 0.35, dt)
             self.facing = (dx / d, dy / d)
 
     def draw(self, screen, cam_x, cam_y):
@@ -892,7 +917,8 @@ class Bison(Enemy):
             d = math.hypot(dx, dy)
             if d < 220.0:
                 ux, uy = (dx / d, dy / d)
-                self._move(ux, uy, self.speed * 0.75, dt)
+                # RUN: a bison at full flight is as fast as the fastest man.
+                self._move(ux, uy, SPRINTER_MAX, dt)
                 self.facing = (ux, uy)
                 return
         self.graze_timer -= dt
