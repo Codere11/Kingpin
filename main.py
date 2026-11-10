@@ -49,6 +49,7 @@ import engine
 import placement
 
 import crop
+import crown
 import biomes
 import board
 import boardapi
@@ -108,7 +109,7 @@ from skills import Skills
 from trade import TradeMenu
 from workshop import WorkshopMenu
 from trees import Trees
-from ui import (ChestPanel, ConfirmMenu, FolderPanel, Hotbar,
+from ui import (ChestPanel, ConfirmMenu, CrownScreen, FolderPanel, Hotbar,
                 InventoryPanel, MarketPanel, PauseMenu, SignPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
@@ -719,6 +720,15 @@ def main() -> None:
     g.sign_open = False
     g.sign_panel = None
     g.sign_post = None
+    # THE CROWN'S DEMAND, delivered to the ship every three days.
+    g.crown_round = 0
+    g.crown_paid = False
+    g.crown_chest = Inventory(capacity=64)
+    g.crown_screen_open = False
+    g.crown_screen = None
+    g.crown_chest_open = False
+    g.crown_chest_panel = None
+    g.crown_intro_done = False
     # A HIRED MAN'S PACK, OPENED THE WAY A CHEST IS.
     g.worker_panel_open = False
     g.worker_panel = None
@@ -1151,6 +1161,26 @@ def main() -> None:
                 return _sg
         return None
 
+    def ship_pos():
+        """The Crown's ship, anchored off the coast at y=0."""
+        import world as _world
+        return (_world.coast_x(0.0, g.world.seed) + 56.0, 0.0)
+
+    def open_crown_screen() -> None:
+        g.crown_screen = CrownScreen(lambda: crown.demand(g),
+                                     lambda: crown.round_of(g),
+                                     lambda: getattr(g, "crown_paid", False))
+        g.crown_screen_open = True
+        pygame.mouse.set_visible(True)
+
+    def crown_demand():
+        return crown.demand(g)
+
+    def crown_pay() -> None:
+        crown.pay(g)
+        g.toast("The Crown is paid -- you pass this round.")
+        g.mark_dirty()
+
     def near_brew() -> bool:
         return houseuse.near_brew(g.player, g.inside_house)
 
@@ -1569,6 +1599,8 @@ def main() -> None:
         
         g.inventory_open = g.trade_open = g.board_open = g.chest_open = False
         g.sign_open = False
+        g.crown_screen_open = False
+        g.crown_chest_open = False
         g.worker_panel_open = False
         g.stall_open = False
         g.body_open = False
@@ -1738,6 +1770,10 @@ def main() -> None:
     g.near_chest = near_chest
     g.near_chest_building = near_chest_building
     g.near_sign = near_sign
+    g.ship_pos = ship_pos
+    g.open_crown_screen = open_crown_screen
+    g.crown_demand = crown_demand
+    g.crown_pay = crown_pay
     g.near_fireplace = near_fireplace
     g.near_lab = near_lab
     g.near_stall = near_stall

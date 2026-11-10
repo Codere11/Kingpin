@@ -270,6 +270,40 @@ def run(g):
                         g.sign_panel = None
                         g.sign_post = None
                         pygame.mouse.set_visible(False)
+            elif g.crown_screen_open:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    g.crown_screen_open = False
+                    g.crown_screen = None
+                    pygame.mouse.set_visible(False)
+                else:
+                    _r = g.crown_screen.handle_event(event)
+                    if _r == "close":
+                        g.crown_screen_open = False
+                        g.crown_screen = None
+                        pygame.mouse.set_visible(False)
+                    elif _r == "pay":
+                        # OPEN THE CROWN'S CHEST: drop the goods in and pay.
+                        g.crown_screen_open = False
+                        g.crown_screen = None
+                        g.crown_chest_panel = ChestPanel(g.inventory, g.crown_chest,
+                                                         top_label="THE CROWN")
+                        g.crown_chest_open = True
+                        pygame.mouse.set_visible(True)
+            elif g.crown_chest_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                                                                  pygame.K_ESCAPE):
+                    g.crown_chest_panel.close()
+                    g.crown_chest_open = False
+                    # ONCE THE ASK IS IN THE CHEST, HE PASSES THE ROUND.
+                    try:
+                        import crown as _crown
+                        if _crown.satisfied(g):
+                            g.crown_pay()
+                    except Exception:
+                        pass
+                    pygame.mouse.set_visible(False)
+                else:
+                    g.crown_chest_panel.handle_event(event)
             elif g.workshop_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
@@ -729,6 +763,17 @@ def run(g):
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     g._held = g.inventory.selected_stack()
                     g._held_id = g._held.defn.id if g._held else None
+                    # THE CROWN'S SHIP: click it and the demand opens.
+                    try:
+                        import world as _world
+                        _shx, _shy = g.ship_pos()
+                        _wx = g.cam_x + event.pos[0] / ZOOM
+                        _wy = g.cam_y + event.pos[1] / ZOOM
+                        if math.hypot(_wx - _shx, _wy - _shy) < 80.0:
+                            g.open_crown_screen()
+                            break
+                    except Exception:
+                        pass
                     # A BUILDABLE IN THE HAND: LEFT CLICK PLACES A 1x1 BLOCK.
                     import block as _block
                     if g._held_id in _block.BUILDABLE and g.hotbar.slot_at(event.pos) is None:
@@ -808,6 +853,7 @@ def run(g):
         # the log has a BLOCKED line, the line names what did it.
         if (g.inventory_open or g.trade_open or g.build_menu_open or g.chest_open
                 or g.workshop_open or g.confirm_open or g.pause_open or g.map_open
+                or g.crown_screen_open or g.crown_chest_open
                 or g.placing is not None or g.inside_house is not None
                 or g.inside_mine is not None or g.board_open or g.smith_open):
             g._blk += g.dt
@@ -963,6 +1009,16 @@ def run(g):
                     plog.log("WORLD-POS-FIX", "room coordinates in the world;"
                              " put back at", int(g._wx), int(g._wy))
             g.now += g.dt
+            # THE CROWN'S DEMAND GROWS EVERY THREE DAYS, and the opening screen
+            # is shown once the boot has finished.
+            try:
+                if crown.escalate(g):
+                    g.toast("The Crown's demand has grown.")
+                if (not g.crown_intro_done and getattr(g, "_boot_left", [0])[0] <= 0):
+                    g.crown_intro_done = True
+                    g.open_crown_screen()
+            except Exception:
+                pass
             creatures_set_time(g.now)
             wildcrop.set_time(g.now)
             wildcrop.set_world(g.world)
@@ -3206,6 +3262,10 @@ def run(g):
                 g.chest_panel.draw(g.screen)
             if g.sign_open:
                 g.sign_panel.draw(g.screen)
+            if g.crown_screen_open:
+                g.crown_screen.draw(g.screen)
+            if g.crown_chest_open:
+                g.crown_chest_panel.draw(g.screen)
             if g.workshop_open:
                 g.workshop_menu.draw(g.screen)
             if g.trade_open:
@@ -3677,6 +3737,10 @@ def run(g):
             g.chest_panel.draw(g.screen)
         if g.sign_open:
             g.sign_panel.draw(g.screen)
+        if g.crown_screen_open:
+            g.crown_screen.draw(g.screen)
+        if g.crown_chest_open:
+            g.crown_chest_panel.draw(g.screen)
         if g.worker_panel_open:
             g.worker_panel.draw(g.screen)
         if g.stall_open:

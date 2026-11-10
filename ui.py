@@ -738,6 +738,80 @@ class SignPanel:
         screen.blit(u, (panel.left + 26, panel.bottom - 40))
 
 
+class CrownScreen:
+    """The Crown's demand, shown at the start and whenever the ship is
+    clicked. The Pay Crown button opens the Crown's chest."""
+
+    def __init__(self, demand_fn, round_fn, paid_fn) -> None:
+        self.demand_fn = demand_fn       # () -> dict
+        self.round_fn = round_fn         # () -> int
+        self.paid_fn = paid_fn           # () -> bool
+        self.hover = None
+        self.font = pygame.font.SysFont("dejavusans", 20, bold=True)
+        self.font_small = pygame.font.SysFont("dejavusans", 15, bold=True)
+        self.font_btn = pygame.font.SysFont("dejavusans", 16, bold=True)
+
+    def _rects(self, sw: int, sh: int):
+        w, h = 460, 300
+        x0, y0 = (sw - w) // 2, (sh - h) // 2
+        panel = pygame.Rect(x0, y0, w, h)
+        pay = pygame.Rect(x0 + w // 2 - 90, y0 + h - 70, 180, 44)
+        return panel, pay
+
+    def handle_event(self, event):
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return None
+        _panel, pay = self._rects(*surface.get_size())
+        if event.type == pygame.MOUSEMOTION:
+            self.hover = pay.collidepoint(event.pos)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if pay.collidepoint(event.pos):
+                return "pay"
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            return "close"
+        return None
+
+    def draw(self, screen: pygame.Surface) -> None:
+        sw, sh = screen.get_size()
+        panel, pay = self._rects(sw, sh)
+        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 155))
+        screen.blit(shade, (0, 0))
+        board = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pygame.draw.rect(board, (20, 20, 24, 244), board.get_rect(), border_radius=12)
+        pygame.draw.rect(board, BORDER, board.get_rect(), width=2, border_radius=12)
+        screen.blit(board, panel.topleft)
+
+        title = self.font.render("THE CROWN WANTS", True, TEXT)
+        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 18))
+        d = self.demand_fn()
+        import quality as _quality
+        grade = _quality.letter(d["grade"])
+        lines = [
+            "%d leaf product   (grade %s or higher)" % (d["leaf_product"], grade),
+            "%d leaf            (grade %s or higher)" % (d["leaf"], grade),
+            "%d wood" % d["wood"],
+        ]
+        y = panel.top + 66
+        for ln in lines:
+            t = self.font_small.render(ln, True, (206, 184, 122))
+            screen.blit(t, (panel.left + 40, y))
+            y += 30
+        state = "PAID -- free time" if self.paid_fn() else "Round %d" % self.round_fn()
+        st = self.font_small.render(state, True, (126, 176, 112) if self.paid_fn() else (176, 168, 152))
+        screen.blit(st, (panel.left + 40, y + 8))
+
+        hovered = self.hover
+        pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
+                         pay, border_radius=8)
+        pygame.draw.rect(screen, ACCENT if hovered else BORDER, pay, width=2,
+                         border_radius=8)
+        t = self.font_btn.render("Pay Crown", True, TEXT)
+        screen.blit(t, (pay.centerx - t.get_width() // 2,
+                        pay.centery - t.get_height() // 2))
+
+
 class PauseMenu:
     """Escape menu: Respawn or Exit game (Esc resumes)."""
 
