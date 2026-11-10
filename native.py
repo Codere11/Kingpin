@@ -429,13 +429,16 @@ def _role_warriors(s) -> None:
         w.weapon = "bow" if i == 1 else "axe"
 
 
-def escalate_war(g) -> None:
-    """The first smoke alarm arms every settlement: one melee warrior, one
-    bowman. New camps built later read g.war_escalated and do the same."""
+def escalate_war(g, exclude=None) -> None:
+    """The first smoke alarm arms every OTHER settlement: one melee warrior,
+    one bowman. The camp that raised the alarm keeps its two axes -- the
+    player is standing in it, so its defence must not change mid-fight."""
     if getattr(g, "war_escalated", False):
         return
     g.war_escalated = True
     for s in getattr(g, "native_settlements", {}).values():
+        if s is exclude:
+            continue
         _role_warriors(s)
 
 

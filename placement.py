@@ -21,12 +21,12 @@ from world import TILE
 
 
 class Chest:
-    """A 1x2 chest on the mesh: 64 slots, double the player's 32."""
+    """A 1x1 chest on the mesh: 64 slots, double the player's 32."""
 
     def __init__(self, x: float, y: float) -> None:
         self.x = float(x)
         self.y = float(y)
-        self.w, self.h = TILE, TILE * 2          # one tile wide, two tall
+        self.w, self.h = TILE, TILE          # one tile each way
         self.rect = pygame.Rect(int(x - self.w / 2), int(y - self.h / 2),
                                 self.w, self.h)
         self.sight_rect = self.rect.inflate(48, 48)
@@ -287,7 +287,7 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
     _sizes = {"lab": (64, 64), "brewery": (64, 64),
               "smith": (64, 64), "mine": (64, 64),
               "stall": (64, 64), "dummy": (64, 64), "target": (64, 64),
-              "fireplace": (64, 64), "chest": (32, 64), "sign": (32, 32),
+              "fireplace": (64, 64), "chest": (32, 32), "sign": (32, 32),
               "foodbox": (32, 32), "workshop": (64, 64)}
     if placing in _sizes:
         _w, _h = _sizes[placing]

@@ -1119,7 +1119,7 @@ class NPC:
                                     pass
                             try:
                                 import native as _nat
-                                _nat.escalate_war(g)
+                                _nat.escalate_war(g, exclude=camp)
                             except Exception:
                                 pass
                         if getattr(self, "weapon", None) == "bow":
