@@ -50,6 +50,10 @@ WOLF_HP = 52
 # horses run from you at exactly this speed, and ONLY when they are running.
 SPRINTER_MAX = 240.0 * 1.7 * 1.5
 
+# GRAZING ANIMALS SHARE A PLANT: every horse and bison within this radius of
+# the bite gets an equal amount of it, stored for later.
+SHARE_RADIUS = 300.0
+
 # -- the pecking order --------------------------------------------------------
 # Six wolves in ten are weaklings, three are a fair fight, and one in ten is a
 # nightmare. WHICH wolves those are is reshuffled every period, and it is keyed
@@ -762,6 +766,8 @@ class Horse:
         self.hit_flash = 0.0
         self.flee_timer = 0.0
         self.graze_timer = random.uniform(0.5, 2.0)
+        self.hunger = random.uniform(0.0, 30.0)   # like a man's belly
+        self.food = random.randint(0, 2)          # what it has stored
         self.target = (self.x, self.y)
         Horse.HORSES = [h for h in Horse.HORSES if h.alive]
         Horse.HORSES.append(self)
@@ -809,6 +815,10 @@ class Horse:
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if not self.alive:
             return
+        self._animal_hunger(dt)
+        if self.hunger >= economy.STARVE_AT:
+            self.health = 0
+            return
         # SKITTISH: a person near spooks it into a full run.
         if threat is not None and not getattr(threat, "dead", False):
             dx, dy = self.x - threat.x, self.y - threat.y
@@ -820,6 +830,10 @@ class Horse:
                     self.facing = (dx / d, dy / d)
                 return
         self.flee_timer = max(0.0, self.flee_timer - dt)
+        # HUNGRY: go to the nearest plant and eat it up.
+        if self.hunger >= economy.EAT_AT and self.food <= 0:
+            if self._animal_forage(dt):
+                return
         # GRAZE: pick a new spot near home now and then, then amble to it.
         self.graze_timer -= dt
         if self.graze_timer <= 0.0:
@@ -865,6 +879,8 @@ class Bison(Enemy):
         self.melee_damage = 2.0 * (35.0 / 3.0)        # double a man's punch
         self.aggro = False
         self.graze_timer = random.uniform(0.5, 2.0)
+        self.hunger = random.uniform(0.0, 30.0)   # like a man's belly
+        self.food = random.randint(0, 2)          # what it has stored
         self.fire_cd = 0.0
         Bison.BISONS = [b for b in Bison.BISONS if b.alive]   # drop the dead
         Bison.BISONS.append(self)
@@ -908,6 +924,10 @@ class Bison(Enemy):
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if not self.alive:
             return
+        self._animal_hunger(dt)
+        if self.hunger >= economy.STARVE_AT:
+            self.health = 0
+            return
         if self.aggro:
             self._charge(dt, target)
             return
@@ -920,6 +940,10 @@ class Bison(Enemy):
                 # RUN: a bison at full flight is as fast as the fastest man.
                 self._move(ux, uy, SPRINTER_MAX, dt)
                 self.facing = (ux, uy)
+                return
+        # HUNGRY: go to the nearest plant and eat it up.
+        if self.hunger >= economy.EAT_AT and self.food <= 0:
+            if self._animal_forage(dt):
                 return
         self.graze_timer -= dt
         if self.graze_timer <= 0.0:
@@ -986,6 +1010,73 @@ class Bison(Enemy):
                 pygame.draw.arc(screen, horn, rect, 0.05, 1.15, 2)
         pygame.draw.circle(screen, eye, (int(hx), int(hy - 4)), 2)
         pygame.draw.circle(screen, eye, (int(hx), int(hy + 4)), 2)
+
+
+def _grazing_animals():
+    """Every horse and bison alive -- the two herds share their grazing."""
+    out = [h for h in Horse.HORSES if h.alive]
+    out += [b for b in Bison.BISONS if b.alive]
+    return out
+
+
+def _animal_hunger(self, dt: float) -> None:
+    """A grazing beast's belly empties exactly like a man's: hunger rises on
+    the day clock, and stored food is eaten first, one bite at a time."""
+    self.hunger = getattr(self, "hunger", 0.0) + economy.HUNGER_RATE * dt
+    if self.hunger > 130.0:
+        self.hunger = 130.0
+    if self.hunger >= economy.EAT_AT and getattr(self, "food", 0) > 0:
+        self.food -= 1
+        self.hunger = max(0.0, self.hunger - economy.EAT_BY)
+
+
+def _animal_forage(self, dt: float) -> bool:
+    """Walk to the nearest wild plant and eat it up; every other grazing
+    animal near the bite gets an equal amount, stored for later. Returns True
+    while it is walking or eating."""
+    try:
+        import wildcrop as _wc
+    except Exception:
+        return False
+    world = _wc._WORLD
+    if world is None:
+        return False
+    found = _wc._nearest(world, self.x, self.y, 520.0)
+    if found is None:
+        return False
+    tx, ty, _kind = found
+    try:
+        from world import TILE
+        wx = tx * TILE + TILE / 2.0
+        wy = ty * TILE + TILE / 2.0
+    except Exception:
+        wx = tx * 32 + 16.0
+        wy = ty * 32 + 16.0
+    dx, dy = wx - self.x, wy - self.y
+    d = math.hypot(dx, dy)
+    if d > 22.0:
+        self._move(dx / d, dy / d, getattr(self, "speed", 100.0) * 0.5, dt)
+        self.facing = (dx / d, dy / d)
+        return True
+    # EAT IT UP: the plant is gone until it regrows.
+    try:
+        world.wild_eaten[(tx, ty)] = _wc._NOW + _wc.REGEN
+    except Exception:
+        pass
+    self.hunger = max(0.0, getattr(self, "hunger", 0.0) - economy.FORAGE_MEAL)
+    # SHARE: nearby animals each get the same bite, stored for later.
+    for other in _grazing_animals():
+        if other is self or not getattr(other, "alive", True):
+            continue
+        if math.hypot(other.x - wx, other.y - wy) < SHARE_RADIUS:
+            other.food = getattr(other, "food", 0) + 1
+    return True
+
+
+Horse._animal_hunger = _animal_hunger
+Horse._animal_forage = _animal_forage
+Bison._animal_hunger = _animal_hunger
+Bison._animal_forage = _animal_forage
 
 
 def make_squad(nation, x: float, y: float, count: int = 3, color=None):
