@@ -16,16 +16,6 @@ CRAFTS = [
     {"id": "watering_can", "name": "Watering Can", "cost": {"wood": 30}},
     {"id": "pickaxe", "name": "Pickaxe", "cost": {"wood": 100}},
     {"id": "compass", "name": "Compass", "cost": {"iron": 100}},
-    # THE SAME MATERIAL THE GUNWORKS USES. The player was turning out rifles
-    # for a hundred iron and five cartridges per iron -- a twentieth of what a
-    # village smith needs for the same work.
-    {"id": "rifle", "name": "Rifle",
-     "cost": {"iron": industry.GUN_IRON, "wood": industry.GUN_WOOD}},
-    {"id": "shotgun", "name": "Shotgun",
-     "cost": {"iron": industry.GUN_IRON, "wood": industry.GUN_WOOD}},
-    {"id": "ammo", "name": "Ammo",
-     "cost": {"iron": industry.AMMO_IRON, "wood": industry.AMMO_WOOD},
-     "yield": 1},
     # A BED, out of the cotton you grow.
     {"id": "bed", "name": "Bed", "cost": {"cotton": 30}},
     # A BOW AND ITS ARROWS: ten arrows out of one piece of wood.

@@ -631,10 +631,15 @@ def run(g):
                 elif g.near_lab():
                     g.craft_at_table()          # one article a press, and you learn
                 elif g.near_workplace() is not None:
-                    g.smith_shop = g.near_workplace()
-                    g.smith_open = True
-                    g.work_msg = ""
-                    pygame.mouse.set_visible(True)
+                    _wp = g.near_workplace()
+                    if getattr(_wp, "kind", None) == "workshop":
+                        g.workshop_open = True
+                        pygame.mouse.set_visible(True)
+                    else:
+                        g.smith_shop = _wp
+                        g.smith_open = True
+                        g.work_msg = ""
+                        pygame.mouse.set_visible(True)
                 elif g.near_workshop():
                     g.workshop_open = True
                     pygame.mouse.set_visible(True)

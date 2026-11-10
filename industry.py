@@ -514,6 +514,8 @@ class Workplace:
             return self._render_mine()
         if self.kind == "lab":
             return self._render_lab()
+        if self.kind == "workshop":
+            return self._render_workshop()
         if self.kind == "brewery":
             return self._render_brewery()
         if self.kind == "dummy":
@@ -699,6 +701,26 @@ class Workplace:
         pygame.draw.circle(surf, (206, 158, 74), (cx, oy + 16), 10)
         pygame.draw.circle(surf, (140, 104, 48), (cx, oy + 16), 10, 2)
         pygame.draw.rect(surf, (100, 74, 40), (cx + 7, oy + 10, 5, 12))
+        return surf
+
+    def _render_workshop(self) -> pygame.Surface:
+        """A workbench: a wooden table with a saw and a hammer on it."""
+        w, h, pad = self.w, self.h, 18
+        surf = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+        ox, oy = pad, pad
+        pygame.draw.ellipse(surf, (0, 0, 0, 78), (ox + 4, oy + h - 8, w - 8, 18))
+        top = pygame.Rect(ox, oy + 12, w, h - 20)
+        pygame.draw.rect(surf, (150, 104, 62), top, border_radius=4)
+        pygame.draw.rect(surf, (78, 54, 34), top, 2, border_radius=4)
+        pygame.draw.rect(surf, (118, 78, 46), (ox + 5, oy + h - 10, 8, 10))
+        pygame.draw.rect(surf, (118, 78, 46), (ox + w - 13, oy + h - 10, 8, 10))
+        # a saw blade on the left, a hammer on the right
+        pygame.draw.circle(surf, (178, 184, 192), (ox + int(w * 0.24), oy + 20), 9)
+        pygame.draw.circle(surf, (98, 104, 114), (ox + int(w * 0.24), oy + 20), 9, 2)
+        pygame.draw.rect(surf, (118, 78, 46), (ox + int(w * 0.24) + 4, oy + 26, 5, 14))
+        pygame.draw.rect(surf, (150, 104, 62), (ox + int(w * 0.62), oy + 14, 6, 16))
+        pygame.draw.rect(surf, (110, 76, 42), (ox + int(w * 0.62) + 6, oy + 14, 12, 6))
+        pygame.draw.rect(surf, (178, 184, 192), (ox + int(w * 0.62) + 8, oy + 20, 8, 3))
         return surf
 
     def _render_smith(self) -> pygame.Surface:

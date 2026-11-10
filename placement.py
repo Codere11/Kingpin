@@ -573,7 +573,7 @@ def try_place(g):
         pygame.mouse.set_visible(False)
         return
     if placing in ("lab", "brewery", "smith", "mine", "dummy", "target",
-                   "fireplace"):
+                   "fireplace", "workshop"):
         _wp = industry.Workplace(placing, x, y, random.randrange(1 << 30))
         if not hubs.land_ok(_wp.rect, g.villages.villages, g.hub_world.hubs,
                            g.player.x, g.player.y):
