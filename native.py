@@ -313,13 +313,20 @@ def build(g, cx: float, cy: float, seed: int):
     # of all settlements keep none. They sleep on their own spots beside the
     # fields, never run from people, and a handler feeds them.
     animals = []
-    _roll = rng.random()
-    if _roll < 0.50:
+    # EXACTLY HALF of settlements keep livestock: 25% horses, 25% buffaloes,
+    # and the other half none. A hash of the settlement's seed -- not a draw
+    # from the camp's shared rng stream -- so it stays a clean 25/25/50.
+    _h = seed
+    _h ^= _h >> 13
+    _h = (_h * 1274126177) & 0xFFFFFFFF
+    _h ^= _h >> 16
+    _roll = _h % 4
+    if _roll in (0, 1):
         try:
             import creatures as _creatures
         except Exception:
             _creatures = None
-        _is_horse = _roll < 0.25
+        _is_horse = _roll == 0
         for i in range(rng.randint(2, 4)):
             ang = rng.uniform(0.0, 2.0 * math.pi)
             rr = field_ring + rng.uniform(-TILE * 3.0, TILE * 2.0)
