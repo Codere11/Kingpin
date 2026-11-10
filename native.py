@@ -301,6 +301,11 @@ def build(g, cx: float, cy: float, seed: int):
         n.native = True
         n.native_role = "warrior"
         n.stock[food_item] = 60
+        # A WARRIOR IS A SOLDIER: full wind, and half a lifetime's martial
+        # skill already behind him.
+        n.stamina = n.max_stamina
+        n.skills.axe = 0.5
+        n.skills.shooting = 0.5
         n.home = (n.x, n.y)
         n.speed = rng.uniform(60.0, 90.0)
         n._orbit = ang
