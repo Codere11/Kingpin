@@ -1006,6 +1006,22 @@ class NPC:
                             _colony.conquer_camp(g, camp)
                     except Exception:
                         pass
+        # A NATIVE (OR CONQUERED) PERSON LEAVES A BODY: the X-eyed corpse,
+        # lootable, exactly like the old world's dead.
+        if getattr(self, "native", False):
+            camp = getattr(self, "native_camp", None)
+            g = getattr(camp, "g", None) if camp is not None else None
+            if g is not None:
+                try:
+                    import corpse as _corpse
+                    _corpse.spawn(self.x, self.y, getattr(self, "name", "a native"),
+                                  float(getattr(g, "now", 0.0)),
+                                  tuple(getattr(self, "clothing", (150, 110, 70))),
+                                  dict(getattr(self, "stock", {}) or {}),
+                                  dict(getattr(self, "grade", {}) or {}),
+                                  tuple(getattr(self, "facing", (0.0, 1.0))))
+                except Exception:
+                    pass
 
     def _walk_toward(self, tx: float, ty: float, speed: float, dt: float) -> None:
         dx, dy = tx - self.x, ty - self.y
