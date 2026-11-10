@@ -733,12 +733,13 @@ class SignPanel:
         return len(getattr(self.camp, "people", ()) or ())
 
     def _rects(self, sw: int, sh: int):
-        w, h = 380, 236
+        w, h = 380, 288
         x0, y0 = (sw - w) // 2, (sh - h) // 2
         panel = pygame.Rect(x0, y0, w, h)
         rows = []
         for i, (label, key) in enumerate((("Farmers", "farmers"),
-                                          ("Loggers", "loggers"))):
+                                          ("Loggers", "loggers"),
+                                          ("Artisans", "artisans"))):
             ry = y0 + 66 + i * 52
             minus = pygame.Rect(x0 + w - 150, ry, 40, 34)
             plus = pygame.Rect(x0 + w - 52, ry, 40, 34)
@@ -767,9 +768,9 @@ class SignPanel:
                 if plus.collidepoint(event.pos):
                     f = int(getattr(self.sign, "farmers", 0))
                     l = int(getattr(self.sign, "loggers", 0))
-                    if f + l < total:
-                        setattr(self.sign, key,
-                                (f + 1) if key == "farmers" else (l + 1))
+                    a = int(getattr(self.sign, "artisans", 0))
+                    if f + l + a < total:
+                        setattr(self.sign, key, int(getattr(self.sign, key, 0)) + 1)
                         self.sync()
                     return "changed"
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -790,10 +791,8 @@ class SignPanel:
         title = self.font.render("JOBS", True, TEXT)
         screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 18))
         total = self._total()
-        f = int(getattr(self.sign, "farmers", 0))
-        l = int(getattr(self.sign, "loggers", 0))
         for label, key, minus, plus, ry in rows:
-            val = f if key == "farmers" else l
+            val = int(getattr(self.sign, key, 0))
             t = self.font_small.render("%s" % label, True, (206, 184, 122))
             screen.blit(t, (panel.left + 26, ry + 8))
             for rect, sym, hkey in ((minus, "-", (key, -1)), (plus, "+", (key, +1))):
@@ -807,7 +806,9 @@ class SignPanel:
                                  rect.centery - tt.get_height() // 2))
             n = self.font.render(str(val), True, TEXT)
             screen.blit(n, (minus.left - 40 - n.get_width(), ry + 8))
-        unemp = max(0, total - f - l)
+        used = int(getattr(self.sign, "farmers", 0)) + int(getattr(self.sign, "loggers", 0)) \
+            + int(getattr(self.sign, "artisans", 0))
+        unemp = max(0, total - used)
         u = self.font_small.render("Unemployed:  %d" % unemp, True, (176, 168, 152))
         screen.blit(u, (panel.left + 26, panel.bottom - 40))
 

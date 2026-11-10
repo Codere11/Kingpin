@@ -64,6 +64,7 @@ class SignPost:
         self.base_y = y
         self.farmers = 0               # how many people farm
         self.loggers = 0               # how many log
+        self.artisans = 0              # how many work the artisan's benches
         self.owner = None
 
     def draw(self, screen: pygame.Surface, cam_x: float, cam_y: float) -> None:

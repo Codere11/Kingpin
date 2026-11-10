@@ -379,8 +379,10 @@ def sync_jobs(g) -> None:
         break
     n_farmer = int(getattr(sign, "farmers", 0) or 0) if sign is not None else len(people)
     n_logger = int(getattr(sign, "loggers", 0) or 0) if sign is not None else 0
+    n_artisan = int(getattr(sign, "artisans", 0) or 0) if sign is not None else 0
     camp.workers = []
     camp.loggers = []
+    camp.artisans = []
     camp.unemployed = []
     for i, n in enumerate(people):
         n.orchard_plot = None
@@ -394,6 +396,10 @@ def sync_jobs(g) -> None:
             n.native_role = "logger"
             n.job = "logger"
             camp.loggers.append(n)
+        elif i < n_farmer + n_logger + n_artisan:
+            n.native_role = "artisan"
+            n.job = "artisan"
+            camp.artisans.append(n)
         else:
             n.native_role = "unemployed"
             n.job = None
@@ -403,30 +409,23 @@ def sync_jobs(g) -> None:
 
 
 def sync_artisans(g) -> None:
-    """Every artisan's bench with a chosen product draws one man from the
-    unemployed pool to work it. Benches with no product stay empty."""
+    """Pair each artisan (assigned on the sign-post) with a bench that has a
+    chosen product. Benches with no product stay empty; artisans with no
+    bench idle until one is built."""
     camp = getattr(g, "player_camp", None)
     if camp is None:
         return
-    camp.artisans = []
     benches = [wp for wp in getattr(g, "placed_work", ()) or ()
                if getattr(wp, "kind", None) == "lab" and getattr(wp, "product", None)]
     for wp in benches:
         wp.artisan = None
-    pool = list(getattr(camp, "unemployed", ()) or ())
+    pool = list(getattr(camp, "artisans", ()) or ())
     for wp in benches:
         u = next((n for n in pool if getattr(n, "artisan_bench", None) is None), None)
         if u is None:
             break
-        u.native_role = "artisan"
-        u.job = "artisan"
         u.artisan_bench = wp
         wp.artisan = u
-        camp.artisans.append(u)
-        try:
-            camp.unemployed.remove(u)
-        except ValueError:
-            pass
 
 
 def _drop_tree(camp, key) -> None:
