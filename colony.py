@@ -17,6 +17,7 @@ orchard is added, deleted, resized or has its crop changed.
 import math
 
 import crop
+import economy
 
 
 def next_kind(kind: str) -> str:
@@ -53,6 +54,8 @@ def make_camp(g) -> object:
         "unemployed": [],          # conquered, not assigned to a job
         "people": [],              # every conquered person (the pool)
         "animals": [],             # the conquered livestock (horses, bison)
+        "_breeding": None,          # the active breeding event
+        "_last_breed_day": -1,      # one birth per day
     })()
     return camp
 
@@ -105,6 +108,89 @@ def sync_camp(g) -> None:
         n.farm_plot = i if i < len(plots) else None
     for i, n in enumerate(camp.loggers):
         n.orchard_plot = i if i < len(orchards) else None
+
+
+def tick_breeding(g, dt: float) -> None:
+    """The livestock multiply: one baby a day, but only while there are more
+    food boxes than animals (one box = one animal). The parents need to be
+    fully fed, and they face each other with hearts before the newborn comes."""
+    pc = getattr(g, "player_camp", None)
+    if pc is None:
+        return
+    boxes = getattr(g, "built_foodboxes", None) or ()
+    if not boxes:
+        return
+    animals = [a for a in (getattr(pc, "animals", ()) or ())
+               if getattr(a, "alive", True)]
+    capacity = len(boxes)
+    # AN ACTIVE BREEDING EVENT: run its clock, then the newborn arrives.
+    ev = getattr(pc, "_breeding", None)
+    if ev is not None:
+        a, b = ev["a"], ev["b"]
+        if not (getattr(a, "alive", True) and getattr(b, "alive", True)):
+            _end_breeding(pc)
+            return
+        ev["t"] -= dt
+        if ev["t"] <= 0.0:
+            _end_breeding(pc)
+            _spawn_baby(g, a, b)
+        return
+    # NO ROOM: one food box feeds exactly one animal.
+    if len(animals) >= capacity:
+        return
+    # ONE BIRTH PER DAY.
+    day = int(g.now / economy.DAY_LENGTH)
+    if day <= getattr(pc, "_last_breed_day", -1):
+        return
+    adults = [a for a in animals if not getattr(a, "baby", False)]
+    fed = [a for a in adults if getattr(a, "hunger", 0.0) < economy.EAT_AT]
+    if len(fed) < 2:
+        return
+    a, b = fed[0], fed[1]
+    a.breeding = True
+    a.breed_partner = b
+    b.breeding = True
+    b.breed_partner = a
+    pc._breeding = {"a": a, "b": b, "t": 2.0}
+    pc._last_breed_day = day
+
+
+def _end_breeding(pc) -> None:
+    ev = getattr(pc, "_breeding", None)
+    if ev is not None:
+        for x in (ev["a"], ev["b"]):
+            x.breeding = False
+            x.breed_partner = None
+    pc._breeding = None
+
+
+def _spawn_baby(g, a, b) -> None:
+    """A newborn of the parents' kind, small, growing up over a day."""
+    pc = getattr(g, "player_camp", None)
+    if pc is None:
+        return
+    import creatures as _creatures
+    mx, my = (a.x + b.x) / 2.0, (a.y + b.y) / 2.0
+    if type(a).__name__ == "Horse":
+        baby = _creatures.Horse(mx, my, getattr(a, "coat", "brown"))
+        if baby not in getattr(g, "horses", ()):
+            g.horses.append(baby)
+    else:
+        baby = _creatures.Bison(mx, my)
+        if baby not in getattr(g, "enemies", ()):
+            g.enemies.append(baby)
+    baby.baby = True
+    baby.born_at = float(getattr(g, "now", 0.0))
+    baby.tamed = True
+    baby.conquered = True
+    baby.g = g
+    baby.home = (mx, my)
+    if baby not in pc.animals:
+        pc.animals.append(baby)
+    try:
+        g.toast("A new %s is born." % ("foal" if type(a).__name__ == "Horse" else "calf"))
+    except Exception:
+        pass
 
 
 def conquer_camp(g, native_camp) -> None:

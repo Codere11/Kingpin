@@ -1553,6 +1553,12 @@ def run(g):
                 rabbit.update(g.dt, None if g.player.dead else g.player, g.grid)
             for horse in g.horses:
                 horse.update(g.dt, None if g.player.dead else g.player, g.grid)
+            # THE LIVESTOCK BREED: one baby a day, one animal per food box.
+            try:
+                import colony as _colony
+                _colony.tick_breeding(g, g.dt)
+            except Exception:
+                pass
             g.enemy_grid.build([e for e in g.enemies if e.alive])
             # THE BEASTS, PICKED OUT ONCE A FRAME. _predator_near() used to walk
             # the whole enemy list -- every wolf AND every soldier -- per man,

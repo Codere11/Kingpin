@@ -774,6 +774,10 @@ class Horse:
         self.returning = False                    # coming back to its sleeping spot
         self.pack = None                          # an Inventory, made on demand
         self.g = None                             # the frame, for the ship and the Crown
+        self.baby = False                         # a newborn, grows up over a day
+        self.born_at = 0.0
+        self.breeding = False                     # facing a mate, hearts out
+        self.breed_partner = None
         self.target = (self.x, self.y)
         Horse.HORSES = [h for h in Horse.HORSES if h.alive]
         Horse.HORSES.append(self)
@@ -891,6 +895,9 @@ class Horse:
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if not self.alive:
             return
+        self._animal_baby_tick(dt)
+        if self._animal_breeding_tick():
+            return
         # RUNNING A DELIVERY: to the ship, then back to the sleeping spot.
         if self.delivering or self.returning:
             self._do_delivery(dt, colliders)
@@ -943,10 +950,15 @@ class Horse:
             pygame.draw.ellipse(screen, (120, 90, 56),
                                 (sx - 13, sy - 22, 26, 44))
             return
+        # A NEWBORN IS SMALL: it grows into a full horse across one day.
+        if getattr(self, "baby", False):
+            img = pygame.transform.smoothscale(img, (45, 45))
         fx, fy = self.facing
         deg = math.degrees(math.atan2(fy, fx))
         rot = pygame.transform.rotate(img, -(deg + 90.0))
         screen.blit(rot, rot.get_rect(center=(int(sx), int(sy))))
+        if getattr(self, "breeding", False):
+            self._draw_breeding_hearts(screen, sx, sy)
 
 
 class Bison(Enemy):
@@ -968,6 +980,10 @@ class Bison(Enemy):
         self.hunger = random.uniform(0.0, 30.0)   # like a man's belly
         self.food = random.randint(0, 2)          # what it has stored
         self.tamed = False                        # a settlement's livestock
+        self.baby = False                         # a newborn, grows up over a day
+        self.born_at = 0.0
+        self.breeding = False                     # facing a mate, hearts out
+        self.breed_partner = None
         self.fire_cd = 0.0
         Bison.BISONS = [b for b in Bison.BISONS if b.alive]   # drop the dead
         Bison.BISONS.append(self)
@@ -1012,6 +1028,9 @@ class Bison(Enemy):
         if self.hit_flash > 0.0:
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if not self.alive:
+            return
+        self._animal_baby_tick(dt)
+        if self._animal_breeding_tick():
             return
         self._animal_hunger(dt)
         if self.hunger >= economy.STARVE_AT:
@@ -1083,6 +1102,15 @@ class Bison(Enemy):
         eye = (12, 9, 7)
         if self.hit_flash > 0.0:
             coat = hump = head = (240, 236, 230)
+        # A NEWBORN CALF IS SMALL: a simple small body, no full horns yet.
+        if getattr(self, "baby", False):
+            pygame.draw.ellipse(screen, (16, 13, 10), (sx - 10, sy - 2, 20, 8))
+            pygame.draw.circle(screen, coat_d, (int(sx), int(sy)), 9)
+            pygame.draw.circle(screen, coat, (int(sx), int(sy)), 8)
+            pygame.draw.circle(screen, head, (int(sx + fx * 7), int(sy + fy * 7)), 5)
+            if getattr(self, "breeding", False):
+                self._draw_breeding_hearts(screen, sx, sy)
+            return
         pygame.draw.ellipse(screen, (16, 13, 10), (sx - 15, sy - 3, 32, 10))
         pygame.draw.line(screen, coat_d, (sx - fx * 14, sy - fy * 14),
                          (sx - fx * 22, sy - fy * 22), 3)
@@ -1105,6 +1133,8 @@ class Bison(Enemy):
                 pygame.draw.arc(screen, horn, rect, 0.05, 1.15, 2)
         pygame.draw.circle(screen, eye, (int(hx), int(hy - 4)), 2)
         pygame.draw.circle(screen, eye, (int(hx), int(hy + 4)), 2)
+        if getattr(self, "breeding", False):
+            self._draw_breeding_hearts(screen, sx, sy)
 
 
 def _grazing_animals():
@@ -1197,14 +1227,60 @@ def _eat_from_box(self, dt: float, colliders=None) -> bool:
     return True                    # the box is empty: wait beside it
 
 
+def _animal_baby_tick(self, dt: float) -> None:
+    """A newborn grows into an adult across one full day."""
+    if not getattr(self, "baby", False):
+        return
+    g = getattr(self, "g", None)
+    if g is None:
+        return
+    if float(getattr(g, "now", 0.0)) - float(getattr(self, "born_at", 0.0)) >= economy.DAY_LENGTH:
+        self.baby = False
+
+
+def _animal_breeding_tick(self) -> bool:
+    """While breeding, the beast faces its mate and stands still. Returns True
+    so the caller's update can stop here."""
+    if not getattr(self, "breeding", False):
+        return False
+    p = getattr(self, "breed_partner", None)
+    if p is not None and getattr(p, "alive", True):
+        dx, dy = p.x - self.x, p.y - self.y
+        d = math.hypot(dx, dy) or 1.0
+        self.facing = (dx / d, dy / d)
+    return True
+
+
+def _draw_breeding_hearts(self, screen, sx, sy) -> None:
+    """Floating hearts over a breeding pair, rising on the game clock."""
+    try:
+        import wildcrop as _wc
+        now = float(getattr(_wc, "_NOW", 0.0))
+        fnt = pygame.font.SysFont("dejavusans", 14, bold=True)
+        for i in range(2):
+            phase = (now * 1.3 + i * 0.5) % 1.0
+            hx = int(sx + (i - 0.5) * 12)
+            hy = int(sy - 24 - phase * 14)
+            h = fnt.render("\u2665", True, (226, 72, 72))
+            screen.blit(h, (hx, hy))
+    except Exception:
+        pass
+
+
 Horse._animal_hunger = _animal_hunger
 Horse._animal_forage = _animal_forage
 Horse._animal_food_box = _animal_food_box
 Horse._eat_from_box = _eat_from_box
+Horse._animal_baby_tick = _animal_baby_tick
+Horse._animal_breeding_tick = _animal_breeding_tick
+Horse._draw_breeding_hearts = _draw_breeding_hearts
 Bison._animal_hunger = _animal_hunger
 Bison._animal_forage = _animal_forage
 Bison._animal_food_box = _animal_food_box
 Bison._eat_from_box = _eat_from_box
+Bison._animal_baby_tick = _animal_baby_tick
+Bison._animal_breeding_tick = _animal_breeding_tick
+Bison._draw_breeding_hearts = _draw_breeding_hearts
 
 
 def make_squad(nation, x: float, y: float, count: int = 3, color=None):
