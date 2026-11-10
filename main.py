@@ -723,6 +723,7 @@ def main() -> None:
     # THE CROWN'S DEMAND, delivered to the ship every three days.
     g.crown_round = 0
     g.crown_paid = False
+    g.crown_biome = "temperate"       # the spawn biome decides the first ask
     g.crown_chest = Inventory(capacity=64)
     g.crown_screen_open = False
     g.crown_screen = None
@@ -1363,6 +1364,8 @@ def main() -> None:
     import world as _world
     g.player.x = _world.coast_x(0.0, g.world.seed) - 44.0
     g.player.y = 0.0
+    # THE FIRST CROWN DEMAND FOLLOWS THE SPAWN BIOME.
+    g.crown_biome = crown.spawn_biome(g)
     g.cam_x = g.player.x - WIDTH / (2.0 * ZOOM)
     g.cam_y = g.player.y - HEIGHT / (2.0 * ZOOM)
     # Rebuild the ground under him NOW and force the static layer to recompose,

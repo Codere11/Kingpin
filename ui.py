@@ -788,9 +788,12 @@ class CrownScreen:
         screen.blit(title, (panel.left + 18, panel.top + 10))
         d = self.demand_fn()
         import quality as _quality
+        import items as _items
         grade = _quality.letter(d["grade"])
-        line = "%d leaf product, %d leaf, %d wood  (grade %s or higher)" % (
-            d["leaf_product"], d["leaf"], d["wood"], grade)
+        lp_name = _items.get(d["leaf_product_item"]).name.lower()
+        leaf_name = _items.get(d["leaf_item"]).name.lower()
+        line = "%d %s, %d %s, %d wood  (grade %s or higher)" % (
+            d["leaf_product"], lp_name, d["leaf"], leaf_name, d["wood"], grade)
         t = self.font.render(line, True, (206, 184, 122))
         screen.blit(t, (panel.left + 18, panel.top + 38))
         state = "PAID -- free time" if self.paid_fn() else "Round %d" % self.round_fn()
