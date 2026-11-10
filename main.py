@@ -1130,7 +1130,7 @@ def main() -> None:
             inventory=g.inventory, built_blocks=g.built_blocks,
             wmouse_x=g.wmouse_x, wmouse_y=g.wmouse_y,
             _observe_npcs=g._observe_npcs, _observe_soldiers=g._observe_soldiers,
-            field_design=g.field_design)
+            field_design=g.field_design, placing=g.placing)
         render.draw_exterior(_g, cx, cy, show_names, target)
 
 

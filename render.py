@@ -168,7 +168,7 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
         import block as _block
         _sel = g.inventory.selected_stack()
         _sel_id = _sel.defn.id if _sel else None
-        if _sel_id in _block.BUILDABLE or getattr(g, "field_design", False):
+        if _sel_id in _block.BUILDABLE or getattr(g, "field_design", False) or getattr(g, "placing", None) is not None:
             _block.draw_grid(target, cx, cy, g.vw, g.vh, g.wmouse_x, g.wmouse_y)
     except Exception:
         pass

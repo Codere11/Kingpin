@@ -120,7 +120,7 @@ def can_place(rect, sight, player, inside_house, built_houses,
               visible_villages, trees) -> bool:
     if inside_house is not None:
         return inside_house.interior.can_place_workshop(rect)
-    if sight.collidepoint(player.x, player.y):
+    if rect.collidepoint(player.x, player.y):
         return False
     for house in built_houses:
         if sight.colliderect(house.sight_rect):
@@ -288,7 +288,7 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
               "smith": (64, 64), "mine": (64, 64),
               "stall": (64, 64), "dummy": (64, 64), "target": (64, 64),
               "fireplace": (64, 64), "chest": (32, 64), "sign": (32, 32),
-              "foodbox": (32, 32)}
+              "foodbox": (32, 32), "workshop": (64, 64)}
     if placing in _sizes:
         _w, _h = _sizes[placing]
         rect = pygame.Rect(int(x - _w / 2), int(y - _h / 2), _w, _h)
