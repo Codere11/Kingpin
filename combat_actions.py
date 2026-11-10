@@ -29,9 +29,33 @@ from ui import ChestPanel
 
 def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
     stack = inventory.selected_stack()
-    if stack is None or stack.defn.id not in (guns.RIFLE, guns.SHOTGUN):
+    if stack is None or stack.defn.id not in (guns.RIFLE, guns.SHOTGUN, "bow"):
         return
     kind = stack.defn.id
+    if kind == "bow":
+        # A BOW LOOSES AN ARROW: axe-level damage, one arrow spent, and the
+        # shaft flies 35% slower than a bullet.
+        if player.gun_cd > 0.0:
+            return
+        if inventory.count_of("arrow") <= 0:
+            toast("No arrows")
+            return
+        inventory.consume("arrow", 1)
+        player.gun_cd = 0.8
+        fx, fy = player.facing
+        muzzle_x = player.x + fx * 30.0
+        muzzle_y = player.y + fy * 30.0
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        wmouse_x, wmouse_y = mouse_x / zoom, mouse_y / zoom
+        distance = math.hypot((cam_x + wmouse_x) - muzzle_x,
+                              (cam_y + wmouse_y) - muzzle_y)
+        import main as _m
+        dmg = max(1, round(_m.MELEE_DAMAGE * skills.axe_damage_scale()))
+        combat.fire(muzzle_x, muzzle_y, player.facing_angle, distance,
+                    shooter=player, owner="player", damage=dmg, team="player",
+                    spread=skills.shot_spread(), arrow=True)
+        skills.gain_shooting()
+        return
     if player.reloading > 0.0 or player.gun_cd > 0.0:
         return
     if player.mags.get(kind, 0) <= 0:
@@ -586,7 +610,7 @@ def on_click(g):
                 g.try_sleep()
                 return
         return
-    if item_id in ("rifle", "shotgun"):
+    if item_id in ("rifle", "shotgun", "bow"):
         g.fire()
         return
     # CLICK DIRECTLY ON A MAN -> CHAT, whatever is in his hands. This is the

@@ -848,7 +848,7 @@ def run(g):
                         plog.log("BODY-OPEN", getattr(g._body, "name", "?"))
                         break
                     # A WEAPON IS AN ATTACK, NOT A CONVERSATION.
-                    if g._held_id not in ("axe", "pickaxe", "rifle", "shotgun"):
+                    if g._held_id not in ("axe", "pickaxe", "rifle", "shotgun", "bow"):
                         if g.click_a_man(event.pos):
                             break
                 g.consumed = g.hotbar.handle_event(event)
