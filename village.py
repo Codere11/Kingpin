@@ -1776,14 +1776,19 @@ class NPC:
                            crop.grow_seconds(self.skills.farming))
         ground = getattr(world, "ground", None)
         if ground is not None:
-            # DEFERRED. Rebuilding a 256x256 chunk of terrain noise inside the
-            # frame that tilled one tile is fine once; with a hundred and sixty
-            # farmers doing it hundreds of times a second it was the whole
-            # frame. The worker thread does it instead.
-            ground.invalidate_tile(ttx, tty, immediate=False)
+            # FIRST PRIORITY WHEN WATCHED: a tile that changed ON SCREEN is
+            # rebuilt right now, in this frame; a farmer's far-off field is
+            # queued to the worker thread as before.
+            _immediate = False
+            if g is not None:
+                _wx = ttx * TILE + TILE / 2.0
+                _wy = tty * TILE + TILE / 2.0
+                if (g.cam_x - TILE <= _wx <= g.cam_x + g.vw + TILE
+                        and g.cam_y - TILE <= _wy <= g.cam_y + g.vh + TILE):
+                    _immediate = True
+            ground.invalidate_tile(ttx, tty, immediate=_immediate)
         self._did_work()           # planted, watered, reaped or broke ground
         return True
-
     def _did_work(self) -> None:
         """He has just DONE a piece of work. Raise the working face for a
         moment; tick() runs it down again.
