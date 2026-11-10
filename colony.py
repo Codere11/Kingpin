@@ -145,7 +145,7 @@ def tick_breeding(g, dt: float) -> None:
     if day <= getattr(pc, "_last_breed_day", -1):
         return
     adults = [a for a in animals if not getattr(a, "baby", False)]
-    fed = [a for a in adults if getattr(a, "hunger", 0.0) < economy.EAT_AT]
+    fed = [a for a in adults if getattr(a, "hunger", 0.0) < economy.HEAL_WELL_FED]
     if len(fed) < 2:
         return
     a, b = fed[0], fed[1]
@@ -250,7 +250,7 @@ def tick_people_breeding(g, dt: float) -> None:
     if day <= getattr(pc, "_last_people_breed_day", -1):
         return
     adults = [p for p in people if not getattr(p, "baby", False)]
-    fed = [p for p in adults if getattr(p, "hunger", 0.0) < economy.EAT_AT]
+    fed = [p for p in adults if getattr(p, "hunger", 0.0) < economy.HEAL_WELL_FED]
     if len(fed) < 2:
         return
     a, b = fed[0], fed[1]
