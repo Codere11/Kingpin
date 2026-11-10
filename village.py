@@ -669,6 +669,11 @@ class NPC:
         self.attack_cd = self.rng.uniform(0.3, 0.8)
         self.combat_speed = self.rng.uniform(120.0, 160.0)
         self.strafe_dir = self.rng.choice((-1.0, 1.0))
+        self.baby = False             # a newborn, grows up over a day
+        self.born_at = 0.0
+        self.breeding = False         # facing a mate, hearts in the eyes
+        self.breed_partner = None
+        self.bedroll = None           # the bedroll tile this person sleeps on
         economy.setup(self)          # goods, coin, hunger, craving, duty
         self._trade_timer = self.rng.uniform(0.5, 2.5)
 
@@ -1172,6 +1177,68 @@ class NPC:
     def _carry_food(self) -> bool:
         return any(self.carry.get(item, 0) > 0 for item in economy.FOOD)
 
+    def _sleep_on_bedroll(self, dt: float, g) -> bool:
+        """At night, walk to the nearest bedroll and sleep on it."""
+        if g is None:
+            return False
+        bb = getattr(g, "built_blocks", None) or {}
+        best = None
+        bd = 1e18
+        for (tx, ty), kind in bb.items():
+            if kind != "bed":
+                continue
+            wx = tx * TILE + TILE / 2.0
+            wy = ty * TILE + TILE / 2.0
+            d = (wx - self.x) ** 2 + (wy - self.y) ** 2
+            if d < bd:
+                bd = d
+                best = (tx, ty)
+        if best is None:
+            return False
+        tx, ty = best
+        wx = tx * TILE + TILE / 2.0
+        wy = ty * TILE + TILE / 2.0
+        if math.hypot(wx - self.x, wy - self.y) > 14.0:
+            self._step_toward(wx, wy, dt)
+            return True
+        self.asleep = True
+        return True
+
+    def _person_breed_sleep(self, dt: float, night: bool, g) -> bool:
+        """The player's own people: babies grow, breeders face each other with
+        hearts, and at night they sleep on their bedrolls. True = busy."""
+        # a newborn grows into a full person across one day
+        if getattr(self, "baby", False) and g is not None:
+            if float(getattr(g, "now", 0.0)) - float(getattr(self, "born_at", 0.0)) >= economy.DAY_LENGTH:
+                self.baby = False
+        if getattr(self, "breeding", False):
+            p = getattr(self, "breed_partner", None)
+            if p is not None and getattr(p, "alive", True):
+                dx, dy = p.x - self.x, p.y - self.y
+                d = math.hypot(dx, dy) or 1.0
+                self.facing = (dx / d, dy / d)
+            return True
+        if night:
+            return self._sleep_on_bedroll(dt, g)
+        if getattr(self, "asleep", False):
+            self.asleep = False
+        return False
+
+    def _draw_person_hearts(self, screen, sx, sy) -> None:
+        """Floating hearts over a breeding pair, rising on the game clock."""
+        try:
+            import wildcrop as _wc
+            now = float(getattr(_wc, "_NOW", 0.0))
+            fnt = pygame.font.SysFont("dejavusans", 12, bold=True)
+            for i in range(2):
+                phase = (now * 1.3 + i * 0.5) % 1.0
+                hx = int(sx + (i - 0.5) * 12)
+                hy = int(sy - 24 - phase * 14)
+                h = fnt.render("\u2665", True, (226, 72, 72))
+                screen.blit(h, (hx, hy))
+        except Exception:
+            pass
+
     def _work_animals(self, dt: float) -> None:
         """The animal handler: keep the feed box stocked, so the livestock eat
         from it. With no box he feeds the hungriest beast directly."""
@@ -1247,6 +1314,12 @@ class NPC:
             self.sleep_t = max(0.0, self.sleep_t - dt)
             self.moving = False
             return
+        # THE PLAYER'S OWN PEOPLE: babies grow, breeders face each other, and
+        # at night they sleep on their bedrolls.
+        if getattr(self, "native", False):
+            g = getattr(getattr(self, "native_camp", None), "g", None)
+            if self._person_breed_sleep(dt, night, g):
+                return
         # NATIVE CAMP PEOPLE: farmers walk out to their fields and work them;
         # warriors patrol a ring around the fire. They live in the register and
         # are driven by their camp, not by a town schedule.
@@ -2903,6 +2976,9 @@ class NPC:
         mood = face.mood_of(self.hurt_flash, self.attack_flash,
                             self.work_flash, self.sly_flash,
                             self.hunger >= face.STARVED_HUNGER)
+        # ASLEEP: closed eyes, and a breeding pair has hearts for eyes.
+        if getattr(self, "asleep", False) or getattr(self, "sleep_t", 0.0) > 0.0:
+            mood = "sleep"
         # AND WHAT HE HAS EARNED WITH HIS HANDS, from the two combat skills
         # together -- drawn UNDER the mood, so a veteran keeps his beard.
         vet = face.vet_tier(self.skills.axe, self.skills.shooting)
@@ -2914,11 +2990,23 @@ class NPC:
         if is_military(self):
             # WAR PAINT ACROSS THE EYES, for the soldiers alone.
             face.war_paint(screen, hx, hy, head_r, fx, fy)
-        if getattr(self, "sleep_t", 0.0) > 0.0:
+        if getattr(self, "asleep", False) or getattr(self, "sleep_t", 0.0) > 0.0:
             try:
                 fnt = pygame.font.SysFont("dejavusans", 12, bold=True)
                 z = fnt.render("Zzz", True, (226, 226, 236))
                 screen.blit(z, (hx + 6, hy - 20))
+            except Exception:
+                pass
+        # A BREEDING PAIR: hearts float, and the eyes themselves are hearts.
+        if getattr(self, "breeding", False):
+            self._draw_person_hearts(screen, sx, sy)
+            try:
+                fnt = pygame.font.SysFont("dejavusans", 10, bold=True)
+                hh = fnt.render("\u2665", True, (226, 72, 72))
+                px, py = -fy, fx
+                for s in (-1, 1):
+                    screen.blit(hh, (int(hx + px * s * 3 - hh.get_width() / 2),
+                                     int(hy + py * s * 3 - 2 - hh.get_height() / 2)))
             except Exception:
                 pass
         # AND THE TOP HAT, IF HE IS THE MAYOR. It goes ON, not under: the

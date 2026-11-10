@@ -1557,6 +1557,7 @@ def run(g):
             try:
                 import colony as _colony
                 _colony.tick_breeding(g, g.dt)
+                _colony.tick_people_breeding(g, g.dt)
             except Exception:
                 pass
             g.enemy_grid.build([e for e in g.enemies if e.alive])

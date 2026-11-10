@@ -61,18 +61,20 @@ def _edges(screen, x, y, kind, up, down, left, right):
 
 
 def _bed_block(screen, x, y):
-    """A 1x1 bed: mattress, folded blanket and a pillow, top-down."""
+    """A 1x1 white bedroll, top-down."""
     wood = (118, 78, 44)
     wood_d = (78, 50, 28)
-    sheet = (240, 238, 232)
-    pillow = (252, 250, 246)
-    blanket = (196, 120, 88)
-    blanket_d = (150, 84, 60)
+    sheet = (250, 250, 248)
+    pillow = (255, 255, 255)
+    blanket = (232, 232, 230)
+    blanket_d = (188, 188, 186)
     pygame.draw.rect(screen, wood_d, (x + 3, y + 5, TILE - 6, TILE - 10), border_radius=2)
     pygame.draw.rect(screen, wood, (x + 5, y + 7, TILE - 10, TILE - 14), border_radius=2)
     pygame.draw.rect(screen, sheet, (x + 7, y + 9, TILE - 14, TILE - 18), border_radius=2)
     pygame.draw.rect(screen, pillow, (x + 7, y + 9, 6, TILE - 18), border_radius=2)
-    pygame.draw.rect(screen, (200, 198, 192), (x + 7, y + 9, 6, TILE - 18), 1, border_radius=2)
+    pygame.draw.rect(screen, (210, 210, 208), (x + 7, y + 9, 6, TILE - 18), 1, border_radius=2)
+    pygame.draw.rect(screen, blanket, (x + 15, y + 14, TILE - 22, TILE - 24), border_radius=2)
+    pygame.draw.rect(screen, blanket_d, (x + 15, y + 14, TILE - 22, TILE - 24), 1, border_radius=2)
     pygame.draw.rect(screen, blanket_d, (x + 16, y + 9, TILE - 23, TILE - 18), border_radius=2)
     pygame.draw.rect(screen, blanket, (x + 17, y + 11, TILE - 25, TILE - 22), border_radius=2)
 

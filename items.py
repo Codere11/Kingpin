@@ -118,7 +118,7 @@ REGISTRY: dict[str, ItemDef] = {
     "cotton_seed": ItemDef("cotton_seed", "Cotton Seeds",
                            "Plant in fertile soil; grows cotton.",
                            stackable=True, max_stack=100),
-    "bed": ItemDef("bed", "Bed", "A cotton bed. Place it and sleep.",
+    "bed": ItemDef("bed", "Bedroll", "A white cotton bedroll. Place it and sleep.",
                    stackable=True, max_stack=10),
 }
 

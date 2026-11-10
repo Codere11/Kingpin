@@ -54,8 +54,10 @@ def make_camp(g) -> object:
         "unemployed": [],          # conquered, not assigned to a job
         "people": [],              # every conquered person (the pool)
         "animals": [],             # the conquered livestock (horses, bison)
-        "_breeding": None,          # the active breeding event
-        "_last_breed_day": -1,      # one birth per day
+        "_breeding": None,          # the active animal breeding event
+        "_last_breed_day": -1,      # one animal birth per day
+        "_breeding_people": None,   # the active people breeding event
+        "_last_people_breed_day": -1,   # one baby per day
     })()
     return camp
 
@@ -189,6 +191,126 @@ def _spawn_baby(g, a, b) -> None:
         pc.animals.append(baby)
     try:
         g.toast("A new %s is born." % ("foal" if type(a).__name__ == "Horse" else "calf"))
+    except Exception:
+        pass
+
+
+_BABY_NAMES = ("Awan", "Kiona", "Takoda", "Yuma", "Chenoa", "Migina",
+               "Ohanzee", "Sikya", "Winona", "Elan", "Kohana", "Mato",
+               "Nokomis", "Shilah", "Hania", "Kanti", "Lakota", "Mika",
+               "Nita", "Onawa", "Peta", "Sakari", "Tala", "Uzumati")
+
+
+def count_bedrolls(g) -> int:
+    """Bedrolls within 500 blocks of the nearest fireplace (or the player).
+    That count is the population's upper limit."""
+    bb = getattr(g, "built_blocks", None) or {}
+    ref = (float(getattr(g.player, "x", 0.0)), float(getattr(g.player, "y", 0.0)))
+    for wp in getattr(g, "placed_work", ()) or ():
+        if getattr(wp, "kind", "") == "fireplace":
+            ref = (float(wp.x), float(wp.y))
+            break
+    n = 0
+    for (tx, ty), kind in bb.items():
+        if kind != "bed":
+            continue
+        wx = tx * 32 + 16.0
+        wy = ty * 32 + 16.0
+        if math.hypot(wx - ref[0], wy - ref[1]) <= 500 * 32:
+            n += 1
+    return n
+
+
+def tick_people_breeding(g, dt: float) -> None:
+    """People breed like the livestock: one baby a day, but only while there
+    are more bedrolls than people. The parents face each other, eyes as hearts,
+    and a baby is born between them that grows up over a day."""
+    pc = getattr(g, "player_camp", None)
+    if pc is None:
+        return
+    bedrolls = count_bedrolls(g)
+    if bedrolls <= 0:
+        return
+    people = [p for p in (getattr(pc, "people", ()) or ())
+              if getattr(p, "alive", True)]
+    ev = getattr(pc, "_breeding_people", None)
+    if ev is not None:
+        a, b = ev["a"], ev["b"]
+        if not (getattr(a, "alive", True) and getattr(b, "alive", True)):
+            _end_people_breeding(pc)
+            return
+        ev["t"] -= dt
+        if ev["t"] <= 0.0:
+            _end_people_breeding(pc)
+            _spawn_human_baby(g, a, b)
+        return
+    if len(people) >= bedrolls:
+        return
+    day = int(g.now / economy.DAY_LENGTH)
+    if day <= getattr(pc, "_last_people_breed_day", -1):
+        return
+    adults = [p for p in people if not getattr(p, "baby", False)]
+    fed = [p for p in adults if getattr(p, "hunger", 0.0) < economy.EAT_AT]
+    if len(fed) < 2:
+        return
+    a, b = fed[0], fed[1]
+    a.breeding = True
+    a.breed_partner = b
+    b.breeding = True
+    b.breed_partner = a
+    pc._breeding_people = {"a": a, "b": b, "t": 2.0}
+    pc._last_people_breed_day = day
+
+
+def _end_people_breeding(pc) -> None:
+    ev = getattr(pc, "_breeding_people", None)
+    if ev is not None:
+        for x in (ev["a"], ev["b"]):
+            x.breeding = False
+            x.breed_partner = None
+    pc._breeding_people = None
+
+
+def _spawn_human_baby(g, a, b) -> None:
+    """A newborn person, small, growing up over a day, with a name."""
+    import random as _random
+    import biomes as _bio
+    import village as village_mod
+    pc = getattr(g, "player_camp", None)
+    if pc is None:
+        return
+    mx, my = (a.x + b.x) / 2.0, (a.y + b.y) / 2.0
+    seed = (int(getattr(g.world, "seed", 1)) ^ int(float(getattr(g, "now", 0.0)) * 1000)
+            ^ id(a)) & 0xFFFFFFFF
+    baby = village_mod.NPC(mx, my, seed, name=_random.choice(_BABY_NAMES),
+                           npc_id="baby_%d_%d" % (int(mx), int(my)), role="Child")
+    baby.native = True
+    baby.conquered = True
+    baby.native_role = "unemployed"
+    baby.native_camp = pc
+    baby.baby = True
+    baby.born_at = float(getattr(g, "now", 0.0))
+    baby.home = (mx, my)
+    baby.stock["bread"] = 20
+    baby.speed = baby.rng.uniform(80.0, 100.0)
+    try:
+        _t = float(_bio.temperature(mx, my, int(getattr(g.world, "seed", 1))))
+        _h = float(_bio.humidity(mx, my, int(getattr(g.world, "seed", 1))))
+        baby.wear = _bio.npc_wear(_t, _h)
+    except Exception:
+        pass
+    if baby not in pc.people:
+        pc.people.append(baby)
+    if baby not in getattr(g, "_observe_npcs", ()):
+        g._observe_npcs.append(baby)
+    _np = getattr(g, "_native_people", None)
+    if _np is None:
+        _np = []
+        g._native_people = _np
+    if baby not in _np:
+        _np.append(baby)
+    try:
+        g.toast("A baby is born.")
     except Exception:
         pass
 
