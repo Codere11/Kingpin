@@ -1018,6 +1018,8 @@ def main() -> None:
             placing=g.placing, player=g.player, inventory=g.inventory,
             built_houses=g.built_houses, built_fences=g.built_fences,
             built_gates=g.built_gates, placed_work=g.placed_work,
+            built_chests=g.built_chests, built_signs=g.built_signs,
+            built_foodboxes=g.built_foodboxes, built_blocks=g.built_blocks,
             hub_world=g.hub_world, villages=g.villages, inside_house=g.inside_house,
             cam_x=g.cam_x, cam_y=g.cam_y, zoom=ZOOM, test_mode=g.test_mode,
             build_cost=build_cost, build_materials=build_materials,
