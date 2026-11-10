@@ -752,10 +752,11 @@ class CrownScreen:
         self.font_btn = pygame.font.SysFont("dejavusans", 16, bold=True)
 
     def _rects(self, sw: int, sh: int):
-        w, h = 460, 300
-        x0, y0 = (sw - w) // 2, (sh - h) // 2
+        # a bottom bar, so the ship and the world above stay in view
+        w, h = sw - 40, 108
+        x0, y0 = 20, sh - h - 14
         panel = pygame.Rect(x0, y0, w, h)
-        pay = pygame.Rect(x0 + w // 2 - 90, y0 + h - 70, 180, 44)
+        pay = pygame.Rect(x0 + w - 170, y0 + 34, 150, 40)
         return panel, pay
 
     def handle_event(self, event):
@@ -776,31 +777,25 @@ class CrownScreen:
         sw, sh = screen.get_size()
         panel, pay = self._rects(sw, sh)
         shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
-        shade.fill((0, 0, 0, 155))
+        shade.fill((0, 0, 0, 50))          # light: the world (and the ship) stays visible
         screen.blit(shade, (0, 0))
         board = pygame.Surface(panel.size, pygame.SRCALPHA)
         pygame.draw.rect(board, (20, 20, 24, 244), board.get_rect(), border_radius=12)
         pygame.draw.rect(board, BORDER, board.get_rect(), width=2, border_radius=12)
         screen.blit(board, panel.topleft)
 
-        title = self.font.render("THE CROWN WANTS", True, TEXT)
-        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 18))
+        title = self.font_small.render("THE CROWN WANTS", True, TEXT)
+        screen.blit(title, (panel.left + 18, panel.top + 10))
         d = self.demand_fn()
         import quality as _quality
         grade = _quality.letter(d["grade"])
-        lines = [
-            "%d leaf product   (grade %s or higher)" % (d["leaf_product"], grade),
-            "%d leaf            (grade %s or higher)" % (d["leaf"], grade),
-            "%d wood" % d["wood"],
-        ]
-        y = panel.top + 66
-        for ln in lines:
-            t = self.font_small.render(ln, True, (206, 184, 122))
-            screen.blit(t, (panel.left + 40, y))
-            y += 30
+        line = "%d leaf product, %d leaf, %d wood  (grade %s or higher)" % (
+            d["leaf_product"], d["leaf"], d["wood"], grade)
+        t = self.font.render(line, True, (206, 184, 122))
+        screen.blit(t, (panel.left + 18, panel.top + 38))
         state = "PAID -- free time" if self.paid_fn() else "Round %d" % self.round_fn()
         st = self.font_small.render(state, True, (126, 176, 112) if self.paid_fn() else (176, 168, 152))
-        screen.blit(st, (panel.left + 40, y + 8))
+        screen.blit(st, (panel.left + 18, panel.top + 70))
 
         hovered = self.hover
         pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
