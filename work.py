@@ -701,7 +701,7 @@ def _made_grade(npc, given: int) -> int:
     """
     try:
         import quality as _q
-        hands = int(npc.skills.leaf_grade(8))
+        hands = int(npc.skills.leaf_grade())
     except Exception:
         hands = NEUTRAL_GRADE
     try:
@@ -715,7 +715,7 @@ def hands_grade(npc) -> int:
     """The grade his own hands would give a batch, before the leaf is counted."""
     try:
         import quality as _q
-        return int(_q.clamp(int(npc.skills.leaf_grade(8))))
+        return int(_q.clamp(int(npc.skills.leaf_grade())))
     except Exception:
         return 3
 

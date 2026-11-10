@@ -287,7 +287,6 @@ def build(g, cx: float, cy: float, seed: int):
         n.tool_uses = 100
         n.home = (n.x, n.y)
         n.speed = rng.uniform(95.0, 115.0)
-        n.quality_cap = rng.randint(2, 8)      # his talent caps his leaf's grade
         n.wear = biomes.npc_wear(temp, hum)
         farmers.append(n)
         g._observe_npcs.append(n)             # drawn with the natives
@@ -311,7 +310,6 @@ def build(g, cx: float, cy: float, seed: int):
         n.skills.shooting = 0.5
         n.home = (n.x, n.y)
         n.speed = rng.uniform(60.0, 90.0)
-        n.quality_cap = rng.randint(2, 8)
         n._orbit = ang
         n.wear = biomes.npc_wear(temp, hum)
         warriors.append(n)

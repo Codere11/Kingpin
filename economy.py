@@ -350,7 +350,6 @@ def setup(npc) -> None:
     npc.book_out = 0.0                 # ...and today's spending
     npc.trade_stops = 0                # villages visited on this run
     npc.trade_stop = None              # the village he is heading for
-    npc.quality_cap = npc.rng.randint(2, 8)   # his talent: never above this
     npc.addiction = 0.0
     if npc.rng.random() < ADDICTED_SHARE:
         npc.addiction = npc.rng.uniform(0.15, 1.0)
@@ -682,7 +681,7 @@ def harvest(village, npc, kind: str, rng) -> None:
         npc.stock["wheat"] = npc.stock.get("wheat", 0) + grain
     grade = 3
     if item in LEAF:                       # leaf has a grade; grain does not (yet)
-        grade = npc.skills.leaf_grade(getattr(npc, "quality_cap", 8))
+        grade = npc.skills.leaf_grade()
         npc.grade[item] = grade
     keep = farmer_keep(npc, item, int(count))
     if keep > 0:

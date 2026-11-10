@@ -64,7 +64,7 @@ def use_barrel(player, inside_house, inventory, skills, now, toast) -> None:
         barrel["kind"], barrel["count"], barrel["ready_at"] = None, 0, 0.0
         barrel["grade"] = 0
         if out:
-            hands = skills.leaf_grade(8)
+            hands = skills.leaf_grade()
             g = quality.clamp(int(round((hands + given) / 2.0)))
             inventory.add(out, count, g)
             nemesis.note_offence_seen(player, "made", out)   # drugs, broached
@@ -109,7 +109,7 @@ def craft_at_table(player, inventory, skills, toast) -> None:
             continue
         stack = inventory.slots[idx]
         given = stack.quality if stack.quality is not None else 0
-        hands = skills.leaf_grade(8)
+        hands = skills.leaf_grade()
         g = quality.clamp(int(round((hands + given) / 2.0)))
         stack.count -= 1
         if stack.count <= 0:
@@ -161,7 +161,7 @@ def work_action(key, smith_shop, player, now, economy, inventory, skills,
             return 0.0, "No leaf"
         out = economy.PROCESS[leaf]
         inventory.consume(leaf, economy.CRAFT_CONSUME)
-        g = skills.leaf_grade(8)
+        g = skills.leaf_grade()
         inventory.add(out, 1, g)
         return 2.0, "Made one %s   (%s)" % (out, quality.letter(g))
     if kind == "mine":
@@ -179,6 +179,6 @@ def work_action(key, smith_shop, player, now, economy, inventory, skills,
                    (getattr(wp.worker, "tool_orders", ()) or ())):
                 kindw = want
                 break
-        inventory.add(kindw, 1, skills.leaf_grade(8))
+        inventory.add(kindw, 1, skills.leaf_grade())
         return 2.0, "Forged a %s" % kindw
     return 0.0, ""

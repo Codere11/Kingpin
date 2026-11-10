@@ -326,7 +326,7 @@ def smith_shift(npc, dt: float, now: float) -> None:
             store["wood"] = int(store.get("wood", 0)) - cost_wood
         npc.produce_acc -= 1.0
         made += 1
-        g = npc.skills.leaf_grade(8)
+        g = npc.skills.leaf_grade()
         # EVERYTHING HE MAKES IS THE TOWN'S, and it goes on the common shelf.
         economy.store_add(v, kind, 1, g)
         if kind == "rifle":
@@ -357,7 +357,7 @@ def produce(npc, dt: float, now: float) -> None:
             npc.brew = None
             out = economy.BREW.get(wort)
             if out:
-                hands = npc.skills.leaf_grade(8)
+                hands = npc.skills.leaf_grade()
                 given = npc.grade.get(wort, 3)
                 g = quality.clamp(int(round((hands + given) / 2.0)))
                 held = npc.stock.get(out, 0)
@@ -407,7 +407,7 @@ def produce(npc, dt: float, now: float) -> None:
             out = economy.PROCESS[leaf]
             npc.produce_acc -= 1.0
             npc.stock[leaf] -= economy.CRAFT_CONSUME
-            hands = npc.skills.leaf_grade(8)
+            hands = npc.skills.leaf_grade()
             given = npc.grade.get(leaf, 3)
             g = quality.clamp(int(round((hands + given) / 2.0)))
             held = npc.stock.get(out, 0)

@@ -320,7 +320,7 @@ def forage_npc(world, npc, radius: float = 230.0):
         if item is None:
             return None
         amount = 1 + random.randint(0, 2)
-        grade = npc.skills.leaf_grade(getattr(npc, "quality_cap", 8))
+        grade = npc.skills.leaf_grade()
         held = npc.stock.get(item, 0)
         npc.grade[item] = quality.merge(npc.grade.get(item, grade), held, grade, amount)
         npc.stock[item] = held + amount

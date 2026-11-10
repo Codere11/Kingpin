@@ -126,10 +126,9 @@ class Skills:
             return
         self.farming = self._step(self.farming, 8.0, 1.0)
 
-    def leaf_grade(self, cap: int = 8) -> int:
-        """What this pair of hands produces. Talent caps it -- one farmer can
-        reach SSS, another never gets past B."""
-        base = min(int(cap), int(self.farming))
+    def leaf_grade(self) -> int:
+        """What this pair of hands produces: his skill, nothing else."""
+        base = min(8, int(self.farming))
         grade = base + random.choice((-1, 0, 0, 0, 1))
         return max(0, min(8, grade))
 
