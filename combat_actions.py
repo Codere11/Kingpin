@@ -275,6 +275,40 @@ def use_axe(g, kills) -> int:
             g.mark_dirty()
             return kills
 
+    # HIT A BUILDING: it is destroyed outright. Only planks and hides come
+    # back to the pack; chests, signs, feed boxes and benches are gone.
+    for _ch in list(getattr(g, "built_chests", ())):
+        if in_arc(_ch.x, _ch.y, 30.0):
+            g.built_chests.remove(_ch)
+            g.combat.spawn_impact(_ch.x, _ch.y, (140, 100, 56))
+            g.toast("Chest destroyed")
+            g.mark_dirty()
+            return kills
+    for _sg in list(getattr(g, "built_signs", ())):
+        if in_arc(_sg.x, _sg.y, 20.0):
+            g.built_signs.remove(_sg)
+            g.combat.spawn_impact(_sg.x, _sg.y, (140, 100, 56))
+            g.toast("Sign-post destroyed")
+            g.mark_dirty()
+            return kills
+    for _fb in list(getattr(g, "built_foodboxes", ())):
+        if in_arc(_fb.x, _fb.y, 20.0):
+            g.built_foodboxes.remove(_fb)
+            g.combat.spawn_impact(_fb.x, _fb.y, (140, 100, 56))
+            g.toast("Food box destroyed")
+            g.mark_dirty()
+            return kills
+    for _wp in list(getattr(g, "placed_work", ())):
+        if in_arc(_wp.x, _wp.y, 34.0):
+            try:
+                g.placed_work.remove(_wp)
+            except Exception:
+                pass
+            g.combat.spawn_impact(_wp.x, _wp.y, (140, 100, 56))
+            g.toast("Workbench destroyed")
+            g.mark_dirty()
+            return kills
+
     # A SETTLEMENT'S FENCE IS NOT WOOD, IT IS LAW. It cannot be cut, by an
     # axe or anything else: the wall is not what keeps people out, the
     # SEARCH at the gate is, and a wall you can hack a hole in would make

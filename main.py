@@ -907,6 +907,8 @@ def main() -> None:
             hub_world=g.hub_world,
             truth=g._TRUTH, trees=g.trees, built_fences=g.built_fences,
             built_gates=g.built_gates, built_blocks=g.built_blocks,
+            built_chests=g.built_chests, built_signs=g.built_signs,
+            built_foodboxes=g.built_foodboxes, placed_work=g.placed_work,
             visible_villages=g.visible_villages,
             work_lanes=g._WORK, now=g.now,
             toast=toast, mark_dirty=mark_dirty, pay_share=pay_share,
