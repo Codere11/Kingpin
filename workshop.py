@@ -1,7 +1,6 @@
 """Workshop crafting menu.
 
-Open it by pressing E next to a workshop you placed inside a house. Spend wood
-and iron to craft tools and guns.
+Open it by pressing E next to a workbench. Spend wood and iron to craft tools.
 """
 
 from __future__ import annotations
@@ -36,24 +35,36 @@ def craft_yield(item_id: str) -> int:
 
 
 class WorkshopMenu:
+    COLS = 2                       # a compact grid, so it always fits the view
+
     def __init__(self, inventory) -> None:
         self.inv = inventory
         self.hover = -1
         self.free = False
-        self.font_title = pygame.font.SysFont("dejavusans", 20, bold=True)
-        self.font = pygame.font.SysFont("dejavusans", 16, bold=True)
-        self.font_small = pygame.font.SysFont("dejavusans", 12, bold=True)
+        self.font_title = pygame.font.SysFont("dejavusans", 18, bold=True)
+        self.font = pygame.font.SysFont("dejavusans", 14, bold=True)
+        self.font_small = pygame.font.SysFont("dejavusans", 11, bold=True)
 
     def _layout(self, sw: int, sh: int):
-        width = 430
-        row_h = 58
-        pad = 14
-        height = 52 + len(CRAFTS) * row_h + 34
+        n = len(CRAFTS)
+        cols = self.COLS
+        rows = max(1, (n + cols - 1) // cols)
+        pad = 10
+        cell_w = min(200, max(110, (sw - 60) // cols))
+        cell_h = 46
+        width = cols * cell_w + (cols + 1) * pad
+        height = 32 + rows * cell_h + 16
+        width = min(width, sw - 16)
+        height = min(height, sh - 16)
         x0 = (sw - width) // 2
         y0 = (sh - height) // 2
-        rows = [pygame.Rect(x0 + pad, y0 + 46 + i * row_h, width - 2 * pad, row_h - 8)
-                for i in range(len(CRAFTS))]
-        return pygame.Rect(x0, y0, width, height), rows
+        cells = []
+        for i in range(n):
+            r, c = divmod(i, cols)
+            cells.append(pygame.Rect(x0 + pad + c * (cell_w + pad),
+                                     y0 + 30 + r * cell_h,
+                                     cell_w, cell_h - 6))
+        return pygame.Rect(x0, y0, width, height), cells
 
     def affordable(self, index: int) -> bool:
         if self.free:
@@ -64,21 +75,21 @@ class WorkshopMenu:
         surface = pygame.display.get_surface()
         if surface is None:
             return None
-        _, rows = self._layout(*surface.get_size())
+        _, cells = self._layout(*surface.get_size())
         if event.type == pygame.MOUSEMOTION:
             self.hover = -1
-            for i, rect in enumerate(rows):
+            for i, rect in enumerate(cells):
                 if rect.collidepoint(event.pos):
                     self.hover = i
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            for i, rect in enumerate(rows):
+            for i, rect in enumerate(cells):
                 if rect.collidepoint(event.pos) and self.affordable(i):
                     return CRAFTS[i]
         return None
 
     def draw(self, screen: pygame.Surface) -> None:
         sw, sh = screen.get_size()
-        panel, rows = self._layout(sw, sh)
+        panel, cells = self._layout(sw, sh)
 
         shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
         shade.fill((0, 0, 0, 150))
@@ -89,10 +100,10 @@ class WorkshopMenu:
         pygame.draw.rect(board, (72, 72, 80), board.get_rect(), width=2, border_radius=12)
         screen.blit(board, panel.topleft)
 
-        title = self.font_title.render("WORKSHOP", True, (222, 214, 196))
-        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 8))
+        title = self.font_title.render("WORKBENCH", True, (222, 214, 196))
+        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 6))
 
-        for i, (craft, rect) in enumerate(zip(CRAFTS, rows)):
+        for i, (craft, rect) in enumerate(zip(CRAFTS, cells)):
             ok = self.affordable(i)
             hovered = (i == self.hover) and ok
             pygame.draw.rect(screen, (48, 46, 40) if hovered else (34, 34, 40),
@@ -100,18 +111,15 @@ class WorkshopMenu:
             border = (222, 176, 88) if hovered else ((104, 132, 92) if ok else (110, 66, 66))
             pygame.draw.rect(screen, border, rect, width=2, border_radius=8)
 
-            icon = items.icon(craft["id"], rect.height - 10)
-            screen.blit(icon, (rect.left + 10, rect.centery - icon.get_height() // 2))
+            icon = items.icon(craft["id"], rect.height - 12)
+            screen.blit(icon, (rect.left + 6, rect.centery - icon.get_height() // 2))
 
             name = self.font.render(craft["name"], True,
                                     (232, 232, 238) if ok else (142, 142, 150))
-            screen.blit(name, (rect.left + icon.get_width() + 20, rect.top + 7))
+            screen.blit(name, (rect.left + icon.get_width() + 12, rect.top + 5))
             parts = []
             for k, v in craft["cost"].items():
-                parts.append(f"{v} {k} (have {self.inv.count_of(k)})")
-            cost = self.font_small.render("   ".join(parts), True,
+                parts.append(f"{v} {k} ({self.inv.count_of(k)})")
+            cost = self.font_small.render("  ".join(parts), True,
                                           (206, 184, 122) if ok else (176, 112, 112))
-            screen.blit(cost, (rect.left + icon.get_width() + 20, rect.top + 30))
-
-        hint = self.font_small.render("E / Esc to close", True, (138, 138, 148))
-        screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 24))
+            screen.blit(cost, (rect.left + icon.get_width() + 12, rect.top + 24))
