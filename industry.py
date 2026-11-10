@@ -493,16 +493,22 @@ class Workplace:
         self.y = float(y)
         self._rng_seed = seed & 0xFFFFFFFF
         self.rng = random.Random(self._rng_seed)
-        self.w, self.h = (64, 64)
+        self.w, self.h = (64, 32) if kind == "research" else (64, 64)
         # WHAT A POST LOOKS LIKE WHILE IT IS BEING WORKED: the dummy takes a
         # blow, the target takes a round. Both are timers the frame drains.
         self.train_flash = 0.0
         self.shot_flash = 0.0
-        self.rect = pygame.Rect(int(x - self.w / 2), int(y - self.h / 2),
-                                self.w, self.h)
-        self.base_y = y + self.h / 2.0
+        if kind == "research":
+            # A 2x1 BENCH FILLS TWO SQUARES: top-left on the snapped corner.
+            self.rect = pygame.Rect(int(x), int(y), self.w, self.h)
+            self.x = float(x + self.w / 2.0)
+            self.y = float(y + self.h / 2.0)
+        else:
+            self.rect = pygame.Rect(int(x - self.w / 2), int(y - self.h / 2),
+                                    self.w, self.h)
+        self.base_y = self.y + self.h / 2.0
         self.sight_rect = self.rect.inflate(48, 48)
-        self.door = (x, y + self.h / 2.0 + 15.0)
+        self.door = (self.x, self.y + self.h / 2.0 + 15.0)
         self.worker = None
         self._image: pygame.Surface | None = None
         self.image = self._render_image()
@@ -514,6 +520,8 @@ class Workplace:
             return self._render_mine()
         if self.kind == "lab":
             return self._render_lab()
+        if self.kind == "research":
+            return self._render_research()
         if self.kind == "workshop":
             return self._render_workshop()
         if self.kind == "brewery":
@@ -702,6 +710,22 @@ class Workplace:
         pygame.draw.circle(surf, (140, 104, 48), (cx, oy + 16), 10, 2)
         pygame.draw.rect(surf, (100, 74, 40), (cx + 7, oy + 10, 5, 12))
         return surf
+
+    def _render_research(self) -> pygame.Surface:
+        """The research bench: the 2x1 PNG, scaled to its two squares."""
+        import os
+        path = os.path.join(os.path.dirname(__file__), "research_bench.png")
+        try:
+            img = pygame.image.load(path).convert_alpha()
+            return pygame.transform.smoothscale(img, (self.w, self.h))
+        except Exception:
+            # a plain desk if the sprite is missing
+            surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            pygame.draw.rect(surf, (150, 104, 62),
+                             (0, self.h // 2, self.w, self.h // 2), border_radius=3)
+            pygame.draw.rect(surf, (78, 54, 34),
+                             (0, self.h // 2, self.w, self.h // 2), 2, border_radius=3)
+            return surf
 
     def _render_workshop(self) -> pygame.Surface:
         """A workbench: a wooden table with a saw and a hammer on it."""

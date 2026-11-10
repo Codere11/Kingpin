@@ -294,12 +294,12 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
               "smith": (64, 64), "mine": (64, 64),
               "stall": (64, 64), "dummy": (64, 64), "target": (64, 64),
               "fireplace": (64, 64), "chest": (32, 32), "sign": (32, 32),
-              "foodbox": (32, 32), "workshop": (64, 64)}
+              "foodbox": (32, 32), "workshop": (64, 64), "research": (64, 32)}
     if placing in _sizes:
         _w, _h = _sizes[placing]
-        if _w == _h == TILE:
-            # A 1x1 CHEST/SIGN/FEED BOX FILLS ONE SQUARE OF THE MESH: its
-            # top-left sits on the snapped corner, exactly like a plank.
+        if _h == TILE:
+            # FILLS WHOLE SQUARES VERTICALLY (1x1 and 2x1): its top-left sits
+            # on the snapped mesh corner, exactly like a plank.
             rect = pygame.Rect(int(x), int(y), _w, _h)
         else:
             rect = pygame.Rect(int(x - _w / 2), int(y - _h / 2), _w, _h)
@@ -602,7 +602,7 @@ def try_place(g):
         pygame.mouse.set_visible(False)
         return
     if placing in ("lab", "brewery", "smith", "mine", "dummy", "target",
-                   "fireplace", "workshop"):
+                   "fireplace", "workshop", "research"):
         _wp = industry.Workplace(placing, x, y, random.randrange(1 << 30))
         if not hubs.land_ok(_wp.rect, g.villages.villages, g.hub_world.hubs,
                            g.player.x, g.player.y):
@@ -749,18 +749,22 @@ def draw_placing(g):
     colour = (126, 224, 148) if ok else (226, 96, 84)
     rr = pygame.Rect(box.x - g.cam_x, box.y - g.cam_y, box.w, box.h)
     sr = pygame.Rect(sight.x - g.cam_x, sight.y - g.cam_y, sight.w, sight.h)
-    _bench = g.placing in ("lab", "brewery", "smith", "mine", "stall",
-                          "dummy", "target", "fireplace")
-    if _bench:
-        # THE SAME WHITE OUTLINE AS A PLANK, over the 2x2 squares it takes.
-        pygame.draw.rect(g.screen, (255, 255, 255), rr, 2)
-        pygame.draw.rect(g.screen, (0, 0, 0), rr.inflate(2, 2), 1)
-    else:
+    if g.placing == "plot":
+        # A PLOT IS A FIELD-LIKE DRAG: it keeps its own green/red rectangle.
         fill = pygame.Surface(rr.size, pygame.SRCALPHA)
         fill.fill((colour[0], colour[1], colour[2], 48))
         g.screen.blit(fill, rr.topleft)
         pygame.draw.rect(g.screen, colour, sr, 2)
         pygame.draw.rect(g.screen, colour, rr, 2)
+    elif g.placing == "demolish":
+        # nothing to preview: the square is just a cursor
+        pygame.draw.rect(g.screen, (255, 255, 255), rr, 2)
+    else:
+        # THE MESH ONLY: every building shows a white outline over the squares
+        # it takes. No green/red fit tint -- fields and orchards keep their own
+        # drag rectangles, drawn elsewhere, and are not touched here.
+        pygame.draw.rect(g.screen, (255, 255, 255), rr, 2)
+        pygame.draw.rect(g.screen, (0, 0, 0), rr.inflate(2, 2), 1)
     hint_text = "Click to place   ·   right-click to cancel"
     if g.placing in ("fence", "gate"):
         hint_text = "Click to place   ·   R to rotate   ·   right-click to cancel"

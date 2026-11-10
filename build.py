@@ -22,6 +22,7 @@ BUILDINGS = [
     # ...and the opposite: take something of his down with one click.
     {"id": "demolish", "name": "Demolish", "wood": 0, "where": "outside"},
     {"id": "lab", "name": "Artisan's bench", "wood": 150, "where": "outside"},
+    {"id": "research", "name": "Research bench", "wood": 150, "where": "outside"},
     {"id": "workshop", "name": "Workbench", "wood": 100, "where": "outside"},
     {"id": "brewery", "name": "Brewhouse", "wood": 120, "where": "outside"},
     # THE PLAYER'S OWN SHOP. It stands inside his hub (main refuses it
@@ -165,6 +166,37 @@ def lab_icon(size: int = 46) -> pygame.Surface:
                            (int(size * 0.72), int(size * 0.40)), int(size * 0.12), 2)
         _LAB_ICON = s
     return _LAB_ICON
+
+
+_RESEARCH_ICON = None
+
+
+def research_icon(size: int = 46) -> pygame.Surface:
+    """A research bench: a book and a lens over the desk."""
+    global _RESEARCH_ICON
+    if _RESEARCH_ICON is None or _RESEARCH_ICON.get_width() != size:
+        s = pygame.Surface((size, size), pygame.SRCALPHA)
+        top = pygame.Rect(size * 0.06, size * 0.52, size * 0.88, size * 0.26)
+        pygame.draw.rect(s, (150, 104, 62), top, border_radius=3)
+        pygame.draw.rect(s, (78, 54, 34), top, 2, border_radius=3)
+        # an open book
+        pygame.draw.polygon(s, (216, 200, 164),
+                            [(size * 0.20, size * 0.34), (size * 0.44, size * 0.40),
+                             (size * 0.44, size * 0.52), (size * 0.20, size * 0.48)])
+        pygame.draw.polygon(s, (190, 172, 136),
+                            [(size * 0.44, size * 0.40), (size * 0.68, size * 0.34),
+                             (size * 0.68, size * 0.48), (size * 0.44, size * 0.52)])
+        pygame.draw.line(s, (120, 100, 70), (size * 0.44, size * 0.40),
+                         (size * 0.44, size * 0.52), 2)
+        # a lens on a stand
+        pygame.draw.line(s, (90, 96, 110), (size * 0.78, size * 0.52),
+                         (size * 0.78, size * 0.34), 3)
+        pygame.draw.circle(s, (150, 190, 210), (int(size * 0.78), int(size * 0.30)),
+                           int(size * 0.09))
+        pygame.draw.circle(s, (70, 96, 112), (int(size * 0.78), int(size * 0.30)),
+                           int(size * 0.09), 2)
+        _RESEARCH_ICON = s
+    return _RESEARCH_ICON
 
 
 def house_icon(size: int = 46) -> pygame.Surface:
@@ -451,6 +483,7 @@ class BuildMenu:
 
             icon_fn = {"house": house_icon, "workshop": workshop_icon,
                        "lab_table": lab_icon, "lab": lab_icon,
+                       "research": research_icon,
                        "brew_table": brew_icon, "barrel": barrel_icon,
                        "brewery": brew_icon, "smith": workshop_icon,
                        "mine": workshop_icon, "plot": fence_icon,
