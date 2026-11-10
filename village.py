@@ -1160,28 +1160,85 @@ class NPC:
         if math.hypot(tx - self.x, ty - self.y) > 8.0:
             self._walk_toward(tx, ty, speed * 0.6, dt)
 
+    def _food_box(self):
+        """The nearest feed box, or None."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        boxes = getattr(g, "built_foodboxes", None) if g is not None else None
+        if not boxes:
+            return None
+        return min(boxes, key=lambda b: (b.x - self.x) ** 2 + (b.y - self.y) ** 2)
+
+    def _carry_food(self) -> bool:
+        return any(self.carry.get(item, 0) > 0 for item in economy.FOOD)
+
     def _work_animals(self, dt: float) -> None:
-        """The animal handler: feed the camp's livestock. He walks to the
-        hungriest tame beast and gives it a bite of stored food."""
+        """The animal handler: keep the feed box stocked, so the livestock eat
+        from it. With no box he feeds the hungriest beast directly."""
         camp = getattr(self, "native_camp", None)
         if camp is None:
             self._native_idle(dt)
             return
-        animals = [a for a in (getattr(camp, "animals", ()) or ())
-                   if getattr(a, "alive", True)]
-        best = None
-        for a in animals:
-            if getattr(a, "food", 0) <= 0 and getattr(a, "hunger", 0.0) >= economy.EAT_AT:
-                if best is None or a.hunger > best.hunger:
-                    best = a
-        if best is None:
+        box = self._food_box()
+        if box is None or getattr(box, "inventory", None) is None:
+            # NO BOX: feed the hungriest beast directly, the old way.
+            animals = [a for a in (getattr(camp, "animals", ()) or ())
+                       if getattr(a, "alive", True)]
+            best = None
+            for a in animals:
+                if getattr(a, "food", 0) <= 0 and getattr(a, "hunger", 0.0) >= economy.EAT_AT:
+                    if best is None or a.hunger > best.hunger:
+                        best = a
+            if best is None:
+                self._native_idle(dt)
+                return
+            if math.hypot(best.x - self.x, best.y - self.y) > 24.0:
+                self._step_toward(best.x, best.y, dt)
+                return
+            best.food = getattr(best, "food", 0) + 1
+            self._did_work()
+            return
+        stocked = sum(1 for s in box.inventory.slots
+                      if s is not None and s.defn.id in economy.FOOD)
+        if stocked >= 8:
             self._native_idle(dt)
             return
-        if math.hypot(best.x - self.x, best.y - self.y) > 24.0:
-            self._step_toward(best.x, best.y, dt)
+        # CARRYING: walk to the box and pour it in.
+        if self._carry_food():
+            if math.hypot(box.x - self.x, box.y - self.y) > 24.0:
+                self._step_toward(box.x, box.y, dt)
+                return
+            for item in economy.FOOD:
+                if self.carry.get(item, 0) > 0:
+                    box.inventory.add(item, int(self.carry[item]))
+                    self.carry[item] = 0
+            self._did_work()
             return
-        best.food = getattr(best, "food", 0) + 1
-        self._did_work()
+        # FORAGE: find a wild food plant and pick it.
+        try:
+            import wildcrop as _wc
+            world = _wc._WORLD
+        except Exception:
+            self._native_idle(dt)
+            return
+        found = _wc._nearest(world, self.x, self.y, 520.0) if world else None
+        if found is None:
+            self._native_idle(dt)
+            return
+        tx, ty, _kind = found
+        wx = tx * TILE + TILE / 2.0
+        wy = ty * TILE + TILE / 2.0
+        if math.hypot(wx - self.x, wy - self.y) > 22.0:
+            self._step_toward(wx, wy, dt)
+            return
+        got = _wc.at(world, tx, ty)
+        if got is not None:
+            kind2, _stage = got
+            item = crop.FOOD_ITEM.get(kind2)
+            if item is not None:
+                world.wild_eaten[(tx, ty)] = _wc._NOW + _wc.REGEN
+                self.carry[item] = self.carry.get(item, 0) + 1
+                self._did_work()
 
     def update(self, dt: float, threat=None, colliders=None, combat=None,
                night: bool = False, world=None, now: float = 0.0,

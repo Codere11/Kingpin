@@ -76,6 +76,34 @@ class SignPost:
                          border_radius=2)
 
 
+class FoodBox:
+    """A 1x1 feed box: the animal handler stocks it, the livestock eat from it."""
+
+    def __init__(self, x: float, y: float) -> None:
+        self.x = float(x)
+        self.y = float(y)
+        self.w = self.h = TILE
+        self.rect = pygame.Rect(int(x - TILE / 2), int(y - TILE / 2), TILE, TILE)
+        self.sight_rect = self.rect.inflate(40, 40)
+        self.base_y = y
+        self.owner = None
+        try:
+            from inventory import Inventory
+            self.inventory = Inventory(32)
+        except Exception:
+            self.inventory = None
+
+    def draw(self, screen: pygame.Surface, cam_x: float, cam_y: float) -> None:
+        sx = int(round(self.x - cam_x))
+        sy = int(round(self.y - cam_y))
+        r = pygame.Rect(sx - 8, sy - 6, 16, 12)
+        pygame.draw.rect(screen, (128, 92, 56), r, border_radius=3)
+        pygame.draw.rect(screen, (86, 60, 36), r, 2, border_radius=3)
+        pygame.draw.rect(screen, (150, 110, 66), (r.left + 2, r.top + 2, r.w - 4, r.h - 4), border_radius=2)
+        for dx in (-3, 0, 3):
+            pygame.draw.line(screen, (188, 168, 96), (sx + dx, sy - 4), (sx + dx, sy + 4), 1)
+
+
 def placement_pos(player, inside_house, inside_mine, cam_x, cam_y,
                   wmouse_x, wmouse_y):
     """The room is 1:1 indoors; the world is ZOOM'd outdoors."""
@@ -108,7 +136,8 @@ def can_place(rect, sight, player, inside_house, built_houses,
 
 
 def own_things(built_plots, placed_work, built_gates, built_fences, built_houses,
-               built_blocks=None, built_chests=None, built_signs=None):
+               built_blocks=None, built_chests=None, built_signs=None,
+               built_foodboxes=None):
     """Everything of HIS a click could take down, smallest first."""
     out = []
     for _r in built_plots:
@@ -131,16 +160,21 @@ def own_things(built_plots, placed_work, built_gates, built_fences, built_houses
     if built_signs:
         for _sg in built_signs:
             out.append((_sg.rect, "sign", _sg))
+    if built_foodboxes:
+        for _fb in built_foodboxes:
+            out.append((_fb.rect, "foodbox", _fb))
     return out
 
 
 def demolish_at(wx, wy, player, built_plots, built_gates, built_fences,
                 built_houses, placed_work, mark_dirty, inventory, stall_mod,
-                built_blocks=None, built_chests=None, built_signs=None) -> str:
+                built_blocks=None, built_chests=None, built_signs=None,
+                built_foodboxes=None) -> str:
     """ONE CLICK TAKES ONE THING OF HIS DOWN -- the smallest under it."""
     hits = [(r.w * r.h, kind, r, obj) for (r, kind, obj) in
             own_things(built_plots, placed_work, built_gates, built_fences,
-                       built_houses, built_blocks, built_chests, built_signs)
+                       built_houses, built_blocks, built_chests, built_signs,
+                       built_foodboxes)
             if r.collidepoint(wx, wy)]
     if not hits:
         return ""
@@ -170,6 +204,17 @@ def demolish_at(wx, wy, player, built_plots, built_gates, built_fences,
             built_signs.remove(obj)
         mark_dirty()
         return "Sign-post taken down"
+    if kind == "foodbox":
+        if obj in built_foodboxes:
+            built_foodboxes.remove(obj)
+        _n = 0
+        if getattr(obj, "inventory", None) is not None:
+            for _st in obj.inventory.slots:
+                if _st is not None:
+                    inventory.add(_st.defn.id, _st.count, _st.quality)
+                    _n += _st.count
+        mark_dirty()
+        return ("Food box taken down -- %d food returned" % _n) if _n else "Food box taken down"
     if kind == "plot":
         if rect in built_plots:
             built_plots.remove(rect)
@@ -242,7 +287,8 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
     _sizes = {"lab": (64, 64), "brewery": (64, 64),
               "smith": (64, 64), "mine": (64, 64),
               "stall": (64, 64), "dummy": (64, 64), "target": (64, 64),
-              "fireplace": (64, 64), "chest": (32, 64), "sign": (32, 32)}
+              "fireplace": (64, 64), "chest": (32, 64), "sign": (32, 32),
+              "foodbox": (32, 32)}
     if placing in _sizes:
         _w, _h = _sizes[placing]
         rect = pygame.Rect(int(x - _w / 2), int(y - _h / 2), _w, _h)
@@ -467,6 +513,34 @@ def try_place(g):
         g.built_signs.append(_sg)
         g.mark_dirty()
         g.toast("Sign-post built")
+        placing = None
+        pygame.mouse.set_visible(False)
+        return
+    if placing == "foodbox":
+        if not hubs.land_ok(rect, g.villages.villages, g.hub_world.hubs,
+                           g.player.x, g.player.y):
+            g.toast("Not your land -- the wild, or your own hub")
+            return
+        if not g.can_place(rect, sight):
+            g.toast("No clear ground here")
+            return
+        _cost = g.build_materials("foodbox")
+        if not g.test_mode:
+            for _it, _q in _cost.items():
+                if g.inventory.count_of(_it) < _q:
+                    g.toast("Need %d %s" % (_q, _it))
+                    placing = None
+                    pygame.mouse.set_visible(False)
+                    return
+            for _it, _q in _cost.items():
+                g.inventory.consume(_it, _q)
+        _fb = FoodBox(x, y)
+        _fb.owner = g.player
+        if not hasattr(g, "built_foodboxes"):
+            g.built_foodboxes = []
+        g.built_foodboxes.append(_fb)
+        g.mark_dirty()
+        g.toast("Food box built")
         placing = None
         pygame.mouse.set_visible(False)
         return

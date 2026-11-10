@@ -606,6 +606,11 @@ def run(g):
                     g.sign_panel = SignPanel(_sg, g.player_camp, g.sync_jobs)
                     g.sign_open = True
                     pygame.mouse.set_visible(True)
+                elif g.near_foodbox() is not None:
+                    _fb = g.near_foodbox()
+                    g.chest_open = True
+                    g.chest_panel = ChestPanel(g.inventory, _fb.inventory, top_label="FOOD BOX")
+                    pygame.mouse.set_visible(True)
                 elif g.near_chest_building() is not None:
                     # A CHEST HE BUILT: double the player's space, filled by
                     # the camp's workers as they carry their produce over.
@@ -3414,6 +3419,8 @@ def run(g):
                 _ch.draw(g.screen, g.cam_x, g.cam_y)
             for _sg in (() if g._inside_now else g.built_signs):
                 _sg.draw(g.screen, g.cam_x, g.cam_y)
+            for _fb in (() if g._inside_now else g.built_foodboxes):
+                _fb.draw(g.screen, g.cam_x, g.cam_y)
             # HIS PLOTS ARE ALWAYS MARKED, and while the build menu is open or
             # he is placing something they are LIT -- so he can see the ground
             # he has already staked before he stakes more.

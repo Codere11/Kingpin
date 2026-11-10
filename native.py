@@ -345,6 +345,7 @@ def build(g, cx: float, cy: float, seed: int):
             else:
                 a = _creatures.Bison(ax, ay)
                 a.tamed = True
+                a.g = g
                 a.home = (ax, ay)
                 if a not in getattr(g, "enemies", ()):
                     g.enemies.append(a)

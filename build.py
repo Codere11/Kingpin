@@ -34,8 +34,6 @@ BUILDINGS = [
     {"id": "fireplace", "name": "Fireplace", "wood": 20, "where": "outside"},
     # A CHEST: 1x2 on the mesh, 64 slots -- double the player's 32.
     {"id": "chest", "name": "Chest", "wood": 50, "where": "outside"},
-    # A SIGN-POST: set how many conquered people work each job.
-    {"id": "sign", "name": "Sign-post", "wood": 20, "where": "outside"},
     # A FORGE IS IRON -- not wood alone.
     {"id": "smith", "name": "Forge", "wood": 0,
      "cost": {"iron": 300}, "where": "outside"},
@@ -300,11 +298,26 @@ def sign_icon(size: int = 46) -> pygame.Surface:
     return s
 
 
+def foodbox_icon(size: int = 46) -> pygame.Surface:
+    """A feed box: a wooden trough with a little hay."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    r = pygame.Rect(int(size * 0.16), int(size * 0.22), int(size * 0.68), int(size * 0.56))
+    pygame.draw.rect(s, (128, 92, 56), r, border_radius=6)
+    pygame.draw.rect(s, (86, 60, 36), r, 3, border_radius=6)
+    pygame.draw.rect(s, (150, 110, 66), (r.left + 5, r.top + 5, r.w - 10, r.h - 10), border_radius=4)
+    for dx in (0.20, 0.40, 0.60):
+        pygame.draw.line(s, (188, 168, 96), (int(dx * size), int(0.34 * size)),
+                         (int((dx + 0.06) * size), int(0.60 * size)), 2)
+    return s
+
+
 # THE SETTLEMENT CATEGORY: things the player designates for the camp, not
 # builds with his own hands. A field grows crops; an orchard grows trees.
 SETTLEMENT_BUILDINGS = [
     {"id": "field", "name": "Field", "wood": 0, "where": "outside"},
     {"id": "orchard", "name": "Orchard", "wood": 0, "where": "outside"},
+    {"id": "sign", "name": "Sign-post", "wood": 20, "where": "outside"},
+    {"id": "foodbox", "name": "Food box", "wood": 30, "where": "outside"},
 ]
 
 
@@ -447,6 +460,7 @@ class BuildMenu:
                        "orchard": orchard_icon,
                        "chest": chest_icon,
                        "sign": sign_icon,
+                       "foodbox": foodbox_icon,
                        "demolish": fence_icon,
                        "fence": fence_icon, "gate": gate_icon}[building["id"]]
             icon = icon_fn(rect.height - 14)

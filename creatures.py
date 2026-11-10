@@ -911,10 +911,12 @@ class Horse:
                     self.facing = (dx / d, dy / d)
                 return
         self.flee_timer = max(0.0, self.flee_timer - dt)
-        # HUNGRY: go to the nearest plant and eat it up. The handler feeds a
-        # tamed horse, so it does not roam off to forage.
-        if not getattr(self, "tamed", False) and self.hunger >= economy.EAT_AT and self.food <= 0:
-            if self._animal_forage(dt):
+        # HUNGRY: a wild horse forages; a tamed one eats from the feed box.
+        if self.hunger >= economy.EAT_AT and self.food <= 0:
+            if getattr(self, "tamed", False):
+                if self._eat_from_box(dt, colliders):
+                    return
+            elif self._animal_forage(dt):
                 return
         # GRAZE: pick a new spot near home now and then, then amble to it.
         self.graze_timer -= dt
@@ -1029,10 +1031,12 @@ class Bison(Enemy):
                 self._move(ux, uy, SPRINTER_MAX, dt)
                 self.facing = (ux, uy)
                 return
-        # HUNGRY: go to the nearest plant and eat it up. A tamed bison is fed
-        # by its handler, so it does not roam off to forage.
-        if not getattr(self, "tamed", False) and self.hunger >= economy.EAT_AT and self.food <= 0:
-            if self._animal_forage(dt):
+        # HUNGRY: a wild bison forages; a tamed one eats from the feed box.
+        if self.hunger >= economy.EAT_AT and self.food <= 0:
+            if getattr(self, "tamed", False):
+                if self._eat_from_box(dt, colliders):
+                    return
+            elif self._animal_forage(dt):
                 return
         self.graze_timer -= dt
         if self.graze_timer <= 0.0:
@@ -1164,10 +1168,43 @@ def _animal_forage(self, dt: float) -> bool:
     return True
 
 
+def _animal_food_box(self):
+    """The nearest feed box, or None."""
+    g = getattr(self, "g", None)
+    boxes = getattr(g, "built_foodboxes", None) if g is not None else None
+    if not boxes:
+        return None
+    return min(boxes, key=lambda b: (b.x - self.x) ** 2 + (b.y - self.y) ** 2)
+
+
+def _eat_from_box(self, dt: float, colliders=None) -> bool:
+    """A tamed beast: walk to the feed box and eat one bite out of it. Returns
+    True while it is walking or eating."""
+    box = _animal_food_box(self)
+    if box is None or getattr(box, "inventory", None) is None:
+        return False
+    d = math.hypot(box.x - self.x, box.y - self.y)
+    if d > 22.0:
+        ux, uy = steering.steer(self, box.x, box.y, colliders or (), ())
+        self.x += ux * getattr(self, "speed", 100.0) * 0.5 * dt
+        self.y += uy * getattr(self, "speed", 100.0) * 0.5 * dt
+        self.facing = (ux, uy)
+        return True
+    for item in economy.FOOD:
+        if box.inventory.consume(item, 1):
+            self.food = getattr(self, "food", 0) + 1
+            return True
+    return True                    # the box is empty: wait beside it
+
+
 Horse._animal_hunger = _animal_hunger
 Horse._animal_forage = _animal_forage
+Horse._animal_food_box = _animal_food_box
+Horse._eat_from_box = _eat_from_box
 Bison._animal_hunger = _animal_hunger
 Bison._animal_forage = _animal_forage
+Bison._animal_food_box = _animal_food_box
+Bison._eat_from_box = _eat_from_box
 
 
 def make_squad(nation, x: float, y: float, count: int = 3, color=None):

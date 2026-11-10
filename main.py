@@ -790,6 +790,7 @@ def main() -> None:
     g.placed_work: list = []          # the four trades, out of doors, on his land
     g.built_chests: list = []          # the 1x2 chests he has built
     g.built_signs: list = []           # the sign-posts that set job counts
+    g.built_foodboxes: list = []       # feed boxes the livestock eat from
     g.built_plots: list = []          # plots he has drawn on his own ground
     g.plot_start = [None]             # where the plot drag began
     g.built_fences: list = []
@@ -965,13 +966,13 @@ def main() -> None:
     def _own_things():
         return placement.own_things(g.built_plots, g.placed_work, g.built_gates,
                                     g.built_fences, g.built_houses, g.built_blocks,
-                                    g.built_chests, g.built_signs)
+                                    g.built_chests, g.built_signs, g.built_foodboxes)
 
     def demolish_at(wx: float, wy: float) -> str:
         return placement.demolish_at(wx, wy, g.player, g.built_plots, g.built_gates,
                                      g.built_fences, g.built_houses, g.placed_work,
                                      mark_dirty, g.inventory, stall_mod, g.built_blocks,
-                                     g.built_chests, g.built_signs)
+                                     g.built_chests, g.built_signs, g.built_foodboxes)
 
     def salary_chest():
         return placement.salary_chest(g.built_houses, hubs, g.hub_world)
@@ -1165,6 +1166,20 @@ def main() -> None:
             if math.hypot(g.player.x - _sg.x, g.player.y - _sg.y) < 56.0:
                 return _sg
         return None
+
+    def near_foodbox():
+        """The nearest feed box he has built, or None."""
+        for _fb in getattr(g, "built_foodboxes", ()):
+            if math.hypot(g.player.x - _fb.x, g.player.y - _fb.y) < 56.0:
+                return _fb
+        return None
+
+    def food_box():
+        """The feed box the livestock and the handler use: the nearest built."""
+        boxes = getattr(g, "built_foodboxes", ()) or ()
+        if not boxes:
+            return None
+        return min(boxes, key=lambda b: (b.x - g.player.x) ** 2 + (b.y - g.player.y) ** 2)
 
     def ship_pos():
         """The Crown's ship, anchored off the coast at y=0."""
@@ -1795,6 +1810,8 @@ def main() -> None:
     g.near_chest = near_chest
     g.near_chest_building = near_chest_building
     g.near_sign = near_sign
+    g.near_foodbox = near_foodbox
+    g.food_box = food_box
     g.ship_pos = ship_pos
     g.open_crown_screen = open_crown_screen
     g.crown_demand = crown_demand
