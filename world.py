@@ -594,8 +594,19 @@ class GroundRenderer:
             sy = int(round(cy * CHUNK - cam_y))
             surf = self.get(cx, cy)
             if surf is None:
+                # ON SCREEN MEANS BUILT NOW, in this very frame, before
+                # anything else draws. The StaticLayer bakes this into its
+                # cached region, so a coarse placeholder left here would sit
+                # on screen for as long as the region is reused -- the
+                # "sprint and the ground never fills in" bug. The worker only
+                # ever builds the ring ahead of the camera.
+                try:
+                    surf = self.chunk_surface(cx, cy)
+                except Exception:
+                    surf = None
+            if surf is None:
                 screen.fill(self._coarse_color(cx, cy), (sx, sy, CHUNK, CHUNK))
-                self.request(cx, cy, 0.0, 0)     # on screen: top priority
+                self.request(cx, cy, 0.0, 0)     # last resort, if generation failed
             else:
                 screen.blit(surf, (sx, sy))
 
