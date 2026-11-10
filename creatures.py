@@ -884,7 +884,9 @@ class Horse:
         try:
             import crown as _crown
             if _crown.satisfied(g):
-                g.crown_pay()
+                _earned = _crown.pay(g, recipient=self._pack())
+                g.toast("The Crown paid %d coin -- the horse carries it home."
+                        % int(_earned or 0))
             else:
                 g.toast("The horse delivered its load.")
         except Exception:

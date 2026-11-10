@@ -817,10 +817,11 @@ class CrownScreen:
     """The Crown's demand, shown at the start and whenever the ship is
     clicked. The Pay Crown button opens the Crown's chest."""
 
-    def __init__(self, demand_fn, round_fn, paid_fn) -> None:
+    def __init__(self, demand_fn, round_fn, paid_fn, reward_fn=None) -> None:
         self.demand_fn = demand_fn       # () -> dict
         self.round_fn = round_fn         # () -> int
         self.paid_fn = paid_fn           # () -> bool
+        self.reward_fn = reward_fn       # () -> int, the coin the next delivery earns
         self.hover = None
         self.font = pygame.font.SysFont("dejavusans", 20, bold=True)
         self.font_small = pygame.font.SysFont("dejavusans", 15, bold=True)
@@ -874,6 +875,10 @@ class CrownScreen:
         state = "PAID -- free time" if self.paid_fn() else "Round %d" % self.round_fn()
         st = self.font_small.render(state, True, (126, 176, 112) if self.paid_fn() else (176, 168, 152))
         screen.blit(st, (panel.left + 18, panel.top + 70))
+        if self.reward_fn is not None:
+            _rw = self.font_small.render("reward: %d coin" % int(self.reward_fn()),
+                                         True, (232, 200, 118))
+            screen.blit(_rw, (panel.right - _rw.get_width() - 190, panel.top + 10))
 
         hovered = self.hover
         pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),

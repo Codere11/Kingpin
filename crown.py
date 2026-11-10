@@ -111,8 +111,11 @@ def satisfied(g) -> bool:
     return lp >= d["leaf_product"] and leaf >= d["leaf"] and wood >= d["wood"]
 
 
-def pay(g) -> None:
-    """Take exactly what the ask demands out of the Crown's chest."""
+def pay(g, recipient=None) -> None:
+    """Take exactly what the ask demands out of the Crown's chest, then pay:
+    10 coin on the first delivery, doubled each time after (10, 20, 40...).
+    The coin goes to `recipient` -- the player's own purse by hand, or the
+    horse's saddle bags so it carries the Crown's coin home."""
     d = demand(g)
     grade = d["grade"]
     need = {"lp": d["leaf_product"], "leaf": d["leaf"], "wood": d["wood"]}
@@ -143,5 +146,17 @@ def pay(g) -> None:
         need[key] -= take
         if stack.count <= 0:
             chest.slots[i] = None
+    # THE CROWN PAYS FOR WHAT IT TAKES. The first delivery earns 10 coin and
+    # every success after that doubles it.
+    payout = 10 * (2 ** int(getattr(g, "crown_deliveries", 0)))
+    inv = recipient if recipient is not None else getattr(g, "inventory", None)
+    if inv is not None:
+        try:
+            inv.add("coin", payout)
+        except Exception:
+            pass
+    g.crown_deliveries = int(getattr(g, "crown_deliveries", 0)) + 1
+    g.crown_payout = 10 * (2 ** int(g.crown_deliveries))
     g.crown_paid = True
+    return payout
 

@@ -725,6 +725,8 @@ def main() -> None:
     g.crown_round = 0
     g.crown_paid = False
     g.crown_biome = "temperate"       # the spawn biome decides the first ask
+    g.crown_deliveries = 0             # successful deliveries: the coin doubles each
+    g.crown_payout = 10                # what the next successful delivery earns
     g.crown_chest = Inventory(capacity=64)
     g.smoke = smoke.Smoke()            # a smoke signal over a conquered fire
     g.war_escalated = False            # once a smoke alarm goes up, bows come out
@@ -1199,7 +1201,8 @@ def main() -> None:
     def open_crown_screen() -> None:
         g.crown_screen = CrownScreen(lambda: crown.demand(g),
                                      lambda: crown.round_of(g),
-                                     lambda: getattr(g, "crown_paid", False))
+                                     lambda: getattr(g, "crown_paid", False),
+                                     lambda: getattr(g, "crown_payout", 10))
         g.crown_screen_open = True
         pygame.mouse.set_visible(True)
 
@@ -1207,8 +1210,8 @@ def main() -> None:
         return crown.demand(g)
 
     def crown_pay() -> None:
-        crown.pay(g)
-        g.toast("The Crown is paid -- you pass this round.")
+        _earned = crown.pay(g)
+        g.toast("The Crown is paid -- %d coin." % int(_earned or 0))
         g.mark_dirty()
 
     def open_horse(horse) -> None:
