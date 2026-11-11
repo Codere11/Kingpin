@@ -381,9 +381,20 @@ class Player:
         pygame.draw.polygon(screen, (34, 30, 26), (tip, left, right))
 
         # torso
-        body = (238, 228, 228) if self.hit_flash > 0.0 else (54, 74, 122)
-        pygame.draw.circle(screen, body, (sx, sy), 11)
-        pygame.draw.circle(screen, (30, 44, 74), (sx, sy), 11, 2)
+        if getattr(self, "armor", None) == "hide_armor":
+            # HIDE ARMOR: a leather body, chest band and shoulder pads.
+            pygame.draw.circle(screen, (238, 228, 228) if self.hit_flash > 0.0 else (120, 82, 46),
+                               (int(sx), int(sy)), 11)
+            pygame.draw.circle(screen, (52, 36, 24), (int(sx), int(sy)), 11, 2)
+            pygame.draw.rect(screen, (88, 60, 34), (int(sx) - 9, int(sy) - 1, 18, 4),
+                             border_radius=2)
+            for _px in (int(sx) - 9, int(sx) + 7):
+                pygame.draw.circle(screen, (96, 66, 38), (_px, int(sy) - 6), 4)
+                pygame.draw.circle(screen, (52, 36, 24), (_px, int(sy) - 6), 4, 1)
+        else:
+            body = (238, 228, 228) if self.hit_flash > 0.0 else (54, 74, 122)
+            pygame.draw.circle(screen, body, (int(sx), int(sy)), 11)
+            pygame.draw.circle(screen, (30, 44, 74), (int(sx), int(sy)), 11, 2)
 
         if held is not None:
             self._draw_held(screen, held, sx, sy, fx, fy, self.swing_progress)
