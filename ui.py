@@ -1182,7 +1182,7 @@ class ShipMarketPanel:
     def _sell_selected(self):
         import market
         good = self._goods()[self.selected]
-        base = self.g.market["base"].get(good, market.ANCHOR)
+        base = self.g.market["base"].get(good, market.spec(good)[0])
         coin = 0.0
         for i, stack in enumerate(list(self.hold.slots)):
             if stack is None or stack.defn.id != good:
@@ -1235,7 +1235,7 @@ class ShipMarketPanel:
         screen.blit(t, (rx + 4, ly))
         for i, good in enumerate(self._goods()):
             rect = gr[i]
-            base = self.g.market["base"].get(good, market.ANCHOR)
+            base = self.g.market["base"].get(good, market.spec(good)[0])
             hist = self.g.market["history"].get(good, [base])
             trend = ""
             if len(hist) >= 2:
@@ -1257,7 +1257,7 @@ class ShipMarketPanel:
             screen.blit(hv, (rect.left + 48, rect.bottom - 18))
         # price history for the selected good
         good = self._goods()[self.selected]
-        base = self.g.market["base"].get(good, market.ANCHOR)
+        base = self.g.market["base"].get(good, market.spec(good)[0])
         hist = self.g.market["history"].get(good, [base])
         pygame.draw.rect(screen, (30, 28, 32), hist_rect, border_radius=7)
         pygame.draw.rect(screen, BORDER, hist_rect, 2, border_radius=7)
