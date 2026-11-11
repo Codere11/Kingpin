@@ -10,10 +10,10 @@ CARDS = [
     {"id": "animals", "name": "Animals", "cost": 100, "icon": "hide",
      "desc": "Unlocks the Fur market, and the ability to ride horses.",
      "points": 100},
-    {"id": "hide_armor", "name": "Hide Armor", "cost": 0, "icon": "hide_armor",
+    {"id": "hide_armor", "name": "Hide Armor", "cost": 300, "icon": "hide_armor",
      "desc": "Stitched hide you can wear. Doubles your health.",
      "points": 100, "requires": "animals"},
-    {"id": "ironworking", "name": "Ironworking", "cost": 0, "icon": "iron_bar",
+    {"id": "ironworking", "name": "Ironworking", "cost": 500, "icon": "iron_bar",
      "desc": "Smelt iron ore into iron bars at the forge.",
      "points": 300, "requires": "hide_armor"},
 ]
