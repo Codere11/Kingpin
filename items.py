@@ -36,6 +36,9 @@ REGISTRY: dict[str, ItemDef] = {
     "compass": ItemDef("compass", "Compass", "Points home, or to the nearest village. Press F."),
     "iron": ItemDef("iron", "Iron", "Raw iron, straight from the ground. Crafting stock.",
                     stackable=True, max_stack=100),
+    "iron_bar": ItemDef("iron_bar", "Iron Bar",
+                        "A smelted bar of iron. What the smith works with.",
+                        stackable=True, max_stack=100),
     "shovel": ItemDef("shovel", "Shovel", "For digging. Gardens, graves, whatever needs doing."),
     "watering_can": ItemDef("watering_can", "Watering Can", "Keeps the crop alive. Or puts out a fire."),
     "seed_bag": ItemDef("seed_bag", "Tobacco Seeds",
@@ -227,6 +230,22 @@ def _draw_iron(s: int) -> pygame.Surface:
     for dx, dy in ((0.36, 0.46), (0.54, 0.40), (0.62, 0.60), (0.42, 0.68)):
         pygame.draw.circle(surf, (168, 96, 52), (int(dx * s), int(dy * s)), int(0.055 * s))
         pygame.draw.circle(surf, (212, 146, 84), (int(dx * s), int(dy * s)), int(0.028 * s))
+    return surf
+
+
+def _draw_iron_bar(s: int) -> pygame.Surface:
+    """A smelted iron bar: a bright metal ingot with a bevel and shine."""
+    surf = _canvas(s)
+    metal, metal_d, metal_l = (176, 178, 186), (86, 88, 96), (224, 226, 232)
+    body = [(0.22, 0.30), (0.78, 0.30), (0.86, 0.44), (0.78, 0.72),
+            (0.22, 0.72), (0.14, 0.44)]
+    _poly(surf, metal_d, [(x + 0.01, y + 0.02) for x, y in body], s)
+    _poly(surf, metal, body, s)
+    _outline(surf, metal_d, body, s)
+    # a bevel and a shine line
+    _poly(surf, metal_l, [(0.26, 0.34), (0.74, 0.34), (0.78, 0.44),
+                          (0.74, 0.52), (0.26, 0.52), (0.22, 0.44)], s)
+    pygame.draw.line(surf, metal_d, _pt((0.28, 0.60), s), _pt((0.72, 0.60), s), 2)
     return surf
 
 
@@ -741,6 +760,7 @@ _DRAWERS = {
     "arrow": _draw_arrow,
     "compass": _draw_compass,
     "iron": _draw_iron,
+    "iron_bar": _draw_iron_bar,
     "berries": _draw_berries,
     "cactus_fruit": _draw_cactus_fruit,
     "red_mushroom": _draw_red_mushroom,

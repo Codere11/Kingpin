@@ -13,6 +13,9 @@ CARDS = [
     {"id": "hide_armor", "name": "Hide Armor", "cost": 0, "icon": "hide_armor",
      "desc": "Stitched hide you can wear. Doubles your health.",
      "points": 100, "requires": "animals"},
+    {"id": "ironworking", "name": "Ironworking", "cost": 0, "icon": "iron_bar",
+     "desc": "Smelt iron ore into iron bars at the forge.",
+     "points": 300, "requires": "hide_armor"},
 ]
 
 

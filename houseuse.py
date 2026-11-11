@@ -129,7 +129,7 @@ def near_workshop(player, inside_house) -> bool:
 
 
 def work_action(key, smith_shop, player, now, economy, inventory, skills,
-                random, pay_share, quality):
+                random, pay_share, quality, ironworking=False):
     """Do a stroke of the trade the player is standing at. Returns (cd, msg)."""
     wp = smith_shop
     if wp is None:
@@ -170,6 +170,13 @@ def work_action(key, smith_shop, player, now, economy, inventory, skills,
         pay_share("iron", _dug)
         return 2.0, "Broke out some iron"
     if kind == "smith":
+        # IRONWORKING: the forge smelts ore into bars, one for one.
+        if ironworking:
+            if inventory.count_of("iron") < 1:
+                return 0.0, "No iron ore"
+            inventory.consume("iron", 1)
+            inventory.add("iron_bar", 1)
+            return 1.0, "Smelted an iron bar"
         if inventory.count_of("iron") < economy.IRON_PER_TOOL:
             return 0.0, "Need %d iron" % economy.IRON_PER_TOOL
         inventory.consume("iron", economy.IRON_PER_TOOL)

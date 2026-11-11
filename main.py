@@ -1294,10 +1294,11 @@ def main() -> None:
         return nearby.near_workplace(g.player, g.placed_work, g.visible_villages)
 
     def work_action(key: str) -> str:
-        
+        import research as _research
+        _iw = _research.state(g, "ironworking") == "done"
         g.work_cd, _msg = houseuse.work_action(key, g.smith_shop, g.player, g.now,
                                              economy, g.inventory, g.skills, random,
-                                             pay_share, quality)
+                                             pay_share, quality, ironworking=_iw)
         return _msg
 
     def near_fireplace() -> bool:
