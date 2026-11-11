@@ -1053,7 +1053,7 @@ def run(g):
             g._blk = 0.0
 
         if (g.inside_house is not None and g.inside_mine is None
-                and not g.game_over and not g.pause_open
+                and not g.game_over and not g.pause_open and not g.research_open
                 and not g.map_open and not g.confirm_open
                 and not g.build_menu_open and g.placing is None):
             g._branch = 'house'
@@ -1172,7 +1172,8 @@ def run(g):
         elif (g.inside_house is None and g.inside_mine is None
               and not g.game_over and not g.inventory_open and not g.build_menu_open
               and not g.chest_open and not g.trade_open and not g.workshop_open
-              and not g.confirm_open and not g.pause_open and not g.map_open
+              and not g.confirm_open and not g.pause_open and not g.research_open
+              and not g.map_open
               and g.placing is None):
             g._branch = 'world'
             if abs(g.player.x) < 3000.0 and abs(g.player.y) < 3000.0:

@@ -1295,7 +1295,7 @@ class ResearchPanel:
 
     def __init__(self, g) -> None:
         self.g = g
-        self.selected = 0
+        self.selected = None
         self.hover = None
         self.font = pygame.font.SysFont("dejavusans", 24, bold=True)
         self.font_small = pygame.font.SysFont("dejavusans", 15, bold=True)
@@ -1307,12 +1307,17 @@ class ResearchPanel:
         return research.CARDS
 
     def _card_rects(self, sw, sh):
-        cols = 4
+        cards = self._cards()
+        n = len(cards)
+        cols = max(1, min(4, n))
+        rows = (n + cols - 1) // cols
         cw, ch, gap = 200, 150, 16
-        x0 = (sw - (cols * cw + (cols - 1) * gap)) // 2
-        y0 = 90
+        grid_w = cols * cw + (cols - 1) * gap
+        grid_h = rows * ch + (rows - 1) * gap
+        x0 = (sw - grid_w) // 2
+        y0 = (sh - grid_h) // 2 + 10
         rects = []
-        for i in range(len(self._cards())):
+        for i in range(n):
             r, c = divmod(i, cols)
             rects.append(pygame.Rect(x0 + c * (cw + gap), y0 + r * (ch + gap), cw, ch))
         return rects
@@ -1354,6 +1359,8 @@ class ResearchPanel:
         return None
 
     def _research(self):
+        if self.selected is None:
+            return
         import research
         card = self._cards()[self.selected]
         st = research.state(self.g, card["id"])
@@ -1372,9 +1379,8 @@ class ResearchPanel:
     def draw(self, screen):
         sw, sh = screen.get_size()
         import research
-        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
-        shade.fill((0, 0, 0, 220))
-        screen.blit(shade, (0, 0))
+        # FULLY OPAQUE BACKGROUND: the research screen is a room, not an overlay.
+        screen.fill((16, 16, 20))
         t = self.font.render("RESEARCH", True, (238, 224, 190))
         screen.blit(t, (sw // 2 - t.get_width() // 2, 28))
         rects = self._card_rects(sw, sh)
@@ -1409,18 +1415,19 @@ class ResearchPanel:
                 dt = self.font_tiny.render(ln, True, (196, 188, 172))
                 screen.blit(dt, (r.left + 12, ly))
                 ly += 16
-        card = self._cards()[self.selected]
-        st = research.state(self.g, card["id"])
-        if st == "locked":
-            btn = self._button(sw, sh)
-            hovered = self.hover is not None and btn.collidepoint(self.hover)
-            pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
-                             btn, border_radius=8)
-            pygame.draw.rect(screen, ACCENT if hovered else BORDER, btn, width=2,
-                             border_radius=8)
-            s = self.font_btn.render("Research", True, TEXT)
-            screen.blit(s, (btn.centerx - s.get_width() // 2,
-                            btn.centery - s.get_height() // 2))
+        if self.selected is not None:
+            card = self._cards()[self.selected]
+            st = research.state(self.g, card["id"])
+            if st == "locked":
+                btn = self._button(sw, sh)
+                hovered = self.hover is not None and btn.collidepoint(self.hover)
+                pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
+                                 btn, border_radius=8)
+                pygame.draw.rect(screen, ACCENT if hovered else BORDER, btn, width=2,
+                                 border_radius=8)
+                s = self.font_btn.render("Research", True, TEXT)
+                screen.blit(s, (btn.centerx - s.get_width() // 2,
+                                btn.centery - s.get_height() // 2))
 
 
 class PauseMenu:
