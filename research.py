@@ -28,6 +28,9 @@ CARDS = [
     {"id": "textiles", "name": "Textiles", "cost": 500, "icon": "textile",
      "desc": "Allows to produce and sell textiles, made from cotton.",
      "points": 300, "requires": "industry"},
+    {"id": "spice_sauce", "name": "Spice sauces", "cost": 300, "icon": "sauce",
+     "desc": "Allows production and sale of New World spice sauces.",
+     "points": 300, "requires": "industry"},
 ]
 
 

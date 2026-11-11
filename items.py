@@ -44,6 +44,8 @@ REGISTRY: dict[str, ItemDef] = {
     "musket": ItemDef("musket", "Musket", "A smoothbore musket. Loud, slow, and heavy."),
     "textile": ItemDef("textile", "Textile", "Woven cloth, made from cotton.",
                        stackable=True, max_stack=100, quality=True),
+    "sauce": ItemDef("sauce", "Spice Sauce", "A bottle of New World spice sauce.",
+                     stackable=True, max_stack=100, quality=True),
     "shovel": ItemDef("shovel", "Shovel", "For digging. Gardens, graves, whatever needs doing."),
     "watering_can": ItemDef("watering_can", "Watering Can", "Keeps the crop alive. Or puts out a fire."),
     "seed_bag": ItemDef("seed_bag", "Tobacco Seeds",
@@ -309,6 +311,28 @@ def _draw_textile(s: int) -> pygame.Surface:
                      border_radius=2)
     pygame.draw.rect(surf, cloth_d, (0.14 * s, 0.30 * s, 0.10 * s, 0.40 * s), 1,
                      border_radius=2)
+    return surf
+
+
+def _draw_sauce(s: int) -> pygame.Surface:
+    """A glass bottle with red sauce inside."""
+    surf = _canvas(s)
+    glass, glass_d = (172, 200, 210), (90, 118, 128)
+    sauce, sauce_d = (198, 52, 44), (132, 30, 26)
+    body = [(0.36, 0.42), (0.64, 0.42), (0.68, 0.80), (0.32, 0.80)]
+    _poly(surf, glass_d, body, s)
+    _poly(surf, glass, body, s)
+    _outline(surf, glass_d, body, s)
+    # neck and cork
+    pygame.draw.rect(surf, glass_d, (0.44 * s, 0.24 * s, 0.12 * s, 0.18 * s),
+                     border_radius=2)
+    pygame.draw.rect(surf, glass, (0.46 * s, 0.24 * s, 0.08 * s, 0.18 * s))
+    pygame.draw.rect(surf, (140, 104, 60), (0.44 * s, 0.18 * s, 0.12 * s, 0.08 * s),
+                     border_radius=2)
+    # the red sauce inside
+    liquid = [(0.39, 0.52), (0.61, 0.52), (0.64, 0.75), (0.36, 0.75)]
+    _poly(surf, sauce_d, liquid, s)
+    _poly(surf, sauce, [(x + 0.008, y + 0.01) for x, y in liquid], s)
     return surf
 
 
@@ -827,6 +851,7 @@ _DRAWERS = {
     "gear": _draw_gear,
     "musket": _draw_musket,
     "textile": _draw_textile,
+    "sauce": _draw_sauce,
     "berries": _draw_berries,
     "cactus_fruit": _draw_cactus_fruit,
     "red_mushroom": _draw_red_mushroom,
