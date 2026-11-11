@@ -1,13 +1,12 @@
-"""native.py -- NATIVE SETTLEMENTS: teepees and fields around a fireplace.
+"""native.py -- NATIVE SETTLEMENTS: bedrolls and fields around a fireplace.
 
 A native settlement is the one kind of settlement the new world has. It is a
-fire in the middle, a ring of hide teepees, and fields of food and leaf laid
-out past the teepees -- and nothing of the old world: no fence, no roads, no
+fire in the middle, a ring of bedrolls, and fields of food and leaf laid out
+past the bedrolls -- and nothing of the old world: no fence, no roads, no
 gates, no searches. Just the people.
 
-The teepees are real blocks, exactly as the player would lay them: a 5x5 of
-hide for the walls, a wood block in the middle for the pole, and the door left
-empty.
+The bedrolls are real blocks, exactly as the player would lay them: one white
+1x1 bedroll per person's place.
 """
 from __future__ import annotations
 
@@ -55,26 +54,6 @@ def native_center(gx: int, gy: int, seed: int):
     jx = rng.uniform(-NATIVE_SPACING * NATIVE_JITTER, NATIVE_SPACING * NATIVE_JITTER)
     jy = rng.uniform(-NATIVE_SPACING * NATIVE_JITTER, NATIVE_SPACING * NATIVE_JITTER)
     return (gx + 0.5) * NATIVE_SPACING + jx, (gy + 0.5) * NATIVE_SPACING + jy
-
-
-def teepee_blocks(tx: int, ty: int) -> dict:
-    """The blocks of one teepee, laid out with (tx, ty) as its top-left.
-
-    A 5x5 square: the outer ring is hide, the middle block is wood (the
-    pole), and the middle of the south wall is the door -- empty, like the
-    rest of the interior.
-    """
-    out = {}
-    for dx in range(5):
-        for dy in range(5):
-            on_wall = dx == 0 or dx == 4 or dy == 0 or dy == 4
-            if on_wall:
-                if (dx, dy) == (2, 4):
-                    continue                    # the door
-                out[(tx + dx, ty + dy)] = "hide"
-            elif (dx, dy) == (2, 2):
-                out[(tx + dx, ty + dy)] = "wood"   # the centre pole
-    return out
 
 
 def _clear_trees(g, cx: float, cy: float, radius: float) -> None:
@@ -176,13 +155,11 @@ def build(g, cx: float, cy: float, seed: int):
     # the war escalates.
     n_warriors = 2
     n_farmers = people - n_warriors
-    n_teepees = -(-people // PER_TEEPEE)      # ceil, two to a teepee
+    n_teepees = -(-people // PER_TEEPEE)      # ceil, two to a bedroll
 
-    # -- the teepee ring -----------------------------------------------------
-    # spaced so a 5x5 (160 px) teepee never touches its neighbour, even after
-    # the block anchoring rounds each teepee up to half a tile towards the
-    # other. Seven tiles of chord and a floor of eight give clear lanes
-    # between teepees whatever the headcount.
+    # -- the bedroll ring ----------------------------------------------------
+    # the same count and the same spacing as before, so the camp keeps its
+    # shape; each bedroll is a single white 1x1 block now.
     chord = 7 * TILE
     ring = max(8.0, chord / max(0.001, 2.0 * math.sin(math.pi / n_teepees))
                / TILE)
@@ -192,7 +169,7 @@ def build(g, cx: float, cy: float, seed: int):
         tp_centers.append((cx + math.cos(ang) * ring * TILE,
                            cy + math.sin(ang) * ring * TILE))
 
-    # -- the fields, past the teepees ---------------------------------------
+    # -- the fields, past the bedrolls -------------------------------------
     n_leaf = rng.randint(MIN_LEAF_FIELDS, MAX_LEAF_FIELDS)
     field_ring = (ring + 7.0) * TILE
     # FIELDS FACE INLAND (west), never east into the ocean: the coast runs
@@ -212,7 +189,7 @@ def build(g, cx: float, cy: float, seed: int):
     # -- MEASURE the layout, then clear that plus 30 blocks -----------------
     max_r = math.hypot(TILE, TILE)          # the fireplace itself
     for (wx, wy) in tp_centers:
-        max_r = max(max_r, math.hypot(wx - cx, wy - cy) + 5 * TILE / 2.0)
+        max_r = max(max_r, math.hypot(wx - cx, wy - cy) + TILE / 2.0)
     for (wx, wy, kind) in field_centers:
         half = (5 * TILE / 2.0) if kind == food_kind else (3 * TILE / 2.0)
         max_r = max(max_r, math.hypot(wx - cx, wy - cy) + half)
@@ -226,12 +203,11 @@ def build(g, cx: float, cy: float, seed: int):
     fire.native = True                      # a camp's fire, not the player's
     g.placed_work.append(fire)
 
-    # -- the teepees, real blocks -------------------------------------------
+    # -- the bedrolls, one real block each ---------------------------------
     for (wx, wy) in tp_centers:
-        tx = int(math.floor(wx / TILE)) - 2
-        ty = int(math.floor(wy / TILE)) - 2
-        for (tx2, ty2), kind in teepee_blocks(tx, ty).items():
-            g.built_blocks[(tx2, ty2)] = kind
+        tx = int(math.floor(wx / TILE))
+        ty = int(math.floor(wy / TILE))
+        g.built_blocks[(tx, ty)] = "bed"
 
     # -- the fields, already growing ----------------------------------------
     field_centres_tiles = []
@@ -364,7 +340,7 @@ def build(g, cx: float, cy: float, seed: int):
         "x": cx, "y": cy, "seed": seed,
         "people": people, "farmers": farmers, "warriors": warriors,
         "animals": animals, "handlers": [],
-        "fireplace": fire, "teepees": tp_centers,
+        "fireplace": fire, "bedrolls": tp_centers,
         "fields": field_centres_tiles,
         "food_kind": food_kind, "leaf_kind": leaf_kind,
         "clearance": clearance,
