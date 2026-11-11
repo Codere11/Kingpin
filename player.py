@@ -411,6 +411,9 @@ class Player:
                  else face.mood_of(self.hurt_flash, self.attack_flash,
                                    starved=self.hunger <= face.STARVED_SATIETY))
         face.draw(screen, _hx, _hy, 9, fx, fy, _mood)
+        # HIDE ARMOR WEARS THE SAME WAR PAINT AS THE ARMOURED WARRIORS.
+        if getattr(self, "armor", None) == "hide_armor":
+            face.war_paint(screen, _hx, _hy, 9, fx, fy)
         # THE WAITING BAR, just below him -- the swing, or the reload.
         #
         # THE SAME BAR FOR BOTH, because they are the same thing to look at: a
