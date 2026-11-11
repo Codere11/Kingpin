@@ -38,7 +38,7 @@ REGISTRY: dict[str, ItemDef] = {
                     stackable=True, max_stack=100),
     "iron_bar": ItemDef("iron_bar", "Iron Bar",
                         "A smelted bar of iron. What the smith works with.",
-                        stackable=True, max_stack=100),
+                        stackable=True, max_stack=100, quality=True),
     "shovel": ItemDef("shovel", "Shovel", "For digging. Gardens, graves, whatever needs doing."),
     "watering_can": ItemDef("watering_can", "Watering Can", "Keeps the crop alive. Or puts out a fire."),
     "seed_bag": ItemDef("seed_bag", "Tobacco Seeds",

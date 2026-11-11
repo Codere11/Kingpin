@@ -787,7 +787,7 @@ class SignPanel:
         return len(getattr(self.camp, "people", ()) or ())
 
     def _rects(self, sw: int, sh: int):
-        w, h = 380, 392
+        w, h = 380, 444
         x0, y0 = (sw - w) // 2, (sh - h) // 2
         panel = pygame.Rect(x0, y0, w, h)
         rows = []
@@ -795,7 +795,8 @@ class SignPanel:
                                           ("Loggers", "loggers"),
                                           ("Artisans", "artisans"),
                                           ("Researchers", "researchers"),
-                                          ("Miners", "miners"))):
+                                          ("Miners", "miners"),
+                                          ("Smiths", "smiths"))):
             ry = y0 + 66 + i * 52
             minus = pygame.Rect(x0 + w - 150, ry, 40, 34)
             plus = pygame.Rect(x0 + w - 52, ry, 40, 34)
@@ -827,7 +828,8 @@ class SignPanel:
                     a = int(getattr(self.sign, "artisans", 0))
                     r = int(getattr(self.sign, "researchers", 0))
                     m = int(getattr(self.sign, "miners", 0))
-                    if f + l + a + r + m < total:
+                    s = int(getattr(self.sign, "smiths", 0))
+                    if f + l + a + r + m + s < total:
                         setattr(self.sign, key, int(getattr(self.sign, key, 0)) + 1)
                         self.sync()
                     return "changed"
@@ -866,7 +868,7 @@ class SignPanel:
             screen.blit(n, (minus.left - 40 - n.get_width(), ry + 8))
         used = int(getattr(self.sign, "farmers", 0)) + int(getattr(self.sign, "loggers", 0)) \
             + int(getattr(self.sign, "artisans", 0)) + int(getattr(self.sign, "researchers", 0)) \
-            + int(getattr(self.sign, "miners", 0))
+            + int(getattr(self.sign, "miners", 0)) + int(getattr(self.sign, "smiths", 0))
         unemp = max(0, total - used)
         u = self.font_small.render("Unemployed:  %d" % unemp, True, (176, 168, 152))
         screen.blit(u, (panel.left + 26, panel.bottom - 40))

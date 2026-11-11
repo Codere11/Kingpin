@@ -64,6 +64,7 @@ class Skills:
     luck = LUCK_OTHERS
     is_player = False
     research = 1.0
+    smithing = 0.0
     # A LEVEL WAS JUST CROSSED. Class default, for the same reason as the two
     # above: an unpickled Skills object does not run __init__.
     just_leveled = False
@@ -74,6 +75,7 @@ class Skills:
         self.axe = 0.0                # 0..1
         self.shooting = 0.0           # 0..1
         self.research = 1.0           # 1..10, starts at one so work proceeds
+        self.smithing = 0.0           # 0..8, grows at the forge
         self.is_player = is_player    # the old road, except the axe and the feet
         self.luck = LUCK_OTHERS       # the nemesis is handed LUCK_NEMESIS
 
@@ -86,7 +88,7 @@ class Skills:
         """
         return (int(self.movement / 0.125) + int(self.axe / 0.125)
                 + int(self.shooting / 0.125) + int(self.farming)
-                + int(self.research))
+                + int(self.research) + int(self.smithing))
 
     def _note_levels(self, before: int) -> None:
         """Raise the flag if this gain crossed a level.
@@ -148,6 +150,20 @@ class Skills:
         self.research = min(10.0, self.research + max(0.0, float(dt)) / 1200.0)
         if self.is_player:
             self._note_levels(_b)
+
+    # -- smithing -----------------------------------------------------------
+    def gain_smithing(self, amount: float = 0.05) -> None:
+        """The forge teaches slowly: eight grades of hands over a career."""
+        _b = self.levels_total() if self.is_player else 0
+        self.smithing = self._step(self.smithing, 8.0, 1.0)
+        if self.is_player:
+            self._note_levels(_b)
+
+    def smith_grade(self) -> int:
+        """What this pair of hands turns out of the forge."""
+        base = min(8, int(self.smithing))
+        grade = base + random.choice((-1, 0, 0, 0, 1))
+        return max(0, min(8, grade))
 
     # -- movement -----------------------------------------------------------
     def gain_movement(self, distance: float) -> None:

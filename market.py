@@ -24,6 +24,7 @@ GOODS = {
     "liqueur": (10.0, 3.0, 30.0),
     "mezcal": (10.0, 3.0, 30.0),
     "hide": (30.0, 15.0, 50.0),
+    "iron_bar": (100.0, 60.0, 150.0),
 }
 
 MID_GRADE = 4          # B, the middle of F..SSS (0..8)
@@ -38,12 +39,15 @@ def spec(good: str):
 
 
 def sellable(g):
-    """What the homeland will buy right now: hide only once Animals is done."""
+    """What the homeland will buy right now: hide once Animals is done, iron
+    bars once Ironworking is done."""
     out = ["cigar", "dried_mushroom", "beer", "liqueur", "mezcal"]
     try:
         import research
         if research.state(g, "animals") == "done":
             out.append("hide")
+        if research.state(g, "ironworking") == "done":
+            out.append("iron_bar")
     except Exception:
         pass
     return out
