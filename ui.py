@@ -1288,6 +1288,141 @@ class ShipMarketPanel:
             screen.blit(ic, (mx - 15, my - 15))
 
 
+class ResearchPanel:
+    """THE RESEARCH TREE: a full-screen card grid, bought with coin.
+    Click a card to select it (dark blue); a Research button appears at the
+    bottom and starts it if the coin is there."""
+
+    def __init__(self, g) -> None:
+        self.g = g
+        self.selected = 0
+        self.hover = None
+        self.font = pygame.font.SysFont("dejavusans", 24, bold=True)
+        self.font_small = pygame.font.SysFont("dejavusans", 15, bold=True)
+        self.font_tiny = pygame.font.SysFont("dejavusans", 12)
+        self.font_btn = pygame.font.SysFont("dejavusans", 17, bold=True)
+
+    def _cards(self):
+        import research
+        return research.CARDS
+
+    def _card_rects(self, sw, sh):
+        cols = 4
+        cw, ch, gap = 200, 150, 16
+        x0 = (sw - (cols * cw + (cols - 1) * gap)) // 2
+        y0 = 90
+        rects = []
+        for i in range(len(self._cards())):
+            r, c = divmod(i, cols)
+            rects.append(pygame.Rect(x0 + c * (cw + gap), y0 + r * (ch + gap), cw, ch))
+        return rects
+
+    def _button(self, sw, sh):
+        return pygame.Rect(sw // 2 - 100, sh - 92, 200, 50)
+
+    def _wrap(self, text, font, maxw):
+        lines = []
+        cur = ""
+        for w in text.split():
+            t = (cur + " " + w).strip()
+            if not cur or font.size(t)[0] <= maxw:
+                cur = t
+            else:
+                lines.append(cur)
+                cur = w
+        if cur:
+            lines.append(cur)
+        return lines
+
+    def handle_event(self, event):
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return None
+        sw, sh = surface.get_size()
+        rects = self._card_rects(sw, sh)
+        btn = self._button(sw, sh)
+        if event.type == pygame.MOUSEMOTION:
+            self.hover = event.pos
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i, r in enumerate(rects):
+                if r.collidepoint(event.pos):
+                    self.selected = i
+                    return None
+            if btn.collidepoint(event.pos):
+                self._research()
+                return None
+        return None
+
+    def _research(self):
+        import research
+        card = self._cards()[self.selected]
+        st = research.state(self.g, card["id"])
+        if st == "locked":
+            if research.start(self.g, card):
+                try:
+                    self.g.toast("Researching %s..." % card["name"])
+                except Exception:
+                    pass
+            else:
+                try:
+                    self.g.toast("Need %d coin" % card["cost"])
+                except Exception:
+                    pass
+
+    def draw(self, screen):
+        sw, sh = screen.get_size()
+        import research
+        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 220))
+        screen.blit(shade, (0, 0))
+        t = self.font.render("RESEARCH", True, (238, 224, 190))
+        screen.blit(t, (sw // 2 - t.get_width() // 2, 28))
+        rects = self._card_rects(sw, sh)
+        for i, card in enumerate(self._cards()):
+            r = rects[i]
+            st = research.state(self.g, card["id"])
+            sel = (i == self.selected)
+            if sel:
+                bg = (30, 52, 96)                    # dark blue selection
+            elif st == "done":
+                bg = (24, 62, 42)
+            else:
+                bg = (34, 34, 40)
+            pygame.draw.rect(screen, bg, r, border_radius=10)
+            pygame.draw.rect(screen, ACCENT if sel else BORDER, r, width=2, border_radius=10)
+            ic = items.icon(card["icon"], 44)
+            screen.blit(ic, (r.left + 12, r.top + 12))
+            nm = self.font_small.render(card["name"], True, (226, 214, 190))
+            screen.blit(nm, (r.left + 64, r.top + 12))
+            cost = self.font_tiny.render("%d c" % card["cost"], True, (232, 200, 118))
+            screen.blit(cost, (r.left + 64, r.top + 34))
+            if st == "done":
+                st_txt = self.font_tiny.render("Researched", True, (150, 224, 150))
+                screen.blit(st_txt, (r.right - st_txt.get_width() - 10, r.top + 12))
+            elif st == "researching":
+                st_txt = self.font_tiny.render("Researching...", True, (232, 200, 118))
+                screen.blit(st_txt, (r.right - st_txt.get_width() - 10, r.top + 12))
+            # description wrapped into the lower half of the card
+            lines = self._wrap(card["desc"], self.font_tiny, r.width - 24)
+            ly = r.bottom - len(lines) * 16 - 10
+            for ln in lines:
+                dt = self.font_tiny.render(ln, True, (196, 188, 172))
+                screen.blit(dt, (r.left + 12, ly))
+                ly += 16
+        card = self._cards()[self.selected]
+        st = research.state(self.g, card["id"])
+        if st == "locked":
+            btn = self._button(sw, sh)
+            hovered = self.hover is not None and btn.collidepoint(self.hover)
+            pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
+                             btn, border_radius=8)
+            pygame.draw.rect(screen, ACCENT if hovered else BORDER, btn, width=2,
+                             border_radius=8)
+            s = self.font_btn.render("Research", True, TEXT)
+            screen.blit(s, (btn.centerx - s.get_width() // 2,
+                            btn.centery - s.get_height() // 2))
+
+
 class PauseMenu:
     """Escape menu: Respawn or Exit game (Esc resumes)."""
 

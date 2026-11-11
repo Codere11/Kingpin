@@ -110,8 +110,8 @@ from trade import TradeMenu
 from workshop import WorkshopMenu
 from trees import Trees
 from ui import (ChestPanel, ConfirmMenu, FolderPanel, HorsePanel,
-                Hotbar, InventoryPanel, MarketPanel, PauseMenu, RoutePanel,
-                ShipMarketPanel, SignPanel)
+                Hotbar, InventoryPanel, MarketPanel, PauseMenu, ResearchPanel,
+                RoutePanel, ShipMarketPanel, SignPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
                      nation_name, village_center)
@@ -766,6 +766,10 @@ def main() -> None:
     g.route_open = False
     g.route_panel = None
     g.route_horse = None
+    g.research_open = False
+    g.research_panel = None
+    import research as _research
+    _research.init(g)
     g.work_cd = 0.0
     g.work_msg = ""
     g.inside_mine = None
