@@ -728,7 +728,7 @@ def main() -> None:
     import market as _market
     _market.init(g)
     g.smoke = smoke.Smoke()            # a smoke signal over a conquered fire
-    g.war_escalated = False            # once a smoke alarm goes up, bows come out
+    g.war_alarms = 0                  # smoke alarms raised: 1 arms a bowman, 2 arms two bowmen
     # A CONQUERED HORSE'S SADDLE BAGS, with the Send-to-ship button.
     g.horse_panel_open = False
     g.horse_panel = None

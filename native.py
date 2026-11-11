@@ -275,7 +275,7 @@ def build(g, cx: float, cy: float, seed: int):
                             name=_name_pool[(n_farmers + i) % len(_name_pool)],
                             npc_id="native_w_%d_%d" % (int(cx), i), role="Warrior")
         n.defender = True
-        n.weapon = "bow" if (getattr(g, "war_escalated", False) and i == 1) else "axe"
+        n.weapon = "bow" if _warrior_is_bow(g, i) else "axe"
         n.native = True
         n.native_role = "warrior"
         n.stock[food_item] = 60
@@ -395,27 +395,34 @@ def build(g, cx: float, cy: float, seed: int):
     return settlement
 
 
-def _role_warriors(s) -> None:
-    """After the war escalates: the first warrior stays with the axe, the
-    second takes up the bow."""
+def _warrior_is_bow(g, i: int) -> bool:
+    """Whether warrior i (0 = the first) carries a bow at this escalation.
+    One alarm arms the second man; two alarms arm both of them."""
+    alarms = int(getattr(g, "war_alarms", 0))
+    if alarms >= 2:
+        return True
+    return alarms >= 1 and i == 1
+
+
+def _role_warriors(s, g) -> None:
+    """Arm a settlement's warriors for the current alarm count: the first
+    warrior keeps the axe after one alarm; two alarms give both of them bows."""
     ws = getattr(s, "warriors", ()) or ()
     for i, w in enumerate(ws):
         if not getattr(w, "alive", True):
             continue
-        w.weapon = "bow" if i == 1 else "axe"
+        w.weapon = "bow" if _warrior_is_bow(g, i) else "axe"
 
 
 def escalate_war(g, exclude=None) -> None:
-    """The first smoke alarm arms every OTHER settlement: one melee warrior,
-    one bowman. The camp that raised the alarm keeps its two axes -- the
-    player is standing in it, so its defence must not change mid-fight."""
-    if getattr(g, "war_escalated", False):
-        return
-    g.war_escalated = True
+    """Each smoke alarm arms every OTHER settlement one step further. The
+    camp that raised the alarm keeps its current weapons -- the player is
+    standing in it, so its defence must not change mid-fight."""
+    g.war_alarms = int(getattr(g, "war_alarms", 0)) + 1
     for s in getattr(g, "native_settlements", {}).values():
         if s is exclude:
             continue
-        _role_warriors(s)
+        _role_warriors(s, g)
 
 
 def ensure_near(g, px: float, py: float, radius: float = NATIVE_RADIUS):
