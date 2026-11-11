@@ -63,6 +63,7 @@ def make_camp(g) -> object:
         "loggers": [],             # the conquered LOGGERS
         "artisans": [],            # the conquered ARTISANS (on benches)
         "researchers": [],         # the conquered RESEARCHERS (at the bench)
+        "miners": [],              # the conquered MINERS (iron in the snow)
         "unemployed": [],          # conquered, not assigned to a job
         "people": [],              # every conquered person (the pool)
         "animals": [],             # the conquered livestock (horses, bison)
@@ -392,10 +393,12 @@ def sync_jobs(g) -> None:
     n_logger = int(getattr(sign, "loggers", 0) or 0) if sign is not None else 0
     n_artisan = int(getattr(sign, "artisans", 0) or 0) if sign is not None else 0
     n_researcher = int(getattr(sign, "researchers", 0) or 0) if sign is not None else 0
+    n_miner = int(getattr(sign, "miners", 0) or 0) if sign is not None else 0
     camp.workers = []
     camp.loggers = []
     camp.artisans = []
     camp.researchers = []
+    camp.miners = []
     camp.unemployed = []
     for i, n in enumerate(people):
         n.orchard_plot = None
@@ -417,6 +420,10 @@ def sync_jobs(g) -> None:
             n.native_role = "researcher"
             n.job = "researcher"
             camp.researchers.append(n)
+        elif i < n_farmer + n_logger + n_artisan + n_researcher + n_miner:
+            n.native_role = "miner"
+            n.job = "miner"
+            camp.miners.append(n)
         else:
             n.native_role = "unemployed"
             n.job = None

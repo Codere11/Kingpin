@@ -1409,6 +1409,50 @@ class NPC:
             pass
         self._did_work()
 
+    def _nearest_iron(self, g):
+        """The nearest unmined iron chunk, or None."""
+        ore_field = getattr(g, "ore_field", None)
+        if ore_field is None:
+            return None
+        best = None
+        for chunk in ore_field.near(self.x, self.y, 12000.0):
+            d = (chunk.x - self.x) ** 2 + (chunk.y - self.y) ** 2
+            if best is None or d < best[0]:
+                best = (d, chunk)
+        return best[1] if best else None
+
+    def _work_mine(self, dt: float) -> None:
+        """A miner walks to the nearest iron chunk, hits it thirty times (one
+        ore a hit), and carries the thirty ore to a chest -- or keeps it if
+        there is no chest that takes iron."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        if g is None:
+            self._native_idle(dt)
+            return
+        import ore as _ore
+        # a full load goes to a chest first
+        if int(self.carry.get("iron", 0)) >= _ore.STRIKES:
+            if self._deposit_to_chest(dt):
+                return
+        chunk = self._nearest_iron(g)
+        if chunk is None:
+            self._native_idle(dt)
+            return
+        if math.hypot(chunk.x - self.x, chunk.y - self.y) > 20.0:
+            self._step_toward(chunk.x, chunk.y, dt)
+            return
+        self.mine_timer = getattr(self, "mine_timer", 0.0) + dt
+        if self.mine_timer >= 1.0:                 # one swing a second
+            self.mine_timer = 0.0
+            chunk.strikes += 1
+            self.carry["iron"] = self.carry.get("iron", 0) + 1
+            self._did_work()
+            self.skills.gain_axe()
+            if chunk.strikes >= _ore.STRIKES:
+                chunk.mined = True
+                g.ore_field.mined.add(chunk.cell)
+
     def _pockets(self):
         """A conquered worker's real pack (an Inventory), made lazily from the
         stock dict he was born with. Village and native farmers keep using the
@@ -1645,6 +1689,9 @@ class NPC:
             return
         if _nat and getattr(self, "native_role", "") == "researcher":
             self._work_research(dt)
+            return
+        if _nat and getattr(self, "native_role", "") == "miner":
+            self._work_mine(dt)
             return
         if _nat and getattr(self, "native_role", "") == "unemployed":
             self._native_idle(dt)

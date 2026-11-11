@@ -112,14 +112,14 @@ def use_pickaxe(player, combat, ore_field, inventory, pay_share, mark_dirty,
         return
     struck.strikes += 1
     combat.spawn_impact(struck.x, struck.y, (150, 150, 160))
+    # ONE HIT, ONE ORE: the chunk runs dry after thirty.
+    inventory.add("iron", 1)
+    pay_share("iron", 1)
     if struck.strikes >= ore.STRIKES:
         struck.mined = True
         ore_field.mined.add(struck.cell)
-        amount = random.randint(ore.YIELD_LO, ore.YIELD_HI)
-        inventory.add("iron", amount)
-        pay_share("iron", amount)
         mark_dirty()
-        toast(f"Mined iron   +{amount}")
+        toast(f"Mined iron   +1  (chunk done)")
     else:
         toast(f"Mining\u2026  {struck.strikes}/{ore.STRIKES}")
 

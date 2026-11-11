@@ -22,10 +22,9 @@ CELL = 260                       # one chunk is possible per cell
 JIT = 66                         # position jitter within a cell
 FIELD_SCALE = 0.00030            # low-frequency iron regions
 FIELD_CUT = 0.62                 # only above this does iron grow at all
-CHANCE_IN_FIELD = 0.34           # fraction of cells in a rich area with a chunk
+CHANCE_IN_FIELD = 0.17           # fraction of cells in a rich area with a chunk (halved)
 VILLAGE_CLEAR = 520.0 * VILLAGE_SCALE + 260.0
-STRIKES = 3                      # pickaxe hits to break a chunk
-YIELD_LO, YIELD_HI = 10, 30
+STRIKES = 30                     # hits to mine a chunk out, one ore per hit
 VARIANTS = 5
 
 
