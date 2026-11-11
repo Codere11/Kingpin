@@ -397,7 +397,8 @@ class ChestPanel:
 
     def __init__(self, player_inv: Inventory, chest_inv: Inventory,
                  slot: int = 40, pad: int = 5, top_rows: int | None = None,
-                 top_label: str = "CHEST", filter_owner=None) -> None:
+                 top_label: str = "CHEST", filter_owner=None,
+                 filter_items=None) -> None:
         self.player = player_inv
         self.chest = chest_inv
         # THE OTHER CONTAINER IS NOT ALWAYS A CHEST. A hired man's pack holds
@@ -409,6 +410,9 @@ class ChestPanel:
         # go in ('Any' means everything). The Crown's chest and a man's pack
         # have none, so filter_owner stays None for them.
         self.filter_owner = filter_owner
+        # WHAT THE LID MAY BE TURNED TO, for a settlement chest: Any, this
+        # biome's food, leaf and product, and wood -- never the whole registry.
+        self.filter_items = filter_items
         self.slot = slot
         self.pad = pad
         self.held: ItemStack | None = None
@@ -461,6 +465,8 @@ class ChestPanel:
         return None
 
     def _filter_list(self):
+        if self.filter_items is not None:
+            return list(self.filter_items)
         return [None] + list(items.REGISTRY.keys())
 
     def _filter_index(self) -> int:

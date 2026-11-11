@@ -675,7 +675,16 @@ def run(g):
                     # the camp's workers as they carry their produce over.
                     _ch = g.near_chest_building()
                     g.chest_open = True
-                    g.chest_panel = ChestPanel(g.inventory, _ch.inventory, filter_owner=_ch)
+                    try:
+                        import crop as _crop
+                        _t = g.world.temperature(_ch.x, _ch.y)
+                        _h = g.world.humidity(_ch.x, _ch.y)
+                        _fitems = _crop.chest_filter_items(_t, _h)
+                    except Exception:
+                        _fitems = None
+                    g.chest_panel = ChestPanel(g.inventory, _ch.inventory,
+                                               filter_owner=_ch,
+                                               filter_items=_fitems)
                     pygame.mouse.set_visible(True)
                 elif g.near_chest():
                     g.chest_open = True

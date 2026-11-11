@@ -81,6 +81,20 @@ def growable_kinds(t, h):
         kinds.append("cotton")
     return kinds
 
+
+def chest_filter_items(t, h):
+    """The chest lid's choosable types for a settlement in this biome: Any,
+    its own food, its own leaf, its own finished product, and wood. Nothing
+    else -- no seeds, tools, arms or oddments."""
+    import biomes
+    food_crop, leaf_crop = biomes.crop_kinds(t, h)
+    out = [None]
+    for item in (FOOD_ITEM.get(food_crop), LEAF_ITEM.get(leaf_crop),
+                 LEAF_PRODUCT.get(leaf_crop), "wood"):
+        if item and item not in out:
+            out.append(item)
+    return out
+
 # the leaf plant takes its colour from where it grows
 LEAF_TINT = {
     "savanna": ((120, 132, 58), (150, 152, 66), (96, 104, 46)),
