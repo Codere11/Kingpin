@@ -1373,16 +1373,21 @@ class ResearchPanel:
         x0 = -cw // 2
         y0 = -260
         rects = []
-        n_trunk = min(3, len(cards))
-        for i in range(n_trunk):
+        # trunk: animals, hide_armor, ironworking
+        for i in range(3):
             rects.append(pygame.Rect(x0, y0 + i * (ch + gap), cw, ch))
-        if len(cards) > n_trunk:
-            by = rects[-1].bottom + gap
+        if len(cards) > 3:
+            by = rects[2].bottom + gap
             left_x = -cw - 20
             right_x = 20
-            for i in range(len(cards) - n_trunk):
-                bx = left_x if i == 0 else right_x
-                rects.append(pygame.Rect(bx, by, cw, ch))
+            rects.append(pygame.Rect(left_x, by, cw, ch))      # gunsmithing
+            if len(cards) > 4:
+                rects.append(pygame.Rect(right_x, by, cw, ch))  # industry
+            if len(cards) > 5:
+                by2 = by + ch + gap
+                rects.append(pygame.Rect(left_x, by2, cw, ch))  # two_shot
+            if len(cards) > 6:
+                rects.append(pygame.Rect(right_x, by2, cw, ch))  # textiles
         return rects
 
     def _world_of(self, sx, sy, sw, sh):
@@ -1419,7 +1424,7 @@ class ResearchPanel:
             return int(round(wy - y0))
 
         # lines: the trunk, then a straight split into the two branches
-        n_trunk = min(3, len(rects))
+        n_trunk = 3
         for i in range(n_trunk - 1):
             x = rects[i].centerx
             pygame.draw.line(surf, (96, 96, 108), (X(x), Y(rects[i].bottom)),
@@ -1442,6 +1447,15 @@ class ResearchPanel:
             for rr in (left, right):
                 if rr is not None:
                     pygame.draw.circle(surf, (96, 96, 108), (X(rr.centerx), Y(rr.top)), 3)
+            # the two branches each lead one step further down
+            if len(rects) > 5:                        # gunsmithing -> two-shot
+                pygame.draw.line(surf, (96, 96, 108), (X(left.centerx), Y(left.bottom)),
+                                 (X(left.centerx), Y(rects[5].top)), 2)
+                pygame.draw.circle(surf, (96, 96, 108), (X(left.centerx), Y(rects[5].top)), 3)
+            if len(rects) > 6 and right is not None:  # industry -> textiles
+                pygame.draw.line(surf, (96, 96, 108), (X(right.centerx), Y(right.bottom)),
+                                 (X(right.centerx), Y(rects[6].top)), 2)
+                pygame.draw.circle(surf, (96, 96, 108), (X(right.centerx), Y(rects[6].top)), 3)
 
         coin_icon = items.icon("coin", 16)
         for i, card in enumerate(self._cards()):

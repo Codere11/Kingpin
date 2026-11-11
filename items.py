@@ -42,6 +42,8 @@ REGISTRY: dict[str, ItemDef] = {
     "gear": ItemDef("gear", "Gear", "A toothed gear. Machines are built from these.",
                     stackable=True, max_stack=100),
     "musket": ItemDef("musket", "Musket", "A smoothbore musket. Loud, slow, and heavy."),
+    "textile": ItemDef("textile", "Textile", "Woven cloth, made from cotton.",
+                       stackable=True, max_stack=100, quality=True),
     "shovel": ItemDef("shovel", "Shovel", "For digging. Gardens, graves, whatever needs doing."),
     "watering_can": ItemDef("watering_can", "Watering Can", "Keeps the crop alive. Or puts out a fire."),
     "seed_bag": ItemDef("seed_bag", "Tobacco Seeds",
@@ -285,6 +287,28 @@ def _draw_musket(s: int) -> pygame.Surface:
     pygame.draw.rect(surf, steel, (0.42 * s, 0.50 * s, 0.42 * s, 0.05 * s))
     # lock
     pygame.draw.rect(surf, steel_d, (0.40 * s, 0.52 * s, 0.07 * s, 0.08 * s))
+    return surf
+
+
+def _draw_textile(s: int) -> pygame.Surface:
+    """A folded bolt of cloth, with a weave and a rolled edge."""
+    surf = _canvas(s)
+    cloth, cloth_d, cloth_l = (200, 190, 150), (120, 108, 82), (226, 216, 180)
+    body = [(0.18, 0.30), (0.82, 0.30), (0.82, 0.70), (0.18, 0.70)]
+    _poly(surf, cloth_d, [(x + 0.01, y + 0.02) for x, y in body], s)
+    _poly(surf, cloth, body, s)
+    _outline(surf, cloth_d, body, s)
+    # weave lines
+    for i in range(1, 5):
+        y = 0.30 + i * 0.08
+        pygame.draw.line(surf, cloth_d, _pt((0.20, y), s), _pt((0.80, y), s), 1)
+        x = 0.18 + i * 0.13
+        pygame.draw.line(surf, cloth_d, _pt((x, 0.32), s), _pt((x, 0.68), s), 1)
+    # a rolled edge
+    pygame.draw.rect(surf, cloth_l, (0.14 * s, 0.30 * s, 0.10 * s, 0.40 * s),
+                     border_radius=2)
+    pygame.draw.rect(surf, cloth_d, (0.14 * s, 0.30 * s, 0.10 * s, 0.40 * s), 1,
+                     border_radius=2)
     return surf
 
 
@@ -802,6 +826,7 @@ _DRAWERS = {
     "iron_bar": _draw_iron_bar,
     "gear": _draw_gear,
     "musket": _draw_musket,
+    "textile": _draw_textile,
     "berries": _draw_berries,
     "cactus_fruit": _draw_cactus_fruit,
     "red_mushroom": _draw_red_mushroom,

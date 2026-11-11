@@ -22,6 +22,12 @@ CARDS = [
     {"id": "industry", "name": "Industry", "cost": 0, "icon": "gear",
      "desc": "Unlocks gears, with which you can later build machines.",
      "points": 0, "requires": "ironworking"},
+    {"id": "two_shot", "name": "Two-Shot", "cost": 500, "icon": "musket",
+     "desc": "A better musket, shoots two bullets without reloading.",
+     "points": 300, "requires": "gunsmithing"},
+    {"id": "textiles", "name": "Textiles", "cost": 500, "icon": "textile",
+     "desc": "Allows to produce and sell textiles, made from cotton.",
+     "points": 300, "requires": "industry"},
 ]
 
 
