@@ -898,7 +898,7 @@ class Horse:
             pass
 
     # -- horse routes ----------------------------------------------------
-    ROUTE_FEED = 5                 # feed the horse takes per leg
+    ROUTE_FEED = 10                # feed the horse takes per leg
     ROUTE_EAT_EVERY = 6.0          # seconds between eating one feed on the road
 
     def _route_chest(self, camp):
