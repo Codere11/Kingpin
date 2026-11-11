@@ -39,6 +39,9 @@ REGISTRY: dict[str, ItemDef] = {
     "iron_bar": ItemDef("iron_bar", "Iron Bar",
                         "A smelted bar of iron. What the smith works with.",
                         stackable=True, max_stack=100, quality=True),
+    "gear": ItemDef("gear", "Gear", "A toothed gear. Machines are built from these.",
+                    stackable=True, max_stack=100),
+    "musket": ItemDef("musket", "Musket", "A smoothbore musket. Loud, slow, and heavy."),
     "shovel": ItemDef("shovel", "Shovel", "For digging. Gardens, graves, whatever needs doing."),
     "watering_can": ItemDef("watering_can", "Watering Can", "Keeps the crop alive. Or puts out a fire."),
     "seed_bag": ItemDef("seed_bag", "Tobacco Seeds",
@@ -246,6 +249,42 @@ def _draw_iron_bar(s: int) -> pygame.Surface:
     _poly(surf, metal_l, [(0.26, 0.34), (0.74, 0.34), (0.78, 0.44),
                           (0.74, 0.52), (0.26, 0.52), (0.22, 0.44)], s)
     pygame.draw.line(surf, metal_d, _pt((0.28, 0.60), s), _pt((0.72, 0.60), s), 2)
+    return surf
+
+
+def _draw_gear(s: int) -> pygame.Surface:
+    """A toothed gear: a metal cog with eight teeth."""
+    surf = _canvas(s)
+    c = 0.5 * s
+    r = 0.30 * s
+    metal, metal_d, metal_l = (176, 178, 186), (86, 88, 96), (224, 226, 232)
+    for i in range(8):
+        a = i * math.tau / 8
+        tx = c + math.cos(a) * (r + 0.06 * s)
+        ty = c + math.sin(a) * (r + 0.06 * s)
+        pygame.draw.rect(surf, metal_d, (tx - 0.05 * s, ty - 0.05 * s,
+                                         0.10 * s, 0.10 * s))
+    pygame.draw.circle(surf, metal_d, (int(c), int(c)), int(r + 0.03 * s))
+    pygame.draw.circle(surf, metal, (int(c), int(c)), int(r))
+    pygame.draw.circle(surf, metal_l, (int(c), int(c)), int(0.22 * s))
+    pygame.draw.circle(surf, metal_d, (int(c), int(c)), int(0.12 * s), 2)
+    return surf
+
+
+def _draw_musket(s: int) -> pygame.Surface:
+    """A musket laid horizontally: wooden stock and a steel barrel."""
+    surf = _canvas(s)
+    wood, wood_d = (150, 104, 62), (78, 54, 34)
+    steel, steel_d = (176, 178, 186), (86, 88, 96)
+    # stock
+    _poly(surf, wood_d, [(0.12, 0.62), (0.40, 0.46), (0.40, 0.62), (0.12, 0.74)], s)
+    _poly(surf, wood, [(0.14, 0.62), (0.38, 0.49), (0.38, 0.61), (0.14, 0.72)], s)
+    # barrel
+    pygame.draw.rect(surf, steel_d, (0.40 * s, 0.48 * s, 0.46 * s, 0.08 * s),
+                     border_radius=2)
+    pygame.draw.rect(surf, steel, (0.42 * s, 0.50 * s, 0.42 * s, 0.05 * s))
+    # lock
+    pygame.draw.rect(surf, steel_d, (0.40 * s, 0.52 * s, 0.07 * s, 0.08 * s))
     return surf
 
 
@@ -761,6 +800,8 @@ _DRAWERS = {
     "compass": _draw_compass,
     "iron": _draw_iron,
     "iron_bar": _draw_iron_bar,
+    "gear": _draw_gear,
+    "musket": _draw_musket,
     "berries": _draw_berries,
     "cactus_fruit": _draw_cactus_fruit,
     "red_mushroom": _draw_red_mushroom,

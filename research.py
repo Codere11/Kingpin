@@ -16,6 +16,12 @@ CARDS = [
     {"id": "ironworking", "name": "Ironworking", "cost": 500, "icon": "iron_bar",
      "desc": "Smelt iron ore into iron bars at the forge.",
      "points": 300, "requires": "hide_armor"},
+    {"id": "gunsmithing", "name": "Gunsmithing", "cost": 0, "icon": "musket",
+     "desc": "Unlocks ammo and Musket.",
+     "points": 0, "requires": "ironworking"},
+    {"id": "industry", "name": "Industry", "cost": 0, "icon": "gear",
+     "desc": "Unlocks gears, with which you can later build machines.",
+     "points": 0, "requires": "ironworking"},
 ]
 
 

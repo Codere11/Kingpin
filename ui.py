@@ -1366,8 +1366,19 @@ class ResearchPanel:
         cw, ch, gap = 560, 132, 34
         x0 = (sw - cw) // 2
         y0 = 84
-        return [pygame.Rect(x0, y0 + i * (ch + gap), cw, ch)
-                for i in range(len(cards))]
+        rects = []
+        n_trunk = min(3, len(cards))
+        for i in range(n_trunk):
+            rects.append(pygame.Rect(x0, y0 + i * (ch + gap), cw, ch))
+        if len(cards) > n_trunk:
+            by = rects[-1].bottom + gap
+            bw = (cw - 60) // 2
+            left_x = sw // 2 - 30 - bw
+            right_x = sw // 2 + 30
+            for i in range(len(cards) - n_trunk):
+                bx = left_x if i == 0 else right_x
+                rects.append(pygame.Rect(bx, by, bw, ch))
+        return rects
 
     def _button(self, sw, sh):
         return pygame.Rect(sw // 2 - 100, sh - 92, 200, 50)
@@ -1431,12 +1442,30 @@ class ResearchPanel:
         t = self.font.render("RESEARCH", True, (238, 224, 190))
         screen.blit(t, (sw // 2 - t.get_width() // 2, 28))
         rects = self._card_rects(sw, sh)
-        # A LINE DOWN THE TREE: to unlock a card, research the one above it.
-        for i in range(len(rects) - 1):
+        # A LINE DOWN THE TREE, then a split into the two branches.
+        n_trunk = min(3, len(rects))
+        for i in range(n_trunk - 1):
             x = rects[i].centerx
             pygame.draw.line(screen, (96, 96, 108), (x, rects[i].bottom),
                              (x, rects[i + 1].top), 2)
             pygame.draw.circle(screen, (96, 96, 108), (x, rects[i + 1].top), 3)
+        if len(rects) > n_trunk:
+            trunk = rects[n_trunk - 1]
+            left = rects[n_trunk]
+            right = rects[n_trunk + 1] if len(rects) > n_trunk + 1 else None
+            mid_y = trunk.bottom + (left.top - trunk.bottom) // 2
+            pygame.draw.line(screen, (96, 96, 108), (trunk.centerx, trunk.bottom),
+                             (trunk.centerx, mid_y), 2)
+            if right is not None:
+                pygame.draw.line(screen, (96, 96, 108), (left.centerx, mid_y),
+                                 (right.centerx, mid_y), 2)
+                pygame.draw.line(screen, (96, 96, 108), (right.centerx, mid_y),
+                                 (right.centerx, right.top), 2)
+            pygame.draw.line(screen, (96, 96, 108), (left.centerx, mid_y),
+                             (left.centerx, left.top), 2)
+            for rr in (left, right):
+                if rr is not None:
+                    pygame.draw.circle(screen, (96, 96, 108), (rr.centerx, rr.top), 3)
         coin_icon = items.icon("coin", 16)
         for i, card in enumerate(self._cards()):
             r = rects[i]
