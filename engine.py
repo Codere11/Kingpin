@@ -30,6 +30,15 @@ def _set_bench_default(g, wp) -> None:
         wp.leaf = wp.product = None
 
 
+def _smiths_available(g) -> bool:
+    """The Smith job only appears once Ironworking is researched."""
+    try:
+        import research
+        return research.state(g, "ironworking") == "done"
+    except Exception:
+        return False
+
+
 def _route_items(g, camp):
     """The chest-filter goods a settlement's route node may move."""
     import crop
@@ -740,7 +749,8 @@ def run(g):
                 elif g.near_sign() is not None:
                     _sg = g.near_sign()
                     g.sign_post = _sg
-                    g.sign_panel = SignPanel(_sg, g.player_camp, lambda: g.sync_jobs(g))
+                    g.sign_panel = SignPanel(_sg, g.player_camp, lambda: g.sync_jobs(g),
+                                             show_smiths=lambda: _smiths_available(g))
                     g.sign_open = True
                     pygame.mouse.set_visible(True)
                 elif g.near_foodbox() is not None:
