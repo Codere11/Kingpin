@@ -425,6 +425,21 @@ def run(g):
                                                          top_label="THE CROWN")
                         g.crown_chest_open = True
                         pygame.mouse.set_visible(True)
+                    elif _r == "market":
+                        g.crown_screen_open = False
+                        g.crown_screen = None
+                        g.market_panel = ShipMarketPanel(g, g.inventory, g.ship_hold)
+                        g.market_open = True
+                        pygame.mouse.set_visible(True)
+            elif g.market_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                                                                  pygame.K_ESCAPE):
+                    g.market_panel.close()
+                    g.market_open = False
+                    g.market_panel = None
+                    pygame.mouse.set_visible(False)
+                else:
+                    g.market_panel.handle_event(event)
             elif g.crown_chest_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
@@ -838,7 +853,7 @@ def run(g):
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
                   and not (g.inventory_open or g.trade_open or g.board_open
                            or g.chest_open or g.stall_open or g.worker_panel_open
-                           or g.workshop_open or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.confirm_open
+                           or g.workshop_open or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.market_open or g.confirm_open
                            or g.map_open or g.pause_open or g.build_menu_open
                            or g.dialogue_panel.open_ or g.placing is not None)):
                 # SPACE: LUNGE. A quarter of the wind, in the way he is holding
@@ -907,7 +922,7 @@ def run(g):
                 if (g.inventory_open or g.trade_open or g.board_open or g.chest_open
                         or g.worker_panel_open or g.stall_open or g.body_open
                         or g.folder_open
-                        or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.workshop_open or g.confirm_open
+                        or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.market_open or g.workshop_open or g.confirm_open
                         or g.map_open or g.build_menu_open or g.placing is not None):
                     g.close_modals()
                 elif g.pause_open:
@@ -1052,7 +1067,7 @@ def run(g):
                 or g.workshop_open or g.confirm_open or g.pause_open or g.map_open
                 or g.crown_screen_open or g.crown_chest_open or g.horse_panel_open
                 or g.placing is not None or g.inside_house is not None
-                or g.inside_mine is not None or g.board_open or g.smith_open or g.artisan_open or g.naming_open or g.route_open):
+                or g.inside_mine is not None or g.board_open or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.market_open):
             g._blk += g.dt
             # A MENU LEFT ALONE FOR TWENTY SECONDS RELEASES THE WORLD. Not a
             # fix for any particular panel -- a guarantee that no panel, known
@@ -1087,7 +1102,7 @@ def run(g):
                          % (g._HF[0] / max(1e-6, g._now_hf - g._HF[1])))
                 g._HF[0], g._HF[1] = 0, g._now_hf
             g.keys = pygame.key.get_pressed()
-            if g.board_open or g.smith_open or g.artisan_open or g.naming_open or g.route_open:                       # reading the board: stand still
+            if g.board_open or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.market_open:                       # reading the board: stand still
                 g.keys = _NO_KEYS
             # THE ROOM IS ZOOMED, SO THE AIM MUST BE. Reading the window
             # mouse against a zoomed camera skews every look by the zoom --
@@ -1211,6 +1226,8 @@ def run(g):
             try:
                 if crown.escalate(g):
                     g.toast("The Crown's demand has grown.")
+                import market as _market
+                _market.tick(g)
                 if (not g.crown_intro_done and getattr(g, "_boot_left", [0])[0] <= 0):
                     g.crown_intro_done = True
                     g.open_crown_screen()
@@ -3476,6 +3493,8 @@ def run(g):
                 g.crown_screen.draw(g.screen)
             if g.crown_chest_open:
                 g.crown_chest_panel.draw(g.screen)
+            if g.market_open and g.market_panel is not None:
+                g.market_panel.draw(g.screen)
             if g.horse_panel_open:
                 g.horse_panel.draw(g.screen)
             if g.workshop_open:
@@ -4006,6 +4025,8 @@ def run(g):
             g.crown_screen.draw(g.screen)
         if g.crown_chest_open:
             g.crown_chest_panel.draw(g.screen)
+        if g.market_open and g.market_panel is not None:
+            g.market_panel.draw(g.screen)
         if g.horse_panel_open:
             g.horse_panel.draw(g.screen)
         if g.workshop_open:

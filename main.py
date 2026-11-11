@@ -112,7 +112,7 @@ from workshop import WorkshopMenu
 from trees import Trees
 from ui import (ChestPanel, ConfirmMenu, CrownScreen, FolderPanel, HorsePanel,
                 Hotbar, InventoryPanel, MarketPanel, PauseMenu, RoutePanel,
-                SignPanel)
+                ShipMarketPanel, SignPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
                      nation_name, village_center)
@@ -729,6 +729,12 @@ def main() -> None:
     g.crown_deliveries = 0             # successful deliveries: the coin doubles each
     g.crown_payout = 10                # what the next successful delivery earns
     g.crown_chest = Inventory(capacity=64)
+    # THE FREE MARKET: sell manufactured goods out of the ship's hold.
+    g.ship_hold = Inventory(capacity=32)
+    g.market_open = False
+    g.market_panel = None
+    import market as _market
+    _market.init(g)
     g.smoke = smoke.Smoke()            # a smoke signal over a conquered fire
     g.war_escalated = False            # once a smoke alarm goes up, bows come out
     g.crown_screen_open = False

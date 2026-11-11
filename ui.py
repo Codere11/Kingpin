@@ -839,25 +839,29 @@ class CrownScreen:
         x0, y0 = 20, sh - h - 14
         panel = pygame.Rect(x0, y0, w, h)
         pay = pygame.Rect(x0 + w - 170, y0 + 34, 150, 40)
-        return panel, pay
+        market = pygame.Rect(pay.left - 160, y0 + 34, 150, 40)
+        return panel, pay, market
 
     def handle_event(self, event):
         surface = pygame.display.get_surface()
         if surface is None:
             return None
-        _panel, pay = self._rects(*surface.get_size())
+        _panel, pay, market = self._rects(*surface.get_size())
         if event.type == pygame.MOUSEMOTION:
-            self.hover = pay.collidepoint(event.pos)
+            self.hover = "pay" if pay.collidepoint(event.pos) else (
+                "market" if market.collidepoint(event.pos) else False)
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if pay.collidepoint(event.pos):
                 return "pay"
+            if market.collidepoint(event.pos):
+                return "market"
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             return "close"
         return None
 
     def draw(self, screen: pygame.Surface) -> None:
         sw, sh = screen.get_size()
-        panel, pay = self._rects(sw, sh)
+        panel, pay, market = self._rects(sw, sh)
         shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
         shade.fill((0, 0, 0, 50))          # light: the world (and the ship) stays visible
         screen.blit(shade, (0, 0))
@@ -886,14 +890,15 @@ class CrownScreen:
                                          True, (232, 200, 118))
             screen.blit(_rw, (panel.right - _rw.get_width() - 190, panel.top + 10))
 
-        hovered = self.hover
-        pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
-                         pay, border_radius=8)
-        pygame.draw.rect(screen, ACCENT if hovered else BORDER, pay, width=2,
-                         border_radius=8)
-        t = self.font_btn.render("Pay Crown", True, TEXT)
-        screen.blit(t, (pay.centerx - t.get_width() // 2,
-                        pay.centery - t.get_height() // 2))
+        for btn, label, key in ((pay, "Pay Crown", "pay"), (market, "Market", "market")):
+            hovered = self.hover == key
+            pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
+                             btn, border_radius=8)
+            pygame.draw.rect(screen, ACCENT if hovered else BORDER, btn, width=2,
+                             border_radius=8)
+            t = self.font_btn.render(label, True, TEXT)
+            screen.blit(t, (btn.centerx - t.get_width() // 2,
+                            btn.centery - t.get_height() // 2))
 
 
 class HorsePanel:
@@ -1105,6 +1110,264 @@ class RoutePanel:
         pygame.draw.rect(screen, ACCENT if hovered else BORDER, start, width=2, border_radius=8)
         s = self.font_btn.render("Start route", True, TEXT)
         screen.blit(s, (start.centerx - s.get_width() // 2, start.centery - s.get_height() // 2))
+
+
+class ShipMarketPanel:
+    """THE FREE MARKET: sell manufactured goods out of the ship's hold.
+
+    Left: the player's pack (top) and the ship's hold (bottom), dragged
+    between like a chest. Right: the sellable goods with their mid-grade
+    prices; click one to open its price history and sell it."""
+
+    COLS = 8
+    PLAYER_ROWS = 4
+    HOLD_ROWS = 4
+
+    def __init__(self, g, player_inv, hold_inv) -> None:
+        self.g = g
+        self.player = player_inv
+        self.hold = hold_inv
+        self.held = None
+        self.held_from = None
+        self.selected = 0
+        self.hover = None
+        self.font = pygame.font.SysFont("dejavusans", 18, bold=True)
+        self.font_small = pygame.font.SysFont("dejavusans", 14, bold=True)
+        self.font_tiny = pygame.font.SysFont("dejavusans", 11)
+
+    def _goods(self):
+        import market
+        return list(market.SELLABLE)
+
+    def _layout(self, sw, sh):
+        slot, pad, cols = 36, 4, self.COLS
+        grid_w = cols * slot + (cols + 1) * pad
+        lx, ly = 16, 40
+        player_rects = []
+        y = ly + 28
+        for r in range(self.PLAYER_ROWS):
+            for c in range(cols):
+                player_rects.append(pygame.Rect(lx + pad + c * (slot + pad),
+                                                y + pad + r * (slot + pad), slot, slot))
+        player_h = self.PLAYER_ROWS * slot + (self.PLAYER_ROWS + 1) * pad
+        hold_y = y + player_h + 30
+        hold_rects = []
+        for r in range(self.HOLD_ROWS):
+            for c in range(cols):
+                hold_rects.append(pygame.Rect(lx + pad + c * (slot + pad),
+                                              hold_y + pad + r * (slot + pad), slot, slot))
+        hold_h = self.HOLD_ROWS * slot + (self.HOLD_ROWS + 1) * pad
+        rx = lx + grid_w + 20
+        rw = max(200, sw - rx - 16)
+        goods_rects = []
+        gy = ly + 28
+        for i in range(len(self._goods())):
+            goods_rects.append(pygame.Rect(rx, gy + i * 52, rw, 46))
+        hist = pygame.Rect(rx, gy + len(self._goods()) * 52 + 8, rw, 140)
+        sell = pygame.Rect(rx + rw // 2 - 90, hist.bottom + 10, 180, 40)
+        return (lx, ly, player_rects, hold_rects, y, hold_y, rx, rw,
+                goods_rects, hist, sell)
+
+    def _slot_at(self, pos):
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return None
+        (_lx, _ly, pr, hr, _y, _hy, _rx, _rw, gr, _hist, _sell) = self._layout(*surface.get_size())
+        for i, r in enumerate(pr):
+            if r.collidepoint(pos):
+                return ("player", i)
+        for i, r in enumerate(hr):
+            if r.collidepoint(pos):
+                return ("hold", i)
+        return None
+
+    def _good_at(self, pos):
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return None
+        (_lx, _ly, pr, hr, _y, _hy, _rx, _rw, gr, _hist, _sell) = self._layout(*surface.get_size())
+        for i, r in enumerate(gr):
+            if r.collidepoint(pos):
+                return i
+        return None
+
+    def _sell_rect(self):
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return None
+        return self._layout(*surface.get_size())[10]
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEMOTION:
+            self.hover = event.pos
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            gi = self._good_at(event.pos)
+            if gi is not None:
+                self.selected = gi
+                return None
+            sell = self._sell_rect()
+            if sell is not None and sell.collidepoint(event.pos):
+                self._sell_selected()
+                return None
+            hit = self._slot_at(event.pos)
+            if hit is None:
+                return None
+            which, index = hit
+            inv = self.player if which == "player" else self.hold
+            was_empty = self.held is None
+            self.held, inv.slots[index] = _place_left(self.held, inv.slots[index])
+            if was_empty and self.held is not None:
+                self.held_from = hit
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+            hit = self._slot_at(event.pos)
+            if hit is None:
+                return None
+            which, index = hit
+            inv = self.player if which == "player" else self.hold
+            self.held, inv.slots[index] = _place_right(self.held, inv.slots[index])
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            if self.held is None:
+                return None
+            hit = self._slot_at(event.pos)
+            if hit is not None:
+                which, index = hit
+                inv = self.player if which == "player" else self.hold
+                self.held, inv.slots[index] = _place_left(self.held, inv.slots[index])
+            else:
+                self._return_held()
+        return None
+
+    def _return_held(self):
+        if self.held is None:
+            return
+        if self.held_from is not None:
+            which, index = self.held_from
+            inv = self.player if which == "player" else self.hold
+            if 0 <= index < inv.capacity and inv.slots[index] is None:
+                inv.slots[index] = self.held
+                self.held = None
+                self.held_from = None
+                return
+        for inv in (self.player, self.hold):
+            slot = inv._first_empty()
+            if slot is not None:
+                inv.slots[slot] = self.held
+                self.held = None
+                self.held_from = None
+                return
+
+    def _hold_count(self, good):
+        return self.hold.count_of(good)
+
+    def _sell_selected(self):
+        import market
+        good = self._goods()[self.selected]
+        base = self.g.market["base"].get(good, market.ANCHOR)
+        coin = 0.0
+        for i, stack in enumerate(list(self.hold.slots)):
+            if stack is None or stack.defn.id != good:
+                continue
+            grade = stack.quality if stack.defn.quality is not None else market.MID_GRADE
+            coin += market.sell_value(self.g, good, stack.count, grade)
+            self.hold.slots[i] = None
+        if coin > 0.0:
+            self.player.add("coin", int(round(coin)))
+            try:
+                self.g.toast("Sold %s for %d coin" % (good, int(round(coin))))
+            except Exception:
+                pass
+
+    def close(self):
+        self._return_held()
+
+    def draw(self, screen):
+        sw, sh = screen.get_size()
+        import market
+        (lx, ly, pr, hr, py, hy, rx, rw, gr, hist_rect, sell) = self._layout(sw, sh)
+        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 170))
+        screen.blit(shade, (0, 0))
+        board = pygame.Surface((sw - 24, sh - 40), pygame.SRCALPHA)
+        pygame.draw.rect(board, (22, 20, 18, 244), board.get_rect(), border_radius=12)
+        pygame.draw.rect(board, BORDER, board.get_rect(), width=2, border_radius=12)
+        screen.blit(board, (12, 20))
+        # titles
+        for label, yy in (("YOUR PACK", py - 24), ("SHIP HOLD", hy - 24)):
+            t = self.font_small.render(label, True, (226, 200, 150))
+            screen.blit(t, (lx + 4, yy))
+        # left inventories
+        for which, rects, inv in (("player", pr, self.player), ("hold", hr, self.hold)):
+            for i, rect in enumerate(rects):
+                stack = inv.slots[i] if i < inv.capacity else None
+                hovered = self.hover is not None and rect.collidepoint(self.hover)
+                pygame.draw.rect(screen, SLOT, rect, border_radius=5)
+                pygame.draw.rect(screen, ACCENT if hovered else BORDER, rect, width=2, border_radius=5)
+                if stack is not None:
+                    ic = items.icon(stack.defn.id, rect.width - 10)
+                    screen.blit(ic, (rect.centerx - ic.get_width() // 2,
+                                     rect.centery - ic.get_height() // 2))
+                    if stack.defn.stackable and stack.count > 1:
+                        c = self.font_tiny.render(str(stack.count), True, TEXT)
+                        screen.blit(c, (rect.right - c.get_width() - 2, rect.bottom - c.get_height() - 1))
+                    _draw_quality(screen, rect, stack, self.font_tiny)
+        # right goods list
+        t = self.font.render("THE MARKET", True, (238, 224, 190))
+        screen.blit(t, (rx + 4, ly))
+        for i, good in enumerate(self._goods()):
+            rect = gr[i]
+            base = self.g.market["base"].get(good, market.ANCHOR)
+            hist = self.g.market["history"].get(good, [base])
+            trend = ""
+            if len(hist) >= 2:
+                trend = " \u25b2" if hist[-1] > hist[-2] else (" \u25bc" if hist[-1] < hist[-2] else "")
+            hovered = self.hover is not None and rect.collidepoint(self.hover)
+            sel = (i == self.selected)
+            pygame.draw.rect(screen, (54, 46, 38) if (sel or hovered) else (34, 34, 40),
+                             rect, border_radius=7)
+            pygame.draw.rect(screen, ACCENT if sel else BORDER, rect, width=2, border_radius=7)
+            ic = items.icon(good, 30)
+            screen.blit(ic, (rect.left + 8, rect.centery - 15))
+            nm = self.font_small.render(items.get(good).name if items.get(good) else good,
+                                        True, (226, 214, 190))
+            screen.blit(nm, (rect.left + 48, rect.top + 6))
+            price = self.font_small.render("B: %.1f c%s" % (base, trend), True, (232, 200, 118))
+            screen.blit(price, (rect.right - price.get_width() - 10, rect.top + 6))
+            have = self._hold_count(good)
+            hv = self.font_tiny.render("in hold: %d" % have, True, (150, 146, 134))
+            screen.blit(hv, (rect.left + 48, rect.bottom - 18))
+        # price history for the selected good
+        good = self._goods()[self.selected]
+        base = self.g.market["base"].get(good, market.ANCHOR)
+        hist = self.g.market["history"].get(good, [base])
+        pygame.draw.rect(screen, (30, 28, 32), hist_rect, border_radius=7)
+        pygame.draw.rect(screen, BORDER, hist_rect, 2, border_radius=7)
+        hd = self.font_small.render("%s price history (mid-grade)" % good, True, (206, 184, 122))
+        screen.blit(hd, (hist_rect.left + 8, hist_rect.top + 4))
+        # sparkline
+        if len(hist) >= 2:
+            lo, hi = min(hist), max(hist)
+            span = (hi - lo) or 1.0
+            pts = []
+            for k, p in enumerate(hist):
+                x = hist_rect.left + 6 + k * (hist_rect.width - 12) / (len(hist) - 1)
+                y = hist_rect.bottom - 10 - (p - lo) / span * (hist_rect.height - 34)
+                pts.append((int(x), int(y)))
+            if len(pts) > 1:
+                pygame.draw.lines(screen, (120, 200, 150), False, pts, 2)
+            cur = self.font_small.render("now %.1f c" % base, True, (232, 200, 118))
+            screen.blit(cur, (hist_rect.left + 8, hist_rect.bottom - 24))
+        # sell button
+        n = self._hold_count(good)
+        hovered = self.hover is not None and sell.collidepoint(self.hover)
+        pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52), sell, border_radius=8)
+        pygame.draw.rect(screen, ACCENT if hovered else BORDER, sell, width=2, border_radius=8)
+        s = self.font_small.render("Sell all (%d)" % n, True, TEXT)
+        screen.blit(s, (sell.centerx - s.get_width() // 2, sell.centery - s.get_height() // 2))
+        # held stack follows the mouse
+        if self.held is not None:
+            mx, my = pygame.mouse.get_pos()
+            ic = items.icon(self.held.defn.id, 30)
+            screen.blit(ic, (mx - 15, my - 15))
 
 
 class PauseMenu:
