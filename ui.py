@@ -904,37 +904,49 @@ class HorsePanel:
         self.chest = ChestPanel(player_inv, horse._pack(),
                                 top_label=getattr(horse, "name", "HORSE") or "HORSE")
         self.horse = horse
-        self.hover = False
+        self.hover = None
         self.font = pygame.font.SysFont("dejavusans", 16, bold=True)
 
-    def _button(self, sw: int, sh: int):
+    def _buttons(self, sw: int, sh: int):
         w, h = 200, 42
-        return pygame.Rect((sw - w) // 2, sh - 54, w, h)
+        y = sh - 54
+        send = pygame.Rect((sw - 2 * w - 12) // 2, y, w, h)
+        route = pygame.Rect(send.right + 12, y, w, h)
+        return send, route
 
     def handle_event(self, event):
         surface = pygame.display.get_surface()
         if surface is None:
             return None
-        btn = self._button(*surface.get_size())
+        send, route = self._buttons(*surface.get_size())
         if event.type == pygame.MOUSEMOTION:
-            self.hover = btn.collidepoint(event.pos)
+            if send.collidepoint(event.pos):
+                self.hover = "send"
+            elif route.collidepoint(event.pos):
+                self.hover = "route"
+            else:
+                self.hover = None
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if btn.collidepoint(event.pos):
+            if send.collidepoint(event.pos):
                 return "send"
+            if route.collidepoint(event.pos):
+                return "route"
         return self.chest.handle_event(event)
 
     def draw(self, screen: pygame.Surface) -> None:
         self.chest.draw(screen)
         sw, sh = screen.get_size()
-        btn = self._button(sw, sh)
-        hovered = self.hover
-        pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
-                         btn, border_radius=8)
-        pygame.draw.rect(screen, ACCENT if hovered else BORDER, btn, width=2,
-                         border_radius=8)
-        t = self.font.render("Send to ship", True, TEXT)
-        screen.blit(t, (btn.centerx - t.get_width() // 2,
-                        btn.centery - t.get_height() // 2))
+        send, route = self._buttons(sw, sh)
+        for rect, label, key in ((send, "Send to ship", "send"),
+                                 (route, "Plan route", "route")):
+            hovered = self.hover == key
+            pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
+                             rect, border_radius=8)
+            pygame.draw.rect(screen, ACCENT if hovered else BORDER, rect, width=2,
+                             border_radius=8)
+            t = self.font.render(label, True, TEXT)
+            screen.blit(t, (rect.centerx - t.get_width() // 2,
+                            rect.centery - t.get_height() // 2))
 
 
 class PauseMenu:

@@ -362,6 +362,16 @@ def conquer_camp(g, native_camp) -> None:
         g.toast("The settlement is yours.")
     except Exception:
         pass
+    # THE PLAYER NAMES HIS NEW SETTLEMENT: "Settlement 1", "Settlement 2",
+    # and so on are the placeholders he can keep or type over.
+    try:
+        g.conquered_count = int(getattr(g, "conquered_count", 0)) + 1
+        g.naming_camp = native_camp
+        g.naming_text = ""
+        g.naming_placeholder = "Settlement %d" % int(g.conquered_count)
+        g.naming_open = True
+    except Exception:
+        pass
 
 
 def sync_jobs(g) -> None:

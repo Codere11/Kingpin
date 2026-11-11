@@ -90,7 +90,7 @@ def chest_filter_items(t, h):
     food_crop, leaf_crop = biomes.crop_kinds(t, h)
     out = [None]
     for item in (FOOD_ITEM.get(food_crop), LEAF_ITEM.get(leaf_crop),
-                 LEAF_PRODUCT.get(leaf_crop), "wood"):
+                 LEAF_PRODUCT.get(leaf_crop), "wood", "horse"):
         if item and item not in out:
             out.append(item)
     return out

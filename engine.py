@@ -255,6 +255,32 @@ def run(g):
                             _idx = _prods.index(_cur) if _cur in _prods else 0
                             _idx = (_idx + (1 if _r.collidepoint(event.pos) else -1)) % len(_prods)
                             g.artisan_bench.leaf, g.artisan_bench.product = _prods[_idx]
+            elif g.naming_open:
+                if event.type == pygame.TEXTINPUT:
+                    g.naming_text = (g.naming_text + event.text)[:24]
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_BACKSPACE:
+                    g.naming_text = g.naming_text[:-1]
+                elif event.type == pygame.KEYDOWN and event.key in (pygame.K_RETURN,
+                                                                    pygame.K_KP_ENTER):
+                    _name = g.naming_text.strip() or g.naming_placeholder
+                    if g.naming_camp is not None:
+                        try:
+                            g.naming_camp.name = _name
+                        except Exception:
+                            pass
+                    g.naming_open = False
+                    g.naming_camp = None
+                    pygame.mouse.set_visible(False)
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    # keep the placeholder name
+                    if g.naming_camp is not None:
+                        try:
+                            g.naming_camp.name = g.naming_placeholder
+                        except Exception:
+                            pass
+                    g.naming_open = False
+                    g.naming_camp = None
+                    pygame.mouse.set_visible(False)
             elif g.board_open:
                 if g.board_panel.handle_event(event):
                     g.board_open = False
@@ -366,6 +392,8 @@ def run(g):
                     _r = g.horse_panel.handle_event(event)
                     if _r == "send":
                         g.send_horse()
+                    elif _r == "route":
+                        g.toast("Route planning is not wired up yet")
             elif g.workshop_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
@@ -750,7 +778,7 @@ def run(g):
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
                   and not (g.inventory_open or g.trade_open or g.board_open
                            or g.chest_open or g.stall_open or g.worker_panel_open
-                           or g.workshop_open or g.smith_open or g.artisan_open or g.confirm_open
+                           or g.workshop_open or g.smith_open or g.artisan_open or g.naming_open or g.confirm_open
                            or g.map_open or g.pause_open or g.build_menu_open
                            or g.dialogue_panel.open_ or g.placing is not None)):
                 # SPACE: LUNGE. A quarter of the wind, in the way he is holding
@@ -819,7 +847,7 @@ def run(g):
                 if (g.inventory_open or g.trade_open or g.board_open or g.chest_open
                         or g.worker_panel_open or g.stall_open or g.body_open
                         or g.folder_open
-                        or g.smith_open or g.artisan_open or g.workshop_open or g.confirm_open
+                        or g.smith_open or g.artisan_open or g.naming_open or g.workshop_open or g.confirm_open
                         or g.map_open or g.build_menu_open or g.placing is not None):
                     g.close_modals()
                 elif g.pause_open:
@@ -964,7 +992,7 @@ def run(g):
                 or g.workshop_open or g.confirm_open or g.pause_open or g.map_open
                 or g.crown_screen_open or g.crown_chest_open or g.horse_panel_open
                 or g.placing is not None or g.inside_house is not None
-                or g.inside_mine is not None or g.board_open or g.smith_open or g.artisan_open):
+                or g.inside_mine is not None or g.board_open or g.smith_open or g.artisan_open or g.naming_open):
             g._blk += g.dt
             # A MENU LEFT ALONE FOR TWENTY SECONDS RELEASES THE WORLD. Not a
             # fix for any particular panel -- a guarantee that no panel, known
@@ -999,7 +1027,7 @@ def run(g):
                          % (g._HF[0] / max(1e-6, g._now_hf - g._HF[1])))
                 g._HF[0], g._HF[1] = 0, g._now_hf
             g.keys = pygame.key.get_pressed()
-            if g.board_open or g.smith_open or g.artisan_open:                       # reading the board: stand still
+            if g.board_open or g.smith_open or g.artisan_open or g.naming_open:                       # reading the board: stand still
                 g.keys = _NO_KEYS
             # THE ROOM IS ZOOMED, SO THE AIM MUST BE. Reading the window
             # mouse against a zoomed camera skews every look by the zoom --
@@ -3808,6 +3836,25 @@ def run(g):
                 _h = g.font.render("takes 10 leaf from a chest, makes 10 goods      [E] close",
                                    True, (196, 226, 168))
                 g.screen.blit(_h, (_panel.centerx - _h.get_width() // 2, _panel.bottom - 28))
+            if g.naming_open:
+                _np = pygame.Rect(g.vw // 2 - 230, g.vh // 2 - 80, 460, 160)
+                _shade = pygame.Surface((g.vw, g.vh), pygame.SRCALPHA)
+                _shade.fill((0, 0, 0, 170))
+                g.screen.blit(_shade, (0, 0))
+                pygame.draw.rect(g.screen, (26, 26, 30), _np, border_radius=10)
+                pygame.draw.rect(g.screen, (150, 118, 78), _np, 2, border_radius=10)
+                _t = g.font.render("NAME YOUR SETTLEMENT", True, (238, 224, 190))
+                g.screen.blit(_t, (_np.centerx - _t.get_width() // 2, _np.top + 14))
+                _shown = g.naming_text if g.naming_text else g.naming_placeholder
+                _entry = g.font.render(_shown, True,
+                                       (232, 220, 180) if g.naming_text else (150, 140, 120))
+                _box = pygame.Rect(_np.centerx - 160, _np.top + 48, 320, 34)
+                pygame.draw.rect(g.screen, (12, 12, 16), _box, border_radius=6)
+                pygame.draw.rect(g.screen, (150, 118, 78), _box, 1, border_radius=6)
+                g.screen.blit(_entry, (_box.left + 10, _box.centery - _entry.get_height() // 2))
+                _h = g.font.render("type a name, then Enter      [Esc] keep \"%s\""
+                                   % g.naming_placeholder, True, (196, 226, 168))
+                g.screen.blit(_h, (_np.centerx - _h.get_width() // 2, _np.bottom - 30))
             if g.smith_open and g.smith_shop is not None:
                 g._w = g.smith_shop.worker
                 g._orders = list(getattr(g._w, "tool_orders", ()) or ())

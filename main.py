@@ -764,6 +764,11 @@ def main() -> None:
     g.smith_shop = None
     g.artisan_open = False
     g.artisan_bench = None
+    g.naming_open = False
+    g.naming_camp = None
+    g.naming_text = ""
+    g.naming_placeholder = ""
+    g.conquered_count = 0
     g.work_cd = 0.0
     g.work_msg = ""
     g.inside_mine = None
