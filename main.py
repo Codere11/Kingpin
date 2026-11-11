@@ -49,7 +49,6 @@ import engine
 import placement
 
 import crop
-import crown
 import smoke
 import biomes
 import board
@@ -110,7 +109,7 @@ from skills import Skills
 from trade import TradeMenu
 from workshop import WorkshopMenu
 from trees import Trees
-from ui import (ChestPanel, ConfirmMenu, CrownScreen, FolderPanel, HorsePanel,
+from ui import (ChestPanel, ConfirmMenu, FolderPanel, HorsePanel,
                 Hotbar, InventoryPanel, MarketPanel, PauseMenu, RoutePanel,
                 ShipMarketPanel, SignPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
@@ -429,7 +428,7 @@ def main() -> None:
         print("SETTLEMENT SPAWN  %.0f,%.0f  in %s"
               % (g._hx, g._hy, getattr(g._home, "name", "?")))
     # ---- THE COLONIAL COAST ----------------------------------------------
-    # He wakes on the beach: the ocean to his right, the Crown's ship just
+    # He wakes on the beach: the ocean to his right, the ship just
     # offshore, and the land stretching away west. Overrides the old spawn.
     import world as _world
     g._hx = _world.coast_x(0.0, g.world.seed) - 44.0
@@ -722,13 +721,6 @@ def main() -> None:
     g.sign_open = False
     g.sign_panel = None
     g.sign_post = None
-    # THE CROWN'S DEMAND, delivered to the ship every three days.
-    g.crown_round = 0
-    g.crown_paid = False
-    g.crown_biome = "temperate"       # the spawn biome decides the first ask
-    g.crown_deliveries = 0             # successful deliveries: the coin doubles each
-    g.crown_payout = 10                # what the next successful delivery earns
-    g.crown_chest = Inventory(capacity=64)
     # THE FREE MARKET: sell manufactured goods out of the ship's hold.
     g.ship_hold = Inventory(capacity=32)
     g.market_open = False
@@ -737,11 +729,6 @@ def main() -> None:
     _market.init(g)
     g.smoke = smoke.Smoke()            # a smoke signal over a conquered fire
     g.war_escalated = False            # once a smoke alarm goes up, bows come out
-    g.crown_screen_open = False
-    g.crown_screen = None
-    g.crown_chest_open = False
-    g.crown_chest_panel = None
-    g.crown_intro_done = False
     # A CONQUERED HORSE'S SADDLE BAGS, with the Send-to-ship button.
     g.horse_panel_open = False
     g.horse_panel = None
@@ -1209,30 +1196,20 @@ def main() -> None:
         return min(boxes, key=lambda b: (b.x - g.player.x) ** 2 + (b.y - g.player.y) ** 2)
 
     def ship_pos():
-        """The Crown's ship, anchored off the coast at y=0."""
+        """The ship, anchored off the coast at y=0."""
         import world as _world
         return (_world.coast_x(0.0, g.world.seed) + 56.0, 0.0)
-
-    def open_crown_screen() -> None:
-        g.crown_screen = CrownScreen(lambda: crown.demand(g),
-                                     lambda: crown.round_of(g),
-                                     lambda: getattr(g, "crown_paid", False),
-                                     lambda: getattr(g, "crown_payout", 10))
-        g.crown_screen_open = True
-        pygame.mouse.set_visible(True)
-
-    def crown_demand():
-        return crown.demand(g)
-
-    def crown_pay() -> None:
-        _earned = crown.pay(g)
-        g.toast("The Crown paid %d coin." % int(_earned or 0))
-        g.mark_dirty()
 
     def open_horse(horse) -> None:
         g.horse_sel = horse
         g.horse_panel = HorsePanel(g.inventory, horse)
         g.horse_panel_open = True
+        pygame.mouse.set_visible(True)
+
+    def open_market() -> None:
+        """The ship's market: sell manufactured goods out of the hold."""
+        g.market_panel = ShipMarketPanel(g, g.inventory, g.ship_hold)
+        g.market_open = True
         pygame.mouse.set_visible(True)
 
     def send_horse() -> None:
@@ -1428,8 +1405,6 @@ def main() -> None:
     import world as _world
     g.player.x = _world.coast_x(0.0, g.world.seed) - 44.0
     g.player.y = 0.0
-    # THE FIRST CROWN DEMAND FOLLOWS THE SPAWN BIOME.
-    g.crown_biome = crown.spawn_biome(g)
     g.cam_x = g.player.x - WIDTH / (2.0 * ZOOM)
     g.cam_y = g.player.y - HEIGHT / (2.0 * ZOOM)
     # Rebuild the ground under him NOW and force the static layer to recompose,
@@ -1667,8 +1642,6 @@ def main() -> None:
         
         g.inventory_open = g.trade_open = g.board_open = g.chest_open = False
         g.sign_open = False
-        g.crown_screen_open = False
-        g.crown_chest_open = False
         g.horse_panel_open = False
         g.worker_panel_open = False
         g.stall_open = False
@@ -1842,10 +1815,8 @@ def main() -> None:
     g.near_foodbox = near_foodbox
     g.food_box = food_box
     g.ship_pos = ship_pos
-    g.open_crown_screen = open_crown_screen
-    g.crown_demand = crown_demand
-    g.crown_pay = crown_pay
     g.open_horse = open_horse
+    g.open_market = open_market
     g.send_horse = send_horse
     g.near_fireplace = near_fireplace
     g.near_lab = near_lab

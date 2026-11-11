@@ -770,10 +770,10 @@ class Horse:
         self.food = random.randint(0, 2)          # what it has stored
         self.tamed = False                        # a settlement's livestock
         self.conquered = False                    # the player's own horse
-        self.delivering = False                   # running the Crown's goods to the ship
+        self.delivering = False                   # running the goods to the ship
         self.returning = False                    # coming back to its sleeping spot
         self.pack = None                          # an Inventory, made on demand
-        self.g = None                             # the frame, for the ship and the Crown
+        self.g = None                             # the frame, for the ship and the market
         self.baby = False                         # a newborn, grows up over a day
         self.born_at = 0.0
         self.breeding = False                     # facing a mate, hearts out
@@ -872,10 +872,9 @@ class Horse:
             return
 
     def _deliver(self, g) -> None:
-        """Pour the saddle bags into the Crown's chest; if the ask is met,
-        that is the payment."""
+        """Pour the saddle bags into the ship's hold, ready for the market."""
         pack = self._pack()
-        chest = getattr(g, "crown_chest", None)
+        chest = getattr(g, "ship_hold", None)
         if pack is None or chest is None:
             return
         n = 0
@@ -887,13 +886,7 @@ class Horse:
             n += stack.count
             pack.slots[i] = None
         try:
-            import crown as _crown
-            if _crown.satisfied(g):
-                _earned = _crown.pay(g, recipient=self._pack())
-                g.toast("The Crown paid %d coin -- the horse carries it home."
-                        % int(_earned or 0))
-            else:
-                g.toast("The horse delivered its load.")
+            g.toast("The horse delivered %d goods to the ship's hold." % n)
         except Exception:
             pass
 
@@ -1008,7 +1001,7 @@ class Horse:
         ship = dest == "ship"
         if ship:
             tx, ty = g.ship_pos()
-            dest_chest = getattr(g, "crown_chest", None)
+            dest_chest = getattr(g, "ship_hold", None)
         else:
             tx, ty = dest.x, dest.y
             dest_chest = self._route_chest(dest)

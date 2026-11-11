@@ -407,8 +407,8 @@ class ChestPanel:
         self.top_rows = int(top_rows) if top_rows else self.CHEST_ROWS
         self.top_label = top_label
         # A CHEST HE BUILT CARRIES A FILTER: only the item shown on the lid may
-        # go in ('Any' means everything). The Crown's chest and a man's pack
-        # have none, so filter_owner stays None for them.
+        # go in ('Any' means everything). A man's pack and the market have
+        # none, so filter_owner stays None for them.
         self.filter_owner = filter_owner
         # WHAT THE LID MAY BE TURNED TO, for a settlement chest: Any, this
         # biome's food, leaf and product, and wood -- never the whole registry.
@@ -817,88 +817,6 @@ class SignPanel:
         unemp = max(0, total - used)
         u = self.font_small.render("Unemployed:  %d" % unemp, True, (176, 168, 152))
         screen.blit(u, (panel.left + 26, panel.bottom - 40))
-
-
-class CrownScreen:
-    """The Crown's demand, shown at the start and whenever the ship is
-    clicked. The Pay Crown button opens the Crown's chest."""
-
-    def __init__(self, demand_fn, round_fn, paid_fn, reward_fn=None) -> None:
-        self.demand_fn = demand_fn       # () -> dict
-        self.round_fn = round_fn         # () -> int
-        self.paid_fn = paid_fn           # () -> bool
-        self.reward_fn = reward_fn       # () -> int, the coin the next delivery earns
-        self.hover = None
-        self.font = pygame.font.SysFont("dejavusans", 20, bold=True)
-        self.font_small = pygame.font.SysFont("dejavusans", 15, bold=True)
-        self.font_btn = pygame.font.SysFont("dejavusans", 16, bold=True)
-
-    def _rects(self, sw: int, sh: int):
-        # a bottom bar, so the ship and the world above stay in view
-        w, h = sw - 40, 108
-        x0, y0 = 20, sh - h - 14
-        panel = pygame.Rect(x0, y0, w, h)
-        pay = pygame.Rect(x0 + w - 170, y0 + 34, 150, 40)
-        market = pygame.Rect(pay.left - 160, y0 + 34, 150, 40)
-        return panel, pay, market
-
-    def handle_event(self, event):
-        surface = pygame.display.get_surface()
-        if surface is None:
-            return None
-        _panel, pay, market = self._rects(*surface.get_size())
-        if event.type == pygame.MOUSEMOTION:
-            self.hover = "pay" if pay.collidepoint(event.pos) else (
-                "market" if market.collidepoint(event.pos) else False)
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if pay.collidepoint(event.pos):
-                return "pay"
-            if market.collidepoint(event.pos):
-                return "market"
-        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            return "close"
-        return None
-
-    def draw(self, screen: pygame.Surface) -> None:
-        sw, sh = screen.get_size()
-        panel, pay, market = self._rects(sw, sh)
-        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
-        shade.fill((0, 0, 0, 50))          # light: the world (and the ship) stays visible
-        screen.blit(shade, (0, 0))
-        board = pygame.Surface(panel.size, pygame.SRCALPHA)
-        pygame.draw.rect(board, (20, 20, 24, 244), board.get_rect(), border_radius=12)
-        pygame.draw.rect(board, BORDER, board.get_rect(), width=2, border_radius=12)
-        screen.blit(board, panel.topleft)
-
-        title = self.font_small.render("THE CROWN WANTS", True, TEXT)
-        screen.blit(title, (panel.left + 18, panel.top + 10))
-        d = self.demand_fn()
-        import quality as _quality
-        import items as _items
-        grade = _quality.letter(d["grade"])
-        lp_name = _items.get(d["leaf_product_item"]).name.lower()
-        leaf_name = _items.get(d["leaf_item"]).name.lower()
-        line = "%d %s, %d %s, %d wood  (grade %s or higher)" % (
-            d["leaf_product"], lp_name, d["leaf"], leaf_name, d["wood"], grade)
-        t = self.font.render(line, True, (206, 184, 122))
-        screen.blit(t, (panel.left + 18, panel.top + 38))
-        state = "PAID -- free time" if self.paid_fn() else "Round %d" % self.round_fn()
-        st = self.font_small.render(state, True, (126, 176, 112) if self.paid_fn() else (176, 168, 152))
-        screen.blit(st, (panel.left + 18, panel.top + 70))
-        if self.reward_fn is not None:
-            _rw = self.font_small.render("reward: %d coin" % int(self.reward_fn()),
-                                         True, (232, 200, 118))
-            screen.blit(_rw, (panel.right - _rw.get_width() - 190, panel.top + 10))
-
-        for btn, label, key in ((pay, "Pay Crown", "pay"), (market, "Market", "market")):
-            hovered = self.hover == key
-            pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
-                             btn, border_radius=8)
-            pygame.draw.rect(screen, ACCENT if hovered else BORDER, btn, width=2,
-                             border_radius=8)
-            t = self.font_btn.render(label, True, TEXT)
-            screen.blit(t, (btn.centerx - t.get_width() // 2,
-                            btn.centery - t.get_height() // 2))
 
 
 class HorsePanel:

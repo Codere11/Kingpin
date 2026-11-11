@@ -153,7 +153,7 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
     items.sort(key=lambda item: item[0])
     for _y, draw in items:
         draw()
-    # THE CROWN'S SHIP, drawn LAST so nothing on the ground ever covers it.
+    # THE SHIP, drawn LAST so nothing on the ground ever covers it.
     try:
         import ship as _ship
         import world as _world
