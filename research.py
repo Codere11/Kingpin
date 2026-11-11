@@ -10,6 +10,9 @@ CARDS = [
     {"id": "animals", "name": "Animals", "cost": 10, "icon": "hide",
      "desc": "Unlocks the Fur market, and the ability to ride horses.",
      "points": 100},
+    {"id": "hide_armor", "name": "Hide Armor", "cost": 0, "icon": "hide_armor",
+     "desc": "Stitched hide you can wear. Doubles your health.",
+     "points": 100, "requires": "animals"},
 ]
 
 
@@ -19,7 +22,7 @@ def init(g) -> None:
     g.research_points = 0.0       # points earned toward the active card
 
 
-def card(g, card_id: str):
+def get_card(g, card_id: str):
     for c in CARDS:
         if c["id"] == card_id:
             return c
@@ -27,8 +30,11 @@ def card(g, card_id: str):
 
 
 def state(g, card_id: str) -> str:
-    """'locked', 'researching' or 'done' for a card."""
+    """'shadow' (prerequisite not done), 'locked', 'researching' or 'done'."""
     v = g.research_cards.get(card_id)
+    c = get_card(g, card_id)
+    if c is not None and c.get("requires") and state(g, c["requires"]) != "done":
+        return "shadow"
     if v is None:
         return "locked"
     if v == "done":
@@ -37,7 +43,11 @@ def state(g, card_id: str) -> str:
 
 
 def start(g, card) -> bool:
-    """Pay for the card and begin researching it. False if he cannot afford it."""
+    """Pay for the card and begin researching it. False if he cannot afford it
+    or its prerequisite is not done."""
+    c = get_card(g, card["id"])
+    if c is not None and c.get("requires") and state(g, c["requires"]) != "done":
+        return False
     if g.inventory.count_of("coin") < card["cost"]:
         return False
     g.inventory.consume("coin", card["cost"])
@@ -51,7 +61,7 @@ def add_points(g, n: float) -> None:
     """A researcher's work lands here. When the active card is full, it finishes."""
     if g.research_active is None:
         return
-    c = card(g, g.research_active)
+    c = get_card(g, g.research_active)
     if c is None:
         return
     g.research_points += n

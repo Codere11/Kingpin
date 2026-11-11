@@ -115,6 +115,8 @@ REGISTRY: dict[str, ItemDef] = {
                            stackable=True, max_stack=20),
     "hide": ItemDef("hide", "Hide", "A thick bison hide. Traders pay well for these.",
                     stackable=True, max_stack=50),
+    "hide_armor": ItemDef("hide_armor", "Hide Armor",
+                          "Worn armor of stitched hide. Doubles your health."),
     "cotton": ItemDef("cotton", "Cotton", "Fluffy white fibre. Spins into cloth.",
                       stackable=True, max_stack=100),
     "cotton_seed": ItemDef("cotton_seed", "Cotton Seeds",
@@ -632,6 +634,28 @@ def _draw_hide(s: int) -> pygame.Surface:
     return surf
 
 
+def _draw_hide_armor(s: int) -> pygame.Surface:
+    """A stitched hide vest: a leather chest piece with shoulder straps."""
+    surf = _canvas(s)
+    hide, hide_d, hide_l = (120, 82, 46), (52, 36, 24), (150, 110, 66)
+    # the torso: a rounded chest piece
+    _poly(surf, hide_d, [(0.28, 0.22), (0.72, 0.22), (0.82, 0.44),
+                         (0.74, 0.78), (0.50, 0.88), (0.26, 0.78), (0.18, 0.44)], s)
+    _poly(surf, hide, [(0.32, 0.28), (0.68, 0.28), (0.76, 0.46),
+                       (0.70, 0.72), (0.50, 0.80), (0.30, 0.72), (0.24, 0.46)], s)
+    # a central seam / lacing
+    pygame.draw.line(surf, hide_d, _pt((0.50, 0.30), s), _pt((0.50, 0.78), s), 2)
+    for yy in (0.34, 0.42, 0.50, 0.58, 0.66, 0.74):
+        pygame.draw.line(surf, hide_d, _pt((0.46, yy), s), _pt((0.54, yy), s), 1)
+    # shoulder straps
+    for dx in (0.20, 0.80):
+        pygame.draw.rect(surf, hide_d, (dx * s - 0.05 * s, 0.18 * s, 0.10 * s, 0.14 * s),
+                         border_radius=2)
+        pygame.draw.rect(surf, hide_l, (dx * s - 0.05 * s, 0.18 * s, 0.10 * s, 0.06 * s),
+                         border_radius=2)
+    return surf
+
+
 def _draw_cotton(s: int) -> pygame.Surface:
     """A fluffy white cotton boll."""
     surf = _canvas(s)
@@ -739,6 +763,7 @@ _DRAWERS = {
     "raw_meat": _draw_raw_meat,
     "cooked_meat": _draw_cooked_meat,
     "hide": _draw_hide,
+    "hide_armor": _draw_hide_armor,
     "cotton": _draw_cotton,
     "cotton_seed": _draw_cotton_seed,
     "bed": _draw_bed,

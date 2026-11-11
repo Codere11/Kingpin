@@ -20,10 +20,29 @@ CRAFTS = [
     # A BOW AND ITS ARROWS: ten arrows out of one piece of wood.
     {"id": "bow", "name": "Bow", "cost": {"wood": 30}},
     {"id": "arrow", "name": "Arrows", "cost": {"wood": 1}, "yield": 10},
+    # HIDE ARMOR: only once it is researched.
+    {"id": "hide_armor", "name": "Hide Armor", "cost": {"hide": 30},
+     "requires": "hide_armor"},
 ]
 
 _COST = {c["id"]: c["cost"] for c in CRAFTS}
 _YIELD = {c["id"]: c.get("yield", 1) for c in CRAFTS}
+
+
+def available_crafts(g=None) -> list:
+    """The craft list, hiding anything whose research is not done yet."""
+    out = []
+    for c in CRAFTS:
+        req = c.get("requires")
+        if req:
+            try:
+                import research
+                if g is None or research.state(g, req) != "done":
+                    continue
+            except Exception:
+                continue
+        out.append(c)
+    return out
 
 
 def craft_cost(item_id: str) -> dict:
@@ -37,8 +56,9 @@ def craft_yield(item_id: str) -> int:
 class WorkshopMenu:
     COLS = 2                       # a compact grid, so it always fits the view
 
-    def __init__(self, inventory) -> None:
+    def __init__(self, inventory, g=None) -> None:
         self.inv = inventory
+        self.g = g
         self.hover = -1
         self.free = False
         self.font_title = pygame.font.SysFont("dejavusans", 18, bold=True)
@@ -46,7 +66,8 @@ class WorkshopMenu:
         self.font_small = pygame.font.SysFont("dejavusans", 11, bold=True)
 
     def _layout(self, sw: int, sh: int):
-        n = len(CRAFTS)
+        crafts = available_crafts(self.g)
+        n = len(crafts)
         cols = self.COLS
         rows = max(1, (n + cols - 1) // cols)
         pad = 10
@@ -69,7 +90,7 @@ class WorkshopMenu:
     def affordable(self, index: int) -> bool:
         if self.free:
             return True
-        return all(self.inv.count_of(k) >= v for k, v in CRAFTS[index]["cost"].items())
+        return all(self.inv.count_of(k) >= v for k, v in available_crafts(self.g)[index]["cost"].items())
 
     def handle_event(self, event):
         surface = pygame.display.get_surface()
@@ -82,9 +103,10 @@ class WorkshopMenu:
                 if rect.collidepoint(event.pos):
                     self.hover = i
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            crafts = available_crafts(self.g)
             for i, rect in enumerate(cells):
                 if rect.collidepoint(event.pos) and self.affordable(i):
-                    return CRAFTS[i]
+                    return crafts[i]
         return None
 
     def draw(self, screen: pygame.Surface) -> None:
@@ -103,7 +125,7 @@ class WorkshopMenu:
         title = self.font_title.render("WORKBENCH", True, (222, 214, 196))
         screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 6))
 
-        for i, (craft, rect) in enumerate(zip(CRAFTS, cells)):
+        for i, (craft, rect) in enumerate(zip(available_crafts(self.g), cells)):
             ok = self.affordable(i)
             hovered = (i == self.hover) and ok
             pygame.draw.rect(screen, (48, 46, 40) if hovered else (34, 34, 40),

@@ -579,6 +579,7 @@ def main() -> None:
     g.player.hub_chest = None
     g.hotbar = Hotbar(g.inventory, visible=8)
     g.panel = InventoryPanel(g.inventory)
+    g.panel.player = g.player
     g.board_panel = board.BoardPanel()
     # TEST MODE'S INSPECTOR AND LOCK-ON. See observer.py -- 'I' lists every
     # living person, filterable by trade, town and nation, and Enter locks the
@@ -589,7 +590,7 @@ def main() -> None:
     g.vignette = DamageVignette()
     g.overlay = GameOver()
     g.build_menu = BuildMenu(g.inventory)
-    g.workshop_menu = WorkshopMenu(g.inventory)
+    g.workshop_menu = WorkshopMenu(g.inventory, g)
     g.confirm = ConfirmMenu()
     g.compass_state = compass.Compass()
     g.compass_menu = compass.CompassMenu()

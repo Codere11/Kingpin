@@ -108,6 +108,7 @@ class Player:
         # and the frailest body that threw one. One standard, applied.
         self.max_health = stats.PLAYER_MAX_HEALTH
         self.health = 100
+        self.armor = None             # equipped armor item id, or None
         self.heal_rate = 1.5           # hp/s while well fed (hunger = satiety)
         self.radius = 12
         self.hit_flash = 0.0
@@ -201,6 +202,20 @@ class Player:
         except Exception:
             pass
 
+    def equip_armor(self, item_id: str) -> None:
+        """Put on armor; hide armor doubles the body."""
+        self.armor = item_id
+        self.max_health = stats.body_for(self) * (2 if item_id == "hide_armor" else 1)
+        self.health = self.max_health
+
+    def unequip_armor(self) -> str | None:
+        """Take the armor off; returns the item id to give back."""
+        old = self.armor
+        self.armor = None
+        self.max_health = stats.body_for(self)
+        self.health = min(self.health, self.max_health)
+        return old
+
     def take_damage(self, amount: int) -> None:
         # A TRANQUILISED MAN IS NOT SHOT AGAIN. Once the dart is in him he is
         # being carried off; a second round does not undo that -- and it must
@@ -238,6 +253,10 @@ class Player:
             self.gun_cd = max(0.0, self.gun_cd - dt)
         # HIS BODY GROWS WITH HIS SKILL, the same rule as every other man.
         stats.apply_body(self)
+        # HIDE ARMOR DOUBLES THE BODY, on top of the skill.
+        if getattr(self, "armor", None) == "hide_armor":
+            self.max_health = stats.body_for(self) * 2
+            self.health = min(self.health, self.max_health)
         if self.reloading > 0.0:
             self.reloading = max(0.0, self.reloading - dt)
             if self.reloading == 0.0:

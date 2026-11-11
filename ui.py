@@ -195,6 +195,7 @@ class InventoryPanel:
 
     def __init__(self, inventory: Inventory, slot: int = 54, pad: int = 8) -> None:
         self.inv = inventory
+        self.player = None              # set by the frame, for the armor slot
         self.slot = slot
         self.pad = pad
         self.held: ItemStack | None = None
@@ -214,7 +215,7 @@ class InventoryPanel:
         grid_w = COLS * slot + (COLS + 1) * pad
         grid_h = rows * slot + (rows + 1) * pad
         panel_w = grid_w
-        panel_h = grid_h + 34 + 30
+        panel_h = grid_h + 34 + 30 + slot + 16     # room for the armor slot
         x0 = (sw - panel_w) // 2
         y0 = (sh - panel_h) // 2
         rects = []
@@ -238,12 +239,46 @@ class InventoryPanel:
                 return i
         return None
 
+    def _armor_rect(self, sw: int, sh: int):
+        """The single armor slot, centred below the grid."""
+        panel, rects = self._layout(sw, sh)
+        if rects:
+            ay = rects[-1].bottom + self.pad
+        else:
+            ay = panel.top + 34 + self.pad
+        return pygame.Rect(panel.centerx - self.slot // 2, ay, self.slot, self.slot)
+
+    def _armor_click(self, event) -> bool:
+        """Equip hide armor by clicking it into the slot; click again to take
+        it off. Returns True if the click was the armor slot."""
+        surface = pygame.display.get_surface()
+        if surface is None or self.player is None:
+            return False
+        ar = self._armor_rect(*surface.get_size())
+        if not ar.collidepoint(event.pos):
+            return False
+        if event.button == 1:
+            if self.held is not None and self.held.defn.id == "hide_armor":
+                self.player.equip_armor("hide_armor")
+                self.held = None
+                self.held_from = None
+                return True
+            if self.held is None and getattr(self.player, "armor", None):
+                old = self.player.unequip_armor()
+                if old:
+                    self.held = ItemStack(items.get(old), 1, None)
+                    self.held_from = None
+                return True
+        return False
+
     # -- interaction --------------------------------------------------------
     def handle_event(self, event) -> None:
         if event.type == pygame.MOUSEMOTION:
             index = self.slot_at(event.pos)
             self.hover = index if index is not None else -1
         elif event.type == pygame.MOUSEBUTTONDOWN:
+            if self._armor_click(event):
+                return
             index = self.slot_at(event.pos)
             if index is None:
                 return
@@ -313,6 +348,19 @@ class InventoryPanel:
 
         title = self.font_title.render("INVENTORY", True, TEXT)
         screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 7))
+
+        # THE ARMOR SLOT, one slot below the grid.
+        if self.player is not None:
+            ar = self._armor_rect(sw, sh)
+            pygame.draw.rect(screen, SLOT, ar, border_radius=8)
+            pygame.draw.rect(screen, BORDER, ar, width=2, border_radius=8)
+            armor = getattr(self.player, "armor", None)
+            if armor:
+                ic = items.icon(armor, self.slot - 14)
+                screen.blit(ic, (ar.centerx - ic.get_width() // 2,
+                                 ar.centery - ic.get_height() // 2))
+            lab = self.font_tiny.render("ARMOR", True, DIM)
+            screen.blit(lab, (ar.right + 8, ar.centery - lab.get_height() // 2))
 
         for i, rect in enumerate(rects):
             stack = self.inv.slots[i]
@@ -1394,6 +1442,8 @@ class ResearchPanel:
                 bg = (30, 52, 96)                    # dark blue selection
             elif st == "done":
                 bg = (24, 62, 42)
+            elif st == "shadow":
+                bg = (26, 26, 30)                    # greyed until unlocked
             else:
                 bg = (34, 34, 40)
             pygame.draw.rect(screen, bg, r, border_radius=10)
@@ -1406,6 +1456,11 @@ class ResearchPanel:
             screen.blit(cost, (r.left + 64, r.top + 34))
             if st == "done":
                 st_txt = self.font_tiny.render("Researched", True, (150, 224, 150))
+                screen.blit(st_txt, (r.right - st_txt.get_width() - 10, r.top + 12))
+            elif st == "shadow":
+                req = card.get("requires")
+                req_name = next((c["name"] for c in self._cards() if c["id"] == req), "?")
+                st_txt = self.font_tiny.render("Requires %s" % req_name, True, (120, 120, 128))
                 screen.blit(st_txt, (r.right - st_txt.get_width() - 10, r.top + 12))
             elif st == "researching":
                 pts = int(getattr(self.g, "research_points", 0.0)) \
