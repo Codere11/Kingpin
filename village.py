@@ -3263,12 +3263,24 @@ class NPC:
         # drawn the same, and the only thing that varies is the colour of his
         # coat. The wear is still recorded on the man (biomes.npc_wear still
         # sets it) in case it is wanted again; it is simply not drawn.
-        body = (242, 232, 232) if flash else self.clothing
-        # THE OLD MAN WEARS A PLAIN TUNIC, and his hair is grey under the face.
-        if getattr(self, "is_stalin", False):
-            body = (74, 78, 76) if not flash else (242, 232, 232)
-        pygame.draw.circle(screen, body, (int(sx), int(sy)), 10)
-        pygame.draw.circle(screen, (44, 40, 36), (int(sx), int(sy)), 10, 2)
+        if getattr(self, "hide_armor", False):
+            # HIDE ARMOR: a leather-brown body with a chest band and shoulder
+            # pads, over the man underneath.
+            pygame.draw.circle(screen, (242, 232, 232) if flash else (120, 82, 46),
+                               (int(sx), int(sy)), 10)
+            pygame.draw.circle(screen, (52, 36, 24), (int(sx), int(sy)), 10, 2)
+            pygame.draw.rect(screen, (88, 60, 34), (int(sx) - 8, int(sy) - 1, 16, 4),
+                             border_radius=2)
+            for _px in (int(sx) - 8, int(sx) + 6):
+                pygame.draw.circle(screen, (96, 66, 38), (_px, int(sy) - 5), 4)
+                pygame.draw.circle(screen, (52, 36, 24), (_px, int(sy) - 5), 4, 1)
+        else:
+            body = (242, 232, 232) if flash else self.clothing
+            # THE OLD MAN WEARS A PLAIN TUNIC, and his hair is grey under the face.
+            if getattr(self, "is_stalin", False):
+                body = (74, 78, 76) if not flash else (242, 232, 232)
+            pygame.draw.circle(screen, body, (int(sx), int(sy)), 10)
+            pygame.draw.circle(screen, (44, 40, 36), (int(sx), int(sy)), 10, 2)
         head_r = 8
         face.hair(screen, hx, hy, head_r)          # long hair behind the head
         pygame.draw.circle(screen, (216, 172, 132), (int(hx), int(hy)), 8)
@@ -3295,8 +3307,8 @@ class NPC:
         if getattr(self, "is_stalin", False):
             # THE OLD MAN keeps the moustache; his cap is gone with the republic.
             face.moustache(screen, hx, hy, head_r)
-        if is_military(self):
-            # WAR PAINT ACROSS THE EYES, for the soldiers alone.
+        if is_military(self) or getattr(self, "hide_armor", False):
+            # WAR PAINT ACROSS THE EYES, for the soldiers and the armoured.
             face.war_paint(screen, hx, hy, head_r, fx, fy)
         if getattr(self, "asleep", False) or getattr(self, "sleep_t", 0.0) > 0.0:
             try:

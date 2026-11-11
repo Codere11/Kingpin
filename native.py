@@ -284,6 +284,8 @@ def build(g, cx: float, cy: float, seed: int):
         n.stamina = n.max_stamina
         n.skills.axe = 0.5
         n.skills.shooting = 0.5
+        if int(getattr(g, "war_alarms", 0)) >= 3:
+            _max_out(n)
         n.home = (n.x, n.y)
         n.speed = rng.uniform(60.0, 90.0)
         n._orbit = ang
@@ -404,14 +406,37 @@ def _warrior_is_bow(g, i: int) -> bool:
     return alarms >= 1 and i == 1
 
 
+def _max_out(w) -> None:
+    """Third alarm: an axe warrior at the top of his craft, in hide armor
+    that doubles his health."""
+    if getattr(w, "hide_armor", False):
+        return
+    w.weapon = "axe"
+    w.skills.axe = 1.0
+    w.skills.shooting = 1.0
+    w.stamina = float(getattr(w, "max_stamina", 30.0))
+    w.hide_armor = True
+    try:
+        import stats as _stats
+        w.max_health = int(round(_stats.body_for(w) * 2.0))
+    except Exception:
+        w.max_health = int(round(getattr(w, "max_health", 115) * 2.0))
+    w.health = w.max_health
+
+
 def _role_warriors(s, g) -> None:
-    """Arm a settlement's warriors for the current alarm count: the first
-    warrior keeps the axe after one alarm; two alarms give both of them bows."""
+    """Arm a settlement's warriors for the current alarm count: one alarm
+    gives the second man a bow, two give both bows, three maxes both of them
+    out as axe fighters in hide armour."""
+    alarms = int(getattr(g, "war_alarms", 0))
     ws = getattr(s, "warriors", ()) or ()
     for i, w in enumerate(ws):
         if not getattr(w, "alive", True):
             continue
-        w.weapon = "bow" if _warrior_is_bow(g, i) else "axe"
+        if alarms >= 3:
+            _max_out(w)
+        else:
+            w.weapon = "bow" if _warrior_is_bow(g, i) else "axe"
 
 
 def escalate_war(g, exclude=None) -> None:
