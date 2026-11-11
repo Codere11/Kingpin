@@ -1363,19 +1363,11 @@ class ResearchPanel:
 
     def _card_rects(self, sw, sh):
         cards = self._cards()
-        n = len(cards)
-        cols = max(1, min(4, n))
-        rows = (n + cols - 1) // cols
-        cw, ch, gap = 200, 150, 16
-        grid_w = cols * cw + (cols - 1) * gap
-        grid_h = rows * ch + (rows - 1) * gap
-        x0 = (sw - grid_w) // 2
-        y0 = (sh - grid_h) // 2 + 10
-        rects = []
-        for i in range(n):
-            r, c = divmod(i, cols)
-            rects.append(pygame.Rect(x0 + c * (cw + gap), y0 + r * (ch + gap), cw, ch))
-        return rects
+        cw, ch, gap = 560, 132, 34
+        x0 = (sw - cw) // 2
+        y0 = 84
+        return [pygame.Rect(x0, y0 + i * (ch + gap), cw, ch)
+                for i in range(len(cards))]
 
     def _button(self, sw, sh):
         return pygame.Rect(sw // 2 - 100, sh - 92, 200, 50)
@@ -1439,6 +1431,13 @@ class ResearchPanel:
         t = self.font.render("RESEARCH", True, (238, 224, 190))
         screen.blit(t, (sw // 2 - t.get_width() // 2, 28))
         rects = self._card_rects(sw, sh)
+        # A LINE DOWN THE TREE: to unlock a card, research the one above it.
+        for i in range(len(rects) - 1):
+            x = rects[i].centerx
+            pygame.draw.line(screen, (96, 96, 108), (x, rects[i].bottom),
+                             (x, rects[i + 1].top), 2)
+            pygame.draw.circle(screen, (96, 96, 108), (x, rects[i + 1].top), 3)
+        coin_icon = items.icon("coin", 16)
         for i, card in enumerate(self._cards()):
             r = rects[i]
             st = research.state(self.g, card["id"])
@@ -1453,33 +1452,42 @@ class ResearchPanel:
                 bg = (34, 34, 40)
             pygame.draw.rect(screen, bg, r, border_radius=10)
             pygame.draw.rect(screen, ACCENT if sel else BORDER, r, width=2, border_radius=10)
-            ic = items.icon(card["icon"], 44)
-            screen.blit(ic, (r.left + 12, r.top + 12))
+            ic = items.icon(card["icon"], 46)
+            screen.blit(ic, (r.left + 16, r.centery - 23))
             nm = self.font_small.render(card["name"], True, (226, 214, 190))
-            screen.blit(nm, (r.left + 64, r.top + 12))
-            cost = self.font_tiny.render("%d c" % card["cost"], True, (232, 200, 118))
-            screen.blit(cost, (r.left + 64, r.top + 34))
+            screen.blit(nm, (r.left + 74, r.top + 14))
+            # PRICE WITH THE COIN
+            if card.get("cost", 0) > 0:
+                screen.blit(coin_icon, (r.left + 74, r.top + 36))
+                ccost = self.font_small.render(str(card["cost"]), True, (232, 200, 118))
+                screen.blit(ccost, (r.left + 74 + 20, r.top + 34))
+            else:
+                ccost = self.font_small.render("-", True, (150, 150, 160))
+                screen.blit(ccost, (r.left + 74, r.top + 34))
+            pts = self.font_tiny.render("%d research points" % card.get("points", 0),
+                                        True, (150, 150, 160))
+            screen.blit(pts, (r.left + 74, r.top + 58))
             if st == "done":
                 st_txt = self.font_tiny.render("Researched", True, (150, 224, 150))
-                screen.blit(st_txt, (r.right - st_txt.get_width() - 10, r.top + 12))
             elif st == "shadow":
                 req = card.get("requires")
                 req_name = next((c["name"] for c in self._cards() if c["id"] == req), "?")
                 st_txt = self.font_tiny.render("Requires %s" % req_name, True, (120, 120, 128))
-                screen.blit(st_txt, (r.right - st_txt.get_width() - 10, r.top + 12))
             elif st == "researching":
                 pts = int(getattr(self.g, "research_points", 0.0)) \
                     if getattr(self.g, "research_active", None) == card["id"] else 0
                 st_txt = self.font_tiny.render("Researching... %d/%d" % (pts, card.get("points", 0)),
                                                True, (232, 200, 118))
-                screen.blit(st_txt, (r.right - st_txt.get_width() - 10, r.top + 12))
-            # description wrapped into the lower half of the card
-            lines = self._wrap(card["desc"], self.font_tiny, r.width - 24)
-            ly = r.bottom - len(lines) * 16 - 10
+            else:
+                st_txt = self.font_tiny.render("Locked", True, (150, 146, 134))
+            screen.blit(st_txt, (r.right - st_txt.get_width() - 14, r.top + 16))
+            # description wrapped into the lower part of the card
+            lines = self._wrap(card["desc"], self.font_tiny, r.width - 96)
+            ly = r.bottom - len(lines) * 15 - 12
             for ln in lines:
                 dt = self.font_tiny.render(ln, True, (196, 188, 172))
-                screen.blit(dt, (r.left + 12, ly))
-                ly += 16
+                screen.blit(dt, (r.left + 74, ly))
+                ly += 15
         if self.selected is not None:
             card = self._cards()[self.selected]
             st = research.state(self.g, card["id"])

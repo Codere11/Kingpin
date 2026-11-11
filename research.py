@@ -7,7 +7,7 @@ card, Animals, needs 100 points.
 """
 
 CARDS = [
-    {"id": "animals", "name": "Animals", "cost": 10, "icon": "hide",
+    {"id": "animals", "name": "Animals", "cost": 100, "icon": "hide",
      "desc": "Unlocks the Fur market, and the ability to ride horses.",
      "points": 100},
     {"id": "hide_armor", "name": "Hide Armor", "cost": 0, "icon": "hide_armor",
