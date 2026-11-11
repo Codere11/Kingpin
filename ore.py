@@ -114,6 +114,14 @@ class OreField:
         rng = random.Random(code)
         x = cx * CELL + CELL / 2.0 + rng.uniform(-JIT, JIT)
         y = cy * CELL + CELL / 2.0 + rng.uniform(-JIT, JIT)
+        # IRON LIVES IN THE SNOW ALONE: the plains and the desert have none.
+        try:
+            import biomes as _bio
+            if _bio.temperature(x, y, self.seed) >= 0.32:
+                self._presence[key] = None
+                return None
+        except Exception:
+            pass
         field = float(fbm(np.float32(x * FIELD_SCALE), np.float32(y * FIELD_SCALE),
                           self.seed + 3, octaves=3))
         if field < FIELD_CUT:

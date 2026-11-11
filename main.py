@@ -428,11 +428,26 @@ def main() -> None:
         print("SETTLEMENT SPAWN  %.0f,%.0f  in %s"
               % (g._hx, g._hy, getattr(g._home, "name", "?")))
     # ---- THE COLONIAL COAST ----------------------------------------------
-    # He wakes on the beach: the ocean to his right, the ship just
-    # offshore, and the land stretching away west. Overrides the old spawn.
+    # He wakes on the beach: the ocean to his right, the ship just offshore,
+    # and the land stretching away west. The first biome is never snow, so
+    # the coast is walked until the ground is warm enough.
     import world as _world
-    g._hx = _world.coast_x(0.0, g.world.seed) - 44.0
-    g._hy = 0.0
+    import biomes as _bio
+    _sx = _world.coast_x(0.0, g.world.seed) - 44.0
+    _sy = 0.0
+    for _i in range(1, 400):
+        _found = False
+        for _sgn in (-1, 1):
+            _y = _sgn * _i * 3000.0
+            _x = _world.coast_x(_y, g.world.seed) - 44.0
+            if _bio.temperature(_x, _y, g.world.seed) >= 0.40:
+                _sx, _sy = _x, _y
+                _found = True
+                break
+        if _found:
+            break
+    g._spawn = (_sx, _sy)
+    g._hx, g._hy = _sx, _sy
     g._home = None
     g._start = None
     # ---- NO TEST SPRITES. The only people are the native settlements. -----
@@ -1229,9 +1244,10 @@ def main() -> None:
         return min(boxes, key=lambda b: (b.x - g.player.x) ** 2 + (b.y - g.player.y) ** 2)
 
     def ship_pos():
-        """The ship, anchored off the coast at y=0."""
+        """The ship, anchored off the coast at the player's spawn."""
         import world as _world
-        return (_world.coast_x(0.0, g.world.seed) + 56.0, 0.0)
+        _sy = getattr(g, "_spawn", (0.0, 0.0))[1]
+        return (_world.coast_x(_sy, g.world.seed) + 56.0, _sy)
 
     def open_horse(horse) -> None:
         g.horse_sel = horse
@@ -1436,8 +1452,8 @@ def main() -> None:
     # the load, because the save's old position is the last word otherwise and
     # drags him back inland, away from the ship and the ocean.
     import world as _world
-    g.player.x = _world.coast_x(0.0, g.world.seed) - 44.0
-    g.player.y = 0.0
+    g.player.x = g._spawn[0]
+    g.player.y = g._spawn[1]
     g.cam_x = g.player.x - WIDTH / (2.0 * ZOOM)
     g.cam_y = g.player.y - HEIGHT / (2.0 * ZOOM)
     # Rebuild the ground under him NOW and force the static layer to recompose,
@@ -1477,7 +1493,7 @@ def main() -> None:
         import native as _native
         import world as _w
         _nseed = (int(g.world.seed) ^ 0x7E7E) & 0xFFFFFFFF
-        _ns_x = _w.coast_x(0.0, g.world.seed) - 300 * 32.0
+        _ns_x = _w.coast_x(g.player.y, g.world.seed) - 300 * 32.0
         _home = _native.build(g, _ns_x, g.player.y, _nseed)
         _home.cell = None
         g.native_settlements["home"] = _home
