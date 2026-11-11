@@ -46,6 +46,8 @@ REGISTRY: dict[str, ItemDef] = {
                        stackable=True, max_stack=100, quality=True),
     "sauce": ItemDef("sauce", "Spice Sauce", "A bottle of New World spice sauce.",
                      stackable=True, max_stack=100, quality=True),
+    "reinforced_armor": ItemDef("reinforced_armor", "Reinforced Armor",
+                                 "Iron plates over textiles. Heavy, and very strong."),
     "shovel": ItemDef("shovel", "Shovel", "For digging. Gardens, graves, whatever needs doing."),
     "watering_can": ItemDef("watering_can", "Watering Can", "Keeps the crop alive. Or puts out a fire."),
     "seed_bag": ItemDef("seed_bag", "Tobacco Seeds",
@@ -333,6 +335,29 @@ def _draw_sauce(s: int) -> pygame.Surface:
     liquid = [(0.39, 0.52), (0.61, 0.52), (0.64, 0.75), (0.36, 0.75)]
     _poly(surf, sauce_d, liquid, s)
     _poly(surf, sauce, [(x + 0.008, y + 0.01) for x, y in liquid], s)
+    return surf
+
+
+def _draw_reinforced_armor(s: int) -> pygame.Surface:
+    """A textile vest with iron plates bolted across it."""
+    surf = _canvas(s)
+    cloth, cloth_d = (200, 190, 150), (120, 108, 82)
+    iron, iron_d = (176, 178, 186), (86, 88, 96)
+    body = [(0.28, 0.22), (0.72, 0.22), (0.82, 0.44), (0.74, 0.78),
+            (0.50, 0.88), (0.26, 0.78), (0.18, 0.44)]
+    _poly(surf, cloth_d, [(x + 0.01, y + 0.02) for x, y in body], s)
+    _poly(surf, cloth, body, s)
+    _outline(surf, cloth_d, body, s)
+    # iron plates bolted across the chest
+    for yy in (0.34, 0.46, 0.58):
+        pygame.draw.rect(surf, iron_d, (0.24 * s, yy * s, 0.52 * s, 0.08 * s),
+                         border_radius=2)
+        pygame.draw.rect(surf, iron, (0.26 * s, (yy + 0.015) * s, 0.48 * s, 0.05 * s),
+                         border_radius=1)
+    # bolts
+    for bx, by in ((0.28, 0.38), (0.72, 0.38), (0.28, 0.50), (0.72, 0.50),
+                   (0.28, 0.62), (0.72, 0.62)):
+        pygame.draw.circle(surf, iron_d, (int(bx * s), int(by * s)), int(0.02 * s))
     return surf
 
 
@@ -852,6 +877,7 @@ _DRAWERS = {
     "musket": _draw_musket,
     "textile": _draw_textile,
     "sauce": _draw_sauce,
+    "reinforced_armor": _draw_reinforced_armor,
     "berries": _draw_berries,
     "cactus_fruit": _draw_cactus_fruit,
     "red_mushroom": _draw_red_mushroom,

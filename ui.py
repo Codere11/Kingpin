@@ -1385,6 +1385,7 @@ class ResearchPanel:
             (-480, y0 + 4 * row),       # two-shot
             (220, y0 + 4 * row),        # textiles (industry's left child)
             (740, y0 + 4 * row),        # spice sauces (industry's right child)
+            (220, y0 + 5 * row),        # reinforced armor (under textiles)
         ]
         rects = []
         for i in range(min(len(cards), len(centers))):
@@ -1471,6 +1472,11 @@ class ResearchPanel:
                              (X(t7.centerx), Y(t7.top)), lw)
             for rr in (t6, t7):
                 pygame.draw.circle(surf, (96, 96, 108), (X(rr.centerx), Y(rr.top)), int(3 * S))
+        # textiles -> reinforced armor
+        if len(rects) > 8:
+            pygame.draw.line(surf, (96, 96, 108), (X(rects[6].centerx), Y(rects[6].bottom)),
+                             (X(rects[6].centerx), Y(rects[8].top)), lw)
+            pygame.draw.circle(surf, (96, 96, 108), (X(rects[6].centerx), Y(rects[8].top)), int(3 * S))
 
         coin_icon = items.icon("coin", int(16 * S))
         for i, card in enumerate(self._cards()):

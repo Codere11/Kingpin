@@ -16,10 +16,10 @@ CARDS = [
     {"id": "ironworking", "name": "Ironworking", "cost": 500, "icon": "iron_bar",
      "desc": "Smelt iron ore into iron bars at the forge.",
      "points": 300, "requires": "hide_armor"},
-    {"id": "gunsmithing", "name": "Gunsmithing", "cost": 0, "icon": "musket",
+    {"id": "gunsmithing", "name": "Gunsmithing", "cost": 500, "icon": "musket",
      "desc": "Unlocks ammo and Musket.",
      "points": 0, "requires": "ironworking"},
-    {"id": "industry", "name": "Industry", "cost": 0, "icon": "gear",
+    {"id": "industry", "name": "Industry", "cost": 500, "icon": "gear",
      "desc": "Unlocks gears, with which you can later build machines.",
      "points": 0, "requires": "ironworking"},
     {"id": "two_shot", "name": "Two-Shot", "cost": 500, "icon": "musket",
@@ -31,6 +31,9 @@ CARDS = [
     {"id": "spice_sauce", "name": "Spice sauces", "cost": 300, "icon": "sauce",
      "desc": "Allows production and sale of New World spice sauces.",
      "points": 300, "requires": "industry"},
+    {"id": "reinforced_armor", "name": "Reinforced armor", "cost": 800, "icon": "reinforced_armor",
+     "desc": "Reinforced armor made with iron plates and textiles.",
+     "points": 500, "requires": "textiles"},
 ]
 
 
