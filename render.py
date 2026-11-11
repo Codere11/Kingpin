@@ -138,12 +138,16 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
                           n.draw(target, cx, cy, s)))
     # THE OBSERVATION CAMP: a few natives and a soldier standing by the spawn.
     for _n in getattr(g, "_observe_npcs", ()):
+        if not getattr(_n, "alive", True):
+            continue                 # THE DEAD ARE A CORPSE, not a standing man
         if view.collidepoint(_n.x, _n.y):
             _near = ((_n.x - g.player.x) ** 2
                      + (_n.y - g.player.y) ** 2) < 260.0 ** 2
             items.append((_n.y, lambda n=_n, s=_near:
                           n.draw(target, cx, cy, s)))
     for _s in getattr(g, "_observe_soldiers", ()):
+        if not getattr(_s, "alive", True):
+            continue
         if view.collidepoint(_s.x, _s.y):
             items.append((_s.y, lambda s=_s: s.draw(target, cx, cy)))
     items.sort(key=lambda item: item[0])
