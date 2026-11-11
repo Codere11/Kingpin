@@ -1358,10 +1358,13 @@ class ResearchPanel:
         self.cam_y = 0.0
         self.zoom = 1.0
         self._pan = None
+        self.SS = 2.0                 # supersample: render at 2x, then scale down
         self.font = pygame.font.SysFont("dejavusans", 24, bold=True)
         self.font_small = pygame.font.SysFont("dejavusans", 15, bold=True)
         self.font_tiny = pygame.font.SysFont("dejavusans", 12)
         self.font_btn = pygame.font.SysFont("dejavusans", 17, bold=True)
+        self.font_small_ss = pygame.font.SysFont("dejavusans", int(15 * self.SS), bold=True)
+        self.font_tiny_ss = pygame.font.SysFont("dejavusans", int(12 * self.SS))
 
     def _cards(self):
         import research
@@ -1410,57 +1413,58 @@ class ResearchPanel:
 
     def _render_world(self):
         import research
+        S = self.SS
         rects = self._world_rects()
         x0 = min(r.left for r in rects) - 80
         x1 = max(r.right for r in rects) + 80
         y0 = min(r.top for r in rects) - 80
         y1 = max(r.bottom for r in rects) + 80
-        w, h = int(x1 - x0), int(y1 - y0)
+        w, h = int((x1 - x0) * S), int((y1 - y0) * S)
         surf = pygame.Surface((w, h), pygame.SRCALPHA)
 
         def X(wx):
-            return int(round(wx - x0))
+            return int(round((wx - x0) * S))
         def Y(wy):
-            return int(round(wy - y0))
+            return int(round((wy - y0) * S))
 
         # lines: the trunk, then a straight split into the two branches
+        lw = max(1, int(2 * S))
         n_trunk = 3
         for i in range(n_trunk - 1):
             x = rects[i].centerx
             pygame.draw.line(surf, (96, 96, 108), (X(x), Y(rects[i].bottom)),
-                             (X(x), Y(rects[i + 1].top)), 2)
-            pygame.draw.circle(surf, (96, 96, 108), (X(x), Y(rects[i + 1].top)), 3)
+                             (X(x), Y(rects[i + 1].top)), lw)
+            pygame.draw.circle(surf, (96, 96, 108), (X(x), Y(rects[i + 1].top)), int(3 * S))
         if len(rects) > n_trunk:
             trunk = rects[n_trunk - 1]
             left = rects[n_trunk]
             right = rects[n_trunk + 1] if len(rects) > n_trunk + 1 else None
             mid_y = trunk.bottom + (left.top - trunk.bottom) // 2
             pygame.draw.line(surf, (96, 96, 108), (X(trunk.centerx), Y(trunk.bottom)),
-                             (X(trunk.centerx), Y(mid_y)), 2)
+                             (X(trunk.centerx), Y(mid_y)), lw)
             if right is not None:
                 pygame.draw.line(surf, (96, 96, 108), (X(left.centerx), Y(mid_y)),
-                                 (X(right.centerx), Y(mid_y)), 2)
+                                 (X(right.centerx), Y(mid_y)), lw)
                 pygame.draw.line(surf, (96, 96, 108), (X(right.centerx), Y(mid_y)),
-                                 (X(right.centerx), Y(right.top)), 2)
+                                 (X(right.centerx), Y(right.top)), lw)
             pygame.draw.line(surf, (96, 96, 108), (X(left.centerx), Y(mid_y)),
-                             (X(left.centerx), Y(left.top)), 2)
+                             (X(left.centerx), Y(left.top)), lw)
             for rr in (left, right):
                 if rr is not None:
-                    pygame.draw.circle(surf, (96, 96, 108), (X(rr.centerx), Y(rr.top)), 3)
-            # the two branches each lead one step further down
-            if len(rects) > 5:                        # gunsmithing -> two-shot
+                    pygame.draw.circle(surf, (96, 96, 108), (X(rr.centerx), Y(rr.top)), int(3 * S))
+            if len(rects) > 5:
                 pygame.draw.line(surf, (96, 96, 108), (X(left.centerx), Y(left.bottom)),
-                                 (X(left.centerx), Y(rects[5].top)), 2)
-                pygame.draw.circle(surf, (96, 96, 108), (X(left.centerx), Y(rects[5].top)), 3)
-            if len(rects) > 6 and right is not None:  # industry -> textiles
+                                 (X(left.centerx), Y(rects[5].top)), lw)
+                pygame.draw.circle(surf, (96, 96, 108), (X(left.centerx), Y(rects[5].top)), int(3 * S))
+            if len(rects) > 6 and right is not None:
                 pygame.draw.line(surf, (96, 96, 108), (X(right.centerx), Y(right.bottom)),
-                                 (X(right.centerx), Y(rects[6].top)), 2)
-                pygame.draw.circle(surf, (96, 96, 108), (X(right.centerx), Y(rects[6].top)), 3)
+                                 (X(right.centerx), Y(rects[6].top)), lw)
+                pygame.draw.circle(surf, (96, 96, 108), (X(right.centerx), Y(rects[6].top)), int(3 * S))
 
-        coin_icon = items.icon("coin", 16)
+        coin_icon = items.icon("coin", int(16 * S))
         for i, card in enumerate(self._cards()):
             r = rects[i]
-            rr = pygame.Rect(X(r.left), Y(r.top), r.w, r.h)
+            rr = pygame.Rect(X(r.left), Y(r.top), int(r.w * S), int(r.h * S))
             st = research.state(self.g, card["id"])
             sel = (i == self.selected)
             if sel:
@@ -1471,42 +1475,43 @@ class ResearchPanel:
                 bg = (26, 26, 30)
             else:
                 bg = (34, 34, 40)
-            pygame.draw.rect(surf, bg, rr, border_radius=10)
-            pygame.draw.rect(surf, ACCENT if sel else BORDER, rr, width=2, border_radius=10)
-            ic = items.icon(card["icon"], 44)
-            surf.blit(ic, (rr.left + 14, rr.top + 14))
-            nm = self.font_small.render(card["name"], True, (226, 214, 190))
-            surf.blit(nm, (rr.left + 66, rr.top + 12))
-            cx = rr.left + 66
-            cy = rr.top + 40
+            pygame.draw.rect(surf, bg, rr, border_radius=int(10 * S))
+            pygame.draw.rect(surf, ACCENT if sel else BORDER, rr, width=int(2 * S),
+                             border_radius=int(10 * S))
+            ic = items.icon(card["icon"], int(44 * S))
+            surf.blit(ic, (rr.left + int(14 * S), rr.top + int(14 * S)))
+            nm = self.font_small_ss.render(card["name"], True, (226, 214, 190))
+            surf.blit(nm, (rr.left + int(66 * S), rr.top + int(12 * S)))
+            cx = rr.left + int(66 * S)
+            cy = rr.top + int(40 * S)
             if card.get("cost", 0) > 0:
                 surf.blit(coin_icon, (cx, cy))
-                ccost = self.font_small.render(str(card["cost"]), True, (232, 200, 118))
-                surf.blit(ccost, (cx + 20, cy))
-                cx += 20 + ccost.get_width() + 16
-            pts = self.font_tiny.render("%d research points" % card.get("points", 0),
-                                        True, (150, 150, 160))
-            surf.blit(pts, (cx, cy + 4))
+                ccost = self.font_small_ss.render(str(card["cost"]), True, (232, 200, 118))
+                surf.blit(ccost, (cx + int(20 * S), cy))
+                cx += int(20 * S) + ccost.get_width() + int(16 * S)
+            pts = self.font_tiny_ss.render("%d research points" % card.get("points", 0),
+                                           True, (150, 150, 160))
+            surf.blit(pts, (cx, cy + int(4 * S)))
             if st == "done":
-                st_txt = self.font_tiny.render("Researched", True, (150, 224, 150))
+                st_txt = self.font_tiny_ss.render("Researched", True, (150, 224, 150))
             elif st == "shadow":
                 req = card.get("requires")
                 req_name = next((c["name"] for c in self._cards() if c["id"] == req), "?")
-                st_txt = self.font_tiny.render("Requires %s" % req_name, True, (120, 120, 128))
+                st_txt = self.font_tiny_ss.render("Requires %s" % req_name, True, (120, 120, 128))
             elif st == "researching":
                 pts = int(getattr(self.g, "research_points", 0.0)) \
                     if getattr(self.g, "research_active", None) == card["id"] else 0
-                st_txt = self.font_tiny.render("Researching... %d/%d" % (pts, card.get("points", 0)),
-                                               True, (232, 200, 118))
+                st_txt = self.font_tiny_ss.render("Researching... %d/%d" % (pts, card.get("points", 0)),
+                                                  True, (232, 200, 118))
             else:
-                st_txt = self.font_tiny.render("Locked", True, (150, 146, 134))
-            surf.blit(st_txt, (rr.right - st_txt.get_width() - 14, rr.top + 14))
-            lines = self._wrap(card["desc"], self.font_tiny, r.w - 40)
-            ly = rr.bottom - len(lines) * 15 - 10
+                st_txt = self.font_tiny_ss.render("Locked", True, (150, 146, 134))
+            surf.blit(st_txt, (rr.right - st_txt.get_width() - int(14 * S), rr.top + int(14 * S)))
+            lines = self._wrap(card["desc"], self.font_tiny_ss, int((r.w - 40) * S))
+            ly = rr.bottom - len(lines) * int(15 * S) - int(10 * S)
             for ln in lines:
-                dt = self.font_tiny.render(ln, True, (196, 188, 172))
-                surf.blit(dt, (rr.left + 20, ly))
-                ly += 15
+                dt = self.font_tiny_ss.render(ln, True, (196, 188, 172))
+                surf.blit(dt, (rr.left + int(20 * S), ly))
+                ly += int(15 * S)
         return surf, x0, y0
 
     def _button(self, sw, sh):
@@ -1542,6 +1547,21 @@ class ResearchPanel:
             self.cam_x = wx - (mx - sw / 2) / self.zoom
             self.cam_y = wy - (my - sh / 2) / self.zoom
             return None
+        if event.type == pygame.KEYDOWN:
+            # WASD TRAVERSES THE TREE.
+            step = 30.0 / self.zoom
+            if event.key == pygame.K_w:
+                self.cam_y -= step
+                return None
+            if event.key == pygame.K_s:
+                self.cam_y += step
+                return None
+            if event.key == pygame.K_a:
+                self.cam_x -= step
+                return None
+            if event.key == pygame.K_d:
+                self.cam_x += step
+                return None
         if event.type == pygame.MOUSEBUTTONDOWN and event.button in (2, 3):
             self._pan = (event.pos[0], event.pos[1], self.cam_x, self.cam_y)
             return None
@@ -1575,9 +1595,10 @@ class ResearchPanel:
         surf, x0, y0 = self._render_world()
         sx0 = int((x0 - self.cam_x) * self.zoom + sw / 2)
         sy0 = int((y0 - self.cam_y) * self.zoom + sh / 2)
-        if abs(self.zoom - 1.0) > 1e-3:
-            w = max(1, int(surf.get_width() * self.zoom))
-            h = max(1, int(surf.get_height() * self.zoom))
+        scale = self.zoom / self.SS
+        if abs(scale - 1.0) > 1e-3:
+            w = max(1, int(surf.get_width() * scale))
+            h = max(1, int(surf.get_height() * scale))
             surf = pygame.transform.smoothscale(surf, (w, h))
         screen.blit(surf, (sx0, sy0))
         if self.selected is not None:
