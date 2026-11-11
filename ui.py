@@ -1363,21 +1363,21 @@ class ResearchPanel:
 
     def _card_rects(self, sw, sh):
         cards = self._cards()
-        cw, ch, gap = 560, 132, 34
+        cw, ch, gap = 440, 124, 30
         x0 = (sw - cw) // 2
-        y0 = 84
+        y0 = 70
         rects = []
         n_trunk = min(3, len(cards))
         for i in range(n_trunk):
             rects.append(pygame.Rect(x0, y0 + i * (ch + gap), cw, ch))
         if len(cards) > n_trunk:
             by = rects[-1].bottom + gap
-            bw = (cw - 60) // 2
-            left_x = sw // 2 - 30 - bw
-            right_x = sw // 2 + 30
+            split_gap = 40
+            left_x = sw // 2 - split_gap // 2 - cw
+            right_x = sw // 2 + split_gap // 2
             for i in range(len(cards) - n_trunk):
                 bx = left_x if i == 0 else right_x
-                rects.append(pygame.Rect(bx, by, bw, ch))
+                rects.append(pygame.Rect(bx, by, cw, ch))
         return rects
 
     def _button(self, sw, sh):
@@ -1481,21 +1481,21 @@ class ResearchPanel:
                 bg = (34, 34, 40)
             pygame.draw.rect(screen, bg, r, border_radius=10)
             pygame.draw.rect(screen, ACCENT if sel else BORDER, r, width=2, border_radius=10)
-            ic = items.icon(card["icon"], 46)
-            screen.blit(ic, (r.left + 16, r.centery - 23))
+            ic = items.icon(card["icon"], 44)
+            screen.blit(ic, (r.left + 14, r.top + 14))
             nm = self.font_small.render(card["name"], True, (226, 214, 190))
-            screen.blit(nm, (r.left + 74, r.top + 14))
-            # PRICE WITH THE COIN
+            screen.blit(nm, (r.left + 66, r.top + 12))
+            # PRICE WITH THE COIN, and the research points on the same row.
+            cx = r.left + 66
+            cy = r.top + 40
             if card.get("cost", 0) > 0:
-                screen.blit(coin_icon, (r.left + 74, r.top + 36))
+                screen.blit(coin_icon, (cx, cy))
                 ccost = self.font_small.render(str(card["cost"]), True, (232, 200, 118))
-                screen.blit(ccost, (r.left + 74 + 20, r.top + 34))
-            else:
-                ccost = self.font_small.render("-", True, (150, 150, 160))
-                screen.blit(ccost, (r.left + 74, r.top + 34))
+                screen.blit(ccost, (cx + 20, cy))
+                cx += 20 + ccost.get_width() + 16
             pts = self.font_tiny.render("%d research points" % card.get("points", 0),
                                         True, (150, 150, 160))
-            screen.blit(pts, (r.left + 74, r.top + 58))
+            screen.blit(pts, (cx, cy + 4))
             if st == "done":
                 st_txt = self.font_tiny.render("Researched", True, (150, 224, 150))
             elif st == "shadow":
@@ -1509,13 +1509,13 @@ class ResearchPanel:
                                                True, (232, 200, 118))
             else:
                 st_txt = self.font_tiny.render("Locked", True, (150, 146, 134))
-            screen.blit(st_txt, (r.right - st_txt.get_width() - 14, r.top + 16))
-            # description wrapped into the lower part of the card
-            lines = self._wrap(card["desc"], self.font_tiny, r.width - 96)
-            ly = r.bottom - len(lines) * 15 - 12
+            screen.blit(st_txt, (r.right - st_txt.get_width() - 14, r.top + 14))
+            # description wrapped into the bottom band, clear of the rows above
+            lines = self._wrap(card["desc"], self.font_tiny, r.width - 40)
+            ly = r.bottom - len(lines) * 15 - 10
             for ln in lines:
                 dt = self.font_tiny.render(ln, True, (196, 188, 172))
-                screen.blit(dt, (r.left + 74, ly))
+                screen.blit(dt, (r.left + 20, ly))
                 ly += 15
         if self.selected is not None:
             card = self._cards()[self.selected]
