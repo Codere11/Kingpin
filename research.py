@@ -34,6 +34,9 @@ CARDS = [
     {"id": "reinforced_armor", "name": "Reinforced armor", "cost": 800, "icon": "reinforced_armor",
      "desc": "Reinforced armor made with iron plates and textiles.",
      "points": 500, "requires": "textiles"},
+    {"id": "rifle", "name": "Rifle", "cost": 500, "icon": "rifle",
+     "desc": "A proper modern rifle, much shorter reload time.",
+     "points": 300, "requires": "two_shot"},
 ]
 
 
