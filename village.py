@@ -1611,6 +1611,9 @@ class NPC:
         if _nat and getattr(self, "native_role", "") == "artisan":
             self._work_artisan(dt)
             return
+        if _nat and getattr(self, "native_role", "") == "researcher":
+            self._native_idle(dt)      # no research bench yet: he waits for it
+            return
         if _nat and getattr(self, "native_role", "") == "unemployed":
             self._native_idle(dt)
             return
