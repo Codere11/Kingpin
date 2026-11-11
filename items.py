@@ -48,6 +48,7 @@ REGISTRY: dict[str, ItemDef] = {
                      stackable=True, max_stack=100, quality=True),
     "reinforced_armor": ItemDef("reinforced_armor", "Reinforced Armor",
                                  "Iron plates over textiles. Heavy, and very strong."),
+    "army_stars": ItemDef("army_stars", "Army", "The stars of a raised army."),
     "shovel": ItemDef("shovel", "Shovel", "For digging. Gardens, graves, whatever needs doing."),
     "watering_can": ItemDef("watering_can", "Watering Can", "Keeps the crop alive. Or puts out a fire."),
     "seed_bag": ItemDef("seed_bag", "Tobacco Seeds",
@@ -358,6 +359,29 @@ def _draw_reinforced_armor(s: int) -> pygame.Surface:
     for bx, by in ((0.28, 0.38), (0.72, 0.38), (0.28, 0.50), (0.72, 0.50),
                    (0.28, 0.62), (0.72, 0.62)):
         pygame.draw.circle(surf, iron_d, (int(bx * s), int(by * s)), int(0.02 * s))
+    return surf
+
+
+def _draw_army_stars(s: int) -> pygame.Surface:
+    """Three gold army stars."""
+    surf = _canvas(s)
+    gold, gold_d = (232, 190, 84), (150, 110, 32)
+    def _star(cx, cy, r):
+        pts = []
+        for i in range(10):
+            a = math.pi / 2 + i * math.pi / 5
+            rr = r if i % 2 == 0 else r * 0.45
+            pts.append((cx + math.cos(a) * rr, cy - math.sin(a) * rr))
+        pygame.draw.polygon(surf, gold_d, pts)
+        pts2 = []
+        for i in range(10):
+            a = math.pi / 2 + i * math.pi / 5
+            rr = (r * 0.7) if i % 2 == 0 else (r * 0.45 * 0.7)
+            pts2.append((cx + math.cos(a) * rr, cy - math.sin(a) * rr))
+        pygame.draw.polygon(surf, gold, pts2)
+    _star(0.28 * s, 0.52 * s, 0.17 * s)
+    _star(0.50 * s, 0.34 * s, 0.14 * s)
+    _star(0.72 * s, 0.52 * s, 0.17 * s)
     return surf
 
 
@@ -878,6 +902,7 @@ _DRAWERS = {
     "textile": _draw_textile,
     "sauce": _draw_sauce,
     "reinforced_armor": _draw_reinforced_armor,
+    "army_stars": _draw_army_stars,
     "berries": _draw_berries,
     "cactus_fruit": _draw_cactus_fruit,
     "red_mushroom": _draw_red_mushroom,

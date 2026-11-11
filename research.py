@@ -34,9 +34,12 @@ CARDS = [
     {"id": "reinforced_armor", "name": "Reinforced armor", "cost": 800, "icon": "reinforced_armor",
      "desc": "Reinforced armor made with iron plates and textiles.",
      "points": 500, "requires": "textiles"},
-    {"id": "rifle", "name": "Rifle", "cost": 500, "icon": "rifle",
+    {"id": "rifle", "name": "Rifle", "cost": 800, "icon": "rifle",
      "desc": "A proper modern rifle, much shorter reload time.",
-     "points": 300, "requires": "two_shot"},
+     "points": 500, "requires": "two_shot"},
+    {"id": "army", "name": "Army", "cost": 1000, "icon": "army_stars",
+     "desc": "Unlocks the Barracks, which allow you to raise an army to defend your lands and conquer new ones.",
+     "points": 800, "requires": ["rifle", "reinforced_armor"]},
 ]
 
 
@@ -53,11 +56,21 @@ def get_card(g, card_id: str):
     return None
 
 
+def _reqs_done(g, c) -> bool:
+    """All prerequisites of a card are done (a string or a list of them)."""
+    req = c.get("requires") if c is not None else None
+    if not req:
+        return True
+    if isinstance(req, str):
+        req = [req]
+    return all(state(g, r) == "done" for r in req)
+
+
 def state(g, card_id: str) -> str:
     """'shadow' (prerequisite not done), 'locked', 'researching' or 'done'."""
     v = g.research_cards.get(card_id)
     c = get_card(g, card_id)
-    if c is not None and c.get("requires") and state(g, c["requires"]) != "done":
+    if not _reqs_done(g, c):
         return "shadow"
     if v is None:
         return "locked"
@@ -70,7 +83,7 @@ def start(g, card) -> bool:
     """Pay for the card and begin researching it. False if he cannot afford it
     or its prerequisite is not done."""
     c = get_card(g, card["id"])
-    if c is not None and c.get("requires") and state(g, c["requires"]) != "done":
+    if not _reqs_done(g, c):
         return False
     if g.inventory.count_of("coin") < card["cost"]:
         return False

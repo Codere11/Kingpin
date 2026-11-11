@@ -1387,6 +1387,7 @@ class ResearchPanel:
             (740, y0 + 4 * row),        # spice sauces (industry's right child)
             (220, y0 + 5 * row),        # reinforced armor (under textiles)
             (-480, y0 + 5 * row),       # rifle (under two-shot)
+            (-130, y0 + 6 * row),       # army (merges rifle + reinforced armor)
         ]
         rects = []
         for i in range(min(len(cards), len(centers))):
@@ -1483,6 +1484,21 @@ class ResearchPanel:
             pygame.draw.line(surf, (96, 96, 108), (X(rects[5].centerx), Y(rects[5].bottom)),
                              (X(rects[5].centerx), Y(rects[9].top)), lw)
             pygame.draw.circle(surf, (96, 96, 108), (X(rects[5].centerx), Y(rects[9].top)), int(3 * S))
+        # rifle + reinforced armor merge into army
+        if len(rects) > 10:
+            rifle = rects[9]
+            armor = rects[8]
+            army = rects[10]
+            mid_y3 = rifle.bottom + (army.top - rifle.bottom) // 2
+            pygame.draw.line(surf, (96, 96, 108), (X(rifle.centerx), Y(rifle.bottom)),
+                             (X(rifle.centerx), Y(mid_y3)), lw)
+            pygame.draw.line(surf, (96, 96, 108), (X(armor.centerx), Y(armor.bottom)),
+                             (X(armor.centerx), Y(mid_y3)), lw)
+            pygame.draw.line(surf, (96, 96, 108), (X(rifle.centerx), Y(mid_y3)),
+                             (X(armor.centerx), Y(mid_y3)), lw)
+            pygame.draw.line(surf, (96, 96, 108), (X(army.centerx), Y(mid_y3)),
+                             (X(army.centerx), Y(army.top)), lw)
+            pygame.draw.circle(surf, (96, 96, 108), (X(army.centerx), Y(army.top)), int(3 * S))
 
         coin_icon = items.icon("coin", int(16 * S))
         for i, card in enumerate(self._cards()):
@@ -1519,8 +1535,10 @@ class ResearchPanel:
                 st_txt = self.font_tiny_ss.render("Researched", True, (150, 224, 150))
             elif st == "shadow":
                 req = card.get("requires")
-                req_name = next((c["name"] for c in self._cards() if c["id"] == req), "?")
-                st_txt = self.font_tiny_ss.render("Requires %s" % req_name, True, (120, 120, 128))
+                if isinstance(req, str):
+                    req = [req]
+                req_names = [next((c["name"] for c in self._cards() if c["id"] == r), "?") for r in (req or [])]
+                st_txt = self.font_tiny_ss.render("Requires %s" % " + ".join(req_names), True, (120, 120, 128))
             elif st == "researching":
                 pts = int(getattr(self.g, "research_points", 0.0)) \
                     if getattr(self.g, "research_active", None) == card["id"] else 0
