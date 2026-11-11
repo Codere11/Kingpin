@@ -85,7 +85,8 @@ def growable_kinds(t, h):
 def chest_filter_items(t, h):
     """The chest lid's choosable types for a settlement in this biome: Any,
     its own food, its own leaf, its own finished product, and wood. Nothing
-    else -- no seeds, tools, arms or oddments."""
+    else -- no seeds, tools, arms or oddments. Iron ore is added in the snow,
+    where it is mined."""
     import biomes
     food_crop, leaf_crop = biomes.crop_kinds(t, h)
     out = [None]
@@ -93,6 +94,8 @@ def chest_filter_items(t, h):
                  LEAF_PRODUCT.get(leaf_crop), "wood", "horse"):
         if item and item not in out:
             out.append(item)
+    if biomes.surface(t, h) == "snow":
+        out.append("iron")
     return out
 
 # the leaf plant takes its colour from where it grows
