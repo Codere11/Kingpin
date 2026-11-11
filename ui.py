@@ -1548,20 +1548,8 @@ class ResearchPanel:
             self.cam_y = wy - (my - sh / 2) / self.zoom
             return None
         if event.type == pygame.KEYDOWN:
-            # WASD TRAVERSES THE TREE.
-            step = 30.0 / self.zoom
-            if event.key == pygame.K_w:
-                self.cam_y -= step
-                return None
-            if event.key == pygame.K_s:
-                self.cam_y += step
-                return None
-            if event.key == pygame.K_a:
-                self.cam_x -= step
-                return None
-            if event.key == pygame.K_d:
-                self.cam_x += step
-                return None
+            # WASD is handled every frame in draw() (hold to keep moving).
+            pass
         if event.type == pygame.MOUSEBUTTONDOWN and event.button in (2, 3):
             self._pan = (event.pos[0], event.pos[1], self.cam_x, self.cam_y)
             return None
@@ -1589,6 +1577,21 @@ class ResearchPanel:
     def draw(self, screen):
         sw, sh = screen.get_size()
         import research
+        # SLIDING WASD: held keys keep the camera moving, scaled by zoom.
+        import time as _time
+        _now = _time.time()
+        _dt = max(0.0, min(0.1, _now - getattr(self, "_last_t", _now)))
+        self._last_t = _now
+        _step = 420.0 * _dt / self.zoom
+        _keys = pygame.key.get_pressed()
+        if _keys[pygame.K_w]:
+            self.cam_y -= _step
+        if _keys[pygame.K_s]:
+            self.cam_y += _step
+        if _keys[pygame.K_a]:
+            self.cam_x -= _step
+        if _keys[pygame.K_d]:
+            self.cam_x += _step
         screen.fill((16, 16, 20))
         t = self.font.render("RESEARCH", True, (238, 224, 190))
         screen.blit(t, (sw // 2 - t.get_width() // 2, 28))
