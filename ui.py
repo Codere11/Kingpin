@@ -949,6 +949,164 @@ class HorsePanel:
                             rect.centery - t.get_height() // 2))
 
 
+class RoutePanel:
+    """Plan a horse's roundtrip: origin (pre-filled), a destination from the
+    conquered settlements plus the ship, what to load at each end, and a
+    per-leg amount. Start route sends the horse off, forever."""
+
+    def __init__(self, horse, origin, destinations, origin_items, dest_items_fn) -> None:
+        self.horse = horse
+        self.origin = origin
+        self.dests = destinations          # list of camps, or the string "ship"
+        self.dest_index = 0
+        self.origin_items = list(origin_items)
+        self.dest_items_fn = dest_items_fn
+        self.origin_item_index = 0
+        self.dest_item_index = 0
+        self.amount = 300
+        self.hover = None
+        self.font = pygame.font.SysFont("dejavusans", 18, bold=True)
+        self.font_small = pygame.font.SysFont("dejavusans", 15, bold=True)
+        self.font_btn = pygame.font.SysFont("dejavusans", 16, bold=True)
+
+    def _name(self, item_id):
+        if item_id is None:
+            return "Any"
+        d = items.get(item_id)
+        return d.name if d is not None else str(item_id)
+
+    def _dest_label(self, i):
+        d = self.dests[i]
+        if d == "ship":
+            return "The ship"
+        return getattr(d, "name", "settlement") or "settlement"
+
+    def _dest_items(self):
+        if self.dest_index < len(self.dests):
+            return list(self.dest_items_fn(self.dests[self.dest_index]))
+        return []
+
+    def _rects(self, sw, sh):
+        w, h = 540, 400
+        x0, y0 = (sw - w) // 2, (sh - h) // 2
+        panel = pygame.Rect(x0, y0, w, h)
+        cx = x0 + w // 2
+        rows = []
+        # each row: (label, left_arrow, right_arrow, plus, minus)
+        y = y0 + 52
+        for i in range(5):
+            left = pygame.Rect(cx + 120, y, 30, 28)
+            right = pygame.Rect(cx + 196, y, 30, 28)
+            plus = pygame.Rect(cx + 158, y, 30, 28)
+            minus = pygame.Rect(cx + 84, y, 30, 28)
+            rows.append((left, right, plus, minus))
+            y += 46
+        start = pygame.Rect(cx - 90, y0 + h - 62, 180, 42)
+        return panel, rows, start
+
+    def handle_event(self, event):
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return None
+        panel, rows, start = self._rects(*surface.get_size())
+        if event.type == pygame.MOUSEMOTION:
+            self.hover = None
+            for i, (l, r, plus, minus) in enumerate(rows):
+                if l.collidepoint(event.pos):
+                    self.hover = (i, -1)
+                elif r.collidepoint(event.pos):
+                    self.hover = (i, +1)
+                elif plus.collidepoint(event.pos):
+                    self.hover = (i, 2)
+                elif minus.collidepoint(event.pos):
+                    self.hover = (i, -2)
+            if start.collidepoint(event.pos):
+                self.hover = ("start",)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i, (l, r, plus, minus) in enumerate(rows):
+                if l.collidepoint(event.pos):
+                    self._step(i, -1)
+                    return "changed"
+                if r.collidepoint(event.pos):
+                    self._step(i, +1)
+                    return "changed"
+                if plus.collidepoint(event.pos):
+                    self.amount = min(9999, self.amount + 50)
+                    return "changed"
+                if minus.collidepoint(event.pos):
+                    self.amount = max(0, self.amount - 50)
+                    return "changed"
+            if start.collidepoint(event.pos):
+                return "start"
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            return "close"
+        return None
+
+    def _step(self, row, direction):
+        if row == 1:                       # origin load item
+            n = len(self.origin_items)
+            self.origin_item_index = (self.origin_item_index + direction) % max(1, n)
+        elif row == 2:                     # destination
+            n = len(self.dests)
+            self.dest_index = (self.dest_index + direction) % max(1, n)
+            self.dest_item_index = 0
+        elif row == 3:                     # destination load item
+            n = len(self._dest_items())
+            self.dest_item_index = (self.dest_item_index + direction) % max(1, n)
+
+    def _current(self):
+        dest = self.dests[self.dest_index] if self.dests else "ship"
+        ship = dest == "ship"
+        item_a = self.origin_items[self.origin_item_index] if self.origin_items else None
+        items_b = self._dest_items()
+        item_b = (items_b[self.dest_item_index] if items_b else None) if not ship else None
+        return dest, ship, item_a, item_b
+
+    def draw(self, screen):
+        sw, sh = screen.get_size()
+        panel, rows, start = self._rects(sw, sh)
+        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 170))
+        screen.blit(shade, (0, 0))
+        pygame.draw.rect(screen, (22, 20, 18, 244), panel, border_radius=12)
+        pygame.draw.rect(screen, BORDER, panel, 2, border_radius=12)
+        t = self.font.render("PLAN ROUTE", True, TEXT)
+        screen.blit(t, (panel.centerx - t.get_width() // 2, panel.top + 14))
+        dest, ship, item_a, item_b = self._current()
+        labels = [
+            "From: %s" % (getattr(self.origin, "name", "?") or "?"),
+            "Loads: %s" % self._name(item_a),
+            "To: %s" % self._dest_label(self.dest_index),
+            "Loads: %s" % (self._name(item_b) if not ship else "- (delivers to the ship)"),
+            "Amount: %d" % self.amount,
+        ]
+        for i, (l, r, plus, minus) in enumerate(rows):
+            text = self.font_small.render(labels[i], True, (226, 200, 150))
+            screen.blit(text, (panel.left + 26, l.centery - text.get_height() // 2))
+            for rr, sym in ((l, "<"), (r, ">")):
+                hovered = self.hover == (i, -1 if rr is l else +1)
+                pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
+                                 rr, border_radius=6)
+                pygame.draw.rect(screen, ACCENT if hovered else BORDER, rr, width=2,
+                                 border_radius=6)
+                s = self.font_small.render(sym, True, TEXT)
+                screen.blit(s, (rr.centerx - s.get_width() // 2, rr.centery - s.get_height() // 2))
+            if i == 4:
+                for rr, sym in ((minus, "-"), (plus, "+")):
+                    hovered = self.hover == (i, -2 if rr is minus else 2)
+                    pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
+                                     rr, border_radius=6)
+                    pygame.draw.rect(screen, ACCENT if hovered else BORDER, rr, width=2,
+                                     border_radius=6)
+                    s = self.font_small.render(sym, True, TEXT)
+                    screen.blit(s, (rr.centerx - s.get_width() // 2, rr.centery - s.get_height() // 2))
+        hovered = self.hover == ("start",)
+        pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52), start, border_radius=8)
+        pygame.draw.rect(screen, ACCENT if hovered else BORDER, start, width=2, border_radius=8)
+        s = self.font_btn.render("Start route", True, TEXT)
+        screen.blit(s, (start.centerx - s.get_width() // 2, start.centery - s.get_height() // 2))
+
+
 class PauseMenu:
     """Escape menu: Respawn or Exit game (Esc resumes)."""
 
