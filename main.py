@@ -733,6 +733,7 @@ def main() -> None:
     g.horse_panel_open = False
     g.horse_panel = None
     g.horse_sel = None
+    g.riding = None               # the horse he is on, or None
     # A HIRED MAN'S PACK, OPENED THE WAY A CHEST IS.
     g.worker_panel_open = False
     g.worker_panel = None
@@ -1177,6 +1178,33 @@ def main() -> None:
             if math.hypot(g.player.x - _ch.x, g.player.y - _ch.y) < 64.0:
                 return _ch
         return None
+
+    def animals_researched() -> bool:
+        import research as _research
+        return _research.state(g, "animals") == "done"
+
+    def near_horse():
+        """The nearest conquered horse he can mount, or None."""
+        for _h in getattr(g, "horses", ()):
+            if getattr(_h, "conquered", False) and getattr(_h, "alive", True):
+                if math.hypot(g.player.x - _h.x, g.player.y - _h.y) < 48.0:
+                    return _h
+        return None
+
+    def mount(horse) -> None:
+        g.riding = horse
+        horse.route = None              # a ridden horse forgets its route
+        horse.delivering = False
+        horse.returning = False
+        toast("Mounted")
+
+    def dismount() -> None:
+        _h = getattr(g, "riding", None)
+        if _h is not None:
+            _h.x, _h.y = g.player.x, g.player.y
+            _h.facing = g.player.facing
+        g.riding = None
+        toast("Dismounted")
 
     def near_sign():
         """The nearest sign-post he has built, or None."""
@@ -1815,6 +1843,10 @@ def main() -> None:
     g.near_brew = near_brew
     g.near_chest = near_chest
     g.near_chest_building = near_chest_building
+    g.animals_researched = animals_researched
+    g.near_horse = near_horse
+    g.mount = mount
+    g.dismount = dismount
     g.near_sign = near_sign
     g.near_foodbox = near_foodbox
     g.food_box = food_box

@@ -696,6 +696,14 @@ def run(g):
                 # swallow every other key/click while designating
                 continue
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_e:
+                # RIDING: E dismounts; near a horse (once Animals is
+                # researched) E mounts.
+                if getattr(g, "riding", None) is not None:
+                    g.dismount()
+                    continue
+                if g.animals_researched() and g.near_horse() is not None:
+                    g.mount(g.near_horse())
+                    continue
                 plog.log("E-KEY", "board", g.near_board() is not None,
                          "stall", g.near_stall() is not None,
                          "chest", g.near_chest() is not None,
@@ -1267,7 +1275,18 @@ def run(g):
             if getattr(g.player, "sleep_t", 0.0) > 0.0:
                 g.player.sleep_t = max(0.0, g.player.sleep_t - g.dt)
                 g.keys = _NO_KEYS
-            g.player.update(g.dt, g.keys, g.aim, 1.0 - 0.25 * g.foliage)
+            _riding = getattr(g, "riding", None)
+            if _riding is not None:
+                # THE HORSE'S OWN SPEED AND SPRINT, under the player's keys.
+                _ps, _pss = g.player.speed, g.player.sprint_speed
+                g.player.speed = _riding.speed
+                g.player.sprint_speed = _riding.speed * 2.2
+                g.player.update(g.dt, g.keys, g.aim, 1.0 - 0.25 * g.foliage)
+                g.player.speed, g.player.sprint_speed = _ps, _pss
+                _riding.x, _riding.y = g.player.x, g.player.y
+                _riding.facing = g.player.facing
+            else:
+                g.player.update(g.dt, g.keys, g.aim, 1.0 - 0.25 * g.foliage)
             if getattr(g.player, "aboard", False):
                 _tr = g._TEST_TRAIN[0]
                 if _tr is not None:
@@ -1699,6 +1718,8 @@ def run(g):
             for rabbit in g.rabbits:
                 rabbit.update(g.dt, None if g.player.dead else g.player, g.grid)
             for horse in g.horses:
+                if horse is getattr(g, "riding", None):
+                    continue               # the rider drives it, not the herd
                 horse.update(g.dt, None if g.player.dead else g.player, g.grid)
             # THE LIVESTOCK BREED: one baby a day, one animal per food box.
             try:
