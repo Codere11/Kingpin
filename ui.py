@@ -1408,7 +1408,10 @@ class ResearchPanel:
                 st_txt = self.font_tiny.render("Researched", True, (150, 224, 150))
                 screen.blit(st_txt, (r.right - st_txt.get_width() - 10, r.top + 12))
             elif st == "researching":
-                st_txt = self.font_tiny.render("Researching...", True, (232, 200, 118))
+                pts = int(getattr(self.g, "research_points", 0.0)) \
+                    if getattr(self.g, "research_active", None) == card["id"] else 0
+                st_txt = self.font_tiny.render("Researching... %d/%d" % (pts, card.get("points", 0)),
+                                               True, (232, 200, 118))
                 screen.blit(st_txt, (r.right - st_txt.get_width() - 10, r.top + 12))
             # description wrapped into the lower half of the card
             lines = self._wrap(card["desc"], self.font_tiny, r.width - 24)

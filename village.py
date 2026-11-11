@@ -1377,6 +1377,38 @@ class NPC:
             self.carry_grade[leaf] = quality.merge(
                 self.carry_grade.get(leaf, 3), old_n, g, taken)
 
+    def _nearest_research_bench(self, g):
+        """The research bench this man works at, or None."""
+        benches = [wp for wp in getattr(g, "placed_work", ()) or ()
+                   if getattr(wp, "kind", None) == "research"]
+        if not benches:
+            return None
+        return min(benches, key=lambda b: (b.x - self.x) ** 2 + (b.y - self.y) ** 2)
+
+    def _work_research(self, dt: float) -> None:
+        """A researcher walks to the research bench and works it: one research
+        point per second per skill level, and two days of this is one level."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        if g is None:
+            self._native_idle(dt)
+            return
+        bench = self._nearest_research_bench(g)
+        if bench is None:
+            self._native_idle(dt)
+            return
+        if math.hypot(bench.x - self.x, bench.y - self.y) > 24.0:
+            self._step_toward(bench.x, bench.y, dt)
+            return
+        self.skills.gain_research(dt)
+        lvl = max(1, int(self.skills.research))
+        try:
+            import research as _research
+            _research.add_points(g, lvl * dt)
+        except Exception:
+            pass
+        self._did_work()
+
     def _pockets(self):
         """A conquered worker's real pack (an Inventory), made lazily from the
         stock dict he was born with. Village and native farmers keep using the
@@ -1612,7 +1644,7 @@ class NPC:
             self._work_artisan(dt)
             return
         if _nat and getattr(self, "native_role", "") == "researcher":
-            self._native_idle(dt)      # no research bench yet: he waits for it
+            self._work_research(dt)
             return
         if _nat and getattr(self, "native_role", "") == "unemployed":
             self._native_idle(dt)

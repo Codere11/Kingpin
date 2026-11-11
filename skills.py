@@ -63,7 +63,7 @@ class Skills:
     # that anything restored from an older world still works.
     luck = LUCK_OTHERS
     is_player = False
-    research = 0.0
+    research = 1.0
     # A LEVEL WAS JUST CROSSED. Class default, for the same reason as the two
     # above: an unpickled Skills object does not run __init__.
     just_leveled = False
@@ -73,7 +73,7 @@ class Skills:
         self.movement = 0.0           # 0..1
         self.axe = 0.0                # 0..1
         self.shooting = 0.0           # 0..1
-        self.research = 0.0           # 0..10, grows with researching
+        self.research = 1.0           # 1..10, starts at one so work proceeds
         self.is_player = is_player    # the old road, except the axe and the feet
         self.luck = LUCK_OTHERS       # the nemesis is handed LUCK_NEMESIS
 
@@ -141,10 +141,11 @@ class Skills:
         return max(0, min(8, grade))
 
     # -- research -----------------------------------------------------------
-    def gain_research(self, amount: float = 0.1) -> None:
-        """A researcher learns by working at the bench: ten levels of it."""
+    def gain_research(self, dt: float) -> None:
+        """Two days behind the research desk is one level -- the slowest skill
+        in the world, because it is paid in discoveries, not in swings."""
         _b = self.levels_total() if self.is_player else 0
-        self.research = self._step(self.research, 10.0, 1.0)
+        self.research = min(10.0, self.research + max(0.0, float(dt)) / 1200.0)
         if self.is_player:
             self._note_levels(_b)
 
