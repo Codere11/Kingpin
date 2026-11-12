@@ -210,6 +210,68 @@ def _chart(world, cx: float, cy: float, half: float):
     return surf
 
 
+PAPER_N = 2048                # the one fixed map image is this many pixels across
+_PAPER = None                 # (key, surface) -- rendered once, panned/zoomed over
+
+
+def _paper(world, seed: int, player_x: float, player_y: float):
+    """ONE fixed map image: terrain, camps and the player, all pinned to their
+    world x,y. Nothing here depends on the camera, so panning and zooming can
+    never make a camp drift off its biome."""
+    global _PAPER
+    _key = (int(seed), int(player_x // 4000.0), int(player_y // 4000.0))
+    if _PAPER is not None and _PAPER[0] == _key:
+        return _PAPER[1]
+    N = PAPER_N
+    half = WORLD_HALF
+    step = (2.0 * half) / N
+    xs = -half + (np.arange(N, dtype=np.float32) + 0.5) * step
+    gx, gy = np.meshgrid(xs, xs)
+    try:
+        temps = np.asarray(biomes.temperature(gx, gy, seed), np.float32)
+        hums = np.asarray(biomes.humidity(gx, gy, seed), np.float32)
+        import world as _world
+        _coast = _world.coast_x(gy, seed)
+    except Exception:
+        temps = np.full((N, N), 0.5, np.float32)
+        hums = np.full((N, N), 0.5, np.float32)
+        _coast = np.full((N, N), half + 1.0, np.float32)
+    _ocean = gx > _coast
+    _snow = temps < 0.32
+    _desert = (temps > 0.62) & (hums < 0.34)
+    rgb = np.empty((N, N, 3), np.uint8)
+    rgb[:] = (74, 130, 66)           # forest
+    rgb[_ocean] = (16, 38, 74)       # ocean
+    rgb[_snow] = (235, 240, 245)     # snow
+    rgb[_desert] = (210, 180, 110)   # desert
+    surf = pygame.surfarray.make_surface(rgb.swapaxes(0, 1))
+    try:
+        import native as _native
+        _ns = _native.NATIVE_SPACING
+        _gx0 = int(math.floor(-half / _ns))
+        _gx1 = int(math.floor(half / _ns))
+        _gy0 = int(math.floor(-half / _ns))
+        _gy1 = int(math.floor(half / _ns))
+        for _gy in range(_gy0, _gy1 + 1):
+            for _gx in range(_gx0, _gx1 + 1):
+                if _gx >= 0:
+                    continue
+                _wx, _wy = _native.native_center(_gx, _gy, seed)
+                _px = int((_wx + half) / step)
+                _py = int((_wy + half) / step)
+                if 0 <= _px < N and 0 <= _py < N:
+                    pygame.draw.circle(surf, (220, 60, 40), (_px, _py), 4)
+    except Exception:
+        pass
+    _ppx = int((player_x + half) / step)
+    _ppy = int((player_y + half) / step)
+    if 0 <= _ppx < N and 0 <= _ppy < N:
+        pygame.draw.circle(surf, (40, 40, 46), (_ppx, _ppy), 7)
+        pygame.draw.circle(surf, (255, 236, 120), (_ppx, _ppy), 5)
+    _PAPER = (_key, surf)
+    return surf
+
+
 def reset() -> None:
     """Back to the whole world, centred where it has always been."""
     _VIEW["cx"], _VIEW["cy"] = 0.0, 0.0
@@ -296,15 +358,18 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
 
     view_half = _VIEW["half"]
     cx, cy = _VIEW["cx"], _VIEW["cy"]
-    chart = _chart(world, cx, cy, view_half)
-    if chart is None:
-        charting = small_charting.render("charting the country…", True,
-                                         (206, 198, 176))
-        screen.blit(charting, (x0 + size // 2 - charting.get_width() // 2,
-                               y0 + size // 2 - charting.get_height() // 2))
-    else:
-        screen.blit(pygame.transform.scale(chart, (size, size)), (x0, y0))
-    # BEYOND THE WORLD IS NOT DARK, IT IS UNCHARTED. The paper shows through.
+    # ONE FIXED IMAGE keyed to world x,y. The camera only picks the rectangle
+    # of it that is shown, so terrain, camps and player can never drift apart.
+    paper = _paper(world, int(getattr(world, "seed", 0)), player.x, player.y)
+    _scale = PAPER_N / (2.0 * WORLD_HALF)
+    _sx = int((cx - view_half + WORLD_HALF) * _scale)
+    _sy = int((cy - view_half + WORLD_HALF) * _scale)
+    _sw = max(1, int((2.0 * view_half) * _scale))
+    _sx = max(0, min(PAPER_N - _sw, _sx))
+    _sy = max(0, min(PAPER_N - _sw, _sy))
+    _sub = paper.subsurface(pygame.Rect(_sx, _sy, _sw, _sw))
+    screen.blit(pygame.transform.scale(_sub, (size, size)), (x0, y0))
+    # BEYOND THE WORLD IS NOT DARK, IT IS UNCHARTED.
     if view_half > WORLD_HALF:
         inset = int((view_half - WORLD_HALF) / (2.0 * view_half) * size)
         for r in ((x0, y0, size, inset), (x0, y0 + size - inset, size, inset),
@@ -312,41 +377,26 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
             pygame.draw.rect(screen, PAPER, r)
 
     def at(wx: float, wy: float):
-        return (x0 + int((wx - (cx - view_half)) / (2.0 * view_half) * size),
-                y0 + int((wy - (cy - view_half)) / (2.0 * view_half) * size))
+        _ppx = (wx + WORLD_HALF) * _scale
+        _ppy = (wy + WORLD_HALF) * _scale
+        return (x0 + int((_ppx - _sx) / _sw * size),
+                y0 + int((_ppy - _sy) / _sw * size))
 
     label_font = pygame.font.SysFont("dejavusansmono", max(11, vh // 44), bold=True)
-
-    # ---- NATIVE CAMPS AND THE PLAYER ------------------------------
-    # Old Soviet settlements, hubs and the gulag are gone from the paper; what
-    # remains is the country itself -- biome legend, native campfires, and him.
-    taken: list = []
-
     small_font = pygame.font.SysFont("dejavusansmono", max(9, vh // 62),
                                      bold=True)
-    # Lattice camps are baked into the terrain chart above. Only the
-    # off-lattice camps (the starter camps and the home camp) are drawn here,
-    # pinned to the same quantised centre as the chart.
+    # Off-lattice camps (starter camps and the home camp) are drawn at the
+    # same world->screen mapping as the fixed image, so they stay pinned too.
     for _n in natives or ():
         _px, _py = at(getattr(_n, "x", 0.0), getattr(_n, "y", 0.0))
         if x0 - 2 <= _px <= x0 + size + 2 and y0 - 2 <= _py <= y0 + size + 2:
             _campfire(screen, int(_px), int(_py))
             _lbl = small_font.render("camp", True, (250, 248, 240))
             _sd = small_font.render("camp", True, (10, 9, 8))
-            for _tx, _ty in ((_px + 9, _py - _lbl.get_height() // 2),
-                             (_px - 9 - _lbl.get_width(), _py - _lbl.get_height() // 2),
-                             (_px - _lbl.get_width() // 2, _py - 16),
-                             (_px - _lbl.get_width() // 2, _py + 10)):
-                _r = pygame.Rect(_tx, _ty, _lbl.get_width(), _lbl.get_height())
-                if (_r.left < x0 or _r.right > x0 + size
-                        or _r.top < y0 or _r.bottom > y0 + size):
-                    continue
-                if any(_r.colliderect(o) for o in taken):
-                    continue
-                taken.append(_r)
-                screen.blit(_sd, (_tx + 1, _ty + 1))
-                screen.blit(_lbl, (_tx, _ty))
-                break
+            _r = pygame.Rect(int(_px + 9), int(_py - _lbl.get_height() // 2),
+                             _lbl.get_width(), _lbl.get_height())
+            screen.blit(_sd, (_r.x + 1, _r.y + 1))
+            screen.blit(_lbl, (_r.x, _r.y))
     # HIM, last and on top -- AND NEVER LOST OFF THE EDGE. A map you cannot
     # find yourself on is not a map; when the view has left him he is pinned
     # to the frame with a bright ring, so pressing C is only a convenience.
