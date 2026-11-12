@@ -1058,6 +1058,46 @@ class NPC:
                                   tuple(getattr(self, "facing", (0.0, 1.0))))
                 except Exception:
                     pass
+        # A CONQUERED WORKER'S DEATH FREES HIS POST: the sign-post count for
+        # his job drops, and he leaves every bucket that held him.
+        if getattr(self, "native", False):
+            camp = getattr(self, "native_camp", None)
+            g = getattr(camp, "g", None) if camp is not None else None
+            if getattr(self, "conquered", False):
+                job = getattr(self, "job", None)
+                if g is not None and job:
+                    _attr = {"farmer": "farmers", "logger": "loggers",
+                             "artisan": "artisans", "researcher": "researchers",
+                             "miner": "miners", "smith": "smiths",
+                             "weaver": "weavers", "spiceman": "spicemen",
+                             "gunsmith": "gunsmiths"}.get(job)
+                    if _attr:
+                        for _s in getattr(g, "built_signs", ()) or ():
+                            _n = int(getattr(_s, _attr, 0) or 0)
+                            if _n > 0:
+                                setattr(_s, _attr, _n - 1)
+                                break
+                for _bucket in ("workers", "loggers", "artisans", "researchers",
+                                "miners", "smiths", "weavers", "spicemen",
+                                "gunsmiths", "unemployed", "people"):
+                    _lst = getattr(camp, _bucket, None) if camp is not None else None
+                    if _lst and self in _lst:
+                        try:
+                            _lst.remove(self)
+                        except ValueError:
+                            pass
+                self.job = None
+                self.native_role = "unemployed"
+            # every native -- worker or soldier -- leaves the frame's register
+            # and draw list, so the dead are never ticked or drawn again.
+            if g is not None:
+                for _reg in ("_native_people", "_observe_npcs"):
+                    _lst = getattr(g, _reg, None)
+                    if _lst and self in _lst:
+                        try:
+                            _lst.remove(self)
+                        except ValueError:
+                            pass
 
     def _walk_toward(self, tx: float, ty: float, speed: float, dt: float) -> None:
         dx, dy = tx - self.x, ty - self.y
@@ -1949,14 +1989,25 @@ class NPC:
         return True
 
     def _native_idle(self, dt: float) -> None:
-        """An extra farmer with no post: he chills, strolling around the camp."""
+        """An extra man with no post: he stays by the fire, not wandering off."""
         camp = getattr(self, "native_camp", None)
         speed = getattr(self, "speed", 60.0)
+        fx = float(getattr(camp, "x", 0.0)) if camp is not None else 0.0
+        fy = float(getattr(camp, "y", 0.0)) if camp is not None else 0.0
+        fire = getattr(camp, "fireplace", None) if camp is not None else None
+        if fire is not None:
+            fx, fy = float(getattr(fire, "x", fx)), float(getattr(fire, "y", fy))
+        else:
+            g = getattr(camp, "g", None) if camp is not None else None
+            if g is not None:
+                for wp in getattr(g, "placed_work", ()) or ():
+                    if getattr(wp, "kind", "") == "fireplace":
+                        fx, fy = float(getattr(wp, "x", fx)), float(getattr(wp, "y", fy))
+                        break
         if getattr(self, "_idle_timer", 0.0) <= 0.0:
-            if camp is not None:
-                ang = self.rng.uniform(0.0, 2.0 * math.pi)
-                r = self.rng.uniform(2.0, 6.0) * TILE
-                self.target = (camp.x + math.cos(ang) * r, camp.y + math.sin(ang) * r)
+            ang = self.rng.uniform(0.0, 2.0 * math.pi)
+            r = self.rng.uniform(1.0, 2.5) * TILE
+            self.target = (fx + math.cos(ang) * r, fy + math.sin(ang) * r)
             self._idle_timer = self.rng.uniform(2.0, 5.0)
         else:
             self._idle_timer -= dt
