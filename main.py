@@ -374,6 +374,17 @@ def main() -> None:
     except Exception:
         pass
 
+    # ---- THE WORLD MAP IS DRAWN ONCE, HERE, BEHIND THE LOADING SCREEN ----
+    #
+    # The map is one fixed image of the whole country (terrain, camps, all of
+    # it). Building it samples the noise for a million points -- a second or so
+    # of work. Do it here, under the progress bar, so the first press of M just
+    # shows it: the player never stands there waiting for the map to appear.
+    try:
+        mapmod.prewarm(g.world)
+    except Exception:
+        pass
+
     g.ore_field = ore.OreField(g.world.seed)
     # THE TOWN THAT HAS WORK FOR HIM, nearest to the origin first. A man does
     # not arrive in a village that has no forge and call himself a smith.

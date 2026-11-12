@@ -214,18 +214,21 @@ PAPER_N = 1024                # the one fixed map image is this many pixels acro
 _PAPER = None                 # (key, surface) -- rendered once, panned/zoomed over
 
 
-def _paper(world, seed: int, player_x: float, player_y: float):
-    """ONE fixed map image: terrain, camps and the player, all pinned to their
-    world x,y. Nothing here depends on the camera, so panning and zooming can
-    never make a camp drift off its biome."""
+def _paper(world, seed: int):
+    """ONE fixed map image: terrain and camps pinned to their world x,y.
+    Built once per world (behind the loading screen), then simply shown."""
     global _PAPER
-    _key = (int(seed), int(player_x // 4000.0), int(player_y // 4000.0))
+    _key = (int(seed),)
     if _PAPER is not None and _PAPER[0] == _key:
         return _PAPER[1]
     N = PAPER_N
     half = WORLD_HALF
-    step = (2.0 * half) / N
-    xs = -half + (np.arange(N, dtype=np.float32) + 0.5) * step
+    # The noise is the expensive part, so classify at half resolution and blow
+    # it up to full size with a 2x nearest-neighbour: at the size this map is
+    # shown the seam is invisible, and it turns a second of fbm into a blink.
+    SN = N // 2
+    sstep = (2.0 * half) / SN
+    xs = -half + (np.arange(SN, dtype=np.float32) + 0.5) * sstep
     gx, gy = np.meshgrid(xs, xs)
     try:
         temps = np.asarray(biomes.temperature(gx, gy, seed), np.float32)
@@ -233,9 +236,9 @@ def _paper(world, seed: int, player_x: float, player_y: float):
         import world as _world
         _coast = _world.coast_x(gy, seed)
     except Exception:
-        temps = np.full((N, N), 0.5, np.float32)
-        hums = np.full((N, N), 0.5, np.float32)
-        _coast = np.full((N, N), half + 1.0, np.float32)
+        temps = np.full((SN, SN), 0.5, np.float32)
+        hums = np.full((SN, SN), 0.5, np.float32)
+        _coast = np.full((SN, SN), half + 1.0, np.float32)
     _ocean = gx > _coast
     _land = ~_ocean
     _snow = _land & (temps < 0.32)
@@ -243,11 +246,13 @@ def _paper(world, seed: int, player_x: float, player_y: float):
     _forest = _land & ~_snow & ~_desert
     # THE OLD-SCHOOL CHART LOOK: dark paper land, blue sea, black borders,
     # and the biomes told apart by their sparse lines and little icons.
-    cls = np.where(_ocean, 3,
-                   np.where(_snow, 0, np.where(_desert, 1, 2))).astype(np.int8)
+    cls_s = np.where(_ocean, 3,
+                     np.where(_snow, 0, np.where(_desert, 1, 2))).astype(np.int8)
+    cls = np.repeat(np.repeat(cls_s, 2, axis=0), 2, axis=1)
+    _ocean_f = cls == 3
     rgb = np.empty((N, N, 3), np.uint8)
     rgb[:] = PAPER_RGB
-    rgb[_ocean] = OCEAN_RGB
+    rgb[_ocean_f] = OCEAN_RGB
     # black borders where one class meets another (the shore included).
     _bx = cls[:, 1:] != cls[:, :-1]
     _by = cls[1:, :] != cls[:-1, :]
@@ -281,6 +286,7 @@ def _paper(world, seed: int, player_x: float, player_y: float):
     try:
         import native as _native
         _ns = _native.NATIVE_SPACING
+        fstep = (2.0 * half) / N
         _gx0 = int(math.floor(-half / _ns))
         _gx1 = int(math.floor(half / _ns))
         _gy0 = int(math.floor(-half / _ns))
@@ -290,8 +296,8 @@ def _paper(world, seed: int, player_x: float, player_y: float):
                 if _gx >= 0:
                     continue
                 _wx, _wy = _native.native_center(_gx, _gy, seed)
-                _px = int((_wx + half) / step)
-                _py = int((_wy + half) / step)
+                _px = int((_wx + half) / fstep)
+                _py = int((_wy + half) / fstep)
                 if 0 <= _px < N and 0 <= _py < N:
                     pygame.draw.line(surf, (104, 72, 44), (_px - 5, _py + 4), (_px + 5, _py - 4), 2)
                     pygame.draw.line(surf, (104, 72, 44), (_px - 5, _py - 4), (_px + 5, _py + 4), 2)
@@ -299,13 +305,17 @@ def _paper(world, seed: int, player_x: float, player_y: float):
                     pygame.draw.circle(surf, (255, 224, 100), (_px, _py - 1), 1)
     except Exception:
         pass
-    _ppx = int((player_x + half) / step)
-    _ppy = int((player_y + half) / step)
-    if 0 <= _ppx < N and 0 <= _ppy < N:
-        pygame.draw.circle(surf, (40, 40, 46), (_ppx, _ppy), 7)
-        pygame.draw.circle(surf, (255, 236, 120), (_ppx, _ppy), 5)
     _PAPER = (_key, surf)
     return surf
+
+
+def prewarm(world) -> None:
+    """Draw the whole map once, behind the loading screen, so pressing M just
+    shows it -- the player never waits for the map on its first open."""
+    try:
+        _paper(world, int(getattr(world, "seed", 0)))
+    except Exception:
+        pass
 
 
 def reset() -> None:
@@ -394,28 +404,42 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
 
     view_half = _VIEW["half"]
     cx, cy = _VIEW["cx"], _VIEW["cy"]
-    # ONE FIXED IMAGE keyed to world x,y. The camera picks a rectangle of it;
-    # the terrain, camps and the player are all in that image, so they can
-    # never disagree about where anything is.
-    paper = _paper(world, int(getattr(world, "seed", 0)), player.x, player.y)
-    _scale = PAPER_N / (2.0 * WORLD_HALF)
-    _sx = int((cx - view_half + WORLD_HALF) * _scale)
-    _sy = int((cy - view_half + WORLD_HALF) * _scale)
-    _sw = max(1, int((2.0 * view_half) * _scale))
-    _sx = max(0, min(PAPER_N - _sw, _sx))
-    _sy = max(0, min(PAPER_N - _sw, _sy))
-    _sub = paper.subsurface(pygame.Rect(_sx, _sy, _sw, _sw))
-    screen.blit(pygame.transform.scale(_sub, (size, size)), (x0, y0))
-    # BEYOND THE WORLD IS NOT DARK, IT IS UNCHARTED.
-    if view_half > WORLD_HALF:
-        inset = int((view_half - WORLD_HALF) / (2.0 * view_half) * size)
-        for r in ((x0, y0, size, inset), (x0, y0 + size - inset, size, inset),
-                  (x0, y0, inset, size), (x0 + size - inset, y0, inset, size)):
-            pygame.draw.rect(screen, PAPER, r)
+    # ONE FIXED IMAGE keyed to world x,y, already built behind the loading
+    # screen. The camera picks a rectangle of it; terrain and camps are all in
+    # that image, so they can never disagree about where anything is.
+    paper = _paper(world, int(getattr(world, "seed", 0)))
+    if view_half < WORLD_HALF:
+        _scale = PAPER_N / (2.0 * WORLD_HALF)
+        _sx = int((cx - view_half + WORLD_HALF) * _scale)
+        _sy = int((cy - view_half + WORLD_HALF) * _scale)
+        _sw = max(1, int((2.0 * view_half) * _scale))
+        _sx = max(0, min(PAPER_N - _sw, _sx))
+        _sy = max(0, min(PAPER_N - _sw, _sy))
+        _sub = paper.subsurface(pygame.Rect(_sx, _sy, _sw, _sw))
+        screen.blit(pygame.transform.scale(_sub, (size, size)), (x0, y0))
+    else:
+        # ZOOMED OUT PAST THE WORLD: show the whole image, centred, on dark
+        # paper -- never a blank screen, and never a subsurface bigger than
+        # the surface it was cut from.
+        _ps = max(1, int(size * WORLD_HALF / view_half))
+        _off = (size - _ps) // 2
+        screen.blit(pygame.transform.scale(paper, (_ps, _ps)),
+                    (x0 + _off, y0 + _off))
+        pygame.draw.rect(screen, PAPER, (x0, y0, size, _off))
+        pygame.draw.rect(screen, PAPER, (x0, y0 + _off + _ps, size,
+                                         size - _off - _ps))
+        pygame.draw.rect(screen, PAPER, (x0, y0, _off, size))
+        pygame.draw.rect(screen, PAPER, (x0 + _off + _ps, y0,
+                                         size - _off - _ps, size))
 
     def w2s(wx: float, wy: float):
-        return (x0 + (wx - (cx - view_half)) / (2.0 * view_half) * size,
-                y0 + (wy - (cy - view_half)) / (2.0 * view_half) * size)
+        if view_half < WORLD_HALF:
+            return (x0 + (wx - (cx - view_half)) / (2.0 * view_half) * size,
+                    y0 + (wy - (cy - view_half)) / (2.0 * view_half) * size)
+        _ps = max(1, int(size * WORLD_HALF / view_half))
+        _off = (size - _ps) // 2
+        return (x0 + _off + (wx + WORLD_HALF) / (2.0 * WORLD_HALF) * _ps,
+                y0 + _off + (wy + WORLD_HALF) / (2.0 * WORLD_HALF) * _ps)
 
     label_font = pygame.font.SysFont("dejavusansmono", max(11, vh // 44), bold=True)
     # Off-lattice camps (starter camps and the home camp), pinned to the same
