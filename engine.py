@@ -527,6 +527,8 @@ def run(g):
                         g.send_horse()
                     elif _r == "route":
                         _open_route(g, g.horse_panel.horse)
+                    elif _r == "escort":
+                        g.toggle_horse_escort(g.horse_panel.horse)
             elif g.workshop_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
@@ -1338,6 +1340,11 @@ def run(g):
                 import market as _market
                 _market.tick(g)
                 g.smoke.update(g.dt)
+            except Exception:
+                pass
+            try:
+                import native as _native
+                _native.tick_raids(g, g.dt)
             except Exception:
                 pass
             creatures_set_time(g.now)

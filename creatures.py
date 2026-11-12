@@ -783,6 +783,8 @@ class Horse:
         self.route_loaded = False                 # cargo + feed are aboard
         self.route_feed = 0.0
         self.route_eat_t = 0.0
+        self.escort = False                       # a soldier rides with it (Army)
+        self.escort_soldier = None                # the soldier on its back
         self.target = (self.x, self.y)
         Horse.HORSES = [h for h in Horse.HORSES if h.alive]
         Horse.HORSES.append(self)
@@ -791,7 +793,18 @@ class Horse:
     def alive(self) -> bool:
         return self.health > 0
 
-    take_damage = Enemy.take_damage
+    def take_damage(self, amount: int, tranq: bool = False) -> bool:
+        dead = Enemy.take_damage(self, amount, tranq)
+        if dead:
+            # A DEAD HORSE DROPS ITS CARGO: the saddle bags are lost with it.
+            _p = getattr(self, "pack", None)
+            if _p is not None and hasattr(_p, "slots"):
+                _p.slots = [None] * len(_p.slots)
+            self.route = None
+            self.delivering = False
+            self.returning = False
+            self.escort_soldier = None
+        return dead
 
     def _sprite(self):
         if Horse.SPRITES is None:

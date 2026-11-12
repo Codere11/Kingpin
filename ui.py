@@ -1141,32 +1141,47 @@ class BarracksPanel:
 
 class HorsePanel:
     """A conquered horse: its saddle bags open like a chest, with a Send to
-    ship button underneath."""
+    ship button underneath -- and, once the Army is researched, a Soldier
+    escort toggle."""
 
-    def __init__(self, player_inv, horse) -> None:
+    def __init__(self, player_inv, horse, g=None) -> None:
         self.chest = ChestPanel(player_inv, horse._pack(),
                                 top_label=getattr(horse, "name", "HORSE") or "HORSE")
         self.horse = horse
         self.hover = None
         self.font = pygame.font.SysFont("dejavusans", 16, bold=True)
+        self.show_escort = False
+        if g is not None:
+            try:
+                import research
+                self.show_escort = research.state(g, "army") == "done"
+            except Exception:
+                pass
 
     def _buttons(self, sw: int, sh: int):
         w, h = 200, 42
         y = sh - 54
+        if self.show_escort:
+            send = pygame.Rect((sw - 3 * w - 24) // 2, y, w, h)
+            route = pygame.Rect(send.right + 12, y, w, h)
+            escort = pygame.Rect(route.right + 12, y, w, h)
+            return send, route, escort
         send = pygame.Rect((sw - 2 * w - 12) // 2, y, w, h)
         route = pygame.Rect(send.right + 12, y, w, h)
-        return send, route
+        return send, route, None
 
     def handle_event(self, event):
         surface = pygame.display.get_surface()
         if surface is None:
             return None
-        send, route = self._buttons(*surface.get_size())
+        send, route, escort = self._buttons(*surface.get_size())
         if event.type == pygame.MOUSEMOTION:
             if send.collidepoint(event.pos):
                 self.hover = "send"
             elif route.collidepoint(event.pos):
                 self.hover = "route"
+            elif escort is not None and escort.collidepoint(event.pos):
+                self.hover = "escort"
             else:
                 self.hover = None
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -1174,14 +1189,19 @@ class HorsePanel:
                 return "send"
             if route.collidepoint(event.pos):
                 return "route"
+            if escort is not None and escort.collidepoint(event.pos):
+                return "escort"
         return self.chest.handle_event(event)
 
     def draw(self, screen: pygame.Surface) -> None:
         self.chest.draw(screen)
         sw, sh = screen.get_size()
-        send, route = self._buttons(sw, sh)
-        for rect, label, key in ((send, "Send to ship", "send"),
-                                 (route, "Plan route", "route")):
+        send, route, escort = self._buttons(sw, sh)
+        buttons = [("Send to ship", "send", send), ("Plan route", "route", route)]
+        if escort is not None:
+            on = bool(getattr(self.horse, "escort", False))
+            buttons.append(("Soldier: ON" if on else "Soldier: OFF", "escort", escort))
+        for label, key, rect in buttons:
             hovered = self.hover == key
             pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
                              rect, border_radius=8)

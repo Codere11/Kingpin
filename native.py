@@ -503,3 +503,111 @@ def ensure_near(g, px: float, py: float, radius: float = NATIVE_RADIUS):
             reg[(gx, gy)] = ns
             made.append(ns)
     return made
+
+
+# -- NATIVE RAIDS ------------------------------------------------------------
+# Once the Army is researched, the unconquered fight back. War parties march
+# on the player's conquered settlements in this order:
+#   1) settle on a settlement WITH soldiers -- avoid it
+#   2) attack a conquered settlement without soldiers
+#   3) if every settlement has soldiers, group up and hit the weakest, or a
+#      cargo horse out on a run.
+
+RAID_INTERVAL = 150.0        # seconds between raids, once Army is done
+RAID_RADIUS = 700.0          # how near a soldier counts as defending the spot
+
+
+def _conquered_camps(g):
+    return [s for s in getattr(g, "native_settlements", {}).values()
+            if getattr(s, "conquered", False)]
+
+
+def _soldiers_near(g, x: float, y: float) -> int:
+    n = 0
+    for s in getattr(g, "_native_people", ()) or ():
+        if (getattr(s, "alive", True)
+                and getattr(s, "native_role", "") == "soldier"
+                and (s.x - x) ** 2 + (s.y - y) ** 2 <= RAID_RADIUS * RAID_RADIUS):
+            n += 1
+    return n
+
+
+def _cargo_horses(g):
+    out = []
+    for h in getattr(g, "horses", ()) or ():
+        if (getattr(h, "conquered", False) and getattr(h, "alive", True)
+                and (getattr(h, "delivering", False)
+                     or getattr(h, "returning", False)
+                     or getattr(h, "route", None) is not None)):
+            out.append(h)
+    return out
+
+
+def _send_raiders(g, tx: float, ty: float, count: int = 3) -> None:
+    """March a handful of warriors from unconquered settlements on (tx, ty)."""
+    n = 0
+    for s in getattr(g, "native_settlements", {}).values():
+        if getattr(s, "conquered", False):
+            continue
+        for w in getattr(s, "warriors", ()) or ():
+            if not getattr(w, "alive", True) or getattr(w, "raiding", False):
+                continue
+            w.raiding = True
+            w.raid_target = (float(tx), float(ty))
+            n += 1
+            if n >= count:
+                return
+    if n == 0:
+        # nothing left alive: no raid can form
+        return
+
+
+def _launch_raid(g) -> None:
+    """Choose a target by the priority order and send the warriors."""
+    pc = getattr(g, "player_camp", None)
+    targets = []       # (obj, x, y, soldier_count)
+    for c in _conquered_camps(g):
+        targets.append((c, float(getattr(c, "x", 0.0)), float(getattr(c, "y", 0.0)),
+                        _soldiers_near(g, getattr(c, "x", 0.0), getattr(c, "y", 0.0))))
+    if pc is not None:
+        px, py = float(getattr(pc, "x", 0.0)), float(getattr(pc, "y", 0.0))
+        targets.append((pc, px, py, _soldiers_near(g, px, py)))
+    if not targets:
+        return
+    player = getattr(g, "player", None)
+    pdist = (lambda t: ((t[1] - player.x) ** 2 + (t[2] - player.y) ** 2)
+             if player is not None else 0.0)
+    # 1) attack a soldierless conquered settlement (nearest to the player)
+    soldierless = [t for t in targets if t[3] == 0]
+    if soldierless:
+        t = min(soldierless, key=pdist)
+        _send_raiders(g, t[1], t[2])
+        return
+    # 3) all have soldiers: hit a cargo horse out on a run, else the weakest
+    horses = _cargo_horses(g)
+    if horses:
+        h = min(horses, key=lambda hh: ((hh.x - (player.x if player else 0.0)) ** 2
+                                        + (hh.y - (player.y if player else 0.0)) ** 2))
+        _send_raiders(g, h.x, h.y)
+        return
+    t = min(targets, key=lambda t: t[3])
+    _send_raiders(g, t[1], t[2])
+
+
+def tick_raids(g, dt: float) -> None:
+    """The native counteroffensive: only once Army is researched."""
+    try:
+        import research
+        if research.state(g, "army") != "done":
+            return
+    except Exception:
+        return
+    t = float(getattr(g, "_raid_timer", RAID_INTERVAL)) - float(dt)
+    if t > 0.0:
+        g._raid_timer = t
+        return
+    g._raid_timer = float(RAID_INTERVAL)
+    try:
+        _launch_raid(g)
+    except Exception:
+        pass

@@ -674,6 +674,9 @@ class NPC:
         self.smith_product = None      # what this smith makes (set by the player)
         self.mounted = False           # a native warrior riding a horse (4th alarm)
         self.reinforced_armor = False  # a bought soldier in reinforced armor
+        self.raiding = False           # a native warrior marching on a raid
+        self.raid_target = None        # (x, y) the raid is heading for
+        self.escort_horse = None       # the cargo horse a soldier rides escort for
         self.produce_acc = 0.0
         self.chop_timer = 0.0
         self._log_tree = None
@@ -1143,6 +1146,22 @@ class NPC:
                     _d2 = (_n.x - self.x) ** 2 + (_n.y - self.y) ** 2
                     if _d2 < best:
                         best, target = _d2, _n
+                # ON A RAID HE ALSO FALLS ON THE WORKERS AND CARGO HORSES.
+                if getattr(self, "raiding", False):
+                    for _n in getattr(g, "_native_people", ()) or ():
+                        if (not getattr(_n, "alive", True)
+                                or not getattr(_n, "conquered", False)
+                                or getattr(_n, "native_role", "") == "soldier"):
+                            continue
+                        _d2 = (_n.x - self.x) ** 2 + (_n.y - self.y) ** 2
+                        if _d2 < best:
+                            best, target = _d2, _n
+                    for _h in getattr(g, "horses", ()) or ():
+                        if not getattr(_h, "alive", True) or not getattr(_h, "conquered", False):
+                            continue
+                        _d2 = (_h.x - self.x) ** 2 + (_h.y - self.y) ** 2
+                        if _d2 < best:
+                            best, target = _d2, _h
                 if target is not None:
                     # THE CONFLICT STARTS: a smoke signal rises from the
                     # fire, once, the moment a warrior spots the player --
@@ -1167,6 +1186,16 @@ class NPC:
                     else:
                         self._fight(dt, target, getattr(g, "combat", None))
                     return
+        # MARCHING ON A RAID: walk to the target when nothing is in reach.
+        if getattr(self, "raiding", False) and getattr(self, "raid_target", None) is not None:
+            _tx, _ty = self.raid_target
+            if math.hypot(_tx - self.x, _ty - self.y) > 24.0:
+                self._walk_toward(_tx, _ty, getattr(self, "speed", 60.0), dt)
+            else:
+                # arrived and nothing to fight: the raid is spent, go home.
+                self.raiding = False
+                self.raid_target = None
+            return
         speed = getattr(self, "speed", 60.0)
         ang = getattr(self, "_orbit", 0.0) + 0.30 * dt
         self._orbit = ang
@@ -1708,6 +1737,14 @@ class NPC:
         if g is None:
             self._native_idle(dt)
             return
+        # EAT: a soldier draws from the camp store and the chests, like the
+        # workers he defends.
+        try:
+            self._native_share()
+            if self._fetch_food_from_chest(dt):
+                return
+        except Exception:
+            pass
         # reload the rifle when it runs dry
         if self.reload_timer > 0.0:
             self.reload_timer = max(0.0, self.reload_timer - dt)
@@ -1733,6 +1770,10 @@ class NPC:
             if d < best:
                 best, target = d, e
         if target is None:
+            _eh = getattr(self, "escort_horse", None)
+            if _eh is not None and getattr(_eh, "alive", True):
+                self._step_toward(_eh.x, _eh.y, dt)
+                return
             self._native_idle(dt)
             return
         distance = math.sqrt(best)

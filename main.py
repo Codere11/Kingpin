@@ -1270,9 +1270,38 @@ def main() -> None:
 
     def open_horse(horse) -> None:
         g.horse_sel = horse
-        g.horse_panel = HorsePanel(g.inventory, horse)
+        g.horse_panel = HorsePanel(g.inventory, horse, g)
         g.horse_panel_open = True
         pygame.mouse.set_visible(True)
+
+    def toggle_horse_escort(horse) -> None:
+        """Flip the horse's Soldier escort. A soldier rides with it and fights
+        anything that comes for the cargo."""
+        horse.escort = not bool(getattr(horse, "escort", False))
+        if horse.escort:
+            # put the nearest free soldier on its back
+            best = None
+            bd = 1e18
+            for _n in getattr(g, "_native_people", ()) or ():
+                if (not getattr(_n, "alive", True)
+                        or getattr(_n, "native_role", "") != "soldier"
+                        or getattr(_n, "escort_horse", None) is not None):
+                    continue
+                _d = (_n.x - horse.x) ** 2 + (_n.y - horse.y) ** 2
+                if _d < bd:
+                    bd, best = _d, _n
+            if best is not None:
+                best.escort_horse = horse
+                horse.escort_soldier = best
+                toast("%s rides escort." % getattr(best, "name", "A soldier"))
+            else:
+                toast("No free soldier to send.")
+        else:
+            _s = getattr(horse, "escort_soldier", None)
+            if _s is not None:
+                _s.escort_horse = None
+            horse.escort_soldier = None
+            toast("Escort called off.")
 
     def open_gunsmith(npc) -> None:
         g.gunsmith_npc = npc
@@ -1932,6 +1961,7 @@ def main() -> None:
     g.food_box = food_box
     g.ship_pos = ship_pos
     g.open_horse = open_horse
+    g.toggle_horse_escort = toggle_horse_escort
     g.open_gunsmith = open_gunsmith
     g.open_smith = open_smith
     g.open_barracks = open_barracks
