@@ -4444,7 +4444,10 @@ class Village:
                                       []).append((wx, wy, 140.0))
                     break
 
-        self.woodlot()          # pay for the tree search at build time
+        # THE WOODLOT IS STAKED LAZILY, the first time a logger of THIS village
+        # actually needs a tree -- not for every village on the map at load.
+        # Staking it eagerly here cost a hundred and fifty thousand tree cells
+        # of noise at boot for villages the player is nowhere near.
 
         fence.install(self, rng)
 
