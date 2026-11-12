@@ -47,19 +47,6 @@ _NAMES = ("Awan", "Kiona", "Takoda", "Yuma", "Nashoba", "Chenoa",
           "Mona", "Nodin", "Ojinjintka", "Paytah", "Sahale", "Tahatan")
 
 
-def _density(gx: int) -> float:
-    """Camp density rises inland: sparse at the coast, full far west."""
-    west = float(-gx) * NATIVE_SPACING
-    return min(1.0, 0.22 + west / 90000.0)
-
-
-def _camp_roll(gx: int, gy: int, seed: int) -> float:
-    """A deterministic 0..1 roll for one lattice cell: whether a camp is here."""
-    code = (gx * 73856093) ^ (gy * 19349663) ^ (seed * 2654435761)
-    rng = random.Random(code & 0xFFFFFFFF)
-    return rng.random()
-
-
 def spawn_starter_camps(g) -> list:
     """The first four camps, scattered at random around the spawn in its
     biome -- not on a ring."""
@@ -539,10 +526,6 @@ def ensure_near(g, px: float, py: float, radius: float = NATIVE_RADIUS):
                 continue
             cx, cy = native_center(gx, gy, g.world.seed)
             if math.hypot(cx - px, cy - py) > radius:
-                continue
-            # DENSITY RISES INLAND: near the coast only a few cells hold a
-            # camp; far west nearly every cell does.
-            if _camp_roll(gx, gy, g.world.seed) >= _density(gx):
                 continue
             # the home camp already stands on its own ground: do not build
             # another camp right on top of it
