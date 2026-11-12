@@ -42,7 +42,7 @@ FIBRE_KINDS = ("cotton",)      # neither food nor leaf: cotton, spun into cloth
 
 # EVERY CROP A FIELD CAN GROW, in the order a field's type cycles. Bread is
 # the base: a fresh field is wheat, and each click moves on to the next crop.
-FIELD_KINDS = ("wheat", "berries", "cactus", "plant", "mushroom", "agave", "cotton")
+FIELD_KINDS = ("wheat", "berries", "cactus", "plant", "mushroom", "agave", "cotton", "chili")
 
 # the item whose icon sits on a field of each crop (bread for wheat, the
 # boll for cotton, and so on)
@@ -50,10 +50,12 @@ FIELD_SYMBOL = {
     "wheat": "bread", "berries": "berries", "cactus": "cactus_fruit",
     "plant": "tobacco", "mushroom": "red_mushroom", "agave": "agave",
     "cotton": "cotton",
+    "chili": "chili",
 }
 
 # what each crop yields
-LEAF_ITEM = {"plant": "tobacco", "mushroom": "red_mushroom", "agave": "agave"}
+LEAF_ITEM = {"plant": "tobacco", "mushroom": "red_mushroom", "agave": "agave",
+             "chili": "chili"}
 FOOD_ITEM = {"wheat": "bread", "berries": "berries", "cactus": "cactus_fruit"}
 
 # what an artisan's bench turns each leaf crop into -- the finished article
@@ -66,6 +68,7 @@ SEED_CROP = {
     "berry_seed": "berries", "mushroom_spore": "mushroom",
     "cactus_seed": "cactus", "agave_seed": "agave",
     "cotton_seed": "cotton",
+    "chili_seed": "chili",
 }
 CROP_SEED = {crop: seed for seed, crop in SEED_CROP.items()}
 
@@ -77,8 +80,11 @@ def growable_kinds(t, h):
     import biomes
     food, leaf = biomes.crop_kinds(t, h)
     kinds = [food, leaf]
-    if biomes.biome_name(t, h) == "savanna":
+    name = biomes.biome_name(t, h)
+    if name == "savanna":
         kinds.append("cotton")
+    if name in ("savanna", "woodland"):
+        kinds.append("chili")
     return kinds
 
 
@@ -104,6 +110,10 @@ def chest_filter_items(t, h):
     # both are useful filters in every biome's chest.
     out.append("cotton")
     out.append("textile")
+    # Chili grows on the savanna and in the woodland, so those biomes can
+    # store it by name.
+    if biomes.biome_name(t, h) in ("savanna", "woodland"):
+        out.append("chili")
     return out
 
 # the leaf plant takes its colour from where it grows
@@ -344,6 +354,42 @@ def draw_cotton(screen, x, y, elapsed, cam_x, cam_y, biome=None):
             pygame.draw.circle(screen, (200, 208, 218), (int(sx + dx), int(sy + dy)), 4, 1)
 
 
+_CHILI_IMAGES = None
+
+
+def draw_chili(screen, x, y, elapsed, cam_x, cam_y, biome=None):
+    """The chili plant from its two PNGs: a small green chili in the seedling
+    stage, then the stem grows and its red chilies come into view."""
+    global _CHILI_IMAGES
+    if _CHILI_IMAGES is None:
+        import os
+        base = os.path.dirname(__file__)
+        try:
+            seed = pygame.image.load(os.path.join(base, "chili_seedling.png")).convert_alpha()
+            plant = pygame.image.load(os.path.join(base, "chili_plant.png")).convert_alpha()
+        except Exception:
+            seed = plant = None
+        _CHILI_IMAGES = (seed, plant)
+    seed, plant = _CHILI_IMAGES
+    sx = x - cam_x
+    sy = y - cam_y
+    st = stage(elapsed)
+    if seed is None or plant is None:
+        pygame.draw.ellipse(screen, (38, 58, 30), (sx - 8, sy - 3, 16, 6))
+        pygame.draw.circle(screen, (90, 150, 60), (int(sx), int(sy - 8)), 5)
+        return
+    if st == 0:
+        h = 40
+        img = pygame.transform.smoothscale(seed, (h, h))
+        screen.blit(img, (sx - h / 2, sy - h * 0.82))
+    else:
+        p = min(1.0, max(0.0, elapsed / GROW_SECONDS))
+        k = min(1.0, max(0.0, (elapsed - PHASE_SECONDS) / max(1.0, GROW_SECONDS - PHASE_SECONDS)))
+        h = int(52 + 36 * k)
+        img = pygame.transform.smoothscale(plant, (h, h))
+        screen.blit(img, (sx - h / 2, sy - h * 0.88))
+
+
 _DRAWERS = {
     "plant": draw_plant,
     "mushroom": draw_mushroom,
@@ -352,4 +398,5 @@ _DRAWERS = {
     "berries": draw_berries,
     "cactus": draw_cactus,
     "cotton": draw_cotton,
+    "chili": draw_chili,
 }

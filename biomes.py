@@ -132,6 +132,9 @@ def can_plant(t, h, kind: str) -> bool:
     # COTTON is a savanna crop: it grows where it naturally grows wild.
     if kind == "cotton" and biome_name(t, h) != "savanna":
         return False
+    # CHILI grows on the savanna and in the woodland.
+    if kind == "chili" and biome_name(t, h) not in ("savanna", "woodland"):
+        return False
     return True
 
 

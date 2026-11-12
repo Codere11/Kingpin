@@ -136,6 +136,11 @@ REGISTRY: dict[str, ItemDef] = {
     "cotton_seed": ItemDef("cotton_seed", "Cotton Seeds",
                            "Plant in fertile soil; grows cotton.",
                            stackable=True, max_stack=100),
+    "chili": ItemDef("chili", "Chili", "A fiery red pepper. A spice that bites back.",
+                     stackable=True, max_stack=100, quality=True),
+    "chili_seed": ItemDef("chili_seed", "Chili Seeds",
+                          "Plant in warm soil; grows chili peppers.",
+                          stackable=True, max_stack=100),
     "bed": ItemDef("bed", "Bedroll", "A white cotton bedroll. Place it and sleep.",
                    stackable=True, max_stack=10),
 }
@@ -849,6 +854,28 @@ def _draw_cotton_seed(s: int) -> pygame.Surface:
     return _draw_seeds(s, (176, 136, 78), (124, 90, 50))
 
 
+def _draw_chili_seed(s: int) -> pygame.Surface:
+    return _draw_seeds(s, (200, 120, 90), (150, 70, 50))
+
+
+def _draw_chili(s: int) -> pygame.Surface:
+    """The chili item: the bundled chili.png, scaled to the icon grid."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "chili.png")
+    try:
+        img = pygame.image.load(path).convert_alpha()
+        return pygame.transform.smoothscale(img, (s, s))
+    except Exception:
+        surf = _canvas(s)
+        pygame.draw.polygon(surf, (206, 48, 42),
+                            [(0.50 * s, 0.15 * s), (0.66 * s, 0.17 * s),
+                             (0.74 * s, 0.34 * s), (0.70 * s, 0.50 * s),
+                             (0.58 * s, 0.62 * s), (0.50 * s, 0.72 * s),
+                             (0.44 * s, 0.62 * s), (0.34 * s, 0.48 * s),
+                             (0.32 * s, 0.34 * s), (0.40 * s, 0.22 * s)])
+        return surf
+
+
 def _draw_bed(s: int) -> pygame.Surface:
     """A small bed, top-down: mattress, blanket and a pillow."""
     surf = _canvas(s)
@@ -948,6 +975,8 @@ _DRAWERS = {
     "hide_armor": _draw_hide_armor,
     "cotton": _draw_cotton,
     "cotton_seed": _draw_cotton_seed,
+    "chili": _draw_chili,
+    "chili_seed": _draw_chili_seed,
     "bed": _draw_bed,
 }
 

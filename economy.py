@@ -54,7 +54,7 @@ def _note(text: str) -> None:
         pass
 
 FOOD = ("bread", "berries", "cactus_fruit")
-LEAF = ("tobacco", "red_mushroom", "agave")
+LEAF = ("tobacco", "red_mushroom", "agave", "chili")
 # The artisan's trade: what a laboratory turns leaf INTO. Nobody craves the raw
 # leaf any more -- the craving is for the finished article.
 PROCESS = {"tobacco": "cigar", "red_mushroom": "dried_mushroom"}
@@ -90,7 +90,7 @@ ITEM_VALUE = {
     # Base prices, by how hard a thing is to produce: tools > iron > food.
     # Each village skews these by what it actually grows -- see Village.prices.
     "bread": 4, "berries": 3, "cactus_fruit": 4,
-    "tobacco": 7, "red_mushroom": 8, "agave": 7,
+    "tobacco": 7, "red_mushroom": 8, "agave": 7, "chili": 7,
     "cigar": 20, "dried_mushroom": 22,          # leaf is the input; this is the good
     "wheat": 3, "wheat_wort": 4, "berry_wort": 4, "agave_wort": 4,
     "beer": 22, "liqueur": 26, "mezcal": 24,
@@ -291,6 +291,8 @@ def crop_yield(kind: str, rng) -> tuple[str, int]:
         return "agave", rng.randint(4, 8)
     if kind == "cotton":
         return "cotton", rng.randint(5, 10)
+    if kind == "chili":
+        return "chili", rng.randint(4, 8)
     return "", 0
 
 
