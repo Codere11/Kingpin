@@ -23,7 +23,9 @@ BUILDINGS = [
     {"id": "demolish", "name": "Demolish", "wood": 0, "where": "outside"},
     {"id": "lab", "name": "Artisan's bench", "wood": 150, "where": "outside"},
     {"id": "research", "name": "Research bench", "wood": 150, "where": "outside"},
-    {"id": "weaver", "name": "Weaver's loom", "wood": 150, "where": "outside"},
+    # A LOOM IS GEARS -- not wood -- and only once Textiles is researched.
+    {"id": "weaver", "name": "Weaver's loom", "wood": 0,
+     "cost": {"gear": 300}, "needs": "textiles", "where": "outside"},
     {"id": "workshop", "name": "Workbench", "wood": 100, "where": "outside"},
     {"id": "brewery", "name": "Brewhouse", "wood": 120, "where": "outside"},
     # THE PLAYER'S OWN SHOP. It stands inside his hub (main refuses it
@@ -378,8 +380,9 @@ SETTLEMENT_BUILDINGS = [
 
 
 class BuildMenu:
-    def __init__(self, inventory) -> None:
+    def __init__(self, inventory, g=None) -> None:
         self.inv = inventory
+        self.g = g
         self.where = "outside"
         self.category = "personal"
         self.hover = -1
@@ -397,7 +400,19 @@ class BuildMenu:
         return SETTLEMENT_BUILDINGS if self.category == "settlement" else BUILDINGS
 
     def _visible(self) -> list[int]:
-        return [i for i, b in enumerate(self._buildings()) if b["where"] == self.where]
+        out = []
+        for i, b in enumerate(self._buildings()):
+            if b["where"] != self.where:
+                continue
+            if b.get("needs") and self.g is not None:
+                try:
+                    import research
+                    if research.state(self.g, b["needs"]) != "done":
+                        continue
+                except Exception:
+                    pass
+            out.append(i)
+        return out
 
     ROWS = 3                      # THREE ROWS OF BUILDINGS, ALWAYS
 

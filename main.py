@@ -604,7 +604,7 @@ def main() -> None:
     g.blood = Blood()
     g.vignette = DamageVignette()
     g.overlay = GameOver()
-    g.build_menu = BuildMenu(g.inventory)
+    g.build_menu = BuildMenu(g.inventory, g)
     g.workshop_menu = WorkshopMenu(g.inventory, g)
     g.confirm = ConfirmMenu()
     g.compass_state = compass.Compass()
