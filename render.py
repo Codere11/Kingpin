@@ -157,8 +157,14 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
     try:
         import ship as _ship
         import world as _world
-        _ship.draw(target, cx, cy,
-                   _world.coast_x(0.0, getattr(g.world, "seed", 0)) + 56.0, 0.0)
+        # THE SHIP ANCHORS OFF THE SPAWN COAST -- the spawn may be north or
+        # south of y=0, and a ship at a hard-coded y=0 was miles away.
+        try:
+            _shx, _shy = g.ship_pos()
+        except Exception:
+            _shx = _world.coast_x(0.0, getattr(g.world, "seed", 0)) + 56.0
+            _shy = 0.0
+        _ship.draw(target, cx, cy, _shx, _shy)
     except Exception as _ship_err:
         try:
             import plog as _plog
