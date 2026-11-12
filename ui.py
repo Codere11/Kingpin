@@ -775,11 +775,13 @@ class SignPanel:
     """The sign-post: how many conquered people farm, log, or go unemployed.
     A click on [-] / [+] moves one person between the jobs."""
 
-    def __init__(self, sign, camp, sync, show_smiths=None, show_gunsmiths=None) -> None:
+    def __init__(self, sign, camp, sync, show_smiths=None, show_weavers=None,
+                 show_gunsmiths=None) -> None:
         self.sign = sign
         self.camp = camp
         self.sync = sync
         self.show_smiths = show_smiths   # callable -> bool, for the gated job
+        self.show_weavers = show_weavers  # callable -> bool
         self.show_gunsmiths = show_gunsmiths  # callable -> bool
         self.hover = None
         self.font = pygame.font.SysFont("dejavusans", 20, bold=True)
@@ -794,6 +796,8 @@ class SignPanel:
                 ("Miners", "miners")]
         if self.show_smiths is not None and self.show_smiths():
             jobs.append(("Smiths", "smiths"))
+        if self.show_weavers is not None and self.show_weavers():
+            jobs.append(("Weavers", "weavers"))
         if self.show_gunsmiths is not None and self.show_gunsmiths():
             jobs.append(("Gunsmiths", "gunsmiths"))
         return jobs

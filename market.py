@@ -25,6 +25,7 @@ GOODS = {
     "mezcal": (10.0, 3.0, 30.0),
     "hide": (30.0, 15.0, 50.0),
     "iron_bar": (100.0, 60.0, 150.0),
+    "textile": (80.0, 45.0, 120.0),
 }
 
 MID_GRADE = 4          # B, the middle of F..SSS (0..8)
@@ -48,6 +49,8 @@ def sellable(g):
             out.append("hide")
         if research.state(g, "ironworking") == "done":
             out.append("iron_bar")
+        if research.state(g, "textiles") == "done":
+            out.append("textile")
     except Exception:
         pass
     return out

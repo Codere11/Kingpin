@@ -100,6 +100,10 @@ def chest_filter_items(t, h):
     out.append("iron_bar")
     if biomes.surface(t, h) == "snow":
         out.append("iron")
+    # Cotton is woven anywhere a loom stands, and cloth is the result, so
+    # both are useful filters in every biome's chest.
+    out.append("cotton")
+    out.append("textile")
     return out
 
 # the leaf plant takes its colour from where it grows

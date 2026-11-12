@@ -522,6 +522,8 @@ class Workplace:
             return self._render_lab()
         if self.kind == "research":
             return self._render_research()
+        if self.kind == "weaver":
+            return self._render_weaver()
         if self.kind == "workshop":
             return self._render_workshop()
         if self.kind == "brewery":
@@ -726,6 +728,35 @@ class Workplace:
             pygame.draw.rect(surf, (78, 54, 34),
                              (0, self.h // 2, self.w, self.h // 2), 2, border_radius=3)
             return surf
+
+    def _render_weaver(self) -> pygame.Surface:
+        """The weaver's loom: a wooden frame, warp threads, and a bolt of
+        cloth taking shape. Drawn top-down like every other workplace."""
+        w, h, pad = self.w, self.h, 14
+        surf = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+        ox, oy = pad, pad
+        wood, wood_d = (150, 104, 62), (78, 54, 34)
+        # shadow
+        pygame.draw.ellipse(surf, (0, 0, 0, 70), (ox + 6, oy + h - 10, w - 12, 24))
+        # the frame: two uprights and two rails
+        pygame.draw.rect(surf, wood_d, (ox + 12, oy + 8, 10, h - 12), border_radius=2)
+        pygame.draw.rect(surf, wood, (ox + 14, oy + 10, 6, h - 16))
+        pygame.draw.rect(surf, wood_d, (ox + w - 22, oy + 8, 10, h - 12), border_radius=2)
+        pygame.draw.rect(surf, wood, (ox + w - 20, oy + 10, 6, h - 16))
+        pygame.draw.rect(surf, wood_d, (ox + 6, oy + 6, w - 12, 9), border_radius=2)
+        pygame.draw.rect(surf, wood_d, (ox + 6, oy + h - 11, w - 12, 9), border_radius=2)
+        # warp threads between the rails
+        for i in range(7):
+            x = ox + 22 + i * ((w - 44) / 6)
+            pygame.draw.line(surf, (206, 196, 170), (x, oy + 16), (x, oy + h - 14), 1)
+        # the woven cloth, lower half
+        pygame.draw.rect(surf, (206, 196, 170), (ox + 18, oy + h // 2, w - 36, h // 2 - 8))
+        pygame.draw.rect(surf, wood_d, (ox + 18, oy + h // 2, w - 36, h // 2 - 8), 2)
+        for i in range(5):
+            x = ox + 24 + i * ((w - 48) / 4)
+            pygame.draw.line(surf, (150, 138, 112), (x, oy + h // 2 + 4),
+                             (x, oy + h - 14), 1)
+        return surf
 
     def _render_workshop(self) -> pygame.Surface:
         """A workbench: a wooden table with a saw and a hammer on it."""

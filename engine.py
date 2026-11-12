@@ -48,6 +48,15 @@ def _gunsmiths_available(g) -> bool:
         return False
 
 
+def _weavers_available(g) -> bool:
+    """The Weaver job only appears once Textiles is researched."""
+    try:
+        import research
+        return research.state(g, "textiles") == "done"
+    except Exception:
+        return False
+
+
 def _route_items(g, camp):
     """The chest-filter goods a settlement's route node may move."""
     import crop
@@ -788,6 +797,7 @@ def run(g):
                     g.sign_post = _sg
                     g.sign_panel = SignPanel(_sg, g.player_camp, lambda: g.sync_jobs(g),
                                              show_smiths=lambda: _smiths_available(g),
+                                             show_weavers=lambda: _weavers_available(g),
                                              show_gunsmiths=lambda: _gunsmiths_available(g))
                     g.sign_open = True
                     pygame.mouse.set_visible(True)

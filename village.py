@@ -179,6 +179,7 @@ _TRADE_GRID = None         # allocated once, rebuilt per village per step
 LOG_CHOP_SECONDS = 3.0    # how long a logger takes to drop one tree
 ORCHARD_GROW_SECONDS = 180.0   # a sapling to a full tree, like a wild stump
 ARTISAN_BATCH_SECONDS = 4.0   # ten leaf into ten finished goods at the bench
+WEAVER_BATCH_SECONDS = 10.0   # five cotton into one bolt of cloth at the loom
 BIRTH_BOND = 18.0                    # seconds of evening friendship before a child
 PEACE_DELAY = 30.0                   # no children until this long after a death
 
@@ -1544,6 +1545,63 @@ class NPC:
             self._did_work()
             self.skills.gain_smithing()
 
+    def _work_weaver(self, dt: float) -> None:
+        """A weaver works the loom: five cotton become one bolt of cloth at
+        a time, the cloth graded by his hand. Only once Textiles is
+        researched."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        if g is None:
+            self._native_idle(dt)
+            return
+        try:
+            import research as _research
+            if _research.state(g, "textiles") != "done":
+                self._native_idle(dt)
+                return
+        except Exception:
+            self._native_idle(dt)
+            return
+        loom = self._nearest_workplace(g, "weaver")
+        if loom is None:
+            self._native_idle(dt)
+            return
+        # deliver finished cloth first
+        if int(self.carry.get("textile", 0)) > 0:
+            if self._deposit_to_chest(dt):
+                return
+        # fetch five cotton from a chest
+        if int(self.carry.get("cotton", 0)) < 5:
+            chest = self._chest_with("cotton", 5)
+            if chest is None:
+                self._native_idle(dt)
+                return
+            if math.hypot(chest.x - self.x, chest.y - self.y) > 20.0:
+                self._step_toward(chest.x, chest.y, dt)
+                return
+            taken, _g = self._take_from_chest(chest, "cotton",
+                                              5 - int(self.carry.get("cotton", 0)))
+            if taken > 0:
+                self.carry["cotton"] = int(self.carry.get("cotton", 0)) + taken
+            return
+        # walk to the loom and weave
+        if math.hypot(loom.x - self.x, loom.y - self.y) > 24.0:
+            self._step_toward(loom.x, loom.y, dt)
+            return
+        self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
+        if self.produce_acc >= WEAVER_BATCH_SECONDS:
+            self.produce_acc = 0.0
+            self.carry["cotton"] = int(self.carry.get("cotton", 0)) - 5
+            if self.carry.get("cotton", 0) <= 0:
+                self.carry.pop("cotton", None)
+            g2 = self.skills.leaf_grade()
+            old_n = int(self.carry.get("textile", 0) or 0)
+            self.carry["textile"] = old_n + 1
+            self.carry_grade["textile"] = quality.merge(
+                self.carry_grade.get("textile", g2), old_n, g2, 1)
+            self._did_work()
+            self.skills.gain_farming(0.05)
+
     # THE GUNSMITH'S THREE PRODUCTS: what he makes, what it costs in iron
     # bars, how long one takes, and which research unlocks it.
     GUNSMITH_PRODUCTS = (
@@ -1859,6 +1917,9 @@ class NPC:
             return
         if _nat and getattr(self, "native_role", "") == "smith":
             self._work_smith(dt)
+            return
+        if _nat and getattr(self, "native_role", "") == "weaver":
+            self._work_weaver(dt)
             return
         if _nat and getattr(self, "native_role", "") == "gunsmith":
             self._work_gunsmith(dt)

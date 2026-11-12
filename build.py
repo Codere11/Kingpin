@@ -23,6 +23,7 @@ BUILDINGS = [
     {"id": "demolish", "name": "Demolish", "wood": 0, "where": "outside"},
     {"id": "lab", "name": "Artisan's bench", "wood": 150, "where": "outside"},
     {"id": "research", "name": "Research bench", "wood": 150, "where": "outside"},
+    {"id": "weaver", "name": "Weaver's loom", "wood": 150, "where": "outside"},
     {"id": "workshop", "name": "Workbench", "wood": 100, "where": "outside"},
     {"id": "brewery", "name": "Brewhouse", "wood": 120, "where": "outside"},
     # THE PLAYER'S OWN SHOP. It stands inside his hub (main refuses it
@@ -197,6 +198,28 @@ def research_icon(size: int = 46) -> pygame.Surface:
                            int(size * 0.09), 2)
         _RESEARCH_ICON = s
     return _RESEARCH_ICON
+
+
+def weaver_icon(size: int = 46) -> pygame.Surface:
+    """A weaver's loom: a wooden frame with vertical threads and a bolt."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    wood, wood_d = (150, 104, 62), (78, 54, 34)
+    # frame
+    pygame.draw.rect(s, wood, (size * 0.18, size * 0.14, size * 0.64, size * 0.72), 3)
+    # vertical warp threads
+    for i in range(6):
+        x = size * (0.24 + i * 0.10)
+        pygame.draw.line(s, (206, 196, 170), (x, size * 0.20), (x, size * 0.80), 1)
+    # a woven bolt across the lower half
+    pygame.draw.rect(s, (206, 196, 170), (size * 0.22, size * 0.52, size * 0.56, size * 0.22))
+    pygame.draw.rect(s, wood_d, (size * 0.22, size * 0.52, size * 0.56, size * 0.22), 2)
+    for i in range(4):
+        x = size * (0.26 + i * 0.15)
+        pygame.draw.line(s, (150, 138, 112), (x, size * 0.54), (x, size * 0.72), 1)
+    # shuttle
+    pygame.draw.rect(s, wood_d, (size * 0.14, size * 0.56, size * 0.72, size * 0.07),
+                     border_radius=2)
+    return s
 
 
 def house_icon(size: int = 46) -> pygame.Surface:
@@ -484,6 +507,7 @@ class BuildMenu:
             icon_fn = {"house": house_icon, "workshop": workshop_icon,
                        "lab_table": lab_icon, "lab": lab_icon,
                        "research": research_icon,
+                       "weaver": weaver_icon,
                        "brew_table": brew_icon, "barrel": barrel_icon,
                        "brewery": brew_icon, "smith": workshop_icon,
                        "mine": workshop_icon, "plot": fence_icon,
