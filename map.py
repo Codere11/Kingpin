@@ -270,7 +270,14 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
 
     view_half = _VIEW["half"]
     cx, cy = _VIEW["cx"], _VIEW["cy"]
-    chart = _chart(world, cx, cy, view_half)
+    # THE CHART IS CACHED ON A QUANTISED CENTRE. The camp and player markers
+    # must use that SAME centre, or they slide smoothly while the terrain
+    # steps, and a camp drifts off its tree. Pin both to the chart's grid.
+    _cell = (2.0 * view_half) / CHART_PX
+    _cq = max(1.0, _cell * 0.25)
+    _cx = math.floor(cx / _cq) * _cq
+    _cy = math.floor(cy / _cq) * _cq
+    chart = _chart(world, _cx, _cy, view_half)
     if chart is None:
         charting = small_charting.render("charting the country…", True,
                                          (206, 198, 176))
@@ -286,8 +293,8 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
             pygame.draw.rect(screen, PAPER, r)
 
     def at(wx: float, wy: float):
-        return (x0 + int((wx - (cx - view_half)) / (2.0 * view_half) * size),
-                y0 + int((wy - (cy - view_half)) / (2.0 * view_half) * size))
+        return (x0 + int((wx - (_cx - view_half)) / (2.0 * view_half) * size),
+                y0 + int((wy - (_cy - view_half)) / (2.0 * view_half) * size))
 
     label_font = pygame.font.SysFont("dejavusansmono", max(11, vh // 44), bold=True)
 
