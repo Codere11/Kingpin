@@ -298,8 +298,28 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
 
     small_font = pygame.font.SysFont("dejavusansmono", max(9, vh // 62),
                                      bold=True)
+    # EVERY CAMP IN THE SIMULATED DISTANCE, straight from the lattice, plus any
+    # already-built camp (the starter camps and the home camp are off-lattice).
+    try:
+        import native as _native
+        _seed = int(getattr(world, "seed", 0))
+        _marks = _native.camp_positions(player.x, player.y, 110000.0, _seed)
+    except Exception:
+        _marks = []
+    _seen = set()
+    _draw = []
+    for _wx, _wy, _gx, _gy in _marks:
+        _key = (int(_wx // 100), int(_wy // 100))
+        if _key not in _seen:
+            _seen.add(_key)
+            _draw.append((_wx, _wy))
     for _n in natives or ():
-        _px, _py = at(_n.x, _n.y)
+        _key = (int(getattr(_n, "x", 0.0) // 100), int(getattr(_n, "y", 0.0) // 100))
+        if _key not in _seen:
+            _seen.add(_key)
+            _draw.append((getattr(_n, "x", 0.0), getattr(_n, "y", 0.0)))
+    for _wx, _wy in _draw:
+        _px, _py = at(_wx, _wy)
         if x0 - 2 <= _px <= x0 + size + 2 and y0 - 2 <= _py <= y0 + size + 2:
             _campfire(screen, int(_px), int(_py))
             _lbl = small_font.render("camp", True, (250, 248, 240))

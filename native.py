@@ -82,6 +82,26 @@ def spawn_starter_camps(g) -> list:
     return made
 
 
+def camp_positions(px: float, py: float, radius: float, seed: int) -> list:
+    """Every native-camp POSITION within `radius` of (px, py), straight from
+    the lattice. Markers only -- no settlement is built here. The full
+    settlement (people, fields, trees) is built lazily by ensure_near when the
+    player walks up to it."""
+    out = []
+    x0 = int(math.floor((px - radius) / NATIVE_SPACING))
+    x1 = int(math.floor((px + radius) / NATIVE_SPACING))
+    y0 = int(math.floor((py - radius) / NATIVE_SPACING))
+    y1 = int(math.floor((py + radius) / NATIVE_SPACING))
+    for gy in range(y0, y1 + 1):
+        for gx in range(x0, x1 + 1):
+            if gx >= 0:
+                continue
+            cx, cy = native_center(gx, gy, seed)
+            if math.hypot(cx - px, cy - py) <= radius:
+                out.append((cx, cy, gx, gy))
+    return out
+
+
 def native_center(gx: int, gy: int, seed: int):
     """A native camp's centre: a 20 km lattice, shaken by jitter."""
     code = (gx * 73856093) ^ (gy * 19349663) ^ (seed * 2654435761)
