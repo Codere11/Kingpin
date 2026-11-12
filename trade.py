@@ -21,7 +21,7 @@ DIM = (140, 140, 150)
 ACCENT = (222, 176, 88)
 
 SELL_RATE = 3          # leaf per coin
-LEAF_ITEMS = ("tobacco", "red_mushroom", "agave")
+LEAF_ITEMS = ("tobacco", "red_mushroom", "agave", "chili")
 RESTOCK_SECONDS = 600.0
 
 BUY = [

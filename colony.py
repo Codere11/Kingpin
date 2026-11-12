@@ -349,7 +349,19 @@ def conquer_camp(g, native_camp) -> None:
         n._log_tree = None
         n.orchard_plot = None
         n.farm_plot = None
-        n.stock["wheat_seed"] = n.stock.get("wheat_seed", 0) + 3
+        # A starter seed for every crop this biome grows, so his first field
+        # can be anything -- chili and cotton included, not only wheat.
+        try:
+            import biomes as _biomes
+            _seed0 = int(getattr(g.world, "seed", 1))
+            _t = float(_biomes.temperature(native_camp.x, native_camp.y, _seed0))
+            _h = float(_biomes.humidity(native_camp.x, native_camp.y, _seed0))
+            for _k in crop.growable_kinds(_t, _h):
+                _s = crop.CROP_SEED.get(_k)
+                if _s:
+                    n.stock[_s] = int(n.stock.get(_s, 0)) + 3
+        except Exception:
+            n.stock["wheat_seed"] = int(n.stock.get("wheat_seed", 0)) + 3
         if n not in pc.people:
             pc.people.append(n)
     # THE LIVESTOCK ARE HIS TOO: a conquered horse carries goods to the ship.
