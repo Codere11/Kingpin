@@ -90,12 +90,12 @@ def _cactus_icon(surf: pygame.Surface, x: int, y: int) -> None:
 
 def _campfire(screen: pygame.Surface, px: int, py: int) -> None:
     """A campfire mark: crossed logs under a little flame."""
-    pygame.draw.line(screen, (104, 72, 44), (px - 6, py + 5), (px + 6, py - 5), 2)
-    pygame.draw.line(screen, (104, 72, 44), (px - 6, py - 5), (px + 6, py + 5), 2)
-    pygame.draw.polygon(screen, (250, 150, 50), [(px, py - 7), (px - 4, py - 1),
-                                                 (px + 4, py - 1)])
-    pygame.draw.polygon(screen, (255, 224, 100), [(px, py - 5), (px - 2, py - 1),
-                                                  (px + 2, py - 1)])
+    pygame.draw.line(screen, (104, 72, 44), (px - 8, py + 7), (px + 8, py - 7), 2)
+    pygame.draw.line(screen, (104, 72, 44), (px - 8, py - 7), (px + 8, py + 7), 2)
+    pygame.draw.polygon(screen, (250, 150, 50), [(px, py - 9), (px - 6, py - 1),
+                                                 (px + 6, py - 1)])
+    pygame.draw.polygon(screen, (255, 224, 100), [(px, py - 6), (px - 3, py - 1),
+                                                  (px + 3, py - 1)])
 
 
 def _chart(world, cx: float, cy: float, half: float):
@@ -283,28 +283,6 @@ def _paper(world, seed: int):
                 _cactus_icon(surf, i, j)
             elif k == 2:
                 _tree_icon(surf, i, j, snow=False)
-    try:
-        import native as _native
-        _ns = _native.NATIVE_SPACING
-        fstep = (2.0 * half) / N
-        _gx0 = int(math.floor(-half / _ns))
-        _gx1 = int(math.floor(half / _ns))
-        _gy0 = int(math.floor(-half / _ns))
-        _gy1 = int(math.floor(half / _ns))
-        for _gy in range(_gy0, _gy1 + 1):
-            for _gx in range(_gx0, _gx1 + 1):
-                if _gx >= 0:
-                    continue
-                _wx, _wy = _native.native_center(_gx, _gy, seed)
-                _px = int((_wx + half) / fstep)
-                _py = int((_wy + half) / fstep)
-                if 0 <= _px < N and 0 <= _py < N:
-                    pygame.draw.line(surf, (104, 72, 44), (_px - 5, _py + 4), (_px + 5, _py - 4), 2)
-                    pygame.draw.line(surf, (104, 72, 44), (_px - 5, _py - 4), (_px + 5, _py + 4), 2)
-                    pygame.draw.circle(surf, (250, 150, 50), (_px, _py), 3)
-                    pygame.draw.circle(surf, (255, 224, 100), (_px, _py - 1), 1)
-    except Exception:
-        pass
     _PAPER = (_key, surf)
     return surf
 
@@ -442,13 +420,34 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
                 y0 + _off + (wy + WORLD_HALF) / (2.0 * WORLD_HALF) * _ps)
 
     label_font = pygame.font.SysFont("dejavusansmono", max(11, vh // 44), bold=True)
-    # Off-lattice camps (starter camps and the home camp), pinned to the same
-    # world->screen transform as the fixed image.
-    for _n in natives or ():
-        _px, _py = w2s(getattr(_n, "x", 0.0), getattr(_n, "y", 0.0))
+    # EVERY CAMP, one detailed icon. The untouched lattice cells are drawn at
+    # their world x,y through the SAME world->screen transform as the terrain,
+    # so none can drift; settled cells come from the register and are skipped
+    # in the lattice pass, then drawn from their exact position.
+    seed = int(getattr(world, "seed", 0))
+    built = [(getattr(_n, "x", 0.0), getattr(_n, "y", 0.0)) for _n in (natives or ())]
+
+    def _mark(_wx, _wy):
+        _px, _py = w2s(_wx, _wy)
         if x0 - 2 <= _px <= x0 + size + 2 and y0 - 2 <= _py <= y0 + size + 2:
             _campfire(screen, int(_px), int(_py))
-    # HIM -- the yellow dot is baked into the paper; this is the ring + label.
+
+    try:
+        import native as _native
+        _ns = _native.NATIVE_SPACING
+        _cells = int(WORLD_HALF / _ns)
+        for _gy in range(-_cells, _cells + 1):
+            for _gx in range(-_cells, 0):
+                _wx, _wy = _native.native_center(_gx, _gy, seed)
+                if any(math.hypot(_wx - bx, _wy - by) < _ns * 0.3
+                       for bx, by in built):
+                    continue
+                _mark(_wx, _wy)
+    except Exception:
+        pass
+    for _bx, _by in built:
+        _mark(_bx, _by)
+    # HIM -- a bright ring and dot, last and on top.
     px, py = w2s(player.x, player.y)
     inside = (x0 <= px <= x0 + size and y0 <= py <= y0 + size)
     if not inside:
