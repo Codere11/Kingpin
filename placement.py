@@ -298,7 +298,7 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
               "stall": (64, 64), "dummy": (64, 64), "target": (64, 64),
               "fireplace": (64, 64), "chest": (32, 32), "sign": (32, 32),
               "foodbox": (32, 32), "workshop": (64, 64), "research": (64, 32),
-              "weaver": (64, 64)}
+              "weaver": (64, 64), "spice": (64, 64)}
     if placing in _sizes:
         _w, _h = _sizes[placing]
         if _h == TILE:
@@ -606,7 +606,7 @@ def try_place(g):
         pygame.mouse.set_visible(False)
         return
     if placing in ("lab", "brewery", "smith", "mine", "dummy", "target",
-                   "fireplace", "workshop", "research", "weaver"):
+                   "fireplace", "workshop", "research", "weaver", "spice"):
         _wp = industry.Workplace(placing, x, y, random.randrange(1 << 30))
         if not hubs.land_ok(_wp.rect, g.villages.villages, g.hub_world.hubs,
                            g.player.x, g.player.y):

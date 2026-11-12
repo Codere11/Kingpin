@@ -57,6 +57,15 @@ def _weavers_available(g) -> bool:
         return False
 
 
+def _spicemen_available(g) -> bool:
+    """The Spiceman job only appears once Spice sauces is researched."""
+    try:
+        import research
+        return research.state(g, "spice_sauce") == "done"
+    except Exception:
+        return False
+
+
 def _route_items(g, camp):
     """The chest-filter goods a settlement's route node may move."""
     import crop
@@ -798,6 +807,7 @@ def run(g):
                     g.sign_panel = SignPanel(_sg, g.player_camp, lambda: g.sync_jobs(g),
                                              show_smiths=lambda: _smiths_available(g),
                                              show_weavers=lambda: _weavers_available(g),
+                                             show_spicemen=lambda: _spicemen_available(g),
                                              show_gunsmiths=lambda: _gunsmiths_available(g))
                     g.sign_open = True
                     pygame.mouse.set_visible(True)

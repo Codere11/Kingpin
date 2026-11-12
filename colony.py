@@ -66,6 +66,7 @@ def make_camp(g) -> object:
         "miners": [],              # the conquered MINERS (iron in the snow)
         "smiths": [],              # the conquered SMITHS (iron bars at the forge)
         "weavers": [],             # the conquered WEAVERS (cotton to cloth at the loom)
+        "spicemen": [],            # the conquered SPICEMEN (chili to sauce at the stall)
         "gunsmiths": [],            # the conquered GUNSMITHS (guns at the forge)
         "unemployed": [],          # conquered, not assigned to a job
         "people": [],              # every conquered person (the pool)
@@ -411,6 +412,7 @@ def sync_jobs(g) -> None:
     n_miner = int(getattr(sign, "miners", 0) or 0) if sign is not None else 0
     n_smith = int(getattr(sign, "smiths", 0) or 0) if sign is not None else 0
     n_weaver = int(getattr(sign, "weavers", 0) or 0) if sign is not None else 0
+    n_spiceman = int(getattr(sign, "spicemen", 0) or 0) if sign is not None else 0
     n_gunsmith = int(getattr(sign, "gunsmiths", 0) or 0) if sign is not None else 0
     camp.workers = []
     camp.loggers = []
@@ -419,6 +421,7 @@ def sync_jobs(g) -> None:
     camp.miners = []
     camp.smiths = []
     camp.weavers = []
+    camp.spicemen = []
     camp.gunsmiths = []
     camp.unemployed = []
     for i, n in enumerate(people):
@@ -455,7 +458,11 @@ def sync_jobs(g) -> None:
             n.native_role = "weaver"
             n.job = "weaver"
             camp.weavers.append(n)
-        elif i < n_farmer + n_logger + n_artisan + n_researcher + n_miner + n_smith + n_weaver + n_gunsmith:
+        elif i < n_farmer + n_logger + n_artisan + n_researcher + n_miner + n_smith + n_weaver + n_spiceman:
+            n.native_role = "spiceman"
+            n.job = "spiceman"
+            camp.spicemen.append(n)
+        elif i < n_farmer + n_logger + n_artisan + n_researcher + n_miner + n_smith + n_weaver + n_spiceman + n_gunsmith:
             n.native_role = "gunsmith"
             n.job = "gunsmith"
             n.gunsmith_product = "musket"   # default: the only gun he can start with

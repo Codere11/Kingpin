@@ -180,6 +180,7 @@ LOG_CHOP_SECONDS = 3.0    # how long a logger takes to drop one tree
 ORCHARD_GROW_SECONDS = 180.0   # a sapling to a full tree, like a wild stump
 ARTISAN_BATCH_SECONDS = 4.0   # ten leaf into ten finished goods at the bench
 WEAVER_BATCH_SECONDS = 10.0   # five cotton into one bolt of cloth at the loom
+SPICEMAN_SECONDS = 60.0      # five chilis into one bottle of sauce at the stall
 BIRTH_BOND = 18.0                    # seconds of evening friendship before a child
 PEACE_DELAY = 30.0                   # no children until this long after a death
 
@@ -1602,6 +1603,60 @@ class NPC:
             self._did_work()
             self.skills.gain_farming(0.05)
 
+    def _work_spiceman(self, dt: float) -> None:
+        """A spiceman at the stall: five chilis into one bottle of sauce, a
+        minute a bottle. Sauce carries no grade -- it is sauce. Only once
+        Spice sauces is researched."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        if g is None:
+            self._native_idle(dt)
+            return
+        try:
+            import research as _research
+            if _research.state(g, "spice_sauce") != "done":
+                self._native_idle(dt)
+                return
+        except Exception:
+            self._native_idle(dt)
+            return
+        stall = self._nearest_workplace(g, "spice")
+        if stall is None:
+            self._native_idle(dt)
+            return
+        # deliver finished bottles first
+        if int(self.carry.get("sauce", 0)) > 0:
+            if self._deposit_to_chest(dt):
+                return
+        # fetch five chilis from a chest
+        if int(self.carry.get("chili", 0)) < 5:
+            chest = self._chest_with("chili", 5)
+            if chest is None:
+                self._native_idle(dt)
+                return
+            if math.hypot(chest.x - self.x, chest.y - self.y) > 20.0:
+                self._step_toward(chest.x, chest.y, dt)
+                return
+            taken, _g = self._take_from_chest(chest, "chili",
+                                              5 - int(self.carry.get("chili", 0)))
+            if taken > 0:
+                self.carry["chili"] = int(self.carry.get("chili", 0)) + taken
+            return
+        # walk to the stall and bottle it
+        if math.hypot(stall.x - self.x, stall.y - self.y) > 24.0:
+            self._step_toward(stall.x, stall.y, dt)
+            return
+        self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
+        if self.produce_acc >= SPICEMAN_SECONDS:
+            self.produce_acc = 0.0
+            self.carry["chili"] = int(self.carry.get("chili", 0)) - 5
+            if self.carry.get("chili", 0) <= 0:
+                self.carry.pop("chili", None)
+                self.carry_grade.pop("chili", None)
+            self.carry["sauce"] = int(self.carry.get("sauce", 0)) + 1
+            self._did_work()
+            self.skills.gain_farming(0.05)
+
     # THE GUNSMITH'S THREE PRODUCTS: what he makes, what it costs in iron
     # bars, how long one takes, and which research unlocks it.
     GUNSMITH_PRODUCTS = (
@@ -1920,6 +1975,9 @@ class NPC:
             return
         if _nat and getattr(self, "native_role", "") == "weaver":
             self._work_weaver(dt)
+            return
+        if _nat and getattr(self, "native_role", "") == "spiceman":
+            self._work_spiceman(dt)
             return
         if _nat and getattr(self, "native_role", "") == "gunsmith":
             self._work_gunsmith(dt)

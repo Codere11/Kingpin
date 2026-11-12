@@ -524,6 +524,8 @@ class Workplace:
             return self._render_research()
         if self.kind == "weaver":
             return self._render_weaver()
+        if self.kind == "spice":
+            return self._render_spice()
         if self.kind == "workshop":
             return self._render_workshop()
         if self.kind == "brewery":
@@ -756,6 +758,27 @@ class Workplace:
             x = ox + 24 + i * ((w - 48) / 4)
             pygame.draw.line(surf, (150, 138, 112), (x, oy + h // 2 + 4),
                              (x, oy + h - 14), 1)
+        return surf
+
+    def _render_spice(self) -> pygame.Surface:
+        """A spice stall: a counter with red bottles of chili sauce, top-down."""
+        w, h, pad = self.w, self.h, 14
+        surf = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+        ox, oy = pad, pad
+        wood, wood_d = (150, 104, 62), (78, 54, 34)
+        # shadow
+        pygame.draw.ellipse(surf, (0, 0, 0, 70), (ox + 6, oy + h - 10, w - 12, 24))
+        # counter top
+        pygame.draw.rect(surf, wood_d, (ox + 8, oy + h // 2, w - 16, h // 2 - 6), border_radius=4)
+        pygame.draw.rect(surf, wood, (ox + 10, oy + h // 2 + 2, w - 20, h // 2 - 10))
+        # bottles in a row
+        for i in range(3):
+            bx = ox + w * (0.30 + i * 0.20)
+            pygame.draw.rect(surf, (186, 48, 44), (bx, oy + h // 2 - 10, 10, 16),
+                             border_radius=2)
+            pygame.draw.rect(surf, (128, 30, 28), (bx, oy + h // 2 - 10, 10, 16), 1,
+                             border_radius=2)
+            pygame.draw.rect(surf, (240, 232, 214), (bx + 1, oy + h // 2 - 4, 8, 5))
         return surf
 
     def _render_workshop(self) -> pygame.Surface:

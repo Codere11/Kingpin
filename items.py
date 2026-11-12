@@ -46,7 +46,7 @@ REGISTRY: dict[str, ItemDef] = {
     "textile": ItemDef("textile", "Textile", "Woven cloth, made from cotton.",
                        stackable=True, max_stack=100, quality=True),
     "sauce": ItemDef("sauce", "Spice Sauce", "A bottle of New World spice sauce.",
-                     stackable=True, max_stack=100, quality=True),
+                     stackable=True, max_stack=100),
     "reinforced_armor": ItemDef("reinforced_armor", "Reinforced Armor",
                                  "Iron plates over textiles. Heavy, and very strong."),
     "army_stars": ItemDef("army_stars", "Army", "The stars of a raised army."),

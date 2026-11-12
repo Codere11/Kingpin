@@ -114,6 +114,8 @@ def chest_filter_items(t, h):
     # store it by name.
     if biomes.biome_name(t, h) in ("savanna", "woodland"):
         out.append("chili")
+    # Sauce is bottled anywhere a spice stall stands.
+    out.append("sauce")
     return out
 
 # the leaf plant takes its colour from where it grows

@@ -26,6 +26,9 @@ BUILDINGS = [
     # A LOOM IS GEARS -- not wood -- and only once Textiles is researched.
     {"id": "weaver", "name": "Weaver's loom", "wood": 0,
      "cost": {"gear": 300}, "needs": "textiles", "where": "outside"},
+    # A SPICE STALL bottles chili sauce -- only once Spice sauces is done.
+    {"id": "spice", "name": "Spice stall", "wood": 300,
+     "needs": "spice_sauce", "where": "outside"},
     {"id": "workshop", "name": "Workbench", "wood": 100, "where": "outside"},
     {"id": "brewery", "name": "Brewhouse", "wood": 120, "where": "outside"},
     # THE PLAYER'S OWN SHOP. It stands inside his hub (main refuses it
@@ -221,6 +224,25 @@ def weaver_icon(size: int = 46) -> pygame.Surface:
     # shuttle
     pygame.draw.rect(s, wood_d, (size * 0.14, size * 0.56, size * 0.72, size * 0.07),
                      border_radius=2)
+    return s
+
+
+def spice_icon(size: int = 46) -> pygame.Surface:
+    """A bottle of red spice sauce, capped and labelled."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    # neck and cap
+    pygame.draw.rect(s, (186, 48, 44), (size * 0.42, size * 0.30, size * 0.16, size * 0.14))
+    pygame.draw.rect(s, (120, 84, 40), (size * 0.42, size * 0.22, size * 0.16, size * 0.09),
+                     border_radius=2)
+    # body
+    pygame.draw.rect(s, (186, 48, 44), (size * 0.28, size * 0.42, size * 0.44, size * 0.42),
+                     border_radius=5)
+    pygame.draw.rect(s, (128, 30, 28), (size * 0.28, size * 0.42, size * 0.44, size * 0.42),
+                     2, border_radius=5)
+    # label
+    pygame.draw.rect(s, (240, 232, 214), (size * 0.33, size * 0.52, size * 0.34, size * 0.18),
+                     border_radius=2)
+    pygame.draw.line(s, (186, 48, 44), (size * 0.37, size * 0.56), (size * 0.63, size * 0.56), 2)
     return s
 
 
@@ -523,6 +545,7 @@ class BuildMenu:
                        "lab_table": lab_icon, "lab": lab_icon,
                        "research": research_icon,
                        "weaver": weaver_icon,
+                       "spice": spice_icon,
                        "brew_table": brew_icon, "barrel": barrel_icon,
                        "brewery": brew_icon, "smith": workshop_icon,
                        "mine": workshop_icon, "plot": fence_icon,
