@@ -358,17 +358,31 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
 
     view_half = _VIEW["half"]
     cx, cy = _VIEW["cx"], _VIEW["cy"]
-    # ONE FIXED IMAGE keyed to world x,y. The camera only picks the rectangle
-    # of it that is shown, so terrain, camps and player can never drift apart.
-    paper = _paper(world, int(getattr(world, "seed", 0)), player.x, player.y)
-    _scale = PAPER_N / (2.0 * WORLD_HALF)
-    _sx = int((cx - view_half + WORLD_HALF) * _scale)
-    _sy = int((cy - view_half + WORLD_HALF) * _scale)
-    _sw = max(1, int((2.0 * view_half) * _scale))
-    _sx = max(0, min(PAPER_N - _sw, _sx))
-    _sy = max(0, min(PAPER_N - _sw, _sy))
-    _sub = paper.subsurface(pygame.Rect(_sx, _sy, _sw, _sw))
-    screen.blit(pygame.transform.scale(_sub, (size, size)), (x0, y0))
+    # THE TERRAIN (lattice camps baked in) is ONE cached surface. Copy it,
+    # draw the off-lattice camps and the player onto that SAME surface, and
+    # blit it once -- every mark shares one transform, so nothing can drift.
+    chart = _chart(world, cx, cy, view_half)
+    if chart is None:
+        charting = small_charting.render("charting the country…", True, (206, 198, 176))
+        screen.blit(charting, (x0 + size // 2 - charting.get_width() // 2,
+                               y0 + size // 2 - charting.get_height() // 2))
+    else:
+        img = chart.copy()
+        n = CHART_PX
+        step = (2.0 * view_half) / n
+        for _n in natives or ():
+            _cpx = int((getattr(_n, "x", 0.0) - (cx - view_half)) / step)
+            _cpy = int((getattr(_n, "y", 0.0) - (cy - view_half)) / step)
+            if 0 <= _cpx < n and 0 <= _cpy < n:
+                pygame.draw.line(img, (104, 72, 44), (_cpx - 3, _cpy + 3), (_cpx + 3, _cpy - 3), 1)
+                pygame.draw.line(img, (104, 72, 44), (_cpx - 3, _cpy - 3), (_cpx + 3, _cpy + 3), 1)
+                img.set_at((_cpx, _cpy), (250, 150, 50))
+        _cpx = int((player.x - (cx - view_half)) / step)
+        _cpy = int((player.y - (cy - view_half)) / step)
+        if 0 <= _cpx < n and 0 <= _cpy < n:
+            pygame.draw.circle(img, (40, 40, 46), (_cpx, _cpy), 4)
+            pygame.draw.circle(img, (255, 236, 120), (_cpx, _cpy), 3)
+        screen.blit(pygame.transform.scale(img, (size, size)), (x0, y0))
     # BEYOND THE WORLD IS NOT DARK, IT IS UNCHARTED.
     if view_half > WORLD_HALF:
         inset = int((view_half - WORLD_HALF) / (2.0 * view_half) * size)
@@ -376,31 +390,14 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
                   (x0, y0, inset, size), (x0 + size - inset, y0, inset, size)):
             pygame.draw.rect(screen, PAPER, r)
 
-    def at(wx: float, wy: float):
-        _ppx = (wx + WORLD_HALF) * _scale
-        _ppy = (wy + WORLD_HALF) * _scale
-        return (x0 + int((_ppx - _sx) / _sw * size),
-                y0 + int((_ppy - _sy) / _sw * size))
+    def w2s(wx: float, wy: float):
+        return (x0 + (wx - (cx - view_half)) / (2.0 * view_half) * size,
+                y0 + (wy - (cy - view_half)) / (2.0 * view_half) * size)
 
     label_font = pygame.font.SysFont("dejavusansmono", max(11, vh // 44), bold=True)
-    small_font = pygame.font.SysFont("dejavusansmono", max(9, vh // 62),
-                                     bold=True)
-    # Off-lattice camps (starter camps and the home camp) are drawn at the
-    # same world->screen mapping as the fixed image, so they stay pinned too.
-    for _n in natives or ():
-        _px, _py = at(getattr(_n, "x", 0.0), getattr(_n, "y", 0.0))
-        if x0 - 2 <= _px <= x0 + size + 2 and y0 - 2 <= _py <= y0 + size + 2:
-            _campfire(screen, int(_px), int(_py))
-            _lbl = small_font.render("camp", True, (250, 248, 240))
-            _sd = small_font.render("camp", True, (10, 9, 8))
-            _r = pygame.Rect(int(_px + 9), int(_py - _lbl.get_height() // 2),
-                             _lbl.get_width(), _lbl.get_height())
-            screen.blit(_sd, (_r.x + 1, _r.y + 1))
-            screen.blit(_lbl, (_r.x, _r.y))
-    # HIM, last and on top -- AND NEVER LOST OFF THE EDGE. A map you cannot
-    # find yourself on is not a map; when the view has left him he is pinned
-    # to the frame with a bright ring, so pressing C is only a convenience.
-    px, py = at(player.x, player.y)
+    # HIM, last and on top -- the dot is baked into the chart above; this is
+    # just the bright ring and the label.
+    px, py = w2s(player.x, player.y)
     inside = (x0 <= px <= x0 + size and y0 <= py <= y0 + size)
     if not inside:
         px = max(x0 + 12, min(x0 + size - 12, px))
