@@ -649,8 +649,9 @@ class NPC:
         self.orchard_plot = None     # fixed orchard the logger works
         self.carry = {}              # surplus he is walking to the chest
         self.carry_grade = {}        # the grade of each carried item
-        self.job = None              # "miner" / "smith" / "logger"
+        self.job = None              # "miner" / "smith" / "gunsmith" / "logger"
         self.workplace = None
+        self.gunsmith_product = None   # what this gunsmith makes (set by the player)
         self.produce_acc = 0.0
         self.chop_timer = 0.0
         self._log_tree = None
@@ -1516,6 +1517,79 @@ class NPC:
             self._did_work()
             self.skills.gain_smithing()
 
+    # THE GUNSMITH'S THREE PRODUCTS: what he makes, what it costs in iron
+    # bars, how long one takes, and which research unlocks it.
+    GUNSMITH_PRODUCTS = (
+        {"id": "musket", "bars": 10, "seconds": 600.0, "needs": None,
+         "name": "Musket", "desc": "1 shot, 5s reload"},
+        {"id": "double_shot", "bars": 15, "seconds": 600.0, "needs": "two_shot",
+         "name": "Double-Shot", "desc": "2 shots, 5s reload"},
+        {"id": "rifle", "bars": 30, "seconds": 600.0, "needs": "rifle",
+         "name": "Rifle", "desc": "3 shots, 1s reload"},
+        {"id": "ammo", "bars": 1, "seconds": 30.0, "needs": None,
+         "name": "Ammo", "desc": "10 rounds", "amount": 10},
+    )
+
+    def _work_gunsmith(self, dt: float) -> None:
+        """A gunsmith works the forge into guns: the player has told him what
+        to make (click him and choose), and he turns iron bars into that one
+        thing, over and over. Only once Gunsmithing is researched."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        if g is None:
+            self._native_idle(dt)
+            return
+        try:
+            import research as _research
+            if _research.state(g, "gunsmithing") != "done":
+                self._native_idle(dt)
+                return
+        except Exception:
+            self._native_idle(dt)
+            return
+        product = next((p for p in self.GUNSMITH_PRODUCTS
+                        if p["id"] == getattr(self, "gunsmith_product", None)), None)
+        if product is None:
+            self._native_idle(dt)
+            return
+        out_item = product["id"]
+        out_n = product.get("amount", 1)
+        # deliver what he has already made first
+        if int(self.carry.get(out_item, 0)) > 0:
+            if self._deposit_to_chest(dt):
+                return
+        forge = self._nearest_workplace(g, "smith")
+        if forge is None:
+            self._native_idle(dt)
+            return
+        # fetch enough iron bars for one batch
+        need = product["bars"]
+        if int(self.carry.get("iron_bar", 0)) < need:
+            chest = self._chest_with("iron_bar", need)
+            if chest is None:
+                self._native_idle(dt)
+                return
+            if math.hypot(chest.x - self.x, chest.y - self.y) > 20.0:
+                self._step_toward(chest.x, chest.y, dt)
+                return
+            taken, _g = self._take_from_chest(chest, "iron_bar",
+                                              need - int(self.carry.get("iron_bar", 0)))
+            if taken > 0:
+                self.carry["iron_bar"] = int(self.carry.get("iron_bar", 0)) + taken
+            return
+        # walk to the forge and work
+        if math.hypot(forge.x - self.x, forge.y - self.y) > 24.0:
+            self._step_toward(forge.x, forge.y, dt)
+            return
+        self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
+        if self.produce_acc >= product["seconds"]:
+            self.produce_acc = 0.0
+            self.carry["iron_bar"] = int(self.carry.get("iron_bar", 0)) - need
+            if self.carry.get("iron_bar", 0) <= 0:
+                self.carry.pop("iron_bar", None)
+            self.carry[out_item] = int(self.carry.get(out_item, 0)) + out_n
+            self._did_work()
+
     def _pockets(self):
         """A conquered worker's real pack (an Inventory), made lazily from the
         stock dict he was born with. Village and native farmers keep using the
@@ -1758,6 +1832,9 @@ class NPC:
             return
         if _nat and getattr(self, "native_role", "") == "smith":
             self._work_smith(dt)
+            return
+        if _nat and getattr(self, "native_role", "") == "gunsmith":
+            self._work_gunsmith(dt)
             return
         if _nat and getattr(self, "native_role", "") == "unemployed":
             self._native_idle(dt)

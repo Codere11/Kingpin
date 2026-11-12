@@ -23,6 +23,8 @@ KEY_DOWN = (pygame.K_s, pygame.K_DOWN)
 # item_id -> (icon size, rotates with facing, side offset from the body)
 HOLD: dict[str, tuple[int, bool, float]] = {
     "rifle": (48, True, 7.0),
+    "musket": (48, True, 7.0),
+    "double_shot": (48, True, 7.0),
     "shotgun": (52, True, 7.0),
     "pickaxe": (46, True, 7.0),
     "compass": (30, False, 10.0),

@@ -42,6 +42,7 @@ REGISTRY: dict[str, ItemDef] = {
     "gear": ItemDef("gear", "Gear", "A toothed gear. Machines are built from these.",
                     stackable=True, max_stack=100),
     "musket": ItemDef("musket", "Musket", "A smoothbore musket. Loud, slow, and heavy."),
+    "double_shot": ItemDef("double_shot", "Double-Shot", "A two-round musket. Fires twice before reloading."),
     "textile": ItemDef("textile", "Textile", "Woven cloth, made from cotton.",
                        stackable=True, max_stack=100, quality=True),
     "sauce": ItemDef("sauce", "Spice Sauce", "A bottle of New World spice sauce.",
@@ -292,6 +293,24 @@ def _draw_musket(s: int) -> pygame.Surface:
     pygame.draw.rect(surf, steel, (0.42 * s, 0.50 * s, 0.42 * s, 0.05 * s))
     # lock
     pygame.draw.rect(surf, steel_d, (0.40 * s, 0.52 * s, 0.07 * s, 0.08 * s))
+    return surf
+
+
+def _draw_double_shot(s: int) -> pygame.Surface:
+    """A double-shot: a musket with two barrels, one above the other."""
+    surf = _canvas(s)
+    wood, wood_d = (150, 104, 62), (78, 54, 34)
+    steel, steel_d = (176, 178, 186), (86, 88, 96)
+    # stock
+    _poly(surf, wood_d, [(0.12, 0.62), (0.40, 0.44), (0.40, 0.62), (0.12, 0.74)], s)
+    _poly(surf, wood, [(0.14, 0.62), (0.38, 0.48), (0.38, 0.61), (0.14, 0.72)], s)
+    # two barrels
+    pygame.draw.rect(surf, steel_d, (0.40 * s, 0.42 * s, 0.46 * s, 0.08 * s),
+                     border_radius=2)
+    pygame.draw.rect(surf, steel, (0.42 * s, 0.44 * s, 0.42 * s, 0.05 * s))
+    pygame.draw.rect(surf, steel_d, (0.40 * s, 0.55 * s, 0.46 * s, 0.08 * s),
+                     border_radius=2)
+    pygame.draw.rect(surf, steel, (0.42 * s, 0.57 * s, 0.42 * s, 0.05 * s))
     return surf
 
 
@@ -899,6 +918,7 @@ _DRAWERS = {
     "iron_bar": _draw_iron_bar,
     "gear": _draw_gear,
     "musket": _draw_musket,
+    "double_shot": _draw_double_shot,
     "textile": _draw_textile,
     "sauce": _draw_sauce,
     "reinforced_armor": _draw_reinforced_armor,

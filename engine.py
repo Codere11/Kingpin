@@ -39,6 +39,15 @@ def _smiths_available(g) -> bool:
         return False
 
 
+def _gunsmiths_available(g) -> bool:
+    """The Gunsmith job only appears once Gunsmithing is researched."""
+    try:
+        import research
+        return research.state(g, "gunsmithing") == "done"
+    except Exception:
+        return False
+
+
 def _route_items(g, camp):
     """The chest-filter goods a settlement's route node may move."""
     import crop
@@ -415,6 +424,20 @@ def run(g):
                         g.sign_panel = None
                         g.sign_post = None
                         pygame.mouse.set_visible(False)
+            elif g.gunsmith_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                                                                  pygame.K_ESCAPE):
+                    g.gunsmith_open = False
+                    g.gunsmith_panel = None
+                    g.gunsmith_npc = None
+                    pygame.mouse.set_visible(False)
+                else:
+                    _r = g.gunsmith_panel.handle_event(event)
+                    if _r == "close":
+                        g.gunsmith_open = False
+                        g.gunsmith_panel = None
+                        g.gunsmith_npc = None
+                        pygame.mouse.set_visible(False)
             elif g.market_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
@@ -750,7 +773,8 @@ def run(g):
                     _sg = g.near_sign()
                     g.sign_post = _sg
                     g.sign_panel = SignPanel(_sg, g.player_camp, lambda: g.sync_jobs(g),
-                                             show_smiths=lambda: _smiths_available(g))
+                                             show_smiths=lambda: _smiths_available(g),
+                                             show_gunsmiths=lambda: _gunsmiths_available(g))
                     g.sign_open = True
                     pygame.mouse.set_visible(True)
                 elif g.near_foodbox() is not None:
@@ -966,6 +990,19 @@ def run(g):
                                     break
                     except Exception:
                         pass
+                    # A GUNSMITH: click him and choose what he makes.
+                    try:
+                        _wx = g.cam_x + event.pos[0] / ZOOM
+                        _wy = g.cam_y + event.pos[1] / ZOOM
+                        for _n in list(getattr(g, "_native_people", ())):
+                            if (getattr(_n, "alive", True)
+                                    and getattr(_n, "job", None) == "gunsmith"):
+                                if math.hypot(_wx - _n.x, _wy - _n.y) < 40.0:
+                                    g.open_gunsmith(_n)
+                                    g.consumed = True
+                                    break
+                    except Exception:
+                        pass
                     # A BUILDABLE IN THE HAND: LEFT CLICK PLACES A 1x1 BLOCK.
                     import block as _block
                     if g._held_id in _block.BUILDABLE and g.hotbar.slot_at(event.pos) is None:
@@ -1005,7 +1042,8 @@ def run(g):
                         plog.log("BODY-OPEN", getattr(g._body, "name", "?"))
                         break
                     # A WEAPON IS AN ATTACK, NOT A CONVERSATION.
-                    if g._held_id not in ("axe", "pickaxe", "rifle", "shotgun", "bow"):
+                    if g._held_id not in ("axe", "pickaxe", "rifle", "shotgun", "bow",
+                                         "musket", "double_shot"):
                         if g.click_a_man(event.pos):
                             break
                 g.consumed = g.hotbar.handle_event(event)
@@ -3477,6 +3515,8 @@ def run(g):
                 g.chest_panel.draw(g.screen)
             if g.sign_open:
                 g.sign_panel.draw(g.screen)
+            if g.gunsmith_open and g.gunsmith_panel is not None:
+                g.gunsmith_panel.draw(g.screen)
             if g.market_open and g.market_panel is not None:
                 g.market_panel.draw(g.screen)
             if g.research_open and g.research_panel is not None:
@@ -4007,6 +4047,8 @@ def run(g):
             g.chest_panel.draw(g.screen)
         if g.sign_open:
             g.sign_panel.draw(g.screen)
+        if g.gunsmith_open and g.gunsmith_panel is not None:
+            g.gunsmith_panel.draw(g.screen)
         if g.market_open and g.market_panel is not None:
             g.market_panel.draw(g.screen)
         if g.research_open and g.research_panel is not None:

@@ -29,7 +29,8 @@ from ui import ChestPanel
 
 def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
     stack = inventory.selected_stack()
-    if stack is None or stack.defn.id not in (guns.RIFLE, guns.SHOTGUN, "bow"):
+    if stack is None or stack.defn.id not in (guns.MUSKET, guns.DOUBLE_SHOT,
+                                             guns.RIFLE, guns.SHOTGUN, "bow"):
         return
     kind = stack.defn.id
     if kind == "bow":
@@ -59,10 +60,18 @@ def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
     if player.reloading > 0.0 or player.gun_cd > 0.0:
         return
     if player.mags.get(kind, 0) <= 0:
-        toast("Empty \u2014 press R to reload")
+        # EMPTY: begin the reload at once. The round is drawn from the pack
+        # the moment the barrel is ready, in settle_reload.
+        if inventory.count_of("ammo") <= 0:
+            toast("No ammo")
+            return
+        player.reload_kind = kind
+        player.reload_total = guns.RELOAD_LO.get(kind, 5.0)
+        player.reloading = player.reload_total
+        toast("Reloading\u2026")
         return
     player.mags[kind] -= 1
-    player.gun_cd = guns.FIRE_CD[kind]
+    player.gun_cd = guns.FIRE_CD.get(kind, 0.4)
     fx, fy = player.facing
     px, py = -fy, fx
     muzzle_x = player.x + fx * 30.0 + px * 7.0
@@ -72,8 +81,8 @@ def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
     distance = math.hypot((cam_x + wmouse_x) - muzzle_x,
                           (cam_y + wmouse_y) - muzzle_y)
     spread = skills.shot_spread()
-    for _ in range(guns.PELLETS[kind]):
-        extra = 0.0 if kind == guns.RIFLE else 0.11   # shotgun scatters
+    for _ in range(guns.PELLETS.get(kind, 1)):
+        extra = 0.11 if kind == guns.SHOTGUN else 0.0   # only the shotgun scatters
         combat.fire(muzzle_x, muzzle_y, player.facing_angle, distance,
                     shooter=player, owner="player", damage=guns.DAMAGE[kind],
                     team="player", spread=spread + extra)
@@ -610,7 +619,7 @@ def on_click(g):
                 g.try_sleep()
                 return
         return
-    if item_id in ("rifle", "shotgun", "bow"):
+    if item_id in ("musket", "double_shot", "rifle", "shotgun", "bow"):
         g.fire()
         return
     # CLICK DIRECTLY ON A MAN -> CHAT, whatever is in his hands. This is the

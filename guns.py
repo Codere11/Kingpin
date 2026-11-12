@@ -1,27 +1,34 @@
-"""Gun magazines and reload timings, shared by the player and the NPCs."""
+"""Gun magazines and reload timings, shared by the player and the NPCs.
+
+The gunsmith turns out three weapons. A musket holds one round and takes five
+seconds to reload; a double-shot holds two and takes the same five; a rifle
+holds three and reloads in a single second. All three eat the same `ammo`.
+"""
 
 from __future__ import annotations
 
+MUSKET = "musket"
+DOUBLE_SHOT = "double_shot"
 RIFLE = "rifle"
-SHOTGUN = "shotgun"
+SHOTGUN = "shotgun"          # legacy; no longer made or issued
 
-MAG = {RIFLE: 10, SHOTGUN: 3}                 # rounds per magazine
-# A RIFLE HAS NO COOL-DOWN. One click, one round: the lever is worked by the
-# player's own hand, so the limit is how fast he clicks, not a timer. The
-# shotgun still has to be pumped.
-FIRE_CD = {RIFLE: 0.0, SHOTGUN: 0.62}         # seconds between shots
-PELLETS = {RIFLE: 1, SHOTGUN: 12}             # a fistful, not three
-DAMAGE = {RIFLE: 80, SHOTGUN: 80}             # ONE ROUND TAKES 80 HEALTH
+MAG = {MUSKET: 1, DOUBLE_SHOT: 2, RIFLE: 3, SHOTGUN: 3}   # rounds per gun
+# Seconds between trigger pulls. The rifle works one round a second; the
+# musket and double-shot are slow to re-aim.
+FIRE_CD = {MUSKET: 0.4, DOUBLE_SHOT: 0.4, RIFLE: 1.0, SHOTGUN: 0.62}
+PELLETS = {MUSKET: 1, DOUBLE_SHOT: 1, RIFLE: 1, SHOTGUN: 12}
+DAMAGE = {MUSKET: 90, DOUBLE_SHOT: 90, RIFLE: 80, SHOTGUN: 80}
 
-# Reload seconds, at zero skill -> at maximum skill.
-RELOAD_LO = {RIFLE: 3.0, SHOTGUN: 2.0}
-RELOAD_HI = {RIFLE: 1.0, SHOTGUN: 2.0}   # the pump takes two seconds, always
+# Reload seconds, at zero skill -> at maximum skill. The three new weapons
+# reload in a fixed time: five seconds for the old guns, one for the rifle.
+RELOAD_LO = {MUSKET: 5.0, DOUBLE_SHOT: 5.0, RIFLE: 1.0, SHOTGUN: 2.0}
+RELOAD_HI = {MUSKET: 5.0, DOUBLE_SHOT: 5.0, RIFLE: 1.0, SHOTGUN: 2.0}
 
 
-# A RIFLEMAN FIRES IN THREES. Three rounds as fast as the lever can be worked,
-# then the aim-and-breathe pause he already had. The shotgun stays one pull.
-BURST = {RIFLE: 3, SHOTGUN: 1}
-BURST_GAP = {RIFLE: 0.08, SHOTGUN: 0.0}
+# A RIFLEMAN FIRES IN THREES (legacy soldier pacing). The player pulls the
+# trigger one round at a time instead.
+BURST = {MUSKET: 1, DOUBLE_SHOT: 1, RIFLE: 3, SHOTGUN: 1}
+BURST_GAP = {MUSKET: 0.0, DOUBLE_SHOT: 0.0, RIFLE: 0.08, SHOTGUN: 0.0}
 
 
 def rounds_now(who, dt: float, can_start: bool) -> int:
@@ -63,6 +70,6 @@ def enemy_fire(combat, shooter, x, y, angle, distance, spread=None) -> None:
 
 
 def reload_time(kind: str, skill: float) -> float:
-    lo = RELOAD_LO.get(kind, 3.0)
+    lo = RELOAD_LO.get(kind, 5.0)
     hi = RELOAD_HI.get(kind, 1.0)
     return lo + (hi - lo) * max(0.0, min(1.0, skill))

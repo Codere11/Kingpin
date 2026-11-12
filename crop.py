@@ -94,6 +94,10 @@ def chest_filter_items(t, h):
                  LEAF_PRODUCT.get(leaf_crop), "wood", "horse"):
         if item and item not in out:
             out.append(item)
+    # Iron bars are smelted anywhere there is a forge (the smith), and the
+    # gunsmith takes them out again -- so a dedicated 'Iron bars' chest is
+    # useful everywhere, not only in the snow.
+    out.append("iron_bar")
     if biomes.surface(t, h) == "snow":
         out.append("iron")
     return out

@@ -775,11 +775,12 @@ class SignPanel:
     """The sign-post: how many conquered people farm, log, or go unemployed.
     A click on [-] / [+] moves one person between the jobs."""
 
-    def __init__(self, sign, camp, sync, show_smiths=None) -> None:
+    def __init__(self, sign, camp, sync, show_smiths=None, show_gunsmiths=None) -> None:
         self.sign = sign
         self.camp = camp
         self.sync = sync
         self.show_smiths = show_smiths   # callable -> bool, for the gated job
+        self.show_gunsmiths = show_gunsmiths  # callable -> bool
         self.hover = None
         self.font = pygame.font.SysFont("dejavusans", 20, bold=True)
         self.font_small = pygame.font.SysFont("dejavusans", 15, bold=True)
@@ -793,6 +794,8 @@ class SignPanel:
                 ("Miners", "miners")]
         if self.show_smiths is not None and self.show_smiths():
             jobs.append(("Smiths", "smiths"))
+        if self.show_gunsmiths is not None and self.show_gunsmiths():
+            jobs.append(("Gunsmiths", "gunsmiths"))
         return jobs
 
     def _rects(self, sw: int, sh: int):
@@ -872,6 +875,102 @@ class SignPanel:
         unemp = max(0, total - used)
         u = self.font_small.render("Unemployed:  %d" % unemp, True, (176, 168, 152))
         screen.blit(u, (panel.left + 26, panel.bottom - 40))
+
+
+class GunsmithPanel:
+    """Click a gunsmith and choose what he makes: a musket, a double-shot, a
+    rifle, or ammo. The double-shot and the rifle only appear once their own
+    research is done, so the panel never offers what he cannot yet build."""
+
+    def __init__(self, npc, g) -> None:
+        self.npc = npc
+        self.g = g
+        self.hover = None
+        self.font = pygame.font.SysFont("dejavusans", 20, bold=True)
+        self.font_small = pygame.font.SysFont("dejavusans", 14)
+        import research as _research
+        self._two_shot = _research.state(g, "two_shot") == "done"
+        self._rifle = _research.state(g, "rifle") == "done"
+
+    def _products(self):
+        out = []
+        for p in getattr(self.npc, "GUNSMITH_PRODUCTS", ()):
+            if p.get("needs") == "two_shot" and not self._two_shot:
+                continue
+            if p.get("needs") == "rifle" and not self._rifle:
+                continue
+            out.append(p)
+        return out
+
+    def _rects(self, sw: int, sh: int):
+        prods = self._products()
+        w = 460
+        h = 76 + len(prods) * 64 + 30
+        x0, y0 = (sw - w) // 2, (sh - h) // 2
+        panel = pygame.Rect(x0, y0, w, h)
+        rows = []
+        for i, p in enumerate(prods):
+            rows.append((p, pygame.Rect(x0 + 16, y0 + 76 + i * 64, w - 32, 52)))
+        return panel, rows
+
+    @staticmethod
+    def _time_str(sec: float) -> str:
+        return "1 day" if sec >= 600.0 else "%d s" % int(sec)
+
+    def handle_event(self, event):
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return None
+        panel, rows = self._rects(*surface.get_size())
+        if event.type == pygame.MOUSEMOTION:
+            self.hover = None
+            for p, r in rows:
+                if r.collidepoint(event.pos):
+                    self.hover = p["id"]
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for p, r in rows:
+                if r.collidepoint(event.pos):
+                    self.npc.gunsmith_product = p["id"]
+                    return "changed"
+            if not panel.collidepoint(event.pos):
+                return "close"
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            return "close"
+        return None
+
+    def draw(self, screen: pygame.Surface) -> None:
+        sw, sh = screen.get_size()
+        panel, rows = self._rects(sw, sh)
+        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 155))
+        screen.blit(shade, (0, 0))
+        board = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pygame.draw.rect(board, (20, 20, 24, 244), board.get_rect(), border_radius=12)
+        pygame.draw.rect(board, BORDER, board.get_rect(), width=2, border_radius=12)
+        screen.blit(board, panel.topleft)
+        name = getattr(self.npc, "name", "Gunsmith") or "Gunsmith"
+        title = self.font.render("GUNSMITH \u2014 %s" % name, True, TEXT)
+        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 18))
+        for p, r in rows:
+            selected = getattr(self.npc, "gunsmith_product", None) == p["id"]
+            hovered = self.hover == p["id"]
+            pygame.draw.rect(screen, (58, 104, 62) if (hovered or selected) else (44, 46, 52),
+                             r, border_radius=8)
+            pygame.draw.rect(screen, ACCENT if (hovered or selected) else BORDER,
+                             r, width=2, border_radius=8)
+            icon = items.icon(p["id"], 40)
+            screen.blit(icon, (r.left + 8, r.centery - 20))
+            t = self.font.render(p["name"], True, TEXT)
+            screen.blit(t, (r.left + 58, r.top + 4))
+            recipe = "%d iron bars" % p["bars"]
+            if p.get("amount", 1) > 1:
+                recipe += "  \u2192  %d rounds" % p["amount"]
+            desc = "%s   \u00b7   %s" % (recipe, self._time_str(p["seconds"]))
+            d = self.font_small.render(desc, True, (176, 168, 152))
+            screen.blit(d, (r.left + 58, r.top + 27))
+        hint = self.font_small.render("Click a product to set what he makes",
+                                      True, (140, 134, 122))
+        screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 24))
 
 
 class HorsePanel:
