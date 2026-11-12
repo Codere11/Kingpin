@@ -481,6 +481,22 @@ def run(g):
                         g.smith_panel = None
                         g.smith_npc = None
                         pygame.mouse.set_visible(False)
+            elif g.barracks_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                                                                  pygame.K_ESCAPE):
+                    g.barracks_open = False
+                    g.barracks_panel = None
+                    g.barracks_wp = None
+                    pygame.mouse.set_visible(False)
+                else:
+                    _r = g.barracks_panel.handle_event(event)
+                    if _r == "buy":
+                        g.buy_soldier()
+                    elif _r == "close":
+                        g.barracks_open = False
+                        g.barracks_panel = None
+                        g.barracks_wp = None
+                        pygame.mouse.set_visible(False)
             elif g.market_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
@@ -866,6 +882,8 @@ def run(g):
                         if getattr(_wp, "product", None) is None:
                             _set_bench_default(g, _wp)
                         pygame.mouse.set_visible(True)
+                    elif getattr(_wp, "kind", None) == "barracks":
+                        g.open_barracks(_wp)
                     else:
                         g.smith_shop = _wp
                         g.smith_open = True
@@ -3594,6 +3612,8 @@ def run(g):
                 g.gunsmith_panel.draw(g.screen)
             if g.smith_panel_open and g.smith_panel is not None:
                 g.smith_panel.draw(g.screen)
+            if g.barracks_open and g.barracks_panel is not None:
+                g.barracks_panel.draw(g.screen)
             if g.market_open and g.market_panel is not None:
                 g.market_panel.draw(g.screen)
             if g.research_open and g.research_panel is not None:
@@ -4129,6 +4149,8 @@ def run(g):
             g.gunsmith_panel.draw(g.screen)
         if g.smith_panel_open and g.smith_panel is not None:
             g.smith_panel.draw(g.screen)
+        if g.barracks_open and g.barracks_panel is not None:
+            g.barracks_panel.draw(g.screen)
         if g.market_open and g.market_panel is not None:
             g.market_panel.draw(g.screen)
         if g.research_open and g.research_panel is not None:

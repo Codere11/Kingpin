@@ -109,9 +109,9 @@ from skills import Skills
 from trade import TradeMenu
 from workshop import WorkshopMenu
 from trees import Trees
-from ui import (ChestPanel, ConfirmMenu, FolderPanel, GunsmithPanel, HorsePanel,
-                Hotbar, InventoryPanel, MarketPanel, PauseMenu, ResearchPanel,
-                RoutePanel, ShipMarketPanel, SignPanel, SmithPanel)
+from ui import (BarracksPanel, ChestPanel, ConfirmMenu, FolderPanel, GunsmithPanel,
+                HorsePanel, Hotbar, InventoryPanel, MarketPanel, PauseMenu,
+                ResearchPanel, RoutePanel, ShipMarketPanel, SignPanel, SmithPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
                      nation_name, village_center)
@@ -752,6 +752,10 @@ def main() -> None:
     g.smith_panel_open = False
     g.smith_panel = None
     g.smith_npc = None
+    # THE BARRACKS: buy a soldier with armor, rifle and ammo.
+    g.barracks_open = False
+    g.barracks_panel = None
+    g.barracks_wp = None
     # THE FREE MARKET: sell manufactured goods out of the ship's hold.
     g.ship_hold = Inventory(capacity=32)
     g.market_open = False
@@ -1282,6 +1286,34 @@ def main() -> None:
         g.smith_panel_open = True
         pygame.mouse.set_visible(True)
 
+    def open_barracks(wp) -> None:
+        g.barracks_wp = wp
+        g.barracks_panel = BarracksPanel(g, wp)
+        g.barracks_open = True
+        pygame.mouse.set_visible(True)
+
+    def buy_soldier() -> None:
+        """Spend the armor, rifle and ammo; a soldier steps out of the barracks."""
+        _wp = g.barracks_wp
+        if _wp is None:
+            return
+        for _it, _q in BarracksPanel.COST:
+            if g.inventory.count_of(_it) < _q:
+                toast("Not enough materials")
+                return
+        for _it, _q in BarracksPanel.COST:
+            g.inventory.consume(_it, _q)
+        try:
+            import colony as _colony
+            _n = _colony.spawn_soldier(g, float(_wp.x), float(_wp.y + 50.0))
+            toast("%s reports for duty." % getattr(_n, "name", "A soldier"))
+        except Exception as _e:
+            plog.log("BARRACKS-BUY-ERR", repr(_e)[:160])
+        g.barracks_open = False
+        g.barracks_panel = None
+        g.barracks_wp = None
+        pygame.mouse.set_visible(False)
+
     def open_market() -> None:
         """The ship's market: sell manufactured goods out of the hold."""
         g.market_panel = ShipMarketPanel(g, g.inventory, g.ship_hold)
@@ -1721,6 +1753,7 @@ def main() -> None:
         g.sign_open = False
         g.gunsmith_open = False
         g.smith_panel_open = False
+        g.barracks_open = False
         g.horse_panel_open = False
         g.worker_panel_open = False
         g.stall_open = False
@@ -1901,6 +1934,8 @@ def main() -> None:
     g.open_horse = open_horse
     g.open_gunsmith = open_gunsmith
     g.open_smith = open_smith
+    g.open_barracks = open_barracks
+    g.buy_soldier = buy_soldier
     g.open_market = open_market
     g.send_horse = send_horse
     g.near_fireplace = near_fireplace

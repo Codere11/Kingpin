@@ -583,3 +583,45 @@ def spawn_conquered(g, farmers: int = 3, loggers: int = 2) -> None:
         if n not in _np:
             _np.append(n)
     sync_camp(g)
+
+
+def spawn_soldier(g, x: float, y: float):
+    """A bought soldier stands at the barracks: reinforced armor (4x body),
+    a rifle, and mid-level shooting. He guards and shoots hostiles."""
+    import village as village_mod
+    import guns as _guns
+    import stats as _stats
+    _s = (int(getattr(getattr(g, "world", None), "seed", 1) or 1) ^ 0x5A1A0) & 0x7FFFFFFF
+    n = village_mod.NPC(float(x), float(y), _s, name="Soldier",
+                        npc_id="soldier_%d" % _s, role="Soldier")
+    n.native = True
+    n.native_role = "soldier"
+    n.job = "soldier"
+    n.is_soldier = True
+    n.defender = True
+    n.conquered = False
+    n.native_camp = getattr(g, "player_camp", None)
+    n.weapon = "rifle"
+    n.gun_kind = _guns.RIFLE
+    n.mag = _guns.MAG[_guns.RIFLE]
+    n.skills.shooting = 0.5
+    n.reinforced_armor = True
+    n.max_health = int(round(_stats.body_for(n) * 4.0))
+    n.health = n.max_health
+    n.home = (float(x), float(y))
+    n.team = "player"
+    n.speed = 110.0
+    n.base_speed = 110.0
+    _np = getattr(g, "_native_people", None)
+    if _np is None:
+        _np = []
+        g._native_people = _np
+    if n not in _np:
+        _np.append(n)
+    _obs = getattr(g, "_observe_npcs", None)
+    if _obs is None:
+        _obs = []
+        g._observe_npcs = _obs
+    if n not in _obs:
+        _obs.append(n)
+    return n

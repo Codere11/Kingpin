@@ -1073,6 +1073,72 @@ class SmithPanel:
         screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 24))
 
 
+class BarracksPanel:
+    """At the barracks: buy a soldier for one reinforced armor, one rifle and
+    thirty rounds. The button greys out until the player can afford it."""
+
+    COST = (("reinforced_armor", 1), ("rifle", 1), ("ammo", 30))
+
+    def __init__(self, g, barracks) -> None:
+        self.g = g
+        self.barracks = barracks
+        self.hover = False
+        self.font = pygame.font.SysFont("dejavusans", 20, bold=True)
+        self.font_small = pygame.font.SysFont("dejavusans", 14)
+
+    def _affordable(self) -> bool:
+        inv = getattr(self.g, "inventory", None)
+        if inv is None:
+            return False
+        return all(inv.count_of(i) >= q for i, q in self.COST)
+
+    def _rects(self, sw: int, sh: int):
+        w, h = 460, 180
+        x0, y0 = (sw - w) // 2, (sh - h) // 2
+        panel = pygame.Rect(x0, y0, w, h)
+        btn = pygame.Rect(x0 + 40, y0 + 96, w - 80, 48)
+        return panel, btn
+
+    def handle_event(self, event):
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return None
+        panel, btn = self._rects(*surface.get_size())
+        if event.type == pygame.MOUSEMOTION:
+            self.hover = btn.collidepoint(event.pos)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if btn.collidepoint(event.pos) and self._affordable():
+                return "buy"
+            if not panel.collidepoint(event.pos):
+                return "close"
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            return "close"
+        return None
+
+    def draw(self, screen: pygame.Surface) -> None:
+        sw, sh = screen.get_size()
+        panel, btn = self._rects(sw, sh)
+        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 155))
+        screen.blit(shade, (0, 0))
+        board = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pygame.draw.rect(board, (20, 20, 24, 244), board.get_rect(), border_radius=12)
+        pygame.draw.rect(board, BORDER, board.get_rect(), width=2, border_radius=12)
+        screen.blit(board, panel.topleft)
+        title = self.font.render("BARRACKS", True, TEXT)
+        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 16))
+        cost = "1 reinforced armor  +  1 rifle  +  30 ammo"
+        c = self.font_small.render(cost, True, (206, 184, 122))
+        screen.blit(c, (panel.centerx - c.get_width() // 2, panel.top + 52))
+        afford = self._affordable()
+        pygame.draw.rect(screen, (58, 104, 62) if (afford and self.hover) else (44, 46, 52),
+                         btn, border_radius=8)
+        pygame.draw.rect(screen, ACCENT if afford else BORDER, btn, width=2, border_radius=8)
+        label = "Buy soldier" if afford else "Need more materials"
+        t = self.font.render(label, True, TEXT if afford else (140, 140, 148))
+        screen.blit(t, (btn.centerx - t.get_width() // 2, btn.centery - t.get_height() // 2))
+
+
 class HorsePanel:
     """A conquered horse: its saddle bags open like a chest, with a Send to
     ship button underneath."""

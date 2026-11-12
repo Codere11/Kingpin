@@ -673,6 +673,7 @@ class NPC:
         self.gunsmith_product = None   # what this gunsmith makes (set by the player)
         self.smith_product = None      # what this smith makes (set by the player)
         self.mounted = False           # a native warrior riding a horse (4th alarm)
+        self.reinforced_armor = False  # a bought soldier in reinforced armor
         self.produce_acc = 0.0
         self.chop_timer = 0.0
         self._log_tree = None
@@ -1685,6 +1686,72 @@ class NPC:
             self._did_work()
             self.skills.gain_farming(0.05)
 
+    def _work_soldier(self, dt: float) -> None:
+        """A bought soldier guards his post and shoots any hostile in reach:
+        an unconquered native warrior or a beast. Reinforced armor, a rifle,
+        and half a lifetime's shooting already behind him."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        if g is None:
+            self._native_idle(dt)
+            return
+        # reload the rifle when it runs dry
+        if self.reload_timer > 0.0:
+            self.reload_timer = max(0.0, self.reload_timer - dt)
+            if self.reload_timer == 0.0:
+                self.mag = guns.MAG.get(self.gun_kind, 3)
+        # nearest hostile: an unconquered warrior, or a beast
+        target = None
+        best = 1e18
+        for s in getattr(g, "native_settlements", {}).values():
+            if getattr(s, "conquered", False):
+                continue
+            for w in getattr(s, "warriors", ()) or ():
+                if not getattr(w, "alive", True):
+                    continue
+                d = (w.x - self.x) ** 2 + (w.y - self.y) ** 2
+                if d < best:
+                    best, target = d, w
+        for e in getattr(g, "enemies", ()) or ():
+            if not getattr(e, "alive", True):
+                continue
+            d = (e.x - self.x) ** 2 + (e.y - self.y) ** 2
+            if d < best:
+                best, target = d, e
+        if target is None:
+            self._native_idle(dt)
+            return
+        distance = math.sqrt(best)
+        dx = target.x - self.x
+        dy = target.y - self.y
+        if distance > 0.0:
+            self.facing = (dx / distance, dy / distance)
+        if distance > 240.0:
+            self._step_toward(target.x, target.y, dt)
+            return
+        if distance < 120.0:
+            # keep the rifle's range, not the axe's
+            self.x -= (dx / distance) * self.speed * dt
+            self.y -= (dy / distance) * self.speed * dt
+        self.attack_cd -= dt
+        if self.mag <= 0:
+            if self.reload_timer <= 0.0:
+                self.reload_timer = guns.reload_time(self.gun_kind, self.skills.shooting)
+            return
+        if self.attack_cd <= 0.0:
+            self.attack_cd = guns.FIRE_CD.get(self.gun_kind, 1.0)
+            self.mag -= 1
+            self._did_attack()
+            self.skills.gain_shooting()
+            combat = getattr(g, "combat", None)
+            if combat is not None:
+                a = math.atan2(dy, dx) + random.uniform(-0.05, 0.05)
+                mx = self.x + (dx / distance) * 16.0
+                my = self.y + (dy / distance) * 16.0
+                combat.fire(mx, my, a, distance, owner="player",
+                            damage=guns.DAMAGE.get(self.gun_kind, 80),
+                            team="player", shooter=self)
+
     # THE GUNSMITH'S THREE PRODUCTS: what he makes, what it costs in iron
     # bars, how long one takes, and which research unlocks it.
     GUNSMITH_PRODUCTS = (
@@ -2009,6 +2076,9 @@ class NPC:
             return
         if _nat and getattr(self, "native_role", "") == "gunsmith":
             self._work_gunsmith(dt)
+            return
+        if _nat and getattr(self, "native_role", "") == "soldier":
+            self._work_soldier(dt)
             return
         if _nat and getattr(self, "native_role", "") == "unemployed":
             self._native_idle(dt)
@@ -3645,6 +3715,18 @@ class NPC:
             for _px in (int(sx) - 8, int(sx) + 6):
                 pygame.draw.circle(screen, (96, 66, 38), (_px, int(sy) - 5), 4)
                 pygame.draw.circle(screen, (52, 36, 24), (_px, int(sy) - 5), 4, 1)
+        elif getattr(self, "reinforced_armor", False):
+            # REINFORCED ARMOR: grey iron plates bolted over a cloth body.
+            pygame.draw.circle(screen, (242, 232, 232) if flash else (176, 180, 190),
+                               (int(sx), int(sy)), 11)
+            pygame.draw.circle(screen, (76, 80, 88), (int(sx), int(sy)), 11, 2)
+            pygame.draw.line(screen, (76, 80, 88), (int(sx) - 8, int(sy) - 3),
+                             (int(sx) + 8, int(sy) - 3), 2)
+            pygame.draw.line(screen, (76, 80, 88), (int(sx) - 7, int(sy) + 3),
+                             (int(sx) + 7, int(sy) + 3), 2)
+            for _px in (int(sx) - 9, int(sx) + 7):
+                pygame.draw.circle(screen, (96, 100, 108), (_px, int(sy) - 6), 5)
+                pygame.draw.circle(screen, (58, 62, 70), (_px, int(sy) - 6), 5, 1)
         else:
             body = (242, 232, 232) if flash else self.clothing
             # THE OLD MAN WEARS A PLAIN TUNIC, and his hair is grey under the face.
