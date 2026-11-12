@@ -237,13 +237,17 @@ def _paper(world, seed: int, player_x: float, player_y: float):
         hums = np.full((N, N), 0.5, np.float32)
         _coast = np.full((N, N), half + 1.0, np.float32)
     _ocean = gx > _coast
+    _land = ~_ocean
     _snow = temps < 0.32
     _desert = (temps > 0.62) & (hums < 0.34)
     rgb = np.empty((N, N, 3), np.uint8)
-    rgb[:] = (74, 130, 66)           # forest
-    rgb[_ocean] = (16, 38, 74)       # ocean
-    rgb[_snow] = (235, 240, 245)     # snow
-    rgb[_desert] = (210, 180, 110)   # desert
+    rgb[:] = (74, 130, 66)                          # forest: the base land
+    rgb[_land & _snow] = (235, 240, 245)            # snow only where there is land
+    rgb[_land & _desert] = (210, 180, 110)          # desert only where there is land
+    # the beach hugs the shore, then the sea wins everything east of it.
+    _sand = _land & (gx > (_coast - _world.SAND_W))
+    rgb[_sand] = (202, 178, 130)
+    rgb[_ocean] = (16, 38, 74)
     surf = pygame.surfarray.make_surface(rgb.swapaxes(0, 1))
     try:
         import native as _native
