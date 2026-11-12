@@ -405,6 +405,23 @@ _NPC_CDEF_STATE = (
 )
 
 
+_MOUNT_SPRITE = None
+
+
+def _mounted_horse():
+    """The horse sprite a mounted warrior rides, loaded once and shared."""
+    global _MOUNT_SPRITE
+    if _MOUNT_SPRITE is None:
+        import os
+        path = os.path.join(os.path.dirname(__file__), "horse.png")
+        try:
+            img = pygame.image.load(path).convert_alpha()
+            _MOUNT_SPRITE = pygame.transform.smoothscale(img, (64, 64))
+        except Exception:
+            _MOUNT_SPRITE = None
+    return _MOUNT_SPRITE
+
+
 class NPC:
     # Real class defaults for attributes the code reads with
     # getattr(x, name, D). Every site agrees on D, so the default
@@ -655,6 +672,7 @@ class NPC:
         self.workplace = None
         self.gunsmith_product = None   # what this gunsmith makes (set by the player)
         self.smith_product = None      # what this smith makes (set by the player)
+        self.mounted = False           # a native warrior riding a horse (4th alarm)
         self.produce_acc = 0.0
         self.chop_timer = 0.0
         self._log_tree = None
@@ -3600,6 +3618,13 @@ class NPC:
         wear = getattr(self, "wear", "normal")
         flash = self.hit_flash > 0.0
         pygame.draw.ellipse(screen, (20, 36, 20), (sx - 12, sy - 4, 24, 9))
+        # A MOUNTED WARRIOR SITS ON A HORSE: the beast is drawn first, the man
+        # rides above it.
+        if getattr(self, "mounted", False):
+            _him = _mounted_horse()
+            if _him is not None:
+                screen.blit(_him, (int(sx - _him.get_width() / 2),
+                                   int(sy - _him.get_height() + 12)))
 
         # ONE BODY, ONE FACE, NO ACCESSORIES.
         #

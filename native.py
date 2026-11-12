@@ -284,7 +284,10 @@ def build(g, cx: float, cy: float, seed: int):
         n.stamina = n.max_stamina
         n.skills.axe = 0.5
         n.skills.shooting = 0.5
-        if int(getattr(g, "war_alarms", 0)) >= 3:
+        _alarms = int(getattr(g, "war_alarms", 0))
+        if _alarms >= 4:
+            _mount_warrior(n)
+        elif _alarms >= 3:
             _max_out(n)
         n.home = (n.x, n.y)
         n.speed = rng.uniform(60.0, 90.0)
@@ -424,6 +427,17 @@ def _max_out(w) -> None:
     w.health = w.max_health
 
 
+def _mount_warrior(w) -> None:
+    """Fourth alarm: a maxed-out fighter rides a horse, in hide armor, with a
+    bow. The horse is his legs -- double the stride -- and the bow keeps him
+    at range."""
+    _max_out(w)
+    w.weapon = "bow"
+    w.mounted = True
+    w.base_speed = 150.0
+    w.speed = 150.0
+
+
 def _role_warriors(s, g) -> None:
     """Arm a settlement's warriors for the current alarm count: one alarm
     gives the second man a bow, two give both bows, three maxes both of them
@@ -433,7 +447,9 @@ def _role_warriors(s, g) -> None:
     for i, w in enumerate(ws):
         if not getattr(w, "alive", True):
             continue
-        if alarms >= 3:
+        if alarms >= 4:
+            _mount_warrior(w)
+        elif alarms >= 3:
             _max_out(w)
         else:
             w.weapon = "bow" if _warrior_is_bow(g, i) else "axe"
