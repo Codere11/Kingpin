@@ -255,6 +255,8 @@ def main() -> None:
     g.FREEZE_RADIUS = FREEZE_RADIUS
     g.SIM_RADIUS = SIM_RADIUS
     g.zoom = ZOOM
+    g.aiming = False           # holding a musket/double-shot/rifle: shadowless, zoomable view
+    g._aiming_prev = False
     g.trees = Trees(g.world.seed)
     g.world.trees = g.trees            # so loggers can find the woods to cut
     set_forest(g.trees)              # villages stake out a woodlot as they build
@@ -587,6 +589,11 @@ def main() -> None:
     # was also the one start that could not cut a tree for its first coin.
     if g.inventory.count_of("axe") <= 0:
         g.inventory.add("axe", 1)
+    # A MUSKET AND ROUNDS AT SPAWN, so the gun aiming mode can be tried.
+    if g.inventory.count_of("musket") <= 0:
+        g.inventory.add("musket", 1)
+    g.inventory.add("ammo", 10)
+    g.player.mags["musket"] = 1          # one round already in the barrel
     # THE PACK ON THE MAN. Dialogue and the yard's work need to move things
     # into and out of it, and neither is handed the local `inventory`; the
     # player is the one object they both already have.

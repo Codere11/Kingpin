@@ -160,6 +160,17 @@ def run(g):
         g.vw, g.vh = g.screen.get_size()
         g.mouse_x, g.mouse_y = pygame.mouse.get_pos()          # window space
         g.wmouse_x, g.wmouse_y = g.mouse_x / g.zoom, g.mouse_y / g.zoom  # world space
+        # GUN AIMING MODE: holding a musket, double-shot or rifle puts the
+        # world in a shadowless overview the player can zoom out with
+        # SHIFT + scroll. Switching away closes it; equipping it again opens
+        # it back at the normal zoom.
+        _aim_sel = g.inventory.selected_stack()
+        g.aiming = bool(_aim_sel is not None
+                        and _aim_sel.defn.id in ("musket", "double_shot", "rifle"))
+        if g.aiming != g._aiming_prev:
+            if not getattr(g, "field_design", False):
+                g.zoom = ZOOM                 # enter or leave: back to normal view
+            g._aiming_prev = g.aiming
 
         # MOOD FROM MONEY: once a day, spread over the next minutes.
         try:
@@ -992,6 +1003,23 @@ def run(g):
                     g.hotbar.select_visible(event.key - pygame.K_1)
                     g.comm = None
             elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEWHEEL):
+                if event.type == pygame.MOUSEWHEEL:
+                    # GUN AIMING ZOOM: SHIFT + scroll zooms out to twice the
+                    # width and height of the normal view, only while a gun is
+                    # in hand.
+                    if (pygame.key.get_mods() & pygame.KMOD_SHIFT
+                            and getattr(g, "aiming", False)):
+                        _old = g.zoom
+                        if event.y > 0:
+                            g.zoom = min(ZOOM, g.zoom * 1.25)
+                        else:
+                            g.zoom = max(ZOOM / 2.0, g.zoom / 1.25)
+                        _wx = g.cam_x + g.mouse_x / _old
+                        _wy = g.cam_y + g.mouse_y / _old
+                        g.cam_x = _wx - g.mouse_x / g.zoom
+                        g.cam_y = _wy - g.mouse_y / g.zoom
+                        g.consumed = True
+                        break
                 if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
                         and g.dialogue_panel.open_
                         and not g.dialogue_panel.hit(event.pos)):
@@ -3863,17 +3891,18 @@ def run(g):
         g.eye_y = g._src.y - g.cam_y + g._src.facing[1] * 5.0
         g.foliage = g.trees.foliage(g._src.x, g._src.y)
         g._cone0 = g.vision.cone_deg
-        if g._watch or g.field_design:
+        if g._watch or g.field_design or g.aiming:
             g.vision.cone_deg = 360.0
         # SETTLEMENT VIEW IS LIT FROM ABOVE: no first-person cone, no night,
-        # the whole visible world (plus the pan's edge) rendered plain.
-        if not g.field_design:
+        # the whole visible world (plus the pan's edge) rendered plain. The
+        # gun-aiming view does the same.
+        if not g.field_design and not g.aiming:
             g.mask = g.vision.build(g.vw, g.vh, g.eye_x, g.eye_y, g._ang,
                                 g.screen_occluders, g.screen_soft, 1.0 - 0.25 * g.foliage)
             g.screen.blit(g.mask, (0, 0))
-        if g._watch or g.field_design:
+        if g._watch or g.field_design or g.aiming:
             g.vision.cone_deg = g._cone0
-        if not g.field_design:
+        if not g.field_design and not g.aiming:
             g.draw_night()
 
         g.selected = g.inventory.selected_stack()
