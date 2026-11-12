@@ -66,7 +66,7 @@ import skills
 import wildcrop
 import physics
 import steering
-from combat import friendly_in_line
+from combat import friendly_in_line, segment_circle_hit
 from world import TILE
 
 SPACING = 55000.0                    # world distance between village cells.
@@ -1126,35 +1126,47 @@ class NPC:
         if not getattr(camp, "conquered", False):
             g = getattr(camp, "g", None)
             if g is not None:
+                _spot = 320.0 if getattr(self, "weapon", None) == "bow" else 260.0
+                target = None
+                best = _spot * _spot
                 player = getattr(g, "player", None)
                 if (player is not None and getattr(player, "alive", True)
                         and not getattr(player, "dead", False)):
-                    d = math.hypot(player.x - self.x, player.y - self.y)
-                    _spot = 320.0 if getattr(self, "weapon", None) == "bow" else 260.0
-                    if d < _spot:
-                        # THE CONFLICT STARTS: a smoke signal rises from the
-                        # fire, once, the moment a warrior spots the player --
-                        # and every settlement arms its bowmen.
-                        if not getattr(camp, "conflict", False):
-                            camp.conflict = True
-                            _fire = getattr(camp, "fireplace", None)
-                            _smoke = getattr(g, "smoke", None)
-                            if _fire is not None and _smoke is not None:
-                                try:
-                                    _smoke.signal(float(_fire.x), float(_fire.y))
-                                except Exception:
-                                    pass
+                    _d2 = (player.x - self.x) ** 2 + (player.y - self.y) ** 2
+                    if _d2 < best:
+                        best, target = _d2, player
+                # A WARRIOR FIGHTS A SOLDIER TOO, whoever is nearer.
+                for _n in getattr(g, "_native_people", ()) or ():
+                    if (not getattr(_n, "alive", True)
+                            or getattr(_n, "native_role", "") != "soldier"):
+                        continue
+                    _d2 = (_n.x - self.x) ** 2 + (_n.y - self.y) ** 2
+                    if _d2 < best:
+                        best, target = _d2, _n
+                if target is not None:
+                    # THE CONFLICT STARTS: a smoke signal rises from the
+                    # fire, once, the moment a warrior spots the player --
+                    # and every settlement arms its bowmen.
+                    if not getattr(camp, "conflict", False):
+                        camp.conflict = True
+                        _fire = getattr(camp, "fireplace", None)
+                        _smoke = getattr(g, "smoke", None)
+                        if _fire is not None and _smoke is not None:
                             try:
-                                import native as _nat
-                                _nat.escalate_war(g, exclude=camp)
+                                _smoke.signal(float(_fire.x), float(_fire.y))
                             except Exception:
                                 pass
-                        if getattr(self, "weapon", None) == "bow":
-                            self._native_bowman_step(dt, player,
-                                                     getattr(g, "combat", None), g)
-                        else:
-                            self._fight(dt, player, getattr(g, "combat", None))
-                        return
+                        try:
+                            import native as _nat
+                            _nat.escalate_war(g, exclude=camp)
+                        except Exception:
+                            pass
+                    if getattr(self, "weapon", None) == "bow":
+                        self._native_bowman_step(dt, target,
+                                                 getattr(g, "combat", None), g)
+                    else:
+                        self._fight(dt, target, getattr(g, "combat", None))
+                    return
         speed = getattr(self, "speed", 60.0)
         ang = getattr(self, "_orbit", 0.0) + 0.30 * dt
         self._orbit = ang
@@ -1687,9 +1699,10 @@ class NPC:
             self.skills.gain_farming(0.05)
 
     def _work_soldier(self, dt: float) -> None:
-        """A bought soldier guards his post and shoots any hostile in reach:
-        an unconquered native warrior or a beast. Reinforced armor, a rifle,
-        and half a lifetime's shooting already behind him."""
+        """A bought soldier: reinforced armor, a rifle, and half a lifetime's
+        shooting. He sees an unconquered warrior or beast at twice the bow's
+        range, holds rifle distance, and steps around anything -- or anyone --
+        standing in the shot before he takes it."""
         camp = getattr(self, "native_camp", None)
         g = getattr(camp, "g", None) if camp is not None else None
         if g is None:
@@ -1700,9 +1713,10 @@ class NPC:
             self.reload_timer = max(0.0, self.reload_timer - dt)
             if self.reload_timer == 0.0:
                 self.mag = guns.MAG.get(self.gun_kind, 3)
-        # nearest hostile: an unconquered warrior, or a beast
+        # nearest hostile within 640 -- double the bow's 320
+        _range = 640.0
         target = None
-        best = 1e18
+        best = _range * _range
         for s in getattr(g, "native_settlements", {}).values():
             if getattr(s, "conquered", False):
                 continue
@@ -1726,13 +1740,26 @@ class NPC:
         dy = target.y - self.y
         if distance > 0.0:
             self.facing = (dx / distance, dy / distance)
-        if distance > 240.0:
-            self._step_toward(target.x, target.y, dt)
+        ux, uy = dx / distance, dy / distance
+        mx = self.x + ux * 16.0
+        my = self.y + uy * 16.0
+        tx, ty = target.x, target.y
+        blocked = self._line_blocked(g, mx, my, tx, ty)
+        if not blocked:
+            blocked = self._shot_hits_friend(g, mx, my, tx, ty)
+        # close in when far, back off when near, and strafe around a blocked
+        # line -- never fire through a friend or a wall.
+        if distance > 260.0:
+            self._step_toward(tx, ty, dt)
             return
-        if distance < 120.0:
-            # keep the rifle's range, not the axe's
-            self.x -= (dx / distance) * self.speed * dt
-            self.y -= (dy / distance) * self.speed * dt
+        if blocked:
+            px, py = -uy, ux
+            self.x += px * self.combat_speed * 0.8 * dt
+            self.y += py * self.combat_speed * 0.8 * dt
+            return
+        if distance < 140.0:
+            self.x -= ux * self.combat_speed * dt
+            self.y -= uy * self.combat_speed * dt
         self.attack_cd -= dt
         if self.mag <= 0:
             if self.reload_timer <= 0.0:
@@ -1745,12 +1772,28 @@ class NPC:
             self.skills.gain_shooting()
             combat = getattr(g, "combat", None)
             if combat is not None:
-                a = math.atan2(dy, dx) + random.uniform(-0.05, 0.05)
-                mx = self.x + (dx / distance) * 16.0
-                my = self.y + (dy / distance) * 16.0
-                combat.fire(mx, my, a, distance, owner="player",
+                combat.fire(mx, my, math.atan2(dy, dx), distance, owner="player",
                             damage=guns.DAMAGE.get(self.gun_kind, 80),
-                            team="player", shooter=self)
+                            team="player", shooter=self,
+                            spread=self.skills.shot_spread())
+
+    def _shot_hits_friend(self, g, x0, y0, x1, y1) -> bool:
+        """True if the player, a conquered worker or a fellow soldier stands
+        in the line of fire -- the shot is not clean."""
+        _p = getattr(g, "player", None)
+        if _p is not None and not getattr(_p, "dead", False):
+            if segment_circle_hit(x0, y0, x1, y1, _p.x, _p.y,
+                                  getattr(_p, "radius", 10) + 6):
+                return True
+        for _n in getattr(g, "_native_people", ()) or ():
+            if _n is self or not getattr(_n, "alive", True):
+                continue
+            if (getattr(_n, "conquered", False)
+                    or getattr(_n, "native_role", "") == "soldier"):
+                if segment_circle_hit(x0, y0, x1, y1, _n.x, _n.y,
+                                      getattr(_n, "radius", 10) + 6):
+                    return True
+        return False
 
     # THE GUNSMITH'S THREE PRODUCTS: what he makes, what it costs in iron
     # bars, how long one takes, and which research unlocks it.
