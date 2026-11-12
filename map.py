@@ -59,7 +59,7 @@ _CACHE: dict = {}
 _THREADS: dict = {}
 _VIEW = {"cx": 0.0, "cy": 0.0, "half": WORLD_HALF}
 
-CHART_PX = 140            # cells across the chart
+CHART_PX = 280            # cells across the chart -- fine enough to pin markers to biomes
 CHART_SAMPLES = 1         # one sample per cell: the chart classifies, not blends
 CHART_KEEP = 12           # charts remembered, then the oldest is dropped
 
@@ -125,7 +125,7 @@ def _chart(world, cx: float, cy: float, half: float):
     n = CHART_PX
     x0, y0 = cx - half, cy - half
     step = (2.0 * half) / n
-    coords = x0 + (np.arange(n, dtype=np.float32) + 0.5) * step
+    coords = x0 + np.arange(n, dtype=np.float32) * step
     gx, gy = np.meshgrid(coords, coords)
     seed = int(getattr(world, "seed", 0))
     try:

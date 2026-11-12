@@ -24,7 +24,7 @@ from world import TILE, coast_x
 # little jitter, and are generated this far around the player
 NATIVE_SPACING = 20000.0      # ~20 km between camps, at full density
 NATIVE_JITTER = 0.45          # fraction of the spacing, either way -- scattered
-NATIVE_RADIUS = 110000.0      # the simulated distance: camps everywhere the map shows
+NATIVE_RADIUS = 40000.0       # generate camps within this of the player
 
 # a teepee sleeps this many people
 PER_TEEPEE = 2
