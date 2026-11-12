@@ -238,17 +238,46 @@ def _paper(world, seed: int, player_x: float, player_y: float):
         _coast = np.full((N, N), half + 1.0, np.float32)
     _ocean = gx > _coast
     _land = ~_ocean
-    _snow = temps < 0.32
-    _desert = (temps > 0.62) & (hums < 0.34)
+    _snow = _land & (temps < 0.32)
+    _desert = _land & (temps > 0.62) & (hums < 0.34)
+    _forest = _land & ~_snow & ~_desert
+    # THE OLD-SCHOOL CHART LOOK: dark paper land, blue sea, black borders,
+    # and the biomes told apart by their sparse lines and little icons.
+    cls = np.where(_ocean, 3,
+                   np.where(_snow, 0, np.where(_desert, 1, 2))).astype(np.int8)
     rgb = np.empty((N, N, 3), np.uint8)
-    rgb[:] = (74, 130, 66)                          # forest: the base land
-    rgb[_land & _snow] = (235, 240, 245)            # snow only where there is land
-    rgb[_land & _desert] = (210, 180, 110)          # desert only where there is land
-    # the beach hugs the shore, then the sea wins everything east of it.
-    _sand = _land & (gx > (_coast - _world.SAND_W))
-    rgb[_sand] = (202, 178, 130)
-    rgb[_ocean] = (16, 38, 74)
+    rgb[:] = PAPER_RGB
+    rgb[_ocean] = OCEAN_RGB
+    # black borders where one class meets another (the shore included).
+    _bx = cls[:, 1:] != cls[:, :-1]
+    _by = cls[1:, :] != cls[:-1, :]
+    _bord = np.zeros((N, N), bool)
+    _bord[:, :-1] |= _bx
+    _bord[:, 1:] |= _bx
+    _bord[:-1, :] |= _by
+    _bord[1:, :] |= _by
+    rgb[_bord] = BORDER_RGB
     surf = pygame.surfarray.make_surface(rgb.swapaxes(0, 1))
+    # SPARSE GRASS LINES, exactly as the old chart drew them.
+    for j in range(1, N, 3):
+        for i in range(1, N, 3):
+            k = cls[j, i]
+            if k == 0:
+                pygame.draw.line(surf, (238, 242, 248), (i, j), (i + 2, j), 1)
+            elif k == 1:
+                pygame.draw.line(surf, (222, 196, 120), (i, j), (i + 2, j), 1)
+            elif k == 2:
+                pygame.draw.line(surf, (110, 168, 92), (i, j), (i + 2, j), 1)
+    # AND THE SPARSER ICONS: tree, cactus, snow tree.
+    for j in range(4, N, 9):
+        for i in range(4, N, 9):
+            k = cls[j, i]
+            if k == 0:
+                _tree_icon(surf, i, j, snow=True)
+            elif k == 1:
+                _cactus_icon(surf, i, j)
+            elif k == 2:
+                _tree_icon(surf, i, j, snow=False)
     try:
         import native as _native
         _ns = _native.NATIVE_SPACING
@@ -264,7 +293,10 @@ def _paper(world, seed: int, player_x: float, player_y: float):
                 _px = int((_wx + half) / step)
                 _py = int((_wy + half) / step)
                 if 0 <= _px < N and 0 <= _py < N:
-                    pygame.draw.circle(surf, (220, 60, 40), (_px, _py), 4)
+                    pygame.draw.line(surf, (104, 72, 44), (_px - 5, _py + 4), (_px + 5, _py - 4), 2)
+                    pygame.draw.line(surf, (104, 72, 44), (_px - 5, _py - 4), (_px + 5, _py + 4), 2)
+                    pygame.draw.circle(surf, (250, 150, 50), (_px, _py), 3)
+                    pygame.draw.circle(surf, (255, 224, 100), (_px, _py - 1), 1)
     except Exception:
         pass
     _ppx = int((player_x + half) / step)
@@ -277,8 +309,8 @@ def _paper(world, seed: int, player_x: float, player_y: float):
 
 
 def reset() -> None:
-    """Back to the whole world, centred where it has always been."""
-    _VIEW["cx"], _VIEW["cy"] = 0.0, 0.0
+    """Back to the whole world, centred on the land (the sea is a sliver east)."""
+    _VIEW["cx"], _VIEW["cy"] = -WORLD_HALF / 2.0, 0.0
     _VIEW["half"] = WORLD_HALF
 
 
