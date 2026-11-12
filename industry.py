@@ -792,8 +792,6 @@ class Workplace:
         ox, oy = pad, pad
         wall, wall_d = (132, 128, 124), (78, 74, 70)
         roof, roof_d = (96, 70, 46), (60, 42, 28)
-        # shadow
-        pygame.draw.ellipse(surf, (0, 0, 0, 70), (ox + 8, oy + h - 12, w - 16, 26))
         # parade square (the cleared ground)
         pygame.draw.rect(surf, (74, 96, 62), (ox + 14, oy + h // 2 + 4, w - 28, h // 2 - 16),
                          border_radius=4)
