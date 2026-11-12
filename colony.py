@@ -433,6 +433,8 @@ def sync_jobs(g) -> None:
         elif i < n_farmer + n_logger + n_artisan + n_researcher + n_miner + n_smith:
             n.native_role = "smith"
             n.job = "smith"
+            if getattr(n, "smith_product", None) is None:
+                n.smith_product = "iron_bar"   # default: smelt ore into bars
             camp.smiths.append(n)
         elif i < n_farmer + n_logger + n_artisan + n_researcher + n_miner + n_smith + n_gunsmith:
             n.native_role = "gunsmith"

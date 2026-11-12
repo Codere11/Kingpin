@@ -40,7 +40,7 @@ REGISTRY: dict[str, ItemDef] = {
                         "A smelted bar of iron. What the smith works with.",
                         stackable=True, max_stack=100, quality=True),
     "gear": ItemDef("gear", "Gear", "A toothed gear. Machines are built from these.",
-                    stackable=True, max_stack=100),
+                    stackable=True, max_stack=100, quality=True),
     "musket": ItemDef("musket", "Musket", "A smoothbore musket. Loud, slow, and heavy."),
     "double_shot": ItemDef("double_shot", "Double-Shot", "A two-round musket. Fires twice before reloading."),
     "textile": ItemDef("textile", "Textile", "Woven cloth, made from cotton.",

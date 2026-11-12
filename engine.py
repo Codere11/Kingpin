@@ -438,6 +438,20 @@ def run(g):
                         g.gunsmith_panel = None
                         g.gunsmith_npc = None
                         pygame.mouse.set_visible(False)
+            elif g.smith_panel_open:
+                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                                                                  pygame.K_ESCAPE):
+                    g.smith_panel_open = False
+                    g.smith_panel = None
+                    g.smith_npc = None
+                    pygame.mouse.set_visible(False)
+                else:
+                    _r = g.smith_panel.handle_event(event)
+                    if _r == "close":
+                        g.smith_panel_open = False
+                        g.smith_panel = None
+                        g.smith_npc = None
+                        pygame.mouse.set_visible(False)
             elif g.market_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
@@ -999,6 +1013,19 @@ def run(g):
                                     and getattr(_n, "job", None) == "gunsmith"):
                                 if math.hypot(_wx - _n.x, _wy - _n.y) < 40.0:
                                     g.open_gunsmith(_n)
+                                    g.consumed = True
+                                    break
+                    except Exception:
+                        pass
+                    # A SMITH: click him and choose iron bars or iron gears.
+                    try:
+                        _wx = g.cam_x + event.pos[0] / ZOOM
+                        _wy = g.cam_y + event.pos[1] / ZOOM
+                        for _n in list(getattr(g, "_native_people", ())):
+                            if (getattr(_n, "alive", True)
+                                    and getattr(_n, "job", None) == "smith"):
+                                if math.hypot(_wx - _n.x, _wy - _n.y) < 40.0:
+                                    g.open_smith(_n)
                                     g.consumed = True
                                     break
                     except Exception:
@@ -3517,6 +3544,8 @@ def run(g):
                 g.sign_panel.draw(g.screen)
             if g.gunsmith_open and g.gunsmith_panel is not None:
                 g.gunsmith_panel.draw(g.screen)
+            if g.smith_panel_open and g.smith_panel is not None:
+                g.smith_panel.draw(g.screen)
             if g.market_open and g.market_panel is not None:
                 g.market_panel.draw(g.screen)
             if g.research_open and g.research_panel is not None:
@@ -4049,6 +4078,8 @@ def run(g):
             g.sign_panel.draw(g.screen)
         if g.gunsmith_open and g.gunsmith_panel is not None:
             g.gunsmith_panel.draw(g.screen)
+        if g.smith_panel_open and g.smith_panel is not None:
+            g.smith_panel.draw(g.screen)
         if g.market_open and g.market_panel is not None:
             g.market_panel.draw(g.screen)
         if g.research_open and g.research_panel is not None:

@@ -973,6 +973,87 @@ class GunsmithPanel:
         screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 24))
 
 
+class SmithPanel:
+    """Click a smith and choose what he makes: iron bars from ore, or iron
+    gears from bars. Same shape as the gunsmith's panel."""
+
+    def __init__(self, npc) -> None:
+        self.npc = npc
+        self.hover = None
+        self.font = pygame.font.SysFont("dejavusans", 20, bold=True)
+        self.font_small = pygame.font.SysFont("dejavusans", 14)
+
+    def _products(self):
+        return list(getattr(self.npc, "SMITH_PRODUCTS", ()))
+
+    def _rects(self, sw: int, sh: int):
+        prods = self._products()
+        w = 460
+        h = 76 + len(prods) * 64 + 30
+        x0, y0 = (sw - w) // 2, (sh - h) // 2
+        panel = pygame.Rect(x0, y0, w, h)
+        rows = []
+        for i, p in enumerate(prods):
+            rows.append((p, pygame.Rect(x0 + 16, y0 + 76 + i * 64, w - 32, 52)))
+        return panel, rows
+
+    @staticmethod
+    def _time_str(sec: float) -> str:
+        return "1 day" if sec >= 600.0 else "%d s" % int(sec)
+
+    def handle_event(self, event):
+        surface = pygame.display.get_surface()
+        if surface is None:
+            return None
+        panel, rows = self._rects(*surface.get_size())
+        if event.type == pygame.MOUSEMOTION:
+            self.hover = None
+            for p, r in rows:
+                if r.collidepoint(event.pos):
+                    self.hover = p["id"]
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for p, r in rows:
+                if r.collidepoint(event.pos):
+                    self.npc.smith_product = p["id"]
+                    return "changed"
+            if not panel.collidepoint(event.pos):
+                return "close"
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            return "close"
+        return None
+
+    def draw(self, screen: pygame.Surface) -> None:
+        sw, sh = screen.get_size()
+        panel, rows = self._rects(sw, sh)
+        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 155))
+        screen.blit(shade, (0, 0))
+        board = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pygame.draw.rect(board, (20, 20, 24, 244), board.get_rect(), border_radius=12)
+        pygame.draw.rect(board, BORDER, board.get_rect(), width=2, border_radius=12)
+        screen.blit(board, panel.topleft)
+        name = getattr(self.npc, "name", "Smith") or "Smith"
+        title = self.font.render("SMITH \u2014 %s" % name, True, TEXT)
+        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 18))
+        for p, r in rows:
+            selected = getattr(self.npc, "smith_product", None) == p["id"]
+            hovered = self.hover == p["id"]
+            pygame.draw.rect(screen, (58, 104, 62) if (hovered or selected) else (44, 46, 52),
+                             r, border_radius=8)
+            pygame.draw.rect(screen, ACCENT if (hovered or selected) else BORDER,
+                             r, width=2, border_radius=8)
+            icon = items.icon(p["id"], 40)
+            screen.blit(icon, (r.left + 8, r.centery - 20))
+            t = self.font.render(p["name"], True, TEXT)
+            screen.blit(t, (r.left + 58, r.top + 4))
+            desc = "%s   \u00b7   %s" % (p["desc"], self._time_str(p["seconds"]))
+            d = self.font_small.render(desc, True, (176, 168, 152))
+            screen.blit(d, (r.left + 58, r.top + 27))
+        hint = self.font_small.render("Click a product to set what he makes",
+                                      True, (140, 134, 122))
+        screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 24))
+
+
 class HorsePanel:
     """A conquered horse: its saddle bags open like a chest, with a Send to
     ship button underneath."""

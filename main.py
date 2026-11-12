@@ -111,7 +111,7 @@ from workshop import WorkshopMenu
 from trees import Trees
 from ui import (ChestPanel, ConfirmMenu, FolderPanel, GunsmithPanel, HorsePanel,
                 Hotbar, InventoryPanel, MarketPanel, PauseMenu, ResearchPanel,
-                RoutePanel, ShipMarketPanel, SignPanel)
+                RoutePanel, ShipMarketPanel, SignPanel, SmithPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
                      nation_name, village_center)
@@ -741,6 +741,10 @@ def main() -> None:
     g.gunsmith_open = False
     g.gunsmith_panel = None
     g.gunsmith_npc = None
+    # A SMITH'S CHOICE OF PRODUCT, opened by clicking him.
+    g.smith_panel_open = False
+    g.smith_panel = None
+    g.smith_npc = None
     # THE FREE MARKET: sell manufactured goods out of the ship's hold.
     g.ship_hold = Inventory(capacity=32)
     g.market_open = False
@@ -1265,6 +1269,12 @@ def main() -> None:
         g.gunsmith_open = True
         pygame.mouse.set_visible(True)
 
+    def open_smith(npc) -> None:
+        g.smith_npc = npc
+        g.smith_panel = SmithPanel(npc)
+        g.smith_panel_open = True
+        pygame.mouse.set_visible(True)
+
     def open_market() -> None:
         """The ship's market: sell manufactured goods out of the hold."""
         g.market_panel = ShipMarketPanel(g, g.inventory, g.ship_hold)
@@ -1703,6 +1713,7 @@ def main() -> None:
         g.inventory_open = g.trade_open = g.board_open = g.chest_open = False
         g.sign_open = False
         g.gunsmith_open = False
+        g.smith_panel_open = False
         g.horse_panel_open = False
         g.worker_panel_open = False
         g.stall_open = False
@@ -1882,6 +1893,7 @@ def main() -> None:
     g.ship_pos = ship_pos
     g.open_horse = open_horse
     g.open_gunsmith = open_gunsmith
+    g.open_smith = open_smith
     g.open_market = open_market
     g.send_horse = send_horse
     g.near_fireplace = near_fireplace
