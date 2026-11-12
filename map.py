@@ -57,7 +57,7 @@ PAN_RATE = 0.25          # a full screen in about four seconds, at any zoom
 
 _CACHE: dict = {}
 _THREADS: dict = {}
-_VIEW = {"cx": 0.0, "cy": 0.0, "half": 60000.0}
+_VIEW = {"cx": 0.0, "cy": 0.0, "half": WORLD_HALF}
 
 CHART_PX = 140            # cells across the chart
 CHART_SAMPLES = 1         # one sample per cell: the chart classifies, not blends
