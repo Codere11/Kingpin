@@ -57,7 +57,7 @@ PAN_RATE = 0.25          # a full screen in about four seconds, at any zoom
 
 _CACHE: dict = {}
 _THREADS: dict = {}
-_VIEW = {"cx": 0.0, "cy": 0.0, "half": WORLD_HALF}
+_VIEW = {"cx": -WORLD_HALF / 2.0, "cy": 0.0, "half": WORLD_HALF}
 
 CHART_PX = 280            # cells across the chart -- fine enough to pin markers to biomes
 CHART_SAMPLES = 1         # one sample per cell: the chart classifies, not blends
@@ -210,7 +210,7 @@ def _chart(world, cx: float, cy: float, half: float):
     return surf
 
 
-PAPER_N = 2048                # the one fixed map image is this many pixels across
+PAPER_N = 1024                # the one fixed map image is this many pixels across
 _PAPER = None                 # (key, surface) -- rendered once, panned/zoomed over
 
 
@@ -358,31 +358,18 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
 
     view_half = _VIEW["half"]
     cx, cy = _VIEW["cx"], _VIEW["cy"]
-    # THE TERRAIN (lattice camps baked in) is ONE cached surface. Copy it,
-    # draw the off-lattice camps and the player onto that SAME surface, and
-    # blit it once -- every mark shares one transform, so nothing can drift.
-    chart = _chart(world, cx, cy, view_half)
-    if chart is None:
-        charting = small_charting.render("charting the country…", True, (206, 198, 176))
-        screen.blit(charting, (x0 + size // 2 - charting.get_width() // 2,
-                               y0 + size // 2 - charting.get_height() // 2))
-    else:
-        img = chart.copy()
-        n = CHART_PX
-        step = (2.0 * view_half) / n
-        for _n in natives or ():
-            _cpx = int((getattr(_n, "x", 0.0) - (cx - view_half)) / step)
-            _cpy = int((getattr(_n, "y", 0.0) - (cy - view_half)) / step)
-            if 0 <= _cpx < n and 0 <= _cpy < n:
-                pygame.draw.line(img, (104, 72, 44), (_cpx - 3, _cpy + 3), (_cpx + 3, _cpy - 3), 1)
-                pygame.draw.line(img, (104, 72, 44), (_cpx - 3, _cpy - 3), (_cpx + 3, _cpy + 3), 1)
-                img.set_at((_cpx, _cpy), (250, 150, 50))
-        _cpx = int((player.x - (cx - view_half)) / step)
-        _cpy = int((player.y - (cy - view_half)) / step)
-        if 0 <= _cpx < n and 0 <= _cpy < n:
-            pygame.draw.circle(img, (40, 40, 46), (_cpx, _cpy), 4)
-            pygame.draw.circle(img, (255, 236, 120), (_cpx, _cpy), 3)
-        screen.blit(pygame.transform.scale(img, (size, size)), (x0, y0))
+    # ONE FIXED IMAGE keyed to world x,y. The camera picks a rectangle of it;
+    # the terrain, camps and the player are all in that image, so they can
+    # never disagree about where anything is.
+    paper = _paper(world, int(getattr(world, "seed", 0)), player.x, player.y)
+    _scale = PAPER_N / (2.0 * WORLD_HALF)
+    _sx = int((cx - view_half + WORLD_HALF) * _scale)
+    _sy = int((cy - view_half + WORLD_HALF) * _scale)
+    _sw = max(1, int((2.0 * view_half) * _scale))
+    _sx = max(0, min(PAPER_N - _sw, _sx))
+    _sy = max(0, min(PAPER_N - _sw, _sy))
+    _sub = paper.subsurface(pygame.Rect(_sx, _sy, _sw, _sw))
+    screen.blit(pygame.transform.scale(_sub, (size, size)), (x0, y0))
     # BEYOND THE WORLD IS NOT DARK, IT IS UNCHARTED.
     if view_half > WORLD_HALF:
         inset = int((view_half - WORLD_HALF) / (2.0 * view_half) * size)
@@ -395,8 +382,13 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
                 y0 + (wy - (cy - view_half)) / (2.0 * view_half) * size)
 
     label_font = pygame.font.SysFont("dejavusansmono", max(11, vh // 44), bold=True)
-    # HIM, last and on top -- the dot is baked into the chart above; this is
-    # just the bright ring and the label.
+    # Off-lattice camps (starter camps and the home camp), pinned to the same
+    # world->screen transform as the fixed image.
+    for _n in natives or ():
+        _px, _py = w2s(getattr(_n, "x", 0.0), getattr(_n, "y", 0.0))
+        if x0 - 2 <= _px <= x0 + size + 2 and y0 - 2 <= _py <= y0 + size + 2:
+            _campfire(screen, int(_px), int(_py))
+    # HIM -- the yellow dot is baked into the paper; this is the ring + label.
     px, py = w2s(player.x, player.y)
     inside = (x0 <= px <= x0 + size and y0 <= py <= y0 + size)
     if not inside:
