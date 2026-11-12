@@ -115,9 +115,11 @@ def _chart(world, cx: float, cy: float, half: float):
     # quarter of a cell, so panning inside a cell does not re-chart.
     cell = (2.0 * float(half)) / CHART_PX
     zoom_i = int(round(math.log(max(1.0, float(half))) / math.log(ZOOM_STEP)))
+    # KEYED ON THE EXACT CENTRE (to the pixel), so the terrain never lags a
+    # quantised step behind the markers -- they both move by the same cx, cy.
     key = (int(getattr(world, "seed", 0)),
-           int(float(cx) // max(1.0, cell * 0.25)),
-           int(float(cy) // max(1.0, cell * 0.25)),
+           round(float(cx), 2),
+           round(float(cy), 2),
            zoom_i, CHART_PX)
     got = _CACHE.get(key)
     if got is not None:
@@ -294,14 +296,7 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
 
     view_half = _VIEW["half"]
     cx, cy = _VIEW["cx"], _VIEW["cy"]
-    # THE CHART IS CACHED ON A QUANTISED CENTRE. The camp and player markers
-    # must use that SAME centre, or they slide smoothly while the terrain
-    # steps, and a camp drifts off its tree. Pin both to the chart's grid.
-    _cell = (2.0 * view_half) / CHART_PX
-    _cq = max(1.0, _cell * 0.25)
-    _cx = math.floor(cx / _cq) * _cq
-    _cy = math.floor(cy / _cq) * _cq
-    chart = _chart(world, _cx, _cy, view_half)
+    chart = _chart(world, cx, cy, view_half)
     if chart is None:
         charting = small_charting.render("charting the country…", True,
                                          (206, 198, 176))
@@ -317,8 +312,8 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
             pygame.draw.rect(screen, PAPER, r)
 
     def at(wx: float, wy: float):
-        return (x0 + int((wx - (_cx - view_half)) / (2.0 * view_half) * size),
-                y0 + int((wy - (_cy - view_half)) / (2.0 * view_half) * size))
+        return (x0 + int((wx - (cx - view_half)) / (2.0 * view_half) * size),
+                y0 + int((wy - (cy - view_half)) / (2.0 * view_half) * size))
 
     label_font = pygame.font.SysFont("dejavusansmono", max(11, vh // 44), bold=True)
 
