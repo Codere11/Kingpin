@@ -1395,7 +1395,7 @@ class ShipMarketPanel:
 
     def _goods(self):
         import market
-        return list(market.SELLABLE)
+        return list(market.sellable(self.g))
 
     def _layout(self, sw, sh):
         slot, pad, cols = 36, 4, self.COLS
