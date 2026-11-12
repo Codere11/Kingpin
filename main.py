@@ -589,11 +589,6 @@ def main() -> None:
     # was also the one start that could not cut a tree for its first coin.
     if g.inventory.count_of("axe") <= 0:
         g.inventory.add("axe", 1)
-    # A MUSKET AND ROUNDS AT SPAWN, so the gun aiming mode can be tried.
-    if g.inventory.count_of("musket") <= 0:
-        g.inventory.add("musket", 1)
-    g.inventory.add("ammo", 10)
-    g.player.mags["musket"] = 1          # one round already in the barrel
     # THE PACK ON THE MAN. Dialogue and the yard's work need to move things
     # into and out of it, and neither is handed the local `inventory`; the
     # player is the one object they both already have.
@@ -1558,10 +1553,6 @@ def main() -> None:
     if (g.inventory.count_of("axe") <= 0
             and g.inventory.count_of("pickaxe") <= 0):
         g.inventory.add("axe", 1)
-        mark_dirty()
-    # FIFTY HIDES TO BUILD WITH, fresh on spawn.
-    if g.inventory.count_of("hide") < 50:
-        g.inventory.add("hide", 50 - g.inventory.count_of("hide"))
         mark_dirty()
 
     # ...AND THE WORLD IS A THOUSAND PEOPLE AFTER THE LOAD, TOO. The save is
