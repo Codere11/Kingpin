@@ -493,7 +493,9 @@ class Workplace:
         self.y = float(y)
         self._rng_seed = seed & 0xFFFFFFFF
         self.rng = random.Random(self._rng_seed)
-        self.w, self.h = (64, 32) if kind == "research" else (64, 64)
+        self.w, self.h = ((64, 32) if kind == "research"
+                          else (96, 96) if kind == "barracks"
+                          else (64, 64))
         # WHAT A POST LOOKS LIKE WHILE IT IS BEING WORKED: the dummy takes a
         # blow, the target takes a round. Both are timers the frame drains.
         self.train_flash = 0.0
@@ -526,6 +528,8 @@ class Workplace:
             return self._render_weaver()
         if self.kind == "spice":
             return self._render_spice()
+        if self.kind == "barracks":
+            return self._render_barracks()
         if self.kind == "workshop":
             return self._render_workshop()
         if self.kind == "brewery":
@@ -779,6 +783,45 @@ class Workplace:
             pygame.draw.rect(surf, (128, 30, 28), (bx, oy + h // 2 - 10, 10, 16), 1,
                              border_radius=2)
             pygame.draw.rect(surf, (240, 232, 214), (bx + 1, oy + h // 2 - 4, 8, 5))
+        return surf
+
+    def _render_barracks(self) -> pygame.Surface:
+        """A barracks: a long, low building with a flag and a parade square."""
+        w, h, pad = self.w, self.h, 14
+        surf = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+        ox, oy = pad, pad
+        wall, wall_d = (132, 128, 124), (78, 74, 70)
+        roof, roof_d = (96, 70, 46), (60, 42, 28)
+        # shadow
+        pygame.draw.ellipse(surf, (0, 0, 0, 70), (ox + 8, oy + h - 12, w - 16, 26))
+        # parade square (the cleared ground)
+        pygame.draw.rect(surf, (74, 96, 62), (ox + 14, oy + h // 2 + 4, w - 28, h // 2 - 16),
+                         border_radius=4)
+        pygame.draw.rect(surf, (52, 72, 44), (ox + 14, oy + h // 2 + 4, w - 28, h // 2 - 16), 2,
+                         border_radius=4)
+        # body
+        pygame.draw.rect(surf, wall, (ox + 12, oy + h // 2 - 14, w - 24, 34), border_radius=4)
+        pygame.draw.rect(surf, wall_d, (ox + 12, oy + h // 2 - 14, w - 24, 34), 2,
+                         border_radius=4)
+        # door
+        pygame.draw.rect(surf, (52, 46, 42), (ox + w // 2 - 8, oy + h // 2 - 4, 16, 24),
+                         border_radius=2)
+        # roof
+        pygame.draw.polygon(surf, roof, [(ox + 8, oy + h // 2 - 14),
+                                         (ox + w - 8, oy + h // 2 - 14),
+                                         (ox + w - 26, oy + h // 2 - 32),
+                                         (ox + 26, oy + h // 2 - 32)])
+        pygame.draw.polygon(surf, roof_d, [(ox + 8, oy + h // 2 - 14),
+                                           (ox + w - 8, oy + h // 2 - 14),
+                                           (ox + w - 26, oy + h // 2 - 32),
+                                           (ox + 26, oy + h // 2 - 32)], 2)
+        # flag
+        pygame.draw.line(surf, (70, 66, 62), (ox + w // 2, oy + h // 2 - 32),
+                         (ox + w // 2, oy + h // 2 - 52), 2)
+        pygame.draw.polygon(surf, (196, 66, 56),
+                            [(ox + w // 2, oy + h // 2 - 52),
+                             (ox + w // 2 + 20, oy + h // 2 - 46),
+                             (ox + w // 2, oy + h // 2 - 40)])
         return surf
 
     def _render_workshop(self) -> pygame.Surface:

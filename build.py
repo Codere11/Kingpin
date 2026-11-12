@@ -29,6 +29,9 @@ BUILDINGS = [
     # A SPICE STALL bottles chili sauce -- only once Spice sauces is done.
     {"id": "spice", "name": "Spice stall", "wood": 300,
      "needs": "spice_sauce", "where": "outside"},
+    # THE BARRACKS raise an army -- only once Army is done. Iron AND wood.
+    {"id": "barracks", "name": "Barracks", "wood": 0,
+     "cost": {"iron_bar": 300, "wood": 300}, "needs": "army", "where": "outside"},
     {"id": "workshop", "name": "Workbench", "wood": 100, "where": "outside"},
     {"id": "brewery", "name": "Brewhouse", "wood": 120, "where": "outside"},
     # THE PLAYER'S OWN SHOP. It stands inside his hub (main refuses it
@@ -243,6 +246,32 @@ def spice_icon(size: int = 46) -> pygame.Surface:
     pygame.draw.rect(s, (240, 232, 214), (size * 0.33, size * 0.52, size * 0.34, size * 0.18),
                      border_radius=2)
     pygame.draw.line(s, (186, 48, 44), (size * 0.37, size * 0.56), (size * 0.63, size * 0.56), 2)
+    return s
+
+
+def barracks_icon(size: int = 46) -> pygame.Surface:
+    """A barracks: a long low building with a flag on its roof."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    wall, wall_d = (132, 128, 124), (78, 74, 70)
+    roof, roof_d = (96, 70, 46), (60, 42, 28)
+    # body
+    pygame.draw.rect(s, wall, (size * 0.14, size * 0.48, size * 0.72, size * 0.36),
+                     border_radius=3)
+    pygame.draw.rect(s, wall_d, (size * 0.14, size * 0.48, size * 0.72, size * 0.36), 2,
+                     border_radius=3)
+    # door
+    pygame.draw.rect(s, (52, 46, 42), (size * 0.44, size * 0.60, size * 0.12, size * 0.24),
+                     border_radius=2)
+    # roof
+    pygame.draw.polygon(s, roof, [(size * 0.10, size * 0.48), (size * 0.90, size * 0.48),
+                                  (size * 0.78, size * 0.30), (size * 0.22, size * 0.30)])
+    pygame.draw.polygon(s, roof_d, [(size * 0.10, size * 0.48), (size * 0.90, size * 0.48),
+                                    (size * 0.78, size * 0.30), (size * 0.22, size * 0.30)], 2)
+    # flag pole + flag
+    pygame.draw.line(s, (70, 66, 62), (size * 0.50, size * 0.30), (size * 0.50, size * 0.12), 2)
+    pygame.draw.polygon(s, (196, 66, 56),
+                        [(size * 0.50, size * 0.12), (size * 0.66, size * 0.18),
+                         (size * 0.50, size * 0.24)])
     return s
 
 
@@ -546,6 +575,7 @@ class BuildMenu:
                        "research": research_icon,
                        "weaver": weaver_icon,
                        "spice": spice_icon,
+                       "barracks": barracks_icon,
                        "brew_table": brew_icon, "barrel": barrel_icon,
                        "brewery": brew_icon, "smith": workshop_icon,
                        "mine": workshop_icon, "plot": fence_icon,
