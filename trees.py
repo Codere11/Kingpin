@@ -79,6 +79,33 @@ def _hash(cx, cy, seed):
     return h
 
 
+class _FastRNG:
+    """A deterministic xorshift RNG, ~100x cheaper to seed than random.Random.
+
+    The tree generator creates one RNG per cell (hundreds of thousands of
+    them at load), and `random.Random(code)` pays for a full Mersenne-Twister
+    seed every time. Only `uniform` and `random` are needed here, and a tree's
+    exact jitter is background noise nobody can tell apart."""
+    __slots__ = ("_s",)
+
+    def __init__(self, code: int) -> None:
+        self._s = (int(code) ^ 0x9E3779B9) & 0xFFFFFFFF
+
+    def _next(self) -> float:
+        s = self._s
+        s ^= (s << 13) & 0xFFFFFFFF
+        s ^= s >> 17
+        s ^= (s << 5) & 0xFFFFFFFF
+        self._s = s & 0xFFFFFFFF
+        return (s & 0xFFFFFFFF) / 4294967296.0
+
+    def random(self) -> float:
+        return self._next()
+
+    def uniform(self, a: float, b: float) -> float:
+        return a + (b - a) * self._next()
+
+
 class TreeSprites:
     """Shared, pre-rendered tree sprites."""
 
@@ -496,28 +523,58 @@ class Trees:
         key = (cx, cy)
         if key in self._presence:
             return self._presence[key]
-        code = _hash(cx, cy, self.seed)
-        rng = random.Random(code)
-        x = cx * CELL + CELL / 2.0 + rng.uniform(-JIT, JIT)
-        y = cy * CELL + CELL / 2.0 + rng.uniform(-JIT, JIT)
-        if x > coast_x(y, self.seed):
-            self._presence[key] = None   # trees do not grow out of the ocean
-            return None
-        temp = float(biomes.temperature(x, y, self.seed))
-        hum = float(biomes.humidity(x, y, self.seed))
-        clump = self._clump(x, y)
-        _dark, _lite, spec, dens = biomes.mix(temp, hum)
-        density = dens * (0.45 + 0.75 * clump)      # biome density, patchy
-        beyond = self._village_clearance(x, y)
-        if beyond < FADE_BAND:
-            density *= _smoothstep(beyond, 0.0, FADE_BAND)
-        if rng.random() >= density * SPAWN:
-            self._presence[key] = None
-            return None
-        species = biomes.pick_species(spec, rng)
-        result = (x, y, code, species, temp < 0.30)
-        self._presence[key] = result
-        return result
+        self._precompute_block(cx, cy)
+        return self._presence.get(key)
+
+    _PRE = 32
+
+    def _precompute_block(self, cx: int, cy: int) -> None:
+        """Generate a whole _PRE x _PRE block of tree cells at once.
+
+        The expensive part of every tree cell is four scalar noise calls
+        (coast, temperature, humidity, clump) -- each a few numpy fbm octaves,
+        each paid per cell. One cell costs ~1 ms of numpy-overhead; a block is
+        one vectorised call per noise field, so 256 cells cost about the same
+        as one. The cheap per-cell work (hash, rng, species) stays a loop, in
+        the same order as the old `_position`, so the world is identical."""
+        x0 = (cx // self._PRE) * self._PRE
+        y0 = (cy // self._PRE) * self._PRE
+        x1 = x0 + self._PRE - 1
+        y1 = y0 + self._PRE - 1
+        cells = [(ix, iy) for iy in range(y0, y1 + 1) for ix in range(x0, x1 + 1)
+                 if (ix, iy) not in self._presence]
+        if not cells:
+            return
+        rows = []
+        for ix, iy in cells:
+            code = _hash(ix, iy, self.seed)
+            rng = _FastRNG(code)
+            x = ix * CELL + CELL / 2.0 + rng.uniform(-JIT, JIT)
+            y = iy * CELL + CELL / 2.0 + rng.uniform(-JIT, JIT)
+            rows.append((ix, iy, code, rng, x, y))
+        ax = np.array([r[4] for r in rows], np.float32)
+        ay = np.array([r[5] for r in rows], np.float32)
+        temps = np.asarray(biomes.temperature(ax, ay, self.seed), np.float32).ravel()
+        hums = np.asarray(biomes.humidity(ax, ay, self.seed), np.float32).ravel()
+        coasts = np.asarray(coast_x(ay, self.seed), np.float32).ravel()
+        clumps = np.asarray(fbm(ax * 0.0045, ay * 0.0045, self.seed + 2,
+                                octaves=3), np.float32).ravel()
+        for k, (ix, iy, code, rng, x, y) in enumerate(rows):
+            t = float(temps[k])
+            h = float(hums[k])
+            if x > float(coasts[k]):
+                self._presence[(ix, iy)] = None
+                continue
+            _dark, _lite, spec, dens = biomes.mix(t, h)
+            density = dens * (0.45 + 0.75 * float(clumps[k]))
+            beyond = self._village_clearance(x, y)
+            if beyond < FADE_BAND:
+                density *= _smoothstep(beyond, 0.0, FADE_BAND)
+            if rng.random() >= density * SPAWN:
+                self._presence[(ix, iy)] = None
+                continue
+            species = biomes.pick_species(spec, rng)
+            self._presence[(ix, iy)] = (x, y, code, species, t < 0.30)
 
     def tree(self, cx: int, cy: int) -> Tree | None:
         key = (cx, cy)

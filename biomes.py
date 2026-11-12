@@ -284,8 +284,19 @@ def blend_array(which: str, t, h):
     return _override(which, top * (1.0 - ft) + bot * ft, t, h)
 
 
+_MIX_MEMO: dict = {}
+
+
 def mix(t: float, h: float):
-    """Scalar blend: (dark_rgb, lite_rgb, species_weights, density)."""
+    """Scalar blend: (dark_rgb, lite_rgb, species_weights, density).
+
+    Memoised on the quantised climate, because the tree generator asks this
+    for a hundred thousand cells whose climate differs by a hair -- and the
+    blend only changes when the biome grid cell changes."""
+    key = (round(float(t), 2), round(float(h), 2))
+    got = _MIX_MEMO.get(key)
+    if got is not None:
+        return got
     ti = min(2.0, max(0.0, float(t)) * 2.0)
     hi = min(2.0, max(0.0, float(h)) * 2.0)
     r0 = min(1, int(ti))
@@ -309,8 +320,11 @@ def mix(t: float, h: float):
         density += DENSITY[name] * w
         for sp, sw in TREES[name].items():
             spec[sp] = spec.get(sp, 0.0) + sw * w
-    return (_override_scalar("dark", dark, t, h),
-            _override_scalar("lite", lite, t, h), spec, density)
+    result = (_override_scalar("dark", dark, t, h),
+              _override_scalar("lite", lite, t, h), spec, density)
+    if len(_MIX_MEMO) < 200000:
+        _MIX_MEMO[key] = result
+    return result
 
 
 def pick_species(spec: dict, rng) -> str:

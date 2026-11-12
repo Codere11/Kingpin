@@ -315,6 +315,7 @@ VILLAGE_SKIRT = 260.0     # clear ground outside the fence: a gate must open
                           # onto open air, and nobody should walk into a trunk
 
 
+@functools.lru_cache(maxsize=32768)
 def village_clear_half(gx: int, gy: int) -> float:
     """Half-width of a village's cleared ground.
 
