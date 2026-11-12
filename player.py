@@ -204,10 +204,17 @@ class Player:
         except Exception:
             pass
 
+    def armor_mult(self) -> int:
+        """How many bodies the equipped armor is worth: hide doubles, and
+        reinforced armor doubles that (four bodies)."""
+        a = getattr(self, "armor", None)
+        return 4 if a == "reinforced_armor" else (2 if a == "hide_armor" else 1)
+
     def equip_armor(self, item_id: str) -> None:
-        """Put on armor; hide armor doubles the body."""
+        """Put on armor; hide doubles the body, reinforced armor doubles it
+        again."""
         self.armor = item_id
-        self.max_health = stats.body_for(self) * (2 if item_id == "hide_armor" else 1)
+        self.max_health = stats.body_for(self) * self.armor_mult()
         self.health = self.max_health
 
     def unequip_armor(self) -> str | None:
@@ -255,9 +262,9 @@ class Player:
             self.gun_cd = max(0.0, self.gun_cd - dt)
         # HIS BODY GROWS WITH HIS SKILL, the same rule as every other man.
         stats.apply_body(self)
-        # HIDE ARMOR DOUBLES THE BODY, on top of the skill.
-        if getattr(self, "armor", None) == "hide_armor":
-            self.max_health = stats.body_for(self) * 2
+        # ARMOR MULTIPLIES THE BODY, on top of the skill.
+        if getattr(self, "armor", None) in ("hide_armor", "reinforced_armor"):
+            self.max_health = stats.body_for(self) * self.armor_mult()
             self.health = min(self.health, self.max_health)
         if self.reloading > 0.0:
             self.reloading = max(0.0, self.reloading - dt)
@@ -393,6 +400,18 @@ class Player:
             for _px in (int(sx) - 9, int(sx) + 7):
                 pygame.draw.circle(screen, (96, 66, 38), (_px, int(sy) - 6), 4)
                 pygame.draw.circle(screen, (52, 36, 24), (_px, int(sy) - 6), 4, 1)
+        elif getattr(self, "armor", None) == "reinforced_armor":
+            # REINFORCED ARMOR: grey iron plates bolted over a cloth body.
+            pygame.draw.circle(screen, (238, 228, 228) if self.hit_flash > 0.0 else (176, 180, 190),
+                               (int(sx), int(sy)), 12)
+            pygame.draw.circle(screen, (76, 80, 88), (int(sx), int(sy)), 12, 2)
+            pygame.draw.line(screen, (76, 80, 88), (int(sx) - 8, int(sy) - 3),
+                             (int(sx) + 8, int(sy) - 3), 2)
+            pygame.draw.line(screen, (76, 80, 88), (int(sx) - 7, int(sy) + 3),
+                             (int(sx) + 7, int(sy) + 3), 2)
+            for _px in (int(sx) - 10, int(sx) + 8):
+                pygame.draw.circle(screen, (96, 100, 108), (_px, int(sy) - 7), 5)
+                pygame.draw.circle(screen, (58, 62, 70), (_px, int(sy) - 7), 5, 1)
         else:
             body = (238, 228, 228) if self.hit_flash > 0.0 else (54, 74, 122)
             pygame.draw.circle(screen, body, (int(sx), int(sy)), 11)

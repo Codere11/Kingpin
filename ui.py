@@ -258,8 +258,8 @@ class InventoryPanel:
         if not ar.collidepoint(event.pos):
             return False
         if event.button == 1:
-            if self.held is not None and self.held.defn.id == "hide_armor":
-                self.player.equip_armor("hide_armor")
+            if self.held is not None and self.held.defn.id in ("hide_armor", "reinforced_armor"):
+                self.player.equip_armor(self.held.defn.id)
                 self.held = None
                 self.held_from = None
                 return True
@@ -990,16 +990,17 @@ class SmithPanel:
         self.hover = None
         self.font = pygame.font.SysFont("dejavusans", 20, bold=True)
         self.font_small = pygame.font.SysFont("dejavusans", 14)
+        self._researched = set()
         if g is not None:
             import research as _research
-            self._industry = _research.state(g, "industry") == "done"
-        else:
-            self._industry = True
+            for _id in ("industry", "reinforced_armor"):
+                if _research.state(g, _id) == "done":
+                    self._researched.add(_id)
 
     def _products(self):
         out = []
         for p in getattr(self.npc, "SMITH_PRODUCTS", ()):
-            if p.get("needs") == "industry" and not self._industry:
+            if p.get("needs") and p.get("needs") not in self._researched:
                 continue
             out.append(p)
         return out

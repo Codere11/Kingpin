@@ -1467,17 +1467,19 @@ class NPC:
     # THE SMITH'S TWO PRODUCTS: what he makes, what he turns it from, and how
     # long one takes. The player picks by clicking him (see SmithPanel).
     SMITH_PRODUCTS = (
-        {"id": "iron_bar", "input": "iron", "seconds": 30.0, "needs": None,
+        {"id": "iron_bar", "recipe": {"iron": 1}, "seconds": 30.0, "needs": None,
          "name": "Iron bars", "desc": "1 iron ore \u2192 1 bar"},
-        {"id": "gear", "input": "iron_bar", "seconds": 30.0, "needs": "industry",
+        {"id": "gear", "recipe": {"iron_bar": 1}, "seconds": 30.0, "needs": "industry",
          "name": "Gears", "desc": "1 iron bar \u2192 1 gear"},
+        {"id": "reinforced_armor", "recipe": {"iron_bar": 10, "textile": 10},
+         "seconds": 60.0, "needs": "reinforced_armor",
+         "name": "Reinforced armor", "desc": "10 bars + 10 textiles \u2192 1 suit"},
     )
 
     def _work_smith(self, dt: float) -> None:
-        """A smith works the forge: iron ore into iron bars, or iron bars
-        into iron gears -- whichever the player has told him to make. Every
-        thirty seconds, the bar or gear graded by his hand. Only once
-        Ironworking is researched."""
+        """A smith works the forge: iron ore into iron bars, iron bars into
+        gears, or bars and textiles into reinforced armor -- whichever the
+        player has told him to make. Only once Ironworking is researched."""
         camp = getattr(self, "native_camp", None)
         g = getattr(camp, "g", None) if camp is not None else None
         if g is None:
@@ -1506,7 +1508,7 @@ class NPC:
                 self._native_idle(dt)
                 return
         out_item = product["id"]
-        in_item = product["input"]
+        recipe = product["recipe"]
         forge = self._nearest_workplace(g, "smith")
         if forge is None:
             self._native_idle(dt)
@@ -1515,19 +1517,21 @@ class NPC:
         if int(self.carry.get(out_item, 0)) > 0:
             if self._deposit_to_chest(dt):
                 return
-        # fetch one input piece from a chest
-        if int(self.carry.get(in_item, 0)) <= 0:
-            chest = self._chest_with(in_item, 1)
-            if chest is None:
-                self._native_idle(dt)
+        # fetch one missing input at a time, from the nearest chest that holds it
+        for in_item, need in recipe.items():
+            if int(self.carry.get(in_item, 0)) < need:
+                chest = self._chest_with(in_item, need)
+                if chest is None:
+                    self._native_idle(dt)
+                    return
+                if math.hypot(chest.x - self.x, chest.y - self.y) > 20.0:
+                    self._step_toward(chest.x, chest.y, dt)
+                    return
+                taken, _g = self._take_from_chest(
+                    chest, in_item, need - int(self.carry.get(in_item, 0)))
+                if taken > 0:
+                    self.carry[in_item] = int(self.carry.get(in_item, 0)) + taken
                 return
-            if math.hypot(chest.x - self.x, chest.y - self.y) > 20.0:
-                self._step_toward(chest.x, chest.y, dt)
-                return
-            taken, _g = self._take_from_chest(chest, in_item, 1)
-            if taken > 0:
-                self.carry[in_item] = int(self.carry.get(in_item, 0)) + taken
-            return
         # walk to the forge and work
         if math.hypot(forge.x - self.x, forge.y - self.y) > 24.0:
             self._step_toward(forge.x, forge.y, dt)
@@ -1535,14 +1539,20 @@ class NPC:
         self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
         if self.produce_acc >= product["seconds"]:
             self.produce_acc = 0.0
-            self.carry[in_item] = int(self.carry.get(in_item, 0)) - 1
-            if self.carry.get(in_item, 0) <= 0:
-                self.carry.pop(in_item, None)
-            g2 = self.skills.smith_grade()
-            old_n = int(self.carry.get(out_item, 0) or 0)
-            self.carry[out_item] = old_n + 1
-            self.carry_grade[out_item] = quality.merge(
-                self.carry_grade.get(out_item, g2), old_n, g2, 1)
+            for in_item, need in recipe.items():
+                self.carry[in_item] = int(self.carry.get(in_item, 0)) - need
+                if self.carry.get(in_item, 0) <= 0:
+                    self.carry.pop(in_item, None)
+                    self.carry_grade.pop(in_item, None)
+            out_def = items.get(out_item)
+            if getattr(out_def, "quality", False):
+                g2 = self.skills.smith_grade()
+                old_n = int(self.carry.get(out_item, 0) or 0)
+                self.carry[out_item] = old_n + 1
+                self.carry_grade[out_item] = quality.merge(
+                    self.carry_grade.get(out_item, g2), old_n, g2, 1)
+            else:
+                self.carry[out_item] = int(self.carry.get(out_item, 0) or 0) + 1
             self._did_work()
             self.skills.gain_smithing()
 
