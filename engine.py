@@ -946,6 +946,8 @@ def run(g):
                 g.map_open = not g.map_open
                 if g.map_open and g.world_map is not None:
                     g.world_map.reset(g.player.x, g.player.y)   # the map follows him
+                if g.map_open:
+                    mapmod.center(g.player.x, g.player.y)
                 pygame.mouse.set_visible(g.map_open)
             elif (g.dialogue_panel.open_
                   and ((event.type == pygame.KEYDOWN

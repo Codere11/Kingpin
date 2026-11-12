@@ -190,6 +190,13 @@ def reset() -> None:
     _VIEW["half"] = WORLD_HALF
 
 
+def center(x: float, y: float) -> None:
+    """Follow the player: the map opens on where he stands, at a zoom that
+    shows every camp in the simulated distance."""
+    _VIEW["cx"], _VIEW["cy"] = float(x), float(y)
+    _VIEW["half"] = 60000.0
+
+
 def _clamp_view() -> None:
     half = _VIEW["half"]
     lim = max(0.0, WORLD_HALF - half)

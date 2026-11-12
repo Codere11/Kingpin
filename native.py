@@ -17,14 +17,14 @@ import biomes
 import crop
 import industry
 import village as village_mod
-from world import TILE
+from world import TILE, coast_x
 
 
 # a native camp is a small place: they sit about this far apart, shaken by a
 # little jitter, and are generated this far around the player
-NATIVE_SPACING = 20000.0      # ~20 km between camps
-NATIVE_JITTER = 0.22          # fraction of the spacing, either way
-NATIVE_RADIUS = 40000.0       # generate camps within this of the player
+NATIVE_SPACING = 20000.0      # ~20 km between camps, at full density
+NATIVE_JITTER = 0.45          # fraction of the spacing, either way -- scattered
+NATIVE_RADIUS = 60000.0       # generate camps within this of the player
 
 # a teepee sleeps this many people
 PER_TEEPEE = 2
@@ -45,6 +45,54 @@ _NAMES = ("Awan", "Kiona", "Takoda", "Yuma", "Nashoba", "Chenoa",
           "Tala", "Uzumati", "Wakanda", "Yansa", "Ahiga", "Chaska",
           "Dakota", "Enapay", "Honovi", "Istas", "Kitchi", "Lomasi",
           "Mona", "Nodin", "Ojinjintka", "Paytah", "Sahale", "Tahatan")
+
+
+def _density(gx: int) -> float:
+    """Camp density rises inland: sparse at the coast, full far west."""
+    west = float(-gx) * NATIVE_SPACING
+    return min(1.0, 0.22 + west / 90000.0)
+
+
+def _camp_roll(gx: int, gy: int, seed: int) -> float:
+    """A deterministic 0..1 roll for one lattice cell: whether a camp is here."""
+    code = (gx * 73856093) ^ (gy * 19349663) ^ (seed * 2654435761)
+    rng = random.Random(code & 0xFFFFFFFF)
+    return rng.random()
+
+
+def spawn_starter_camps(g) -> list:
+    """The first four camps, scattered at random around the spawn in its
+    biome -- not on a ring."""
+    reg = getattr(g, "native_settlements", None)
+    if reg is None:
+        reg = {}
+        g.native_settlements = reg
+    for _s in reg.values():
+        if getattr(_s, "starter", False):
+            return []
+    px, py = float(g.player.x), float(g.player.y)
+    seed = int(getattr(g.world, "seed", 1))
+    rng = random.Random(seed ^ 0xB10C5)
+    made = []
+    for _ in range(600):
+        if len(made) >= 4:
+            break
+        ang = rng.uniform(0.0, 2.0 * math.pi)
+        r = rng.uniform(18000.0, 55000.0)
+        cx = px + math.cos(ang) * r
+        cy = py + math.sin(ang) * r
+        if cx > coast_x(cy, seed):        # the ocean holds no camp
+            continue
+        if any(math.hypot(cx - s.x, cy - s.y) < 12000.0 for s in made):
+            continue
+        _seed = ((int(cx) * 73856093) ^ (int(cy) * 19349663)
+                 ^ (seed * 2654435761)) & 0xFFFFFFFF
+        ns = build(g, cx, cy, _seed)
+        ns.starter = True
+        ns.cell = None
+        reg[("starter", len(made))] = ns
+        made.append(ns)
+    return made
 
 
 def native_center(gx: int, gy: int, seed: int):
@@ -491,6 +539,10 @@ def ensure_near(g, px: float, py: float, radius: float = NATIVE_RADIUS):
                 continue
             cx, cy = native_center(gx, gy, g.world.seed)
             if math.hypot(cx - px, cy - py) > radius:
+                continue
+            # DENSITY RISES INLAND: near the coast only a few cells hold a
+            # camp; far west nearly every cell does.
+            if _camp_roll(gx, gy, g.world.seed) >= _density(gx):
                 continue
             # the home camp already stands on its own ground: do not build
             # another camp right on top of it

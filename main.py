@@ -1582,6 +1582,7 @@ def main() -> None:
         g.native_settlements["home"] = _home
         g.native_settlement = _home
         _made = _native.ensure_near(g, g.player.x, g.player.y, _native.NATIVE_RADIUS)
+        _native.spawn_starter_camps(g)
         plog.log("NATIVE", "home at %.0f,%.0f + %d native settlements"
                  % (_home.x, _home.y, len(_made)))
     except Exception as _ne:
