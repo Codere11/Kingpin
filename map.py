@@ -178,6 +178,30 @@ def _chart(world, cx: float, cy: float, half: float):
                 _cactus_icon(surf, i, j)
             elif k == CLS_FOREST:
                 _tree_icon(surf, i, j, snow=False)
+    # CAMP MARKERS ARE BAKED INTO THE SAME SURFACE AS THE TERRAIN, so a camp
+    # and the tree behind it are one image and can never drift apart.
+    try:
+        import native as _native
+        _ns = _native.NATIVE_SPACING
+        _gx0 = int(math.floor((cx - half) / _ns))
+        _gx1 = int(math.floor((cx + half) / _ns))
+        _gy0 = int(math.floor((cy - half) / _ns))
+        _gy1 = int(math.floor((cy + half) / _ns))
+        for _gy in range(_gy0, _gy1 + 1):
+            for _gx in range(_gx0, _gx1 + 1):
+                if _gx >= 0:
+                    continue
+                _wx, _wy = _native.native_center(_gx, _gy, seed)
+                _pi = int((_wx - x0) / step)
+                _pj = int((_wy - y0) / step)
+                if 0 <= _pi < n and 0 <= _pj < n:
+                    surf.set_at((_pi, _pj), (250, 150, 50))
+                    if _pi + 1 < n:
+                        surf.set_at((_pi + 1, _pj), (250, 150, 50))
+                    if _pj + 1 < n:
+                        surf.set_at((_pi, _pj + 1), (250, 150, 50))
+    except Exception:
+        pass
     if len(_CACHE) >= CHART_KEEP:
         _CACHE.pop(next(iter(_CACHE)))
     _CACHE[key] = surf
@@ -305,28 +329,11 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
 
     small_font = pygame.font.SysFont("dejavusansmono", max(9, vh // 62),
                                      bold=True)
-    # EVERY CAMP IN THE SIMULATED DISTANCE, straight from the lattice, plus any
-    # already-built camp (the starter camps and the home camp are off-lattice).
-    try:
-        import native as _native
-        _seed = int(getattr(world, "seed", 0))
-        _marks = _native.camp_positions(player.x, player.y, 110000.0, _seed)
-    except Exception:
-        _marks = []
-    _seen = set()
-    _draw = []
-    for _wx, _wy, _gx, _gy in _marks:
-        _key = (int(_wx // 100), int(_wy // 100))
-        if _key not in _seen:
-            _seen.add(_key)
-            _draw.append((_wx, _wy))
+    # Lattice camps are baked into the terrain chart above. Only the
+    # off-lattice camps (the starter camps and the home camp) are drawn here,
+    # pinned to the same quantised centre as the chart.
     for _n in natives or ():
-        _key = (int(getattr(_n, "x", 0.0) // 100), int(getattr(_n, "y", 0.0) // 100))
-        if _key not in _seen:
-            _seen.add(_key)
-            _draw.append((getattr(_n, "x", 0.0), getattr(_n, "y", 0.0)))
-    for _wx, _wy in _draw:
-        _px, _py = at(_wx, _wy)
+        _px, _py = at(getattr(_n, "x", 0.0), getattr(_n, "y", 0.0))
         if x0 - 2 <= _px <= x0 + size + 2 and y0 - 2 <= _py <= y0 + size + 2:
             _campfire(screen, int(_px), int(_py))
             _lbl = small_font.render("camp", True, (250, 248, 240))

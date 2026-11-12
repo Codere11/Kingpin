@@ -22,7 +22,7 @@ from world import TILE, coast_x
 
 # a native camp is a small place: they sit about this far apart, shaken by a
 # little jitter, and are generated this far around the player
-NATIVE_SPACING = 20000.0      # ~20 km between camps, at full density
+NATIVE_SPACING = 60000.0      # ~60 km between camps (3x sparser, less lag)
 NATIVE_JITTER = 0.45          # fraction of the spacing, either way -- scattered
 NATIVE_RADIUS = 40000.0       # generate camps within this of the player
 
