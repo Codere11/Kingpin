@@ -3931,6 +3931,14 @@ def run(g):
             g.vision.cone_deg = g._cone0
         if not g.field_design and not g.aiming:
             g.draw_night()
+        # THE SHIP IS A LANDMARK, NOT A LINE-OF-SIGHT THING: draw it over the
+        # vision mask so it is always seen from the spawn coast.
+        try:
+            import ship as _ship
+            _shx, _shy = g.ship_pos()
+            _ship.draw(g.screen, g.cam_x, g.cam_y, _shx, _shy)
+        except Exception:
+            pass
 
         g.selected = g.inventory.selected_stack()
         g._sel0 = g.inventory.selected_stack()      # never rely on a name that a

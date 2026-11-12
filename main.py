@@ -1538,6 +1538,9 @@ def main() -> None:
     import world as _world
     g.player.x = g._spawn[0]
     g.player.y = g._spawn[1]
+    # FACE THE SEA: the ship is offshore to the east, and the vision cone must
+    # look at it or the whole ocean -- ship included -- sits in the dark.
+    g.player.facing = (1.0, 0.0)
     g.cam_x = g.player.x - WIDTH / (2.0 * ZOOM)
     g.cam_y = g.player.y - HEIGHT / (2.0 * ZOOM)
     # Rebuild the ground under him NOW and force the static layer to recompose,
