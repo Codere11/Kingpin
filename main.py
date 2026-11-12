@@ -1271,7 +1271,7 @@ def main() -> None:
 
     def open_smith(npc) -> None:
         g.smith_npc = npc
-        g.smith_panel = SmithPanel(npc)
+        g.smith_panel = SmithPanel(npc, g)
         g.smith_panel_open = True
         pygame.mouse.set_visible(True)
 

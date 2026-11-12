@@ -977,14 +977,25 @@ class SmithPanel:
     """Click a smith and choose what he makes: iron bars from ore, or iron
     gears from bars. Same shape as the gunsmith's panel."""
 
-    def __init__(self, npc) -> None:
+    def __init__(self, npc, g=None) -> None:
         self.npc = npc
+        self.g = g
         self.hover = None
         self.font = pygame.font.SysFont("dejavusans", 20, bold=True)
         self.font_small = pygame.font.SysFont("dejavusans", 14)
+        if g is not None:
+            import research as _research
+            self._industry = _research.state(g, "industry") == "done"
+        else:
+            self._industry = True
 
     def _products(self):
-        return list(getattr(self.npc, "SMITH_PRODUCTS", ()))
+        out = []
+        for p in getattr(self.npc, "SMITH_PRODUCTS", ()):
+            if p.get("needs") == "industry" and not self._industry:
+                continue
+            out.append(p)
+        return out
 
     def _rects(self, sw: int, sh: int):
         prods = self._products()

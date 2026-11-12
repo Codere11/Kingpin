@@ -1465,9 +1465,9 @@ class NPC:
     # THE SMITH'S TWO PRODUCTS: what he makes, what he turns it from, and how
     # long one takes. The player picks by clicking him (see SmithPanel).
     SMITH_PRODUCTS = (
-        {"id": "iron_bar", "input": "iron", "seconds": 30.0,
+        {"id": "iron_bar", "input": "iron", "seconds": 30.0, "needs": None,
          "name": "Iron bars", "desc": "1 iron ore \u2192 1 bar"},
-        {"id": "gear", "input": "iron_bar", "seconds": 30.0,
+        {"id": "gear", "input": "iron_bar", "seconds": 30.0, "needs": "industry",
          "name": "Gears", "desc": "1 iron bar \u2192 1 gear"},
     )
 
@@ -1494,6 +1494,15 @@ class NPC:
         if product is None:
             self._native_idle(dt)
             return
+        if product.get("needs"):
+            try:
+                import research as _research
+                if _research.state(g, product["needs"]) != "done":
+                    self._native_idle(dt)
+                    return
+            except Exception:
+                self._native_idle(dt)
+                return
         out_item = product["id"]
         in_item = product["input"]
         forge = self._nearest_workplace(g, "smith")
