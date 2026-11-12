@@ -53,11 +53,11 @@ MIN_HALF = 1200.0        # the closest you may zoom: about two villages wide
 MAX_HALF = WORLD_HALF * 1.35
 
 ZOOM_STEP = 1.16         # per notch: smooth, and you can always get back
-PAN_RATE = 0.85          # a full screen a second, at any zoom
+PAN_RATE = 0.25          # a full screen in about four seconds, at any zoom
 
 _CACHE: dict = {}
 _THREADS: dict = {}
-_VIEW = {"cx": 0.0, "cy": 0.0, "half": WORLD_HALF}
+_VIEW = {"cx": 0.0, "cy": 0.0, "half": 60000.0}
 
 CHART_PX = 140            # cells across the chart
 CHART_SAMPLES = 1         # one sample per cell: the chart classifies, not blends
@@ -216,7 +216,10 @@ def _zoom(factor: float, ax: float = 0.0, ay: float = 0.0) -> None:
 
 
 def handle_input(dt: float, player, mouse_pos=None, wheel: int = 0) -> None:
-    """Pan and zoom. Called every frame the map is open."""
+    """Pan and zoom. Called every frame the map is open. The pan runs on
+    real frame time, never the simulation clock, so fast-forward cannot make
+    the paper fling itself across the country."""
+    dt = max(0.0, min(float(dt), 0.05))
     keys = pygame.key.get_pressed()
     half = _VIEW["half"]
     speed = half * PAN_RATE * dt
