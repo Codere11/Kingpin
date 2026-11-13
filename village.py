@@ -1483,13 +1483,40 @@ class NPC:
     def _work_artisan(self, dt: float) -> None:
         """An artisan on the bench: fetch 10 leaf from a chest, carry it to
         the bench, turn it into 10 finished goods, and walk those back to a
-        chest. Once assigned he keeps the bench as his post -- he never drifts
-        back to the campfire, which was a two-task glitch where he flipped
-        between idling by the fire and walking to work."""
+        chest. He SELF-PAIRS: if he has no bench he takes any free one every
+        tick (auto-configuring an unset bench), so he never idles beside a
+        bench that is standing unused just because a pairing pass was missed."""
         bench = getattr(self, "artisan_bench", None)
         if bench is None:
-            self._native_idle(dt)      # no bench at all: stay by the fire
-            return
+            g = getattr(getattr(self, "native_camp", None), "g", None)
+            if g is not None:
+                free = [wp for wp in getattr(g, "placed_work", ()) or ()
+                        if getattr(wp, "kind", None) == "lab"
+                        and getattr(wp, "artisan", None) is None]
+                if free:
+                    for wp in free:
+                        if getattr(wp, "product", None) is None:
+                            try:
+                                import biomes as _biomes
+                                import crop as _crop
+                                _world = getattr(g, "world", None)
+                                _t = float(_world.temperature(wp.x, wp.y))
+                                _h = float(_world.humidity(wp.x, wp.y))
+                                _leaf_crop = _biomes.crop_kinds(_t, _h)[1]
+                                _leaf = _crop.LEAF_ITEM.get(_leaf_crop)
+                                _prod = _crop.LEAF_PRODUCT.get(_leaf_crop)
+                                if _leaf and _prod:
+                                    wp.leaf, wp.product = _leaf, _prod
+                            except Exception:
+                                pass
+                        if getattr(wp, "product", None):
+                            bench = wp
+                            bench.artisan = self
+                            self.artisan_bench = bench
+                            break
+            if bench is None:
+                self._native_idle(dt)      # no bench at all: stay by the fire
+                return
 
         def _wait_at_bench():
             if math.hypot(bench.x - self.x, bench.y - self.y) > 22.0:
