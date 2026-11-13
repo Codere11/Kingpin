@@ -283,12 +283,11 @@ def _apply_man(n, rec) -> None:
 # -- process 0's side ------------------------------------------------------
 class Workers:
     def __init__(self) -> None:
-        self.settles = []          # one lane per settlement shard (N cores)
+        self.settle = None
         self.hub = None
         self.enabled = False
-        self._town_lane = {}       # id(town) -> (lane, index in that lane)
         self._events = []          # parent -> lanes, next request
-        self._watch = []           # (lane, ti) pairs whose notice board is open
+        self._watch = []           # towns whose notice board is open
         self._reqs = []            # (rid, kind, ...) -- hire / sell requests
         self._cbs = {}             # rid -> the frame's callback
         self.offence_sink = None   # what to do with what a lane saw
@@ -302,14 +301,6 @@ class Workers:
         self._dmg_missed: dict = {}
         self._rid = 0
         self._frame = 0
-
-    @property
-    def settle(self):
-        """The first settlement lane, for callers that only knew one."""
-        return self.settles[0] if self.settles else None
-
-    def _lanes(self):
-        return self.settles + ([self.hub] if self.hub is not None else [])
 
     # -- the two lanes are started by start(), below ----------------------
     def _spawn(self, name, make_step, men, towns, extras):
@@ -346,9 +337,8 @@ class Workers:
 
     def ok(self) -> bool:
         return (self.enabled
-                and self.hub is not None and not self.hub.dead()
-                and bool(self.settles)
-                and all(not l.dead() for l in self.settles))
+                and self.settle is not None and not self.settle.dead()
+                and self.hub is not None and not self.hub.dead())
 
     # -- one world tick ----------------------------------------------------
     def tick(self, now, dt, phase, night, player, soldiers=()) -> None:
@@ -372,34 +362,17 @@ class Workers:
                # THE NOTICE BOARD, WHICH IS THE FRAME'S AND THE TOWN'S AT
                # ONCE: the frame draws it, the lane owns what it says. The
                # frame asks for the towns on it; the lane answers in the reply.
-               "watch": [],
-               "req": []}
+               "watch": list(self._watch),
+               "req": list(self._reqs)}
         msg["stall"] = self.stall
         sent = True
+        sent_settle = True
         # WHAT THE SEAT PAID THE FREE TRADERS GOES TO THE LANE THAT OWNS THEM.
         if self._to_hub:
             msg["relay"] = list(self._to_hub)
-        # ONE WATCH LIST AND ONE REQUEST LIST PER LANE: a town's index is
-        # local to the shard that owns it, so the frame routes each open board
-        # and each hire/sell to its own lane.
-        watch_by_lane = {}
-        for lane, ti in self._watch:
-            watch_by_lane.setdefault(lane, []).append(ti)
-        req_by_lane = {}
-        for r in self._reqs:
-            # r = (rid, lane_name, kind, ...)
-            for lane in self.settles:
-                if lane is not None and lane.name == r[1]:
-                    req_by_lane.setdefault(lane, []).append((r[0],) + r[2:])
-                    break
-        for lane in self.settles:
-            if lane is None or lane.dead():
-                continue
-            m = dict(msg)
-            m["watch"] = watch_by_lane.get(lane, [])
-            m["req"] = req_by_lane.get(lane, [])
-            ok_send = lane.send(m)
-            sent = ok_send and sent
+        if self.settle is not None and not self.settle.dead():
+            sent_settle = self.settle.send(msg)
+            sent = sent_settle and sent
         if self.hub is not None and not self.hub.dead():
             if self.hub.send(msg):
                 # THE RELAY IS SPENT WHEN IT IS DELIVERED, not when both sends
@@ -408,7 +381,7 @@ class Workers:
                 self._to_hub = []
         if sent:
             self._reqs = []
-        for _lane in self._lanes():
+        for _lane in (self.settle, self.hub):
             if _lane is not None:
                 _lane.req.pump()          # the frame keeps moving out
 
@@ -416,7 +389,7 @@ class Workers:
         """Take whatever the lanes have finished. Never blocks."""
         if not self.enabled:
             return
-        for lane in self._lanes():
+        for lane in (self.settle, self.hub):
             if lane is None:
                 continue
             frames = lane.recv()
@@ -510,43 +483,33 @@ class Workers:
 
     # -- the notice board, across the fence -------------------------------
     def watch(self, towns) -> None:
-        """The towns whose board is on screen. Their state comes back next tick.
-        Each town is routed to the settlement shard that owns it."""
-        if not self.settles:
+        """The towns whose board is on screen. Their state comes back next tick."""
+        if self.settle is None:
             self._watch = []
             return
         out = []
         for v in towns:
-            got = self._town_lane.get(id(v))
-            if got is not None:
-                out.append((got[0], got[1]))
+            i = self.settle.town_index.get(id(v))
+            if i is not None:
+                out.append(i)
         self._watch = out
 
-    def _town_route(self, town):
-        """(lane, index) for a town, or (None, None)."""
-        got = self._town_lane.get(id(town))
-        if got is None:
-            return None, None
-        return got[0], got[1]
-
     def hire(self, town, kind, cb) -> None:
-        lane, i = self._town_route(town)
-        self._request(("hire", i, kind), cb, lane=lane)
+        self._request(("hire", self.settle.town_index.get(id(town))
+                       if self.settle is not None else None, kind), cb)
 
     def sell(self, town, offers, cb) -> None:
-        lane, i = self._town_route(town)
-        self._request(("sell", i, list(offers)), cb, lane=lane)
+        self._request(("sell", self.settle.town_index.get(id(town))
+                       if self.settle is not None else None, list(offers)), cb)
 
-    def _request(self, payload, cb, lane=None) -> None:
-        if lane is None:
-            lane = self.settle
-        if not self.enabled or lane is None or payload[1] is None:
+    def _request(self, payload, cb) -> None:
+        if not self.enabled or self.settle is None or payload[1] is None:
             if cb is not None:
                 cb(None)
             return
         self._rid += 1
         self._cbs[self._rid] = cb
-        self._reqs.append((self._rid, lane.name) + payload)
+        self._reqs.append((self._rid,) + payload)
 
     # -- events that cross the fence --------------------------------------
     def take_deaths(self) -> list:
@@ -583,7 +546,7 @@ class Workers:
         if not self.enabled or npc is None:
             return
         key = str(getattr(npc, "id", ""))
-        for lane in self._lanes():
+        for lane in (self.settle, self.hub):
             if lane is None:
                 continue
             if key in lane.ids:
@@ -598,7 +561,7 @@ class Workers:
     def crime(self, town, ids) -> None:
         if not self.enabled or town is None:
             return
-        for lane in self._lanes():
+        for lane in (self.settle, self.hub):
             if lane is None:
                 continue
             i = lane.town_index.get(id(town))
@@ -607,7 +570,7 @@ class Workers:
                 return
 
     def stop(self) -> None:
-        for lane in self._lanes():
+        for lane in (self.settle, self.hub):
             if lane is not None:
                 lane.stop()
 
@@ -666,7 +629,7 @@ def _witness_ids(x, y, service):
             if getattr(w, "secret_police", False)]
 
 
-def _settlement_step(world, towns, men, player, hub_men, villages, root: bool = False):
+def _settlement_step(world, towns, men, player, hub_men, villages):
     """PROCESS 2: the settlements' books, and every settlement man."""
 
     class _Sink:
@@ -869,28 +832,24 @@ def _settlement_step(world, towns, men, player, hub_men, villages, root: bool = 
         player.x, player.y = px, py
         player.wanted, player.dead = wanted, dead
         # THE ROAD, AND THE NATION'S IDLE. Both move men between towns, so they
-        # belong to the process that owns the men -- not to the frame. With the
-        # settlements sharded across cores only the ROOT shard runs these
-        # (they are global: one owner, or men would move twice).
-        if root:
-            try:
-                stubs = []
-                for (sx, sy, snat, shost) in msg.get("soldiers", ()):
-                    st = _S()
-                    st.x, st.y, st.nation = sx, sy, snat
-                    st.hostile, st.alive, st.kind = shost, True, "soldier"
-                    stubs.append(st)
-                village_mod.refugees_on_the_road(now, stubs)
-            except Exception:
-                pass
+        # belong to the process that owns the men -- not to the frame.
+        try:
+            stubs = []
+            for (sx, sy, snat, shost) in msg.get("soldiers", ()):
+                st = _S()
+                st.x, st.y, st.nation = sx, sy, snat
+                st.hostile, st.alive, st.kind = shost, True, "soldier"
+                stubs.append(st)
+            village_mod.refugees_on_the_road(now, stubs)
+        except Exception:
+            pass
         timers["idle"] += dt
         if timers["idle"] >= 12.0:
             timers["idle"] = 0.0
-            if root:
-                try:
-                    villages.send_idle(now)
-                except Exception:
-                    pass
+            try:
+                villages.send_idle(now)
+            except Exception:
+                pass
         for ev in msg["events"]:
             try:
                 if ev[1] != "settle":
@@ -1659,42 +1618,17 @@ def start(world, villages, hub_world, player) -> Workers:
                 continue
             got.add(i)
             settle_men.append(n)
-        # SPLIT THE SETTLEMENTS ACROSS THE SPARE CORES. Each shard owns a
-        # slice of the towns and their men; the hub keeps its own lane. The
-        # frame routes watch/hire/sell/damage through the town->shard map.
-        n_settle = max(1, min(spare - 1, 8))
-        if len(settle_towns) <= 1:
-            n_settle = 1
-        chunks = [[] for _ in range(n_settle)]
-        for i, v in enumerate(settle_towns):
-            chunks[i % n_settle].append(v)
-        town_shard = {}
-        for si, ch in enumerate(chunks):
-            for v in ch:
-                town_shard[id(v)] = si
-        shard_men = [[] for _ in range(n_settle)]
-        for n in settle_men:
-            v = getattr(n, "village", None)
-            si = town_shard.get(id(v), 0) if v is not None else 0
-            shard_men[si].append(n)
-        for si in range(n_settle):
-            _t, _m = chunks[si], shard_men[si]
-            lane = _W._spawn(
-                "settle%d" % si,
-                lambda _t=_t, _m=_m, _si=si: _settlement_step(
-                    world, _t, _m, player, hub_men, villages, root=(_si == 0)),
-                _m, _t, None)
-            _W.settles.append(lane)
-            for _idx, _v in enumerate(_t):
-                _W._town_lane[id(_v)] = (lane, _idx)
+        _W.settle = _W._spawn(
+            "settle", lambda: _settlement_step(world, settle_towns, settle_men,
+                                               player, hub_men, villages),
+            settle_men, settle_towns, None)
         _W.hub = _W._spawn(
             "hub", lambda: _hub_step(world, hub_towns, hub_men, carts,
                                      settle_towns, player),
             hub_men, hub_towns, None)
         _W.enabled = True
-        _log("LANES UP: %d settlement shards / %d men / %d towns, %d hub men / %d hubs"
-             % (n_settle, len(settle_men), len(settle_towns),
-                len(hub_men), len(hub_towns)))
+        _log("LANES UP: %d settlement men / %d towns, %d hub men / %d hubs"
+             % (len(settle_men), len(settle_towns), len(hub_men), len(hub_towns)))
     except Exception as exc:
         import traceback
         _log("LANES FAILED TO START: %r\n%s" % (exc, traceback.format_exc()))
