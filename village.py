@@ -2609,15 +2609,16 @@ class NPC:
 
     def _step_toward_excl(self, tx: float, ty: float, dt: float,
                           excl=None, speed_scale: float = 1.0) -> None:
-        """Step toward a target that is ITSELF a collider (an ore chunk, a
-        tree trunk). Excluding its own box from the steering lets the man
-        actually reach it, instead of being pushed one way then the other."""
+        """Step toward a target that is ITSELF (or is surrounded by) colliders
+        -- an ore chunk, a tree trunk. Excluding those boxes from the steering
+        lets the man actually reach it, instead of being pushed one way then
+        the other. `excl` may be one rect or a list of them."""
         rects = getattr(self, "_rects", ())
         if excl is not None and rects:
-            # Exclude by OVERLAP, not identity: a growing tree makes a brand
-            # new trunk rect every tick, so `is not` never matched and the
-            # logger kept fighting his own tree.
-            rects = [r for r in rects if not r.colliderect(excl)]
+            if not isinstance(excl, (list, tuple, set)):
+                excl = (excl,)
+            rects = [r for r in rects
+                     if not any(r.colliderect(e) for e in excl if e is not None)]
         ux, uy = steering.steer(self, tx, ty, rects, getattr(self, "_fences", ()))
         self.x += ux * self.speed * speed_scale * dt
         self.y += uy * self.speed * speed_scale * dt
@@ -2767,23 +2768,27 @@ class NPC:
             elif tree.canopy_r >= float(st.get("target_r", 72.0)):
                 if cut_tile is None:
                     cut_tile = (tx, ty)
+        # THE LOGGER WALKS FREELY AMONG HIS OWN ORCHARD TREES: every trunk in
+        # the orchard is excluded from his steering, so he never orbits one.
+        _trunks = []
+        for _st in state.values():
+            _tr = _st.get("tree") if _st else None
+            if _tr is not None and not getattr(_tr, "felled", False):
+                _trr = getattr(_tr, "trunk_rect", None)
+                if _trr is not None:
+                    _trunks.append(_trr)
         if cut_tile is None and plant_tile is None:
             # nothing to do: every sapling is still growing
             tx = ctx * TILE + TILE / 2.0
             ty = cty * TILE + TILE / 2.0
             if math.hypot(tx - self.x, ty - self.y) > 40.0:
-                self._step_toward(tx, ty, dt, 0.7)
+                self._step_toward_excl(tx, ty, dt, excl=_trunks, speed_scale=0.7)
             return True
         ttx, tty = cut_tile if cut_tile is not None else plant_tile
         tx = ttx * TILE + TILE / 2.0
         ty = tty * TILE + TILE / 2.0
-        _excl = None
-        if cut_tile is not None:
-            _st = state.get((ttx, tty))
-            _tr = _st.get("tree") if _st else None
-            _excl = getattr(_tr, "trunk_rect", None) if _tr is not None else None
         if math.hypot(tx - self.x, ty - self.y) > 14.0:
-            self._step_toward_excl(tx, ty, dt, excl=_excl)
+            self._step_toward_excl(tx, ty, dt, excl=_trunks)
             return True
         if cut_tile is not None:
             st = state.get((ttx, tty))

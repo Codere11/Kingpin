@@ -107,6 +107,10 @@ def sync_camp(g) -> None:
         r = fd["rect"]
         if fd.get("type") == "orchard":
             (ctx, cty), tl = _tiles_of(r)
+            # A REAL ORCHARD: trees every other tile, one empty block between
+            # each pair, so no two trunks are ever adjacent. It looks natural
+            # and a logger never has to thread a solid wall of trunks.
+            tl = [(tx, ty) for (tx, ty) in tl if tx % 2 == 0 and ty % 2 == 0]
             orchards.append((ctx, cty))
             orchard_tiles[(ctx, cty)] = tl
         else:
