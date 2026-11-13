@@ -38,37 +38,27 @@ _BACKDROP = None
 
 
 def _backdrop(lw: int, lh: int):
-    """One random, real slice of the world at the GAME'S OWN ZOOM, so the
-    forest looks like the forest in play -- big overlapping canopies, not a
-    grid of tiny trees in rows. No player, no HUD, no vision shadow."""
+    """A single, naturally-generated image of the whole world, zoomed out:
+    the map's fixed paper (terrain, coast, camps, scattered tree icons). No
+    player, no HUD, no shadow, and no tree rows -- the icons are scattered."""
     global _BACKDROP
     if _BACKDROP is None:
-        GAME_ZOOM = 2.25                 # match main.ZOOM
-        vw = max(2, int(lw / GAME_ZOOM))
-        vh = max(2, int(lh / GAME_ZOOM))
         import world as W
-        import trees as T
+        import map as M
         seed = random.randint(1, 2 ** 31 - 1)
         w = W.World(seed)
-        g = W.GroundRenderer(w)
-        trees = T.Trees(seed)
-        cx = W.coast_x(0.0, seed) - random.uniform(4000.0, 40000.0)
-        cy = random.uniform(-20000.0, 20000.0)
-        CH = W.CHUNK
-        gx0, gx1 = int(cx // CH), int((cx + vw) // CH)
-        gy0, gy1 = int(cy // CH), int((cy + vh) // CH)
-        big = pygame.Surface((vw, vh))
-        big.fill((20, 24, 18))
-        for gy in range(gy0, gy1 + 1):
-            for gx in range(gx0, gx1 + 1):
-                try:
-                    big.blit(g._generate(gx, gy), (gx * CH - cx, gy * CH - cy))
-                except Exception:
-                    pass
-        _stump = trees.stump()
-        for _t in trees.visible(cx, cy, vw, vh):
-            _t.draw(big, cx, cy, _stump)
-        _BACKDROP = pygame.transform.scale(big, (lw, lh))
+        paper = M._paper(w, seed)
+        P = paper.get_width()
+        aspect = lw / lh if lh else 1.0
+        ph = P
+        pw = int(ph * aspect)
+        if pw > P:
+            pw = P
+            ph = max(1, int(pw / aspect))
+        x0 = random.randint(0, max(1, P - pw))
+        y0 = random.randint(0, max(1, P - ph))
+        region = paper.subsurface(pygame.Rect(x0, y0, pw, ph))
+        _BACKDROP = pygame.transform.scale(region, (lw, lh))
     return _BACKDROP
 
 
