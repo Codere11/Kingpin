@@ -1647,7 +1647,8 @@ class NPC:
             self._native_idle(dt)
             return
         if math.hypot(chunk.x - self.x, chunk.y - self.y) > 20.0:
-            self._step_toward(chunk.x, chunk.y, dt)
+            self._step_toward_excl(chunk.x, chunk.y, dt,
+                                   excl=getattr(chunk, "rect", None))
             return
         self.mine_timer = getattr(self, "mine_timer", 0.0) + dt
         if self.mine_timer >= 1.0:                 # one swing a second
@@ -2603,6 +2604,20 @@ class NPC:
         self.facing = (ux, uy)
         self.skills.gain_movement(self.speed * speed_scale * dt)
 
+    def _step_toward_excl(self, tx: float, ty: float, dt: float,
+                          excl=None, speed_scale: float = 1.0) -> None:
+        """Step toward a target that is ITSELF a collider (an ore chunk, a
+        tree trunk). Excluding its own box from the steering lets the man
+        actually reach it, instead of being pushed one way then the other."""
+        rects = getattr(self, "_rects", ())
+        if excl is not None and rects:
+            rects = [r for r in rects if r is not excl]
+        ux, uy = steering.steer(self, tx, ty, rects, getattr(self, "_fences", ()))
+        self.x += ux * self.speed * speed_scale * dt
+        self.y += uy * self.speed * speed_scale * dt
+        self.facing = (ux, uy)
+        self.skills.gain_movement(self.speed * speed_scale * dt)
+
     def _field_obstruction(self, ttx: int, tty: int, g, world):
         """What stands on this field tile that must be cleared before farming:
         'block', 'station', 'tree' or 'plant' -- or None if the tile is bare."""
@@ -2756,8 +2771,13 @@ class NPC:
         ttx, tty = cut_tile if cut_tile is not None else plant_tile
         tx = ttx * TILE + TILE / 2.0
         ty = tty * TILE + TILE / 2.0
+        _excl = None
+        if cut_tile is not None:
+            _st = state.get((ttx, tty))
+            _tr = _st.get("tree") if _st else None
+            _excl = getattr(_tr, "trunk_rect", None) if _tr is not None else None
         if math.hypot(tx - self.x, ty - self.y) > 14.0:
-            self._step_toward(tx, ty, dt)
+            self._step_toward_excl(tx, ty, dt, excl=_excl)
             return True
         if cut_tile is not None:
             st = state.get((ttx, tty))
