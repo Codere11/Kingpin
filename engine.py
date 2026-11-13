@@ -2763,23 +2763,6 @@ def run(g):
                 nemesis.set_now(g.now)
             except Exception:
                 pass
-            # ---- ANYBODY OVER THE CAMP FENCE IS SHOT --------------------
-            try:
-                import gulag as _gulag_t
-                g._n_in = _gulag_t.tick(g.player, g.enemies, village_mod.PEOPLE,
-                                      combat=g.combat, dt=g.dt)
-                if g._n_in and int(g.now) - int(getattr(_gulag_t, "_said", -99)) >= 3:
-                    _gulag_t._said = g.now
-                    plog.log("GULAG-INTRUDER", g._n_in, "inside the fence")
-            except Exception:
-                pass
-            # ---- THE STATE'S BEER COMES OFF THE TRAIN -------------------
-            try:
-                import govbeer as _govbeer
-                if g._TEST_TRAIN[0] is not None:
-                    _govbeer.tick(g._TEST_TRAIN[0], g.villages.villages, g.dt, g.now)
-            except Exception as _gbe:
-                plog.log("GOVBEER-ERR", repr(_gbe)[:140])
             # ---- GUNFIRE SCATTERS A CROWD ------------------------------
             try:
                 g._panic_t[0] += g.dt
@@ -2791,49 +2774,8 @@ def run(g):
             except Exception as _pn:
                 plog.log("PANIC-ERR", repr(_pn)[:120])
             # ---- THE CAMP'S PEOPLE --------------------------------------
-            try:
-                import prison as _prison
-                _prison.tick(g.player, g.enemies, list(village_mod.PEOPLE), g.dt, g.now, g.combat)
-            except Exception as _pe:
-                plog.log("PRISON-ERROR", repr(_pe)[:140])
-            # ---- THE RESETTLEMENT CAMPAIGN ------------------------------
             # (removed: the old town world is gone)
-            # ---- ARREST AND DETENTION -----------------------------------
-            try:
-                import detain as _detain
-                # a tranquilised player is carried in by the nearest militia
-                if getattr(g.player, "sleep_t", 0.0) > 0.0 and not getattr(g.player, "aboard", False):
-                    g._pc = _detain.player_cell()
-                    if g._pc is None:
-                        g._near = _detain._militia_near(g.player, g.enemies,
-                                                      village_mod.PEOPLE,
-                                                      g.player.x, g.player.y, 900.0)
-                        g._cell = _detain._nearest_cell(g.player.x, g.player.y)
-                        if g._near and g._cell is not None:
-                            _detain.arrest_player(g.player, g._cell)
-                            # HE IS CARRIED INSIDE, NOT LEFT ON THE ROOF.
-                            g._croom = getattr(g._cell, "room", None)
-                            if g._croom is not None:
-                                g.inside_mine = g._cell
-                                g.player._mine_latch = True
-                                g.player.x = g._croom.W / 2.0
-                                g.player.y = g._croom.H - 40.0
-                                g.cam_x = g.player.x - g.vw / 2.0
-                                g.cam_y = g.player.y - g.vh / 2.0
-                                pygame.mouse.set_visible(True)
-                                plog.log("ENTER-CELL", "the player is inside the cell at",
-                                         int(g._cell.x), int(g._cell.y))
-                _detain.player_tick(g.player, g._TEST_TRAIN[0], g.dt)
-                # the train plans its calls where people are actually waiting
-                if int(g.now * 2) != int(getattr(_detain, "_plan_at", -1)):
-                    _detain._plan_at = g.now * 2
-                    _detain.pickup_order(g._TEST_TRAIN[0])
-                _detain.tick(g.player, g.enemies, village_mod.PEOPLE, g.dt, g.now)
-                g._tr0 = g._TEST_TRAIN[0]
-                if g._tr0 is not None and not g._tr0.done:
-                    _detain.board_train(g._tr0, g.player, g.now)
-            except Exception as _de:
-                plog.log("DETAIN-ERROR", repr(_de)[:140])
+
             # ---- THE TEST TRAIN -----------------------------------------
             try:
                 _tr = g._TEST_TRAIN[0]
@@ -2858,23 +2800,6 @@ def run(g):
                                   g.placed_work, g.camp_walls)
             except Exception as _te2:
                 plog.log("TRAIN-ERROR", repr(_te2)[:160])
-            # ---- THE CROWN ANSWERS THE NAME -----------------------------
-            try:
-                g._lead = nemesis.FACTS.get(nemesis.LEADER_ID)
-                if g._lead is not None:
-                    if not manhunt.SENT:
-                        manhunt.dispatch(g.player, g._lead.get("at"), now=g.now,
-                                         enemies=g.enemies,
-                                         villages=g.villages.villages)
-                    manhunt.tick(g.player, g.enemies, g.now)
-                    if int(g.now) - int(getattr(manhunt, "_said", -999)) >= 5:
-                        manhunt._said = g.now
-                        plog.log("MANHUNT-STATE",
-                                 "standing", manhunt.any_standing(g.enemies),
-                                 "of", len(g.enemies), "soldiers",
-                                 "| at", int(g.player.x), int(g.player.y))
-            except Exception as _exc:
-                plog.log("MANHUNT-ERR", repr(_exc))
             if int(g.now) % 60 == 0:
                 try:
                     folders_mod.prune(g.now)
