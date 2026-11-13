@@ -1679,10 +1679,13 @@ class NPC:
         return float(wp.x), float(wp.y)
 
     def _wp_go(self, wp, dt, dist) -> bool:
-        """Walk toward the workplace's door; True while still on the way."""
+        """Walk toward the workplace's door; True while still on the way.
+        The workplace's OWN box is excluded from steering -- a man going to
+        work at a bench must not treat that bench as a wall, or he orbits its
+        corner forever and never gets close enough to work."""
         dx, dy = self._wp_door(wp)
         if math.hypot(dx - self.x, dy - self.y) > dist:
-            self._step_toward(dx, dy, dt)
+            self._step_toward_excl(dx, dy, dt, excl=getattr(wp, "rect", None))
             return True
         return False
 
