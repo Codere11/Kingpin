@@ -38,27 +38,60 @@ _BACKDROP = None
 
 
 def _backdrop(lw: int, lh: int):
-    """A single, naturally-generated image of the whole world, zoomed out:
-    the map's fixed paper (terrain, coast, camps, scattered tree icons). No
-    player, no HUD, no shadow, and no tree rows -- the icons are scattered."""
+    """A REAL rendered picture of the world, zoomed out: the actual ground
+    plus trees scattered by the world's own density noise (random positions,
+    so no rows). No player, no HUD, no vision shadow."""
     global _BACKDROP
     if _BACKDROP is None:
         import world as W
-        import map as M
+        import biomes
         seed = random.randint(1, 2 ** 31 - 1)
         w = W.World(seed)
-        paper = M._paper(w, seed)
-        P = paper.get_width()
-        aspect = lw / lh if lh else 1.0
-        ph = P
-        pw = int(ph * aspect)
-        if pw > P:
-            pw = P
-            ph = max(1, int(pw / aspect))
-        x0 = random.randint(0, max(0, P - pw))
-        y0 = random.randint(0, max(0, P - ph))
-        region = paper.subsurface(pygame.Rect(x0, y0, pw, ph))
-        _BACKDROP = pygame.transform.scale(region, (lw, lh))
+        g = W.GroundRenderer(w)
+        vw = 1400
+        vh = max(2, int(vw * lh / lw))
+        cx = W.coast_x(0.0, seed) - random.uniform(6000.0, 30000.0)
+        cy = random.uniform(-15000.0, 15000.0)
+        CH = W.CHUNK
+        big = pygame.Surface((vw, vh))
+        big.fill((20, 24, 18))
+        gx0, gx1 = int(cx // CH), int((cx + vw) // CH)
+        gy0, gy1 = int(cy // CH), int((cy + vh) // CH)
+        for gy in range(gy0, gy1 + 1):
+            for gx in range(gx0, gx1 + 1):
+                try:
+                    big.blit(g._generate(gx, gy), (gx * CH - cx, gy * CH - cy))
+                except Exception:
+                    pass
+        # NATURAL TREES: random positions, kept only where the biome's own
+        # density says a tree grows -- so forest clumps and desert stays bare.
+        for _ in range(420):
+            x = cx + random.random() * vw
+            y = cy + random.random() * vh
+            try:
+                t = float(biomes.temperature(x, y, seed))
+                h = float(biomes.humidity(x, y, seed))
+                coast = W.coast_x(y, seed)
+            except Exception:
+                continue
+            if x > coast:
+                continue
+            try:
+                _dark, _lite, _spec, dens = biomes.mix(t, h)
+            except Exception:
+                dens = 0.0
+            if random.random() >= float(dens):
+                continue
+            snowy = t < 0.30
+            px = int(x - cx)
+            py = int(y - cy)
+            r = random.randint(10, 18)
+            shade = (220, 230, 238) if snowy else (52, 104, 60)
+            dark = (186, 200, 212) if snowy else (38, 78, 46)
+            pygame.draw.ellipse(big, (16, 24, 16), (px - r, py - r // 3, r * 2, r))
+            pygame.draw.circle(big, dark, (px, py), r)
+            pygame.draw.circle(big, shade, (px - r // 3, py - r // 3), int(r * 0.7))
+        _BACKDROP = pygame.transform.scale(big, (lw, lh))
     return _BACKDROP
 
 
