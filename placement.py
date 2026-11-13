@@ -628,6 +628,15 @@ def try_place(g):
         _wp.worker = None
         _wp.owner = g.player
         g.placed_work.append(_wp)
+        if getattr(_wp, "kind", None) == "lab":
+            # A NEW BENCH: any assigned artisan waiting for one takes it now
+            # and walks to work -- he does not give up because the table did
+            # not exist when he was first told his trade.
+            try:
+                import colony as _colony
+                _colony.sync_artisans(g)
+            except Exception:
+                pass
         if not isinstance(getattr(g.player, "workplaces", None), list):
             g.player.workplaces = []
         g.player.workplaces.append(_wp)          # he can put a man to it
