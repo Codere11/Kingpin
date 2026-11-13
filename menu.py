@@ -55,8 +55,8 @@ def _backdrop(lw: int, lh: int):
         if pw > P:
             pw = P
             ph = max(1, int(pw / aspect))
-        x0 = random.randint(0, max(1, P - pw))
-        y0 = random.randint(0, max(1, P - ph))
+        x0 = random.randint(0, max(0, P - pw))
+        y0 = random.randint(0, max(0, P - ph))
         region = paper.subsurface(pygame.Rect(x0, y0, pw, ph))
         _BACKDROP = pygame.transform.scale(region, (lw, lh))
     return _BACKDROP
