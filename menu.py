@@ -64,7 +64,8 @@ def _backdrop(lw: int, lh: int):
                 except Exception:
                     pass
         # NATURAL TREES: random positions, kept only where the biome's own
-        # density says a tree grows -- so forest clumps and desert stays bare.
+        # density says a tree grows, and drawn as the biome's OWN species --
+        # cactuses in the desert, trees in the woods, nothing where it is bare.
         for _ in range(420):
             x = cx + random.random() * vw
             y = cy + random.random() * vh
@@ -77,14 +78,33 @@ def _backdrop(lw: int, lh: int):
             if x > coast:
                 continue
             try:
-                _dark, _lite, _spec, dens = biomes.mix(t, h)
+                _dark, _lite, spec, dens = biomes.mix(t, h)
             except Exception:
-                dens = 0.0
+                spec, dens = {}, 0.0
             if random.random() >= float(dens):
                 continue
-            snowy = t < 0.30
+            # pick the species by its own weight, like the game does
+            _total = sum(spec.values()) or 0.0
+            _roll = random.random() * _total
+            _acc = 0.0
+            _sp = "broadleaf"
+            for _name, _w in spec.items():
+                _acc += _w
+                if _roll <= _acc:
+                    _sp = _name
+                    break
             px = int(x - cx)
             py = int(y - cy)
+            if _sp == "bare":
+                continue
+            if _sp == "cactus":
+                col = (72, 148, 84)
+                r = random.randint(9, 15)
+                pygame.draw.rect(big, col, (px, py - r, 3, r))
+                pygame.draw.rect(big, col, (px - 5, py - r + 3, 5, 3))
+                pygame.draw.rect(big, col, (px + 3, py - r + 6, 5, 3))
+                continue
+            snowy = t < 0.30
             r = random.randint(10, 18)
             shade = (220, 230, 238) if snowy else (52, 104, 60)
             dark = (186, 200, 212) if snowy else (38, 78, 46)
