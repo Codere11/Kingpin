@@ -38,14 +38,16 @@ _BACKDROP = None
 
 
 def _backdrop(lw: int, lh: int):
-    """One random, real slice of the world for the title screen: just the
-    ground (terrain, beach, sea) -- no player, no HUD, no vision shadow."""
+    """One random, real slice of the world for the title screen: the ground,
+    the trees and the wild plants -- no player, no HUD, no vision shadow."""
     global _BACKDROP
     if _BACKDROP is None:
         import world as W
+        import trees as T
         seed = random.randint(1, 2 ** 31 - 1)
         w = W.World(seed)
         g = W.GroundRenderer(w)
+        trees = T.Trees(seed)
         cx = W.coast_x(0.0, seed) - random.uniform(4000.0, 40000.0)
         cy = random.uniform(-20000.0, 20000.0)
         CH = W.CHUNK
@@ -58,7 +60,11 @@ def _backdrop(lw: int, lh: int):
                     chunks[(gx, gy)] = g._generate(gx, gy)
                 except Exception:
                     chunks[(gx, gy)] = None
-        _BACKDROP = (cx, cy, chunks)
+        try:
+            trees.visible(cx, cy, lw, lh)      # pre-warm the forest in view
+        except Exception:
+            pass
+        _BACKDROP = (cx, cy, chunks, trees)
     return _BACKDROP
 
 
@@ -157,12 +163,15 @@ class Menu:
         low = pygame.Surface((lw, lh))
         # A REAL SLICE OF THE WORLD behind the menu: ground only -- no player,
         # no HUD/inventory, no vision shadow.
-        _cx, _cy, _chunks = _backdrop(lw, lh)
+        _cx, _cy, _chunks, _trees = _backdrop(lw, lh)
         import world as _W
         for (_gx, _gy), _surf in _chunks.items():
             if _surf is not None:
                 low.blit(_surf, (int(_gx * _W.CHUNK - _cx),
                                  int(_gy * _W.CHUNK - _cy)))
+        _stump = _trees.stump()
+        for _t in _trees.visible(_cx, _cy, lw, lh):
+            _t.draw(low, _cx, _cy, _stump)
         _dim = pygame.Surface((lw, lh), pygame.SRCALPHA)
         _dim.fill((8, 8, 12, 170))
         low.blit(_dim, (0, 0))
