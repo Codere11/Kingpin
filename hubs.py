@@ -67,13 +67,12 @@ def in_player_hub(rect, hubs) -> bool:
 def land_ok(rect, villages, hubs, px: float, py: float, clearance=140.0) -> bool:
     """HIS OWN GROUND, OR OPEN COUNTRY -- NEVER SOMEBODY ELSE'S.
 
-    A settlement's fence and a hut's fence are both closed to him: the law is
-    the gate, and a man does not build a forge in another man's town. What is
-    allowed is the wild, and any yard he has already closed himself.
-    """
+    The old-world hubs are gone; only real towns (none remain) and his own
+    fenced yard matter. A conquered native settlement is HIS ground, so a
+    sign-post, a bench or a fence goes up right beside it."""
     if in_player_hub(rect, hubs):
         return True
-    for v in list(villages or ()) + list(hubs or ()):
+    for v in list(villages or ()):
         fr = getattr(v, "fence_rect", None)
         if fr is not None and fr.inflate(clearance, clearance).colliderect(rect):
             return False
