@@ -38,13 +38,14 @@ _BACKDROP = None
 
 
 def _backdrop(lw: int, lh: int):
-    """One random, real, ZOOMED-OUT slice of the world for the title screen:
-    the ground and the forest, pre-rendered once -- no player, no HUD, no
-    vision shadow."""
+    """One random, real slice of the world at the GAME'S OWN ZOOM, so the
+    forest looks like the forest in play -- big overlapping canopies, not a
+    grid of tiny trees in rows. No player, no HUD, no vision shadow."""
     global _BACKDROP
     if _BACKDROP is None:
-        Z = 3                            # show three screens' worth of world
-        big_w, big_h = lw * Z, lh * Z
+        GAME_ZOOM = 2.25                 # match main.ZOOM
+        vw = max(2, int(lw / GAME_ZOOM))
+        vh = max(2, int(lh / GAME_ZOOM))
         import world as W
         import trees as T
         seed = random.randint(1, 2 ** 31 - 1)
@@ -54,9 +55,9 @@ def _backdrop(lw: int, lh: int):
         cx = W.coast_x(0.0, seed) - random.uniform(4000.0, 40000.0)
         cy = random.uniform(-20000.0, 20000.0)
         CH = W.CHUNK
-        gx0, gx1 = int(cx // CH), int((cx + big_w) // CH)
-        gy0, gy1 = int(cy // CH), int((cy + big_h) // CH)
-        big = pygame.Surface((big_w, big_h))
+        gx0, gx1 = int(cx // CH), int((cx + vw) // CH)
+        gy0, gy1 = int(cy // CH), int((cy + vh) // CH)
+        big = pygame.Surface((vw, vh))
         big.fill((20, 24, 18))
         for gy in range(gy0, gy1 + 1):
             for gx in range(gx0, gx1 + 1):
@@ -65,7 +66,7 @@ def _backdrop(lw: int, lh: int):
                 except Exception:
                     pass
         _stump = trees.stump()
-        for _t in trees.visible(cx, cy, big_w, big_h):
+        for _t in trees.visible(cx, cy, vw, vh):
             _t.draw(big, cx, cy, _stump)
         _BACKDROP = pygame.transform.scale(big, (lw, lh))
     return _BACKDROP
