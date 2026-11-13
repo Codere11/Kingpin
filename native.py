@@ -31,7 +31,7 @@ PER_TEEPEE = 2
 
 # every native settlement keeps this much clear ground beyond its own layout,
 # measured in whole tiles -- the user's "+30 blocks".
-CLEAR_BLOCKS = 30
+CLEAR_BLOCKS = 90               # the buildable clearing around a camp (3x each way)
 
 # the three food fields and (up to) two leaf fields
 MIN_FOOD_FIELDS = 3
