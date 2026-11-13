@@ -1280,10 +1280,10 @@ class NPC:
 
     def _distribute_food(self, dt: float) -> bool:
         """A farmer with a full pack feeds the settlement FIRST: four of the
-        food to each person, walked one by one. Only when everyone has their
-        four does the remainder go to the chest -- from where the horse takes
-        it. Returns True while walking or handing over; sets `_feeding_done`
-        when the round ends."""
+        food to each person, walked one by one -- and ONE delivery of four is
+        DONE. He does not chase a man down again because that man ate one of
+        his four. Only when everyone has been delivered to does the remainder
+        go to the chest (the horse's larder)."""
         camp = getattr(self, "native_camp", None)
         if camp is None:
             return False
@@ -1299,11 +1299,13 @@ class NPC:
             if total < 40:
                 return False                 # the pack is not full yet
             self._feeding_round = True
+            self._fed_round = set()          # who already got their four
+        fed = getattr(self, "_fed_round", set())
         people = [p for p in self._camp_people()
-                  if p is not self
-                  and int(getattr(p, "stock", {}).get(food_item, 0)) < 4]
+                  if p is not self and id(p) not in fed]
         if not people or int(self.carry.get(food_item, 0) or 0) < 4:
             self._feeding_round = False
+            self._fed_round = set()
             self._feeding_done = True        # everyone fed (or pack spent)
             return False
         p = min(people, key=lambda q: (q.x - self.x) ** 2 + (q.y - self.y) ** 2)
@@ -1314,6 +1316,7 @@ class NPC:
         self.carry[food_item] = int(self.carry.get(food_item, 0)) - 4
         if self.carry.get(food_item, 0) <= 0:
             self.carry.pop(food_item, None)
+        fed.add(id(p))
         self._did_work()
         return True
 
