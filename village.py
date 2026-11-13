@@ -1426,15 +1426,22 @@ class NPC:
     def _work_artisan(self, dt: float) -> None:
         """An artisan on the bench: fetch 10 leaf from a chest, carry it to
         the bench, turn it into 10 finished goods, and walk those back to a
-        chest. The good's grade is the midpoint of his hand and the leaf's."""
+        chest. Once assigned he keeps the bench as his post -- he never drifts
+        back to the campfire, which was a two-task glitch where he flipped
+        between idling by the fire and walking to work."""
         bench = getattr(self, "artisan_bench", None)
         if bench is None:
-            self._native_idle(dt)
+            self._native_idle(dt)      # no bench at all: stay by the fire
             return
+
+        def _wait_at_bench():
+            if math.hypot(bench.x - self.x, bench.y - self.y) > 22.0:
+                self._step_toward(bench.x, bench.y, dt)
+
         product = getattr(bench, "product", None)
         leaf = getattr(bench, "leaf", None)
         if not product or not leaf:
-            self._native_idle(dt)
+            _wait_at_bench()
             return
         # 1. Deliver the finished article before fetching more leaf.
         if self.carry.get(product, 0) > 0:
@@ -1478,18 +1485,15 @@ class NPC:
         # 3. Fetch 10 leaf from the nearest chest that holds it.
         chest = self._chest_with(leaf, 10)
         if chest is None:
-            # NO LEAF ANYWHERE YET: stand at the bench and wait, so an
-            # assigned artisan visibly goes to his job instead of sitting by
-            # the fire.
-            if math.hypot(bench.x - self.x, bench.y - self.y) > 22.0:
-                self._step_toward(bench.x, bench.y, dt)
+            # NO LEAF ANYWHERE YET: stand at the bench and wait.
+            _wait_at_bench()
             return
         if math.hypot(chest.x - self.x, chest.y - self.y) > 22.0:
             self._step_toward(chest.x, chest.y, dt)
             return
         taken, g = self._take_from_chest(chest, leaf, 10)
         if taken <= 0:
-            self._native_idle(dt)
+            _wait_at_bench()           # emptied on the way: stay on the job
             return
         old_n = int(self.carry.get(leaf, 0) or 0)
         self.carry[leaf] = old_n + taken
