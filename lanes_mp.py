@@ -1563,74 +1563,8 @@ _W = Workers()
 
 
 def start(world, villages, hub_world, player) -> Workers:
-    """Fork the two lanes. Returns the stub even when they are switched off."""
-    if os.environ.get("KINGPIN_WORKERS", "1") == "0":
-        _log("LANES disabled by KINGPIN_WORKERS=0")
-        return _W
-    # HOW MANY CORES MAY WE ACTUALLY TAKE (workers.py, which already existed):
-    # affinity-aware, reserves two for the desktop and the OS, and refuses to
-    # add lanes to a machine that is already loaded. Two lanes are needed for
-    # the split; with fewer spare cores it is not worth forking at all.
-    try:
-        import workers as _plan
-        spare = _plan.plan_workers()
-    except Exception:
-        spare = 2
-    if spare < 2:
-        _log("LANES: no spare cores (plan_workers=%d) -- single process" % spare)
-        return _W
-    try:
-        import village as _v
-        _towns = [v for v in villages.villages if not getattr(v, "is_hub", False)]
-        _log("CENSUS towns %d  town.npcs %d  register %d  travellers %d"
-             % (len(_towns), sum(len(v.npcs) for v in _towns),
-                len(_v.PEOPLE), len(_v.TRAVELLERS)))
-    except Exception as _ce:
-        _log("CENSUS failed: %r" % (_ce,))
-    _log("LANES: plan_workers=%d, taking 2 (hubs, settlements)" % spare)
-    try:
-        import village as village_mod
-        settle_towns = [v for v in villages.villages
-                        if not getattr(v, "is_hub", False)]
-        hub_towns = list(hub_world.hubs)
-        hub_men = [n for h in hub_towns for n in h.npcs]
-        carts = list(getattr(hub_world, "_caravans", ()))
-        hub_men += [c.npc for c in carts]
-        seen = {id(n) for n in hub_men}
-        # THE ROLL AND THE REGISTER ARE NOT THE SAME LIST. A town's roster is
-        # the authority for who lives there; `village.PEOPLE` is the flat list
-        # the frame used to walk, and it need not hold every man a town lists
-        # (rebuild_people caps a town at its capacity). The lane must own every
-        # man EITHER list names, or a man drops out of the simulation the
-        # moment the frame hands the settlements over.
-        settle_men = []
-        got = set()
-        for n in (list(village_mod.PEOPLE)
-                  + [n for t in settle_towns for n in t.npcs]
-                  + list(village_mod.TRAVELLERS)):
-            i = id(n)
-            if i in seen or i in got or not getattr(n, "alive", True):
-                continue
-            # NATIVE CAMP PEOPLE BELONG TO THE FRAME, not to a lane: the frame
-            # walks g._native_people every tick, so a lane copy would be a
-            # second body whose stale farm_plot wanders and fights the real one.
-            if getattr(n, "native", False):
-                continue
-            got.add(i)
-            settle_men.append(n)
-        _W.settle = _W._spawn(
-            "settle", lambda: _settlement_step(world, settle_towns, settle_men,
-                                               player, hub_men, villages),
-            settle_men, settle_towns, None)
-        _W.hub = _W._spawn(
-            "hub", lambda: _hub_step(world, hub_towns, hub_men, carts,
-                                     settle_towns, player),
-            hub_men, hub_towns, None)
-        _W.enabled = True
-        _log("LANES UP: %d settlement men / %d towns, %d hub men / %d hubs"
-             % (len(settle_men), len(settle_towns), len(hub_men), len(hub_towns)))
-    except Exception as exc:
-        import traceback
-        _log("LANES FAILED TO START: %r\n%s" % (exc, traceback.format_exc()))
-        _W.enabled = False
+    """THE OLD-WORLD LANES ARE GONE. The old towns and the old hubs are
+    empty, so there is nothing left to fork -- the frame walks the native
+    camps. This stays as a stub so every caller keeps working."""
+    _log("LANES: old-world lanes removed -- single process")
     return _W

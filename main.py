@@ -308,7 +308,6 @@ def main() -> None:
     def _main_capital():
         return worldbuild.main_capital(g.villages)
 
-    g.hub_world.build_caravans(g.world)
     # NO TREE THROUGH A ROOF -- BUT THE WOODS STILL GROW IN THE YARD.
     #
     # This used to mark EVERY tree inside a hub's fence as felled, directly

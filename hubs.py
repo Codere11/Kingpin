@@ -957,46 +957,12 @@ class Hubs:
         self.build(world, villages)
 
     def build(self, world, villages) -> None:
-        # ATTACHED TO THE REGISTRY, so every system that asks the registry
-        # which settlements are near a point gets the hubs too.
+        # ATTACHED TO THE REGISTRY, so the player's own yard (add_player_hub)
+        # is reachable as a hub. THE OLD-WORLD HUBS ARE GONE: no 25 huts, no
+        # 100 men, no free traders -- only the yard the player fences himself.
         villages.offlattice = self.hubs
-        # (and the registry keeps the book, so a test -- or a later system --
-        # can reach this one object without hunting for it)
         villages._hubs = self
-        rng = random.Random(int(world.seed) ^ 0x0C0FFEE)
-        towns = list(getattr(villages, "villages", ()) or ())
-        tries = 0
-        while len(self.hubs) < HUB_COUNT and tries < 8000:
-            tries += 1
-            # OFF THE LATTICE, AND INSIDE THE MAP. Every lattice cell within
-            # reach is already a town, so a hub cannot be on the lattice -- and
-            # `villages.visible` finds a town by asking the LATTICE where it is,
-            # so nothing that walks `villages` will ever find a hub. That is
-            # why a hub needs its own list, its own draw AND ITS OWN COLLISION.
-            x = rng.uniform(-80000.0, 80000.0)
-            y = rng.uniform(-80000.0, 80000.0)
-            import world as _world
-            if x > _world.coast_x(y, world.seed):
-                continue          # no hub out in the ocean
-            if any((v.x - x) ** 2 + (v.y - y) ** 2 < MIN_FROM_TOWN ** 2
-                   for v in towns):
-                continue
-            if any((h.x - x) ** 2 + (h.y - y) ** 2 < 9000.0 ** 2
-                   for h in self.hubs):
-                continue
-            try:
-                hub = Hub(world, x, y, rng.randrange(1 << 30),
-                          registry=villages)
-            except Exception:
-                continue
-            # IN THE REGISTRY, LIKE A TOWN. This is the whole of it: the
-            # exterior draw loop walks `villages.visible`, the player's
-            # collision walks the same villages' `fence_walls`, the crops are
-            # drawn from `world.plots`, and the board, the fence and the people
-            # all appear because they are a village that the world can see.
-            # Hand-drawing them separately gave a picture with no collision,
-            # no crops and nobody in it.
-            self.hubs.append(hub)
+        self._caravans = []
 
     def build_caravans(self, world) -> None:
         """THE FREE TRADERS. Nationless, owned by nobody, and not a hut's man:
