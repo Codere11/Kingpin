@@ -2614,7 +2614,10 @@ class NPC:
         actually reach it, instead of being pushed one way then the other."""
         rects = getattr(self, "_rects", ())
         if excl is not None and rects:
-            rects = [r for r in rects if r is not excl]
+            # Exclude by OVERLAP, not identity: a growing tree makes a brand
+            # new trunk rect every tick, so `is not` never matched and the
+            # logger kept fighting his own tree.
+            rects = [r for r in rects if not r.colliderect(excl)]
         ux, uy = steering.steer(self, tx, ty, rects, getattr(self, "_fences", ()))
         self.x += ux * self.speed * speed_scale * dt
         self.y += uy * self.speed * speed_scale * dt
