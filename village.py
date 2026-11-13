@@ -1519,8 +1519,7 @@ class NPC:
                 return
 
         def _wait_at_bench():
-            if math.hypot(bench.x - self.x, bench.y - self.y) > 22.0:
-                self._step_toward(bench.x, bench.y, dt)
+            self._wp_go(bench, dt, 22.0)
 
         product = getattr(bench, "product", None)
         leaf = getattr(bench, "leaf", None)
@@ -1548,8 +1547,7 @@ class NPC:
             return
         # 2. With a full batch of leaf, work the bench.
         if self.carry.get(leaf, 0) >= 10:
-            if math.hypot(bench.x - self.x, bench.y - self.y) > 22.0:
-                self._step_toward(bench.x, bench.y, dt)
+            if self._wp_go(bench, dt, 22.0):
                 return
             self.produce_acc += dt
             if self.produce_acc >= ARTISAN_BATCH_SECONDS:
@@ -1607,8 +1605,7 @@ class NPC:
         if bench is None:
             self._native_idle(dt)
             return
-        if math.hypot(bench.x - self.x, bench.y - self.y) > 24.0:
-            self._step_toward(bench.x, bench.y, dt)
+        if self._wp_go(bench, dt, 24.0):
             return
         self.skills.gain_research(dt)
         lvl = max(1, int(self.skills.research))
@@ -1670,12 +1667,30 @@ class NPC:
             return None
         return min(wps, key=lambda w: (w.x - self.x) ** 2 + (w.y - self.y) ** 2)
 
+    def _wp_door(self, wp):
+        """The walk-up point just outside a workplace's footprint. A
+        workplace's CENTRE is inside its own collider, so walking at the
+        centre made a man orbit the bench -- flipping one way then the other,
+        forever, never close enough to work."""
+        d = getattr(wp, "door", None)
+        if d is not None:
+            return float(d[0]), float(d[1])
+        return float(wp.x), float(wp.y)
+
+    def _wp_go(self, wp, dt, dist) -> bool:
+        """Walk toward the workplace's door; True while still on the way."""
+        dx, dy = self._wp_door(wp)
+        if math.hypot(dx - self.x, dy - self.y) > dist:
+            self._step_toward(dx, dy, dt)
+            return True
+        return False
+
     def _wait_at_post(self, wp, dt) -> None:
         """Stand at the assigned workplace while there is nothing to fetch or
         carry -- never drift back to the campfire. That drift was the
         two-task glitch: walk to work, idle by the fire, walk to work..."""
-        if wp is not None and math.hypot(wp.x - self.x, wp.y - self.y) > 22.0:
-            self._step_toward(wp.x, wp.y, dt)
+        if wp is not None:
+            self._wp_go(wp, dt, 20.0)
 
     # THE SMITH'S TWO PRODUCTS: what he makes, what he turns it from, and how
     # long one takes. The player picks by clicking him (see SmithPanel).
@@ -1746,8 +1761,7 @@ class NPC:
                     self.carry[in_item] = int(self.carry.get(in_item, 0)) + taken
                 return
         # walk to the forge and work
-        if math.hypot(forge.x - self.x, forge.y - self.y) > 24.0:
-            self._step_toward(forge.x, forge.y, dt)
+        if self._wp_go(forge, dt, 24.0):
             return
         self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
         if self.produce_acc >= product["seconds"]:
@@ -1809,8 +1823,7 @@ class NPC:
                 self.carry["cotton"] = int(self.carry.get("cotton", 0)) + taken
             return
         # walk to the loom and weave
-        if math.hypot(loom.x - self.x, loom.y - self.y) > 24.0:
-            self._step_toward(loom.x, loom.y, dt)
+        if self._wp_go(loom, dt, 24.0):
             return
         self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
         if self.produce_acc >= WEAVER_BATCH_SECONDS:
@@ -1866,8 +1879,7 @@ class NPC:
                 self.carry["chili"] = int(self.carry.get("chili", 0)) + taken
             return
         # walk to the stall and bottle it
-        if math.hypot(stall.x - self.x, stall.y - self.y) > 24.0:
-            self._step_toward(stall.x, stall.y, dt)
+        if self._wp_go(stall, dt, 24.0):
             return
         self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
         if self.produce_acc >= SPICEMAN_SECONDS:
@@ -2050,8 +2062,7 @@ class NPC:
                 self.carry["iron_bar"] = int(self.carry.get("iron_bar", 0)) + taken
             return
         # walk to the forge and work
-        if math.hypot(forge.x - self.x, forge.y - self.y) > 24.0:
-            self._step_toward(forge.x, forge.y, dt)
+        if self._wp_go(forge, dt, 24.0):
             return
         self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
         if self.produce_acc >= product["seconds"]:
