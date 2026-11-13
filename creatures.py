@@ -773,6 +773,7 @@ class Horse:
         self.delivering = False                   # running the goods to the ship
         self.returning = False                    # coming back to its sleeping spot
         self.pack = None                          # an Inventory, made on demand
+        self.coins = 0.0                          # the ship's payment, carried home
         self.g = None                             # the frame, for the ship and the market
         self.baby = False                         # a newborn, grows up over a day
         self.born_at = 0.0
@@ -877,6 +878,7 @@ class Horse:
                 self.returning = False
                 self.x, self.y = hx, hy
                 self.facing = (0.0, -1.0)
+                self._drop_coin(g)          # the ship's coin reaches the chest
                 return
             ux, uy = steering.steer(self, hx, hy, colliders or (), ())
             self.x += ux * self.speed * 1.2 * dt
@@ -885,21 +887,63 @@ class Horse:
             return
 
     def _deliver(self, g) -> None:
-        """Pour the saddle bags into the ship's hold, ready for the market."""
+        """SELL the saddle bags to the ship. The coin rides home in the bags;
+        goods the ship will not buy stay aboard -- nothing is given away."""
+        n = self._sell_pack(g)
+        if n > 0:
+            try:
+                g.toast("The horse sold %d goods for the ship's coin." % n)
+            except Exception:
+                pass
+
+    def _sell_pack(self, g) -> int:
+        """Sell every sellable good in the saddle bags to the ship, crediting
+        the horse's own purse. Returns how many were sold."""
+        try:
+            import market as _market
+        except Exception:
+            return 0
         pack = self._pack()
-        chest = getattr(g, "ship_hold", None)
-        if pack is None or chest is None:
-            return
-        n = 0
+        if pack is None:
+            return 0
+        coin = 0.0
+        sold = 0
+        sellable = _market.sellable(g)
         for i in range(len(pack.slots)):
             stack = pack.slots[i]
             if stack is None:
                 continue
-            chest.add(stack.defn.id, stack.count, stack.quality)
-            n += stack.count
+            if stack.defn.id not in sellable:
+                continue
+            grade = stack.quality if stack.defn.quality is not None else _market.MID_GRADE
+            coin += _market.sell_value(g, stack.defn.id, stack.count, grade)
+            sold += stack.count
             pack.slots[i] = None
+        if coin > 0.0:
+            self.coins = float(getattr(self, "coins", 0.0)) + coin
+        return sold
+
+    def _home_chest(self, g):
+        """The settlement chest nearest the horse's sleeping spot."""
+        chests = getattr(g, "built_chests", ()) if g is not None else ()
+        if not chests:
+            return None
+        hx, hy = self.home
+        return min(chests, key=lambda c: (c.x - hx) ** 2 + (c.y - hy) ** 2)
+
+    def _drop_coin(self, g) -> None:
+        """On arriving home, pay the settlement's chest with the coin the ship
+        gave. With no chest the coin stays in the saddle bags for next time."""
+        coins = int(round(float(getattr(self, "coins", 0.0))))
+        if coins <= 0:
+            return
+        chest = self._home_chest(g)
+        if chest is None or getattr(chest, "inventory", None) is None:
+            return
+        chest.inventory.add("coin", coins)
+        self.coins = 0.0
         try:
-            g.toast("The horse delivered %d goods to the ship's hold." % n)
+            g.toast("The horse brought %d coin home." % coins)
         except Exception:
             pass
 
@@ -1038,11 +1082,12 @@ class Horse:
             if math.hypot(tx - self.x, ty - self.y) > 28.0:
                 self._route_steer(tx, ty, dt, colliders)
                 return
-            if dest_chest is not None:
+            if ship:
+                self._sell_pack(g)          # the ship buys the cargo, coin to the purse
+            elif dest_chest is not None:
                 self._route_drop(dest_chest, item_a)
-                if not ship:
-                    self._route_take(dest_chest, item_b, amount)
-                    self._route_feed(dest_chest)
+                self._route_take(dest_chest, item_b, amount)
+                self._route_feed(dest_chest)
             self.route_phase = "to_home"
             return
         # to_home
@@ -1050,6 +1095,7 @@ class Horse:
         if math.hypot(hx - self.x, hy - self.y) > 28.0:
             self._route_steer(hx, hy, dt, colliders)
             return
+        self._drop_coin(g)              # the ship's coin reaches the settlement
         if home_chest is not None:
             if item_b and not ship:
                 self._route_drop(home_chest, item_b)
