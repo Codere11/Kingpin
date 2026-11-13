@@ -47,8 +47,8 @@ import os
 # Reserve, don't consume. The desktop needs a core, the OS needs one, and this
 # process needs the lane it already has. Taking every core makes the game fast
 # and the machine unusable, which is not "fast".
-RESERVE_CORES = 2
-MAX_WORKERS = 4          # beyond this the crossing costs more than the work
+RESERVE_CORES = 1
+MAX_WORKERS = 8          # beyond this the crossing costs more than the work
 MIN_WORKERS = 0          # 0 is a real answer: a box with nothing spare
                          # runs the world single-process, as it does today
 

@@ -478,16 +478,33 @@ def sync_jobs(g) -> None:
 def sync_artisans(g) -> None:
     """Pair each artisan (assigned on the sign-post) with a bench that has a
     chosen product. Benches with no product stay empty; artisans with no
-    bench idle until one is built."""
+    bench idle until one is built. An unconfigured bench gets this biome's
+    default product, so an assigned man always has somewhere to go."""
     camp = getattr(g, "player_camp", None)
     if camp is None:
         return
     benches = [wp for wp in getattr(g, "placed_work", ()) or ()
-               if getattr(wp, "kind", None) == "lab" and getattr(wp, "product", None)]
+               if getattr(wp, "kind", None) == "lab"]
     for wp in benches:
+        if getattr(wp, "product", None) is None:
+            try:
+                import biomes as _biomes
+                import crop as _crop
+                _world = getattr(g, "world", None)
+                _t = float(_world.temperature(wp.x, wp.y))
+                _h = float(_world.humidity(wp.x, wp.y))
+                _leaf_crop = _biomes.crop_kinds(_t, _h)[1]
+                _leaf = _crop.LEAF_ITEM.get(_leaf_crop)
+                _prod = _crop.LEAF_PRODUCT.get(_leaf_crop)
+                if _leaf and _prod:
+                    wp.leaf, wp.product = _leaf, _prod
+            except Exception:
+                pass
         wp.artisan = None
     pool = list(getattr(camp, "artisans", ()) or ())
     for wp in benches:
+        if getattr(wp, "product", None) is None:
+            continue
         u = next((n for n in pool if getattr(n, "artisan_bench", None) is None), None)
         if u is None:
             break

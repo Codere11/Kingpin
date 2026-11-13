@@ -101,6 +101,8 @@ def draw_blocks(screen, blocks, cam_x, cam_y, view):
         wy = ty * TILE
         if not view.collidepoint(wx + TILE / 2.0, wy + TILE / 2.0):
             continue
+        if kind == "bed":
+            continue            # a bedroll gets no wall bevel behind it
         if kind not in _COLORS:
             kind = "wood"
         _edges(screen, int(wx - cam_x), int(wy - cam_y), kind,

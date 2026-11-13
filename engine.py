@@ -2673,6 +2673,12 @@ def run(g):
                     if not _n.alive:
                         g._dead_here = True
                         continue
+                    # THE NATIVE CAMP PEOPLE SEE THE SAME SOLID WORLD AS THE
+                    # TOWNSMEN: houses, fences, benches, the fireplace and the
+                    # trees. Without this their steering ran with no obstacles
+                    # at all and they walked straight under the fire.
+                    _n._rects = getattr(g, "colliders", ()) or ()
+                    _n._fences = getattr(g, "visible_villages", ()) or ()
                     try:
                         if not _n.tick(g.world_dt, g.world, g.now, g._phase,
                                        g.combat, g.night, g.colliders, g.nearest_hostile):
@@ -3738,7 +3744,6 @@ def run(g):
         # the barn showed the middle of the map instead of the hall.
         if not g._inside_now:
             g.draw_exterior(g.cam_x, g.cam_y, True)
-            comm.draw_clouds(g.screen, g.cam_x, g.cam_y)
         try:
             # HIS OWN BENCHES, FORGES AND SHAFTS. A village's workplaces are
             # part of its ground; his are his, and have to be drawn.
@@ -3776,6 +3781,9 @@ def run(g):
             pass
         if not g._inside_now:
             g.draw_news(g.screen, g.cam_x, g.cam_y, g.vw, g.vh)   # the bubble, over his head
+            # CHAT CLOUDS GO LAST: over buildings, fireplaces, benches and
+            # chests -- never hidden underneath a placed thing.
+            comm.draw_clouds(g.screen, g.cam_x, g.cam_y)
         g.draw_villages = g.villages.visible(g.cam_x, g.cam_y, g.vw, g.vh,
                                          extra=g.hub_world.hubs)
         # THE BAR UNDER THE GUARD, for the man HE is searching -- ten seconds

@@ -1327,14 +1327,27 @@ class NPC:
         return min(ok, key=lambda c: (c.x - self.x) ** 2 + (c.y - self.y) ** 2)
 
     def _chest_with(self, item: str, n: int):
-        """The nearest chest that takes `item` and holds at least n of it."""
-        chest = self._chest_accepting(item)
-        if chest is None:
+        """The nearest chest that takes `item` and holds at least n of it.
+        Searches EVERY chest, not just the first one in the list -- a worker
+        used to idle beside an empty 'Any' chest while a full one stood ten
+        steps away."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None)
+        chests = getattr(g, "built_chests", None) if g is not None else None
+        if not chests:
             return None
-        inv = getattr(chest, "inventory", None)
-        if inv is not None and inv.count_of(item) >= n:
-            return chest
-        return None
+        best = None
+        for c in chests:
+            f = getattr(c, "filter", None)
+            if f is not None and f != item:
+                continue
+            inv = getattr(c, "inventory", None)
+            if inv is None or inv.count_of(item) < n:
+                continue
+            d = (c.x - self.x) ** 2 + (c.y - self.y) ** 2
+            if best is None or d < best[0]:
+                best = (d, c)
+        return best[1] if best else None
 
     def _take_from_chest(self, chest, item: str, n: int):
         """Take up to n of item out of a chest; returns (taken, grade)."""
@@ -1465,7 +1478,11 @@ class NPC:
         # 3. Fetch 10 leaf from the nearest chest that holds it.
         chest = self._chest_with(leaf, 10)
         if chest is None:
-            self._native_idle(dt)
+            # NO LEAF ANYWHERE YET: stand at the bench and wait, so an
+            # assigned artisan visibly goes to his job instead of sitting by
+            # the fire.
+            if math.hypot(bench.x - self.x, bench.y - self.y) > 22.0:
+                self._step_toward(bench.x, bench.y, dt)
             return
         if math.hypot(chest.x - self.x, chest.y - self.y) > 22.0:
             self._step_toward(chest.x, chest.y, dt)
