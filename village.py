@@ -1586,6 +1586,13 @@ class NPC:
             return None
         return min(wps, key=lambda w: (w.x - self.x) ** 2 + (w.y - self.y) ** 2)
 
+    def _wait_at_post(self, wp, dt) -> None:
+        """Stand at the assigned workplace while there is nothing to fetch or
+        carry -- never drift back to the campfire. That drift was the
+        two-task glitch: walk to work, idle by the fire, walk to work..."""
+        if wp is not None and math.hypot(wp.x - self.x, wp.y - self.y) > 22.0:
+            self._step_toward(wp.x, wp.y, dt)
+
     # THE SMITH'S TWO PRODUCTS: what he makes, what he turns it from, and how
     # long one takes. The player picks by clicking him (see SmithPanel).
     SMITH_PRODUCTS = (
@@ -1644,7 +1651,7 @@ class NPC:
             if int(self.carry.get(in_item, 0)) < need:
                 chest = self._chest_with(in_item, need)
                 if chest is None:
-                    self._native_idle(dt)
+                    self._wait_at_post(forge, dt)
                     return
                 if math.hypot(chest.x - self.x, chest.y - self.y) > 20.0:
                     self._step_toward(chest.x, chest.y, dt)
@@ -1707,7 +1714,7 @@ class NPC:
         if int(self.carry.get("cotton", 0)) < 5:
             chest = self._chest_with("cotton", 5)
             if chest is None:
-                self._native_idle(dt)
+                self._wait_at_post(loom, dt)
                 return
             if math.hypot(chest.x - self.x, chest.y - self.y) > 20.0:
                 self._step_toward(chest.x, chest.y, dt)
@@ -1764,7 +1771,7 @@ class NPC:
         if int(self.carry.get("chili", 0)) < 5:
             chest = self._chest_with("chili", 5)
             if chest is None:
-                self._native_idle(dt)
+                self._wait_at_post(stall, dt)
                 return
             if math.hypot(chest.x - self.x, chest.y - self.y) > 20.0:
                 self._step_toward(chest.x, chest.y, dt)
@@ -1948,7 +1955,7 @@ class NPC:
         if int(self.carry.get("iron_bar", 0)) < need:
             chest = self._chest_with("iron_bar", need)
             if chest is None:
-                self._native_idle(dt)
+                self._wait_at_post(forge, dt)
                 return
             if math.hypot(chest.x - self.x, chest.y - self.y) > 20.0:
                 self._step_toward(chest.x, chest.y, dt)
