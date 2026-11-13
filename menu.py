@@ -130,7 +130,7 @@ class Menu:
             pygame.draw.line(low, (18, 16, 20), (0, y), (lw, y))
         persist.set_test(self.test)
 
-        title = "GETWORLD" if self.page == "main" else (
+        title = "STRATWEST" if self.page == "main" else (
             "TEST SAVES" if self.test else "SAVES")
         t = self.title_font.render(title, False, TITLE)
         o = self.title_font.render(title, False, TITLE_DARK)
