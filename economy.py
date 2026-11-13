@@ -374,7 +374,11 @@ def setup(npc) -> None:
 
 
 def food_of(npc) -> int:
-    return sum(npc.stock.get(i, 0) for i in FOOD)
+    total = sum(npc.stock.get(i, 0) for i in FOOD)
+    _pack = getattr(npc, "pack", None)
+    if _pack is not None:
+        total += sum(_pack.count_of(i) for i in FOOD)
+    return total
 
 
 def fuel_of(npc) -> int:
@@ -2178,19 +2182,31 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
             health = health + HEAL_RATE * dt
             npc.health = top if health > top else health
     if hunger >= EAT_AT:
+        _ate = False
         for item in FOOD:
             if stock.get(item, 0) > 0:
                 stock[item] -= 1
                 hunger = hunger - EAT_BY
                 if hunger < 0.0:
                     hunger = 0.0
+                _ate = True
                 break
-        else:
-            if npc.trade_state != "none":
-                if wildcrop.forage(wildcrop._WORLD, npc.x, npc.y):
-                    hunger = hunger - FORAGE_MEAL
-                    if hunger < 0.0:
-                        hunger = 0.0
+        if not _ate:
+            _pack = getattr(npc, "pack", None)
+            if _pack is not None:
+                for item in FOOD:
+                    if _pack.count_of(item) > 0:
+                        _pack.consume(item, 1)
+                        hunger = hunger - EAT_BY
+                        if hunger < 0.0:
+                            hunger = 0.0
+                        _ate = True
+                        break
+        if not _ate and npc.trade_state != "none":
+            if wildcrop.forage(wildcrop._WORLD, npc.x, npc.y):
+                hunger = hunger - FORAGE_MEAL
+                if hunger < 0.0:
+                    hunger = 0.0
     if yearning >= YEARING_ACT:
         want = npc.wants_product
         if want and stock.get(want, 0) > 0:

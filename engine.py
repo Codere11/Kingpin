@@ -1082,6 +1082,31 @@ def run(g):
                                     break
                     except Exception:
                         pass
+                    # A CONQUERED WORKER: click him to open his pack and take
+                    # goods out of it or put goods in, like a chest.
+                    try:
+                        _wx = g.cam_x + event.pos[0] / g.zoom
+                        _wy = g.cam_y + event.pos[1] / g.zoom
+                        for _n in list(getattr(g, "_native_people", ())):
+                            if (getattr(_n, "alive", True)
+                                    and getattr(_n, "conquered", False)
+                                    and getattr(_n, "job", None) not in ("smith", "gunsmith")):
+                                if math.hypot(_wx - _n.x, _wy - _n.y) < 40.0:
+                                    _bag = work.bag(_n)
+                                    for _item, _cnt in list(getattr(_n, "carry", {}).items()):
+                                        if int(_cnt) > 0:
+                                            _bag.add(_item, int(_cnt))
+                                    _n.carry = {}
+                                    g._wn = _n
+                                    g.worker_panel = ChestPanel(
+                                        g.inventory, _bag, top_rows=4,
+                                        top_label=getattr(_n, "name", "PACK"))
+                                    g.worker_panel_open = True
+                                    g.consumed = True
+                                    pygame.mouse.set_visible(True)
+                                    break
+                    except Exception:
+                        pass
                     # A BUILDABLE IN THE HAND: LEFT CLICK PLACES A 1x1 BLOCK.
                     import block as _block
                     if g._held_id in _block.BUILDABLE and g.hotbar.slot_at(event.pos) is None:
