@@ -1036,8 +1036,8 @@ def run(g):
                     try:
                         import world as _world
                         _shx, _shy = g.ship_pos()
-                        _wx = g.cam_x + event.pos[0] / ZOOM
-                        _wy = g.cam_y + event.pos[1] / ZOOM
+                        _wx = g.cam_x + event.pos[0] / g.zoom
+                        _wy = g.cam_y + event.pos[1] / g.zoom
                         if math.hypot(_wx - _shx, _wy - _shy) < 80.0:
                             g.open_market()
                             g.consumed = True
@@ -1046,8 +1046,8 @@ def run(g):
                         pass
                     # A CONQUERED HORSE: click opens its saddle bags.
                     try:
-                        _wx = g.cam_x + event.pos[0] / ZOOM
-                        _wy = g.cam_y + event.pos[1] / ZOOM
+                        _wx = g.cam_x + event.pos[0] / g.zoom
+                        _wy = g.cam_y + event.pos[1] / g.zoom
                         for _hh in list(getattr(g, "horses", ())):
                             if getattr(_hh, "conquered", False) and getattr(_hh, "alive", True):
                                 if math.hypot(_wx - _hh.x, _wy - _hh.y) < 40.0:
@@ -1058,8 +1058,8 @@ def run(g):
                         pass
                     # A GUNSMITH: click him and choose what he makes.
                     try:
-                        _wx = g.cam_x + event.pos[0] / ZOOM
-                        _wy = g.cam_y + event.pos[1] / ZOOM
+                        _wx = g.cam_x + event.pos[0] / g.zoom
+                        _wy = g.cam_y + event.pos[1] / g.zoom
                         for _n in list(getattr(g, "_native_people", ())):
                             if (getattr(_n, "alive", True)
                                     and getattr(_n, "job", None) == "gunsmith"):
@@ -1071,8 +1071,8 @@ def run(g):
                         pass
                     # A SMITH: click him and choose iron bars or iron gears.
                     try:
-                        _wx = g.cam_x + event.pos[0] / ZOOM
-                        _wy = g.cam_y + event.pos[1] / ZOOM
+                        _wx = g.cam_x + event.pos[0] / g.zoom
+                        _wy = g.cam_y + event.pos[1] / g.zoom
                         for _n in list(getattr(g, "_native_people", ())):
                             if (getattr(_n, "alive", True)
                                     and getattr(_n, "job", None) == "smith"):
@@ -1086,8 +1086,8 @@ def run(g):
                     import block as _block
                     if g._held_id in _block.BUILDABLE and g.hotbar.slot_at(event.pos) is None:
                         try:
-                            _wx = g.cam_x + event.pos[0] / ZOOM
-                            _wy = g.cam_y + event.pos[1] / ZOOM
+                            _wx = g.cam_x + event.pos[0] / g.zoom
+                            _wy = g.cam_y + event.pos[1] / g.zoom
                             _tx = int(_wx // _block.TILE)
                             _ty = int(_wy // _block.TILE)
                             if _block.place_block(g, _tx, _ty, g._held_id):
@@ -1109,8 +1109,8 @@ def run(g):
                             break
                     # A BODY IS LOOTED, NOT SWUNG AT. Whatever is in his hand
                     # -- axe included -- a click on a corpse opens the corpse.
-                    g._bw = (g.cam_x + event.pos[0] / ZOOM,
-                           g.cam_y + event.pos[1] / ZOOM)
+                    g._bw = (g.cam_x + event.pos[0] / g.zoom,
+                           g.cam_y + event.pos[1] / g.zoom)
                     g._body = corpse_mod.nearest(g._bw[0], g._bw[1])
                     if g._body is not None:
                         g.body_panel = ChestPanel(
