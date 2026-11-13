@@ -2129,7 +2129,10 @@ class NPC:
                         break
         if getattr(self, "_idle_timer", 0.0) <= 0.0:
             ang = self.rng.uniform(0.0, 2.0 * math.pi)
-            r = self.rng.uniform(1.0, 2.5) * TILE
+            # ORBIT WELL OUTSIDE THE FIRE'S OWN COLLIDER. The fireplace is a
+            # solid workplace, so a ring drawn at 1-2.5 tiles crossed its box
+            # and the steering pushed the idler one way then the other.
+            r = self.rng.uniform(2.5, 4.0) * TILE
             self.target = (fx + math.cos(ang) * r, fy + math.sin(ang) * r)
             self._idle_timer = self.rng.uniform(2.0, 5.0)
         else:
