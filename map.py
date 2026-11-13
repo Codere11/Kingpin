@@ -98,6 +98,18 @@ def _campfire(screen: pygame.Surface, px: int, py: int) -> None:
                                                   (px + 3, py - 1)])
 
 
+def _flag(screen: pygame.Surface, px: int, py: int) -> None:
+    """A conquered settlement's marker: a dark-blue flag on a pole."""
+    pole = (96, 88, 78)
+    blue = (24, 46, 104)      # dark blue
+    blue_d = (14, 28, 66)
+    pygame.draw.line(screen, pole, (px - 1, py - 11), (px - 1, py + 7), 2)
+    pygame.draw.polygon(screen, blue, [(px + 1, py - 11), (px + 15, py - 7),
+                                       (px + 1, py - 3)])
+    pygame.draw.polygon(screen, blue_d, [(px + 1, py - 11), (px + 15, py - 7),
+                                         (px + 1, py - 3)], 1)
+
+
 def _chart(world, cx: float, cy: float, half: float):
     """THE GROUND UNDER THE CURRENT VIEW, sampled for THIS zoom.
 
@@ -425,7 +437,9 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
     # so none can drift; settled cells come from the register and are skipped
     # in the lattice pass, then drawn from their exact position.
     seed = int(getattr(world, "seed", 0))
-    built = [(getattr(_n, "x", 0.0), getattr(_n, "y", 0.0)) for _n in (natives or ())]
+    built = [(getattr(_n, "x", 0.0), getattr(_n, "y", 0.0), _n) for _n in (natives or ())]
+    name_font = pygame.font.SysFont("dejavusansmono", max(9, vh // 62),
+                                    bold=False)
 
     def _mark(_wx, _wy):
         _px, _py = w2s(_wx, _wy)
@@ -440,13 +454,28 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
             for _gx in range(-_cells, 0):
                 _wx, _wy = _native.native_center(_gx, _gy, seed)
                 if any(math.hypot(_wx - bx, _wy - by) < _ns * 0.3
-                       for bx, by in built):
+                       for bx, by, _n in built):
                     continue
                 _mark(_wx, _wy)
     except Exception:
         pass
-    for _bx, _by in built:
-        _mark(_bx, _by)
+    # SETTLED CAMPS: a campfire if still native, a dark-blue flag and the
+    # settlement's name once it is conquered and named.
+    for _bx, _by, _n in built:
+        _px, _py = w2s(_bx, _by)
+        if x0 - 2 <= _px <= x0 + size + 2 and y0 - 2 <= _py <= y0 + size + 2:
+            if getattr(_n, "conquered", False):
+                _flag(screen, int(_px), int(_py))
+                _nm = getattr(_n, "name", None) or ""
+                if _nm:
+                    _txt = name_font.render(_nm, True, (224, 220, 206))
+                    _sh = name_font.render(_nm, True, (12, 11, 10))
+                    _tx = int(_px) - _txt.get_width() // 2
+                    _ty = int(_py) + 9
+                    screen.blit(_sh, (_tx + 1, _ty + 1))
+                    screen.blit(_txt, (_tx, _ty))
+            else:
+                _campfire(screen, int(_px), int(_py))
     # HIM -- a bright ring and dot, last and on top.
     px, py = w2s(player.x, player.y)
     inside = (x0 <= px <= x0 + size and y0 <= py <= y0 + size)
