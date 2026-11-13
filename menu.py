@@ -69,13 +69,14 @@ class Menu:
         lw, lh = max(1, w // scale), max(1, h // scale)
         self._fonts(lw)
         if self.page == "main":
-            bw, bh = max(54, int(lw * 0.24)), max(18, int(lh * 0.15))
-            gap = max(8, int(lw * 0.03))
-            total = bw * 3 + gap * 2
-            x0 = (lw - total) // 2
-            y = int(lh * 0.60)
-            self._rects = [pygame.Rect(x0 + i * (bw + gap), y, bw, bh)
-                           for i in range(3)]
+            # THREE BUTTONS, STACKED VERTICALLY and centred -- wide enough
+            # that SINGLEPLAYER never truncates to "Single...".
+            bw = max(120, int(lw * 0.56))
+            bh = max(20, int(lh * 0.13))
+            gap = max(8, int(lh * 0.035))
+            y0 = int(lh * 0.46)
+            self._rects = [pygame.Rect((lw - bw) // 2, y0 + i * (bh + gap),
+                                       bw, bh) for i in range(3)]
             self._actions = ["singleplayer", "testmode", "quit"]
         else:
             bh = max(14, int(lh * 0.095))
