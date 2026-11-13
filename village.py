@@ -2158,28 +2158,50 @@ class NPC:
         return any(self.carry.get(item, 0) > 0 for item in economy.FOOD)
 
     def _sleep_on_bedroll(self, dt: float, g) -> bool:
-        """At night, walk to the nearest bedroll and sleep on it."""
+        """At night, each person takes ONE unoccupied bedroll; when every
+        bed is taken the rest sleep on the ground, each at his own spot --
+        never two people on one bed, never two people on one spot."""
         if g is None:
             return False
         bb = getattr(g, "built_blocks", None) or {}
+        taken = set()
+        for _n in getattr(g, "_native_people", ()) or ():
+            if _n is not self and getattr(_n, "asleep", False):
+                _b = getattr(_n, "bed", None)
+                if _b is not None:
+                    taken.add(_b)
         best = None
         bd = 1e18
         for (tx, ty), kind in bb.items():
-            if kind != "bed":
+            if kind != "bed" or (tx, ty) in taken:
                 continue
-            wx = tx * TILE + TILE / 2.0
-            wy = ty * TILE + TILE / 2.0
-            d = (wx - self.x) ** 2 + (wy - self.y) ** 2
+            d = (tx * TILE - self.x) ** 2 + (ty * TILE - self.y) ** 2
             if d < bd:
                 bd = d
                 best = (tx, ty)
-        if best is None:
-            return False
-        tx, ty = best
-        wx = tx * TILE + TILE / 2.0
-        wy = ty * TILE + TILE / 2.0
-        if math.hypot(wx - self.x, wy - self.y) > 14.0:
-            self._step_toward(wx, wy, dt)
+        if best is not None:
+            tx, ty = best
+            self.bed = (tx, ty)
+            wx = tx * TILE + TILE / 2.0
+            wy = ty * TILE + TILE / 2.0
+            if math.hypot(wx - self.x, wy - self.y) > 14.0:
+                self._step_toward(wx, wy, dt)
+                return True
+            self.asleep = True
+            return True
+        # EVERY BED IS TAKEN: sleep on the ground, on his own spot.
+        self.bed = None
+        if getattr(self, "_ground_spot", None) is None:
+            _ang = self.rng.uniform(0.0, 2.0 * math.pi)
+            _r = self.rng.uniform(1.5, 3.5) * TILE
+            _camp = getattr(self, "native_camp", None)
+            _fx = float(getattr(_camp, "x", self.x))
+            _fy = float(getattr(_camp, "y", self.y))
+            self._ground_spot = (_fx + math.cos(_ang) * _r,
+                                 _fy + math.sin(_ang) * _r)
+        gx, gy = self._ground_spot
+        if math.hypot(gx - self.x, gy - self.y) > 8.0:
+            self._step_toward(gx, gy, dt)
             return True
         self.asleep = True
         return True
@@ -2202,6 +2224,8 @@ class NPC:
             return self._sleep_on_bedroll(dt, g)
         if getattr(self, "asleep", False):
             self.asleep = False
+            self.bed = None
+            self._ground_spot = None
         return False
 
     def _draw_person_hearts(self, screen, sx, sy) -> None:

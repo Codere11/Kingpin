@@ -1107,6 +1107,34 @@ def run(g):
                                     break
                     except Exception:
                         pass
+                    # A BEDROLL: click it and sleep through the night.
+                    try:
+                        import block as _blockb
+                        _wx = g.cam_x + event.pos[0] / g.zoom
+                        _wy = g.cam_y + event.pos[1] / g.zoom
+                        _tx = int(_wx // _blockb.TILE)
+                        _ty = int(_wy // _blockb.TILE)
+                        if getattr(g, "built_blocks", {}).get((_tx, _ty)) == "bed":
+                            g.sleep_timer = 3.0
+                            g.consumed = True
+                            pygame.mouse.set_visible(False)
+                            break
+                    except Exception:
+                        pass
+                    # A SLEEPING PERSON: click him and lie down too.
+                    try:
+                        _wx = g.cam_x + event.pos[0] / g.zoom
+                        _wy = g.cam_y + event.pos[1] / g.zoom
+                        for _n in list(getattr(g, "_native_people", ())):
+                            if (getattr(_n, "alive", True)
+                                    and getattr(_n, "asleep", False)):
+                                if math.hypot(_wx - _n.x, _wy - _n.y) < 40.0:
+                                    g.sleep_timer = 3.0
+                                    g.consumed = True
+                                    pygame.mouse.set_visible(False)
+                                    break
+                    except Exception:
+                        pass
                     # A BUILDABLE IN THE HAND: LEFT CLICK PLACES A 1x1 BLOCK.
                     import block as _block
                     if g._held_id in _block.BUILDABLE and g.hotbar.slot_at(event.pos) is None:
