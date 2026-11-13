@@ -139,7 +139,7 @@ class Menu:
         for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
             low.blit(o, (tx + ox, ty + oy))
         low.blit(t, (tx, ty))
-        sub = _fit(self.small_font, "tobacco  ·  lead  ·  greed", lw - 16, DIM)
+        sub = _fit(self.small_font, "Take  ·  Manage  ·  Sell", lw - 16, DIM)
         low.blit(sub, (lw // 2 - sub.get_width() // 2, ty + t.get_height() + 4))
 
         for i, (rect, act) in enumerate(zip(self._rects, self._actions)):

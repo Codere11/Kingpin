@@ -1610,13 +1610,7 @@ def main() -> None:
         plog.log("COLONY-ERROR", repr(_ce)[:200])
 
     # ONE COTTON PLANT, RIGHT BESIDE THE SPAWN, full grown so it can be seen
-    # and picked the moment he opens his eyes. A WILD plant, like wild tobacco.
-    try:
-        _ctx = int((g.player.x - 4 * 32.0) // TILE)
-        _cty = int(g.player.y // TILE)
-        g.world.wild_forced[(_ctx, _cty)] = ("cotton", 3)
-    except Exception as _e:
-        plog.log("COTTON-SPAWN", repr(_e)[:120])
+    # and picked the moment he opens his eyes. (removed: no test cotton at spawn)
 
     # THE MAN WHO ANSWERS QUESTIONS IS NOT A CASUALTY OF A SAVE LOAD.
     # `load_now` rebuilds every town's roll up to its capacity, and he is the
