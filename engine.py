@@ -4,8 +4,6 @@ import sys
 import time
 import threading
 import comm
-import socio
-import grief
 
 
 def _bench_products(g, wp):
@@ -172,18 +170,8 @@ def run(g):
                 g.zoom = ZOOM                 # enter or leave: back to normal view
             g._aiming_prev = g.aiming
 
-        # MOOD FROM MONEY: once a day, spread over the next minutes.
-        try:
-            socio.tick(list(village_mod.PEOPLE), g.now, g.dt)
-        except Exception as _so:
-            plog.log("SOCIO-ERR", repr(_so)[:120])
         # CHAT CLOUDS: what was just said to a man, fading over a few seconds.
         comm.tick_clouds(g.dt)
-        # SEEING A CORPSE: -15 mood, once per body, spread over a minute.
-        try:
-            grief.tick(list(village_mod.PEOPLE), g.dt)
-        except Exception as _gr:
-            plog.log("GRIEF-ERR", repr(_gr)[:120])
         # A NEARBY MAN MAY SPEAK TO THE PLAYER: praise, insult or threaten.
         try:
             comm.tick_npc_to_player(list(village_mod.PEOPLE), g.player, g.dt)
@@ -599,8 +587,6 @@ def run(g):
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_m,
                                                                   pygame.K_ESCAPE):
                     g.map_open = False
-                elif g.world_map is not None:
-                    g.world_map.zoom_event(event)
             elif g.trade_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
@@ -944,8 +930,6 @@ def run(g):
                 # one thing a man on a road needs -- where am I and where is the
                 # nearest town -- was a debug tool.
                 g.map_open = not g.map_open
-                if g.map_open and g.world_map is not None:
-                    g.world_map.reset(g.player.x, g.player.y)   # the map follows him
                 pygame.mouse.set_visible(g.map_open)
             elif (g.dialogue_panel.open_
                   and ((event.type == pygame.KEYDOWN
@@ -2813,11 +2797,7 @@ def run(g):
             except Exception as _pe:
                 plog.log("PRISON-ERROR", repr(_pe)[:140])
             # ---- THE RESETTLEMENT CAMPAIGN ------------------------------
-            try:
-                import resettle as _reset
-                _reset.tick(g.villages.villages, g.now, g.dt)
-            except Exception as _re3:
-                plog.log("RESETTLE-ERROR", repr(_re3)[:140])
+            # (removed: the old town world is gone)
             # ---- ARREST AND DETENTION -----------------------------------
             try:
                 import detain as _detain
@@ -3420,24 +3400,6 @@ def run(g):
         # -- draw world ------------------------------------------------------
         g.tick_conquest(g.dt)
         g.update_hud()
-        if g.map_open and g.world_map is not None:
-            g.world_map.update(g.dt)
-            # The map is live: while it is open the armies alone continue the
-            # march, so their markers walk across it. Nothing else in the world
-            # is simulated -- no villages, no economy, no vision -- because
-            # running all of that with the map up is what froze the game solid.
-            if g.test_mode and g.armies:
-                for _army in g.armies:
-                    if _army.done:
-                        continue
-                    for _s in _army.soldiers:
-                        g.mt = getattr(_s, "march_target", None)
-                        if g.mt is None or not _s.alive:
-                            continue
-                        g.ux, g.uy = steering.steer(_s, g.mt[0], g.mt[1], [], [])
-                        _s.x += g.ux * 240.0 * g.dt
-                        _s.y += g.uy * 240.0 * g.dt
-                war.update(g.armies, g.dt, g.now)
         if g.inside_house is not None and g.inside_mine is None:
             g.interior = g.inside_house.interior
             # THE INTERIOR IS DRAWN AT THE SAME ZOOM AS THE WORLD. It was still

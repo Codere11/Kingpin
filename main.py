@@ -81,7 +81,6 @@ import war
 import work
 import wildcrop
 import world
-import worldmap
 import lanes_mp as workers
 from blood import Blood
 from build import BuildMenu, build_cost, build_materials
@@ -647,11 +646,6 @@ def main() -> None:
     except Exception as _te:
         plog.log("TRAIN-ERROR", repr(_te)[:160])
     try:
-        import resettle as _resettle
-        _resettle.build(g.villages.villages)
-    except Exception as _rse:
-        plog.log("RESETTLE-ERROR", repr(_rse)[:140])
-    try:
         import rail as _rail0
         _rail0.ensure(g.villages.villages)
     except Exception as _re0:
@@ -828,7 +822,7 @@ def main() -> None:
     # Chart the map at world creation, on a worker thread, so pressing M
     # simply shows it instead of stalling the game for a second. The map is
     # the simulation's view: a region the size of the old world, around him.
-    g.world_map = worldmap.WorldMap(g.world.seed, background=True)
+    g.world_map = None   # the old town map is gone; map.py draws the world now
     g.placing = None
     # SETTLEMENT DESIGNATION: pick 'Field' and the player freezes while the
     # camera pans like a city-management view; drag a rectangle to designate.
