@@ -1263,6 +1263,60 @@ class NPC:
                 self.mood = min(100.0, getattr(self, "mood", 50.0) + 2.0)
                 break
 
+    def _camp_people(self):
+        """Everyone who lives in this settlement, for the farmer to feed."""
+        camp = getattr(self, "native_camp", None)
+        if camp is None:
+            return []
+        people = getattr(camp, "people", None)
+        if people is not None:
+            return [p for p in people if getattr(p, "alive", True)]
+        out = []
+        for attr in ("farmers", "warriors", "handlers"):
+            for p in (getattr(camp, attr, ()) or ()):
+                if getattr(p, "alive", True):
+                    out.append(p)
+        return out
+
+    def _distribute_food(self, dt: float) -> bool:
+        """A farmer with a full pack feeds the settlement FIRST: four of the
+        food to each person, walked one by one. Only when everyone has their
+        four does the remainder go to the chest -- from where the horse takes
+        it. Returns True while walking or handing over; sets `_feeding_done`
+        when the round ends."""
+        camp = getattr(self, "native_camp", None)
+        if camp is None:
+            return False
+        food_item, best, total = None, 0, 0
+        for item in economy.FOOD:
+            n = int(self.carry.get(item, 0) or 0)
+            total += n
+            if n > best:
+                best, food_item = n, item
+        if food_item is None:
+            return False
+        if not getattr(self, "_feeding_round", False):
+            if total < 40:
+                return False                 # the pack is not full yet
+            self._feeding_round = True
+        people = [p for p in self._camp_people()
+                  if p is not self
+                  and int(getattr(p, "stock", {}).get(food_item, 0)) < 4]
+        if not people or int(self.carry.get(food_item, 0) or 0) < 4:
+            self._feeding_round = False
+            self._feeding_done = True        # everyone fed (or pack spent)
+            return False
+        p = min(people, key=lambda q: (q.x - self.x) ** 2 + (q.y - self.y) ** 2)
+        if math.hypot(p.x - self.x, p.y - self.y) > 20.0:
+            self._step_toward(p.x, p.y, dt)
+            return True
+        p.stock[food_item] = int(getattr(p, "stock", {}).get(food_item, 0)) + 4
+        self.carry[food_item] = int(self.carry.get(food_item, 0)) - 4
+        if self.carry.get(food_item, 0) <= 0:
+            self.carry.pop(food_item, None)
+        self._did_work()
+        return True
+
     def _camp_chest(self):
         """The nearest chest that will take what he carries. A chest with a
         lid filter only takes its one kind; an 'Any' chest takes everything."""
@@ -2249,8 +2303,16 @@ class NPC:
             return
         if _nat and getattr(self, "native_role", "") == "farmer":
             self._native_share()
-            if self._deposit_to_chest(dt):
+            if self._distribute_food(dt):
                 return
+            # THE SURPLUS GOES TO THE CHEST ONLY AFTER THE SETTLEMENT IS FED:
+            # four to every person first, the remainder to the horse's larder.
+            # A pack with no food in it (leaf, seeds) is deposited as before.
+            _has_food = any(int(self.carry.get(i, 0) or 0) > 0 for i in economy.FOOD)
+            if getattr(self, "_feeding_done", False) or not _has_food:
+                self._feeding_done = False
+                if self._deposit_to_chest(dt):
+                    return
             if self.farm_plot is None:
                 self._native_idle(dt)
                 return
