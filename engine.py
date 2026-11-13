@@ -152,7 +152,7 @@ def run(g):
                 plog.log("POS-FIX", "player y was a container ->", int(g.player.y))
         except Exception as _px:
             plog.log("POS-FIX-FAIL", repr(_px)[:120])
-        g.dt = min(g.clock.tick(30 if getattr(g, "record_mode", False) else FPS) / 1000.0, 0.05)
+        g.dt = min(g.clock.tick(FPS) / 1000.0, 0.05)
         g._PH["f"] += 1
         g.dt = min(g.dt * g.time_scale, 0.5)          # test-mode speed-up
         g.vw, g.vh = g.screen.get_size()
@@ -931,11 +931,6 @@ def run(g):
                 # nearest town -- was a debug tool.
                 g.map_open = not g.map_open
                 pygame.mouse.set_visible(g.map_open)
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
-                # RECORD MODE: cap the frame loop to 30 FPS, so OBS recording
-                # stops fighting the game for CPU.
-                g.record_mode = not getattr(g, "record_mode", False)
-                g.toast("Record mode: 30 FPS" if g.record_mode else "Record mode off")
             elif (g.dialogue_panel.open_
                   and ((event.type == pygame.KEYDOWN
                         and event.key in (pygame.K_1, pygame.K_2, pygame.K_3,
