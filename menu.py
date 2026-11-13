@@ -34,6 +34,34 @@ TEST_BORDER = (66, 118, 138)
 TEST_BORDER_HOVER = (140, 222, 240)
 
 
+_BACKDROP = None
+
+
+def _backdrop(lw: int, lh: int):
+    """One random, real slice of the world for the title screen: just the
+    ground (terrain, beach, sea) -- no player, no HUD, no vision shadow."""
+    global _BACKDROP
+    if _BACKDROP is None:
+        import world as W
+        seed = random.randint(1, 2 ** 31 - 1)
+        w = W.World(seed)
+        g = W.GroundRenderer(w)
+        cx = W.coast_x(0.0, seed) - random.uniform(4000.0, 40000.0)
+        cy = random.uniform(-20000.0, 20000.0)
+        CH = W.CHUNK
+        gx0, gx1 = int(cx // CH), int((cx + lw) // CH)
+        gy0, gy1 = int(cy // CH), int((cy + lh) // CH)
+        chunks = {}
+        for gy in range(gy0, gy1 + 1):
+            for gx in range(gx0, gx1 + 1):
+                try:
+                    chunks[(gx, gy)] = g._generate(gx, gy)
+                except Exception:
+                    chunks[(gx, gy)] = None
+        _BACKDROP = (cx, cy, chunks)
+    return _BACKDROP
+
+
 def _fit(font, text, max_w, color):
     """Render ``text`` shrinking/truncating so it never exceeds ``max_w``."""
     if max_w <= 4:
@@ -69,12 +97,13 @@ class Menu:
         lw, lh = max(1, w // scale), max(1, h // scale)
         self._fonts(lw)
         if self.page == "main":
-            # THREE BUTTONS, STACKED VERTICALLY and centred -- wide enough
-            # that SINGLEPLAYER never truncates to "Single...".
-            bw = max(120, int(lw * 0.56))
-            bh = max(20, int(lh * 0.13))
-            gap = max(8, int(lh * 0.035))
-            y0 = int(lh * 0.46)
+            # THREE BUTTONS, STACKED VERTICALLY and centred -- small enough to
+            # leave the subtitle clear, wide enough that SINGLEPLAYER never
+            # truncates to "Single...".
+            bw = max(104, int(lw * 0.38))
+            bh = max(14, int(lh * 0.085))
+            gap = max(6, int(lh * 0.02))
+            y0 = int(lh * 0.50)
             self._rects = [pygame.Rect((lw - bw) // 2, y0 + i * (bh + gap),
                                        bw, bh) for i in range(3)]
             self._actions = ["singleplayer", "testmode", "quit"]
@@ -126,9 +155,17 @@ class Menu:
         w, h = screen.get_size()
         scale, lw, lh = self._layout(w, h)
         low = pygame.Surface((lw, lh))
-        low.fill(BG)
-        for y in range(0, lh, 4):
-            pygame.draw.line(low, (18, 16, 20), (0, y), (lw, y))
+        # A REAL SLICE OF THE WORLD behind the menu: ground only -- no player,
+        # no HUD/inventory, no vision shadow.
+        _cx, _cy, _chunks = _backdrop(lw, lh)
+        import world as _W
+        for (_gx, _gy), _surf in _chunks.items():
+            if _surf is not None:
+                low.blit(_surf, (int(_gx * _W.CHUNK - _cx),
+                                 int(_gy * _W.CHUNK - _cy)))
+        _dim = pygame.Surface((lw, lh), pygame.SRCALPHA)
+        _dim.fill((8, 8, 12, 170))
+        low.blit(_dim, (0, 0))
         persist.set_test(self.test)
 
         title = "STRATWEST" if self.page == "main" else (
@@ -136,12 +173,12 @@ class Menu:
         t = self.title_font.render(title, False, TITLE)
         o = self.title_font.render(title, False, TITLE_DARK)
         tx = lw // 2 - t.get_width() // 2
-        ty = int(lh * 0.15)
+        ty = int(lh * 0.11)
         for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
             low.blit(o, (tx + ox, ty + oy))
         low.blit(t, (tx, ty))
         sub = _fit(self.small_font, "Take  ·  Manage  ·  Sell", lw - 16, DIM)
-        low.blit(sub, (lw // 2 - sub.get_width() // 2, ty + t.get_height() + 4))
+        low.blit(sub, (lw // 2 - sub.get_width() // 2, int(lh * 0.34)))
 
         for i, (rect, act) in enumerate(zip(self._rects, self._actions)):
             hovered = (i == self.hover)
