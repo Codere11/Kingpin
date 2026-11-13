@@ -255,6 +255,7 @@ def main() -> None:
     g.SIM_RADIUS = SIM_RADIUS
     g.zoom = ZOOM
     g.aiming = False           # holding a musket/double-shot/rifle: shadowless, zoomable view
+    g.record_mode = False      # F11: cap the frame loop to 30 FPS while recording
     g._aiming_prev = False
     g.trees = Trees(g.world.seed)
     g.world.trees = g.trees            # so loggers can find the woods to cut
