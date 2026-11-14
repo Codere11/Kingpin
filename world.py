@@ -63,14 +63,29 @@ SAND = np.array((202, 178, 130), np.float32)    # warm pixel sand (beach AND sea
 ALGAE = (86, 205, 96)                            # bright green algae, under the water
 
 
+# The coastline is static, yet the engine and the ship both asked for it
+# EVERY frame (a scalar fbm each) and every spawn roll asked again. Memoise
+# scalar answers; arrays (tree blocks) pass straight through.
+_COAST_MEMO: dict = {}
+
+
 def coast_x(y, seed):
     """The shoreline x for a given world y. fBm value noise (scalars and
     arrays alike) so the coast wiggles naturally with bays and headlands.
     A scalar in gives a plain float out (so it never poisons pygame.Rect)."""
+    if getattr(y, "ndim", 0) == 0:
+        key = (round(float(y), 1), seed)
+        got = _COAST_MEMO.get(key)
+        if got is not None:
+            return got
     yy = np.asarray(y, np.float32) * 0.008
     n = fbm(np.float32(0.0), yy, seed + 77, octaves=3)
     r = COAST_X + (n - 0.5) * 300.0
-    return float(r) if getattr(r, "ndim", 0) == 0 else r
+    out = float(r) if getattr(r, "ndim", 0) == 0 else r
+    if getattr(y, "ndim", 0) == 0:
+        if len(_COAST_MEMO) < 200000:
+            _COAST_MEMO[key] = out
+    return out
 
 
 # plot kinds that count as worked / planted soil (must match crop.py)

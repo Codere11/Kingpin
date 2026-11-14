@@ -67,20 +67,38 @@ def try_sleep(inside_house, player, math, reach, toast, night_factor,
 # a fireplace lights this many world pixels around itself (5 tiles)
 FIRE_LIGHT_RADIUS = 5 * 32.0
 
+# THE GLOW GRADIENT IS THE SAME FOR EVERY FIREPLACE AND EVERY FRAME. It was
+# rebuilt from 48 concentric circles per light per frame -- 250 circles a
+# frame with five fires, ~15% of all game time. Built once per (radius,
+# strength-bucket) and blitted.
+_GLOW_CACHE: dict = {}
+
+
+def _glow_surface(radius: float, strength: int) -> pygame.Surface:
+    # strength only changes with the night's depth, a handful of values over a
+    # whole night; bucket it so a walking night does not mint a new 320x320
+    # surface every frame.
+    key = (int(radius), int(strength) // 12)
+    glow = _GLOW_CACHE.get(key)
+    if glow is None:
+        size = int(radius * 2)
+        glow = pygame.Surface((max(2, size), max(2, size)), pygame.SRCALPHA)
+        steps = 48
+        for i in range(steps):
+            t = i / float(steps - 1)
+            r = max(1, int(radius * (1.0 - t)))
+            a = int(strength * t)
+            pygame.draw.circle(glow, (0, 0, 0, a), (int(radius), int(radius)), r)
+        _GLOW_CACHE[key] = glow
+    return glow
+
 
 def _punch_light(shade: pygame.Surface, lx: float, ly: float,
                 radius: float, strength: int) -> None:
     """Cut a radial hole in the night shade around a light source. The shade's
     per-pixel alpha is the darkness; BLEND_RGBA_SUB subtracts the glow's alpha,
     so the middle is lit and the edge falls off to full dark."""
-    size = int(radius * 2)
-    glow = pygame.Surface((max(2, size), max(2, size)), pygame.SRCALPHA)
-    steps = 48
-    for i in range(steps):
-        t = i / float(steps - 1)
-        r = max(1, int(radius * (1.0 - t)))
-        a = int(strength * t)
-        pygame.draw.circle(glow, (0, 0, 0, a), (int(radius), int(radius)), r)
+    glow = _glow_surface(radius, strength)
     shade.blit(glow, (int(lx - radius), int(ly - radius)),
                special_flags=pygame.BLEND_RGBA_SUB)
 
