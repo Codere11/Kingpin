@@ -1221,11 +1221,16 @@ def run(g):
             g._blk += g.dt
             # A MENU LEFT ALONE FOR TWENTY SECONDS RELEASES THE WORLD. Not a
             # fix for any particular panel -- a guarantee that no panel, known
-            # or not yet written, can hold the game still for good.
+            # or not yet written, can hold the game still for good. THE PAUSE
+            # MENU IS THE ONE EXCEPTION: its whole job is to hold the world
+            # still for as long as the player wants. Auto-closing it resumed
+            # the world on its own, and a man who walked away came back to a
+            # corpse -- hunger had kept running while he thought it was paused.
             g._stuck = 0.0 if g._had_event else g._stuck + g.dt
             if g._stuck >= 20.0:
                 g._stuck = 0.0
-                g.close_modals("Closed: that menu had stopped responding")
+                if not g.pause_open:
+                    g.close_modals("Closed: that menu had stopped responding")
             if g._blk >= 1.0:
                 g._blk = 0.0
                 plog.log("BLOCKED", "inv", g.inventory_open, "trade", g.trade_open,
