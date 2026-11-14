@@ -2664,8 +2664,12 @@ class NPC:
                     return "station"
             trees = getattr(g, "trees", None)
             if trees is not None:
+                _orch = getattr(getattr(self, "native_camp", None),
+                                "orchard_state", None)
                 for tree in trees.near(wx, wy, TILE * 0.7):
                     if not getattr(tree, "felled", False):
+                        if _orch and (ttx, tty) in _orch:
+                            continue   # the logger's orchard tree, not the farmer's
                         return "tree"
         try:
             import wildcrop as _wc
@@ -2698,15 +2702,23 @@ class NPC:
                 except Exception:
                     pass
                 return True
-        # A STANDING TREE is felled for its wood.
+        # A STANDING TREE is felled for its wood -- but NOT an orchard tree:
+        # those are the logger's, and a farmer cutting them was the
+        # "plant then cut immediately" glitch when an orchard sat beside a
+        # field and the boundary tile belonged to both.
         trees = getattr(g, "trees", None)
         if trees is not None:
+            _orch = getattr(getattr(self, "native_camp", None),
+                            "orchard_state", None)
             for tree in trees.near(wx, wy, TILE * 0.7):
-                if not getattr(tree, "felled", False):
-                    trees.fell(tree, now)
-                    amt = self.rng.randint(10, 30)
-                    self.stock["wood"] = self.stock.get("wood", 0) + amt
-                    return True
+                if getattr(tree, "felled", False):
+                    continue
+                if _orch and (ttx, tty) in _orch:
+                    continue
+                trees.fell(tree, now)
+                amt = self.rng.randint(10, 30)
+                self.stock["wood"] = self.stock.get("wood", 0) + amt
+                return True
         # A WILD PLANT is picked for whatever it carried.
         try:
             import wildcrop as _wc
