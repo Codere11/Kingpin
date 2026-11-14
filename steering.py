@@ -101,21 +101,19 @@ def _gate_steer(entity, px, py, v):
 def _around_corner(entity, px, py, ux, uy, gx, gy, rect, rad):
     """Head for the cheapest clear corner of a blocking rect.
 
-    THE CORNER CHOICE MUST STICK. Standing at a rect's edge, the two corners
-    behind you cost almost exactly the same, and the choice flipped with every
-    frame -- measured, a man alternating between (0.58, -0.82) and
-    (-0.58, 0.82) ten times a second, going nowhere. The corner he chose is
-    held for about a second before he is allowed to change his mind.
+    The cheapest corner is picked every frame (the old "stick to the corner"
+    hysteresis locked a man into circling a rect for ever, so it is gone). If
+    the man is already standing ON that corner, the goal is still behind the
+    rect -- so he heads for the adjacent corner nearer the goal, walking
+    AROUND the rect instead of orbiting the corner point.
     """
     corners = ((rect.left - rad, rect.top - rad),
                (rect.right + rad, rect.top - rad),
                (rect.left - rad, rect.bottom + rad),
                (rect.right + rad, rect.bottom + rad))
-    held = getattr(entity, "_avoid_corner", None)
-    hold_n = int(getattr(entity, "_avoid_n", 0) or 0)
-    best = None
+    best_i = 0
     best_cost = 1e18
-    for cx, cy in corners:
+    for i, (cx, cy) in enumerate(corners):
         cdx, cdy = cx - px, cy - py
         cdist = math.hypot(cdx, cdy)
         if cdist < 1e-3:
@@ -125,18 +123,31 @@ def _around_corner(entity, px, py, ux, uy, gx, gy, rect, rad):
         gdist = math.hypot(gdx, gdy) or 1.0
         a2 = math.acos(max(-1.0, min(1.0, (cdx * gdx + cdy * gdy) / (cdist * gdist))))
         cost = a1 + a2
-        side = 1 if (cdx * uy - cdy * ux) > 0.0 else -1
         # NO HYSTERESIS. "Keep going round the same way" was meant to stop a
         # man dithering between two corners; what it actually did was lock him
         # into whichever side he first took, so a man whose true best corner
         # was the other one circled for ever. The cheapest corner, every time.
         if cost < best_cost:
             best_cost = cost
-            best = (cx, cy, side)
-    cx, cy, side = best
-    entity._avoid_side = side
+            best_i = i
+    cx, cy = corners[best_i]
     entity._avoid_corner = (cx, cy)
-    entity._avoid_n = max(0, hold_n - 1) if (held == (cx, cy) and hold_n) else 16
+    entity._avoid_side = 1
+    entity._avoid_n = 16
+    # SLIDE PAST, NOT ORBIT. A goal just the other side of the rect (a man to
+    # feed standing by the bench just placed between you and him) left the
+    # straight line still blocked AFTER the corner was reached -- and the man
+    # reversed toward the same corner and back, ten times a second, going
+    # nowhere. Standing on the corner now heads for the adjacent corner that
+    # lies nearer the goal, so he walks AROUND the rect instead of into its
+    # corner point and back out.
+    if math.hypot(px - cx, py - cy) < rad + 10.0:
+        adj = ((1, 2), (0, 3), (0, 3), (1, 2))[best_i]
+        nx, ny = corners[adj[0]]
+        if (corners[adj[1]][0] - gx) ** 2 + (corners[adj[1]][1] - gy) ** 2 \
+                < (nx - gx) ** 2 + (ny - gy) ** 2:
+            nx, ny = corners[adj[1]]
+        cx, cy = nx, ny
     ox, oy = cx - rect.centerx, cy - rect.centery
     on = math.hypot(ox, oy) or 1.0
     tx, ty = cx + ox / on * 12.0, cy + oy / on * 12.0

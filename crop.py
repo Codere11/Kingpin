@@ -36,7 +36,7 @@ def yield_scale(skill: float) -> float:
     return 1.0 + 2.0 * k
 PHASE_SECONDS = GROW_SECONDS / 4.0        # 3 growth phases, then ripe
 
-LEAF_KINDS = ("plant", "mushroom", "agave")
+LEAF_KINDS = ("plant", "mushroom", "agave", "chili")
 FOOD_KINDS = ("wheat", "berries", "cactus")
 FIBRE_KINDS = ("cotton",)      # neither food nor leaf: cotton, spun into cloth
 
