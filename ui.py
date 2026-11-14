@@ -1588,7 +1588,7 @@ class ShipMarketPanel:
             nm = self.font_small.render(items.get(good).name if items.get(good) else good,
                                         True, (226, 214, 190))
             screen.blit(nm, (rect.left + 48, rect.top + 6))
-            price = self.font_small.render("B: %.1f c%s" % (base, trend), True, (232, 200, 118))
+            price = self.font_small.render("B: %d c per 10%s" % (market.per_ten(base), trend), True, (232, 200, 118))
             screen.blit(price, (rect.right - price.get_width() - 10, rect.top + 6))
             have = self._hold_count(good)
             hv = self.font_tiny.render("in hold: %d" % have, True, (150, 146, 134))
@@ -1612,7 +1612,7 @@ class ShipMarketPanel:
                 pts.append((int(x), int(y)))
             if len(pts) > 1:
                 pygame.draw.lines(screen, (120, 200, 150), False, pts, 2)
-            cur = self.font_small.render("now %.1f c" % base, True, (232, 200, 118))
+            cur = self.font_small.render("now %d c per 10" % market.per_ten(base), True, (232, 200, 118))
             screen.blit(cur, (hist_rect.left + 8, hist_rect.bottom - 24))
         # sell button
         n = self._hold_count(good)

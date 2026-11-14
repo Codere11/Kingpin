@@ -16,18 +16,23 @@ sold out of the hold.
 import economy
 import quality
 
-# good -> (anchor, floor, cap) for the MID-GRADE price band
+# good -> (anchor, floor, cap) for the MID-GRADE price band.
+# The anchor is COIN PER UNIT -- deliberately cheap at the start: ten units of
+# the basic goods are one coin, ten bars are ten coin. Demand moves it a day
+# at a time; the coin a player is actually paid is always rounded to a whole
+# coin (never a decimal) at the payout, and the panel shows the whole-coin
+# price for ten units.
 GOODS = {
-    "cigar": (10.0, 3.0, 30.0),
-    "dried_mushroom": (10.0, 3.0, 30.0),
-    "beer": (10.0, 3.0, 30.0),
-    "liqueur": (10.0, 3.0, 30.0),
-    "mezcal": (10.0, 3.0, 30.0),
-    "hide": (30.0, 15.0, 50.0),
-    "iron_bar": (100.0, 60.0, 150.0),
-    "textile": (80.0, 45.0, 120.0),
-    "chili": (10.0, 3.0, 30.0),
-    "sauce": (100.0, 60.0, 150.0),
+    "cigar": (0.1, 0.03, 0.3),
+    "dried_mushroom": (0.1, 0.03, 0.3),
+    "beer": (0.1, 0.03, 0.3),
+    "liqueur": (0.1, 0.03, 0.3),
+    "mezcal": (0.1, 0.03, 0.3),
+    "hide": (0.3, 0.15, 0.5),
+    "iron_bar": (1.0, 0.6, 1.5),
+    "textile": (0.8, 0.45, 1.2),
+    "chili": (0.1, 0.03, 0.3),
+    "sauce": (1.0, 0.6, 1.5),
 }
 
 MID_GRADE = 4          # B, the middle of F..SSS (0..8)
@@ -38,7 +43,12 @@ HISTORY = 40           # how many daily prices the chart remembers
 
 def spec(good: str):
     """(anchor, floor, cap) for a good."""
-    return GOODS.get(good, (10.0, 3.0, 30.0))
+    return GOODS.get(good, (0.1, 0.03, 0.3))
+
+
+def per_ten(base: float) -> int:
+    """The whole-coin price of ten units at this per-unit anchor, rounded."""
+    return int(round(base * 10.0))
 
 
 def sellable(g):

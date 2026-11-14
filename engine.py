@@ -3602,7 +3602,8 @@ def run(g):
                     mapmod.draw(g.screen, g.world, g.player, g._nearest_town(),
                                 g.hub_world.hubs,
                                 settlements=list(g.villages.villages),
-                                natives=list(getattr(g, "native_settlements", {}).values()))
+                                natives=list(getattr(g, "native_settlements", {}).values()),
+                                ship=(g.ship_pos() if hasattr(g, "ship_pos") else None))
                 except Exception:
                     import traceback as _tb; _tb.print_exc()
             pygame.display.flip()

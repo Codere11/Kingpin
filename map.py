@@ -110,6 +110,20 @@ def _flag(screen: pygame.Surface, px: int, py: int) -> None:
                                          (px + 1, py - 3)], 1)
 
 
+def _ship_icon(screen: pygame.Surface, px: int, py: int) -> None:
+    """The colonial ship, anchored offshore: a hull and one sail."""
+    hull = (116, 86, 56)
+    sail = (238, 234, 218)
+    mast = (70, 54, 38)
+    pygame.draw.polygon(screen, hull, [(px - 8, py + 2), (px + 8, py + 2),
+                                       (px + 4, py + 6), (px - 4, py + 6)])
+    pygame.draw.line(screen, mast, (px, py - 8), (px, py + 3), 1)
+    pygame.draw.polygon(screen, sail, [(px + 1, py - 8), (px + 8, py - 2),
+                                       (px + 1, py + 2)])
+    pygame.draw.polygon(screen, (170, 160, 140), [(px + 1, py - 8), (px + 8, py - 2),
+                                                  (px + 1, py + 2)], 1)
+
+
 def _chart(world, cx: float, cy: float, half: float):
     """THE GROUND UNDER THE CURRENT VIEW, sampled for THIS zoom.
 
@@ -370,7 +384,7 @@ def handle_input(dt: float, player, mouse_pos=None, wheel: int = 0) -> None:
 
 
 def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
-         settlements=(), natives=()) -> None:
+         settlements=(), natives=(), ship=None) -> None:
     """The world as far as the view reaches: EVERY town and EVERY hub on it.
 
     The map used to pin exactly two places -- the nearest town and the nearest
@@ -476,6 +490,12 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
                     screen.blit(_txt, (_tx, _ty))
             else:
                 _campfire(screen, int(_px), int(_py))
+    # THE SHIP, anchored off the coast at the player's spawn -- always on the
+    # chart, so the way home to the coast is never lost.
+    if ship is not None:
+        _spx, _spy = w2s(float(ship[0]), float(ship[1]))
+        if x0 - 2 <= _spx <= x0 + size + 2 and y0 - 2 <= _spy <= y0 + size + 2:
+            _ship_icon(screen, int(_spx), int(_spy))
     # HIM -- a bright ring and dot, last and on top.
     px, py = w2s(player.x, player.y)
     inside = (x0 <= px <= x0 + size and y0 <= py <= y0 + size)
