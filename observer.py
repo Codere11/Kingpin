@@ -64,6 +64,7 @@ class Observer:
 
     def __init__(self) -> None:
         self.open = False
+        self.test_mode = False        # the inspector is a test-mode tool ONLY
         self.target = None            # the man being watched
         self.scroll = 0
         self.filt = FILTER_NONE
@@ -139,7 +140,13 @@ class Observer:
 
     # -- keys --------------------------------------------------------------
     def handle(self, event, player) -> bool:
-        """Returns True if the event was consumed."""
+        """Returns True if the event was consumed.
+
+        THE INSPECTOR IS TEST MODE ONLY. Outside test mode it answers nothing
+        and draws nothing, so the 'I' / Enter / X keys that once stole the
+        naming panel's keystrokes are simply inert."""
+        if not getattr(self, "test_mode", False):
+            return False
         if event.type != pygame.KEYDOWN:
             return False
         k = event.key
@@ -191,6 +198,8 @@ class Observer:
     # -- lock on, let go ---------------------------------------------------
     def observe(self, npc) -> None:
         """START WATCHING THIS MAN. His log begins here, and only his."""
+        if not getattr(self, "test_mode", False):
+            return
         self.target = npc
         self.log = []
         self.t0 = time.time()
@@ -279,6 +288,8 @@ class Observer:
 
     # -- drawing -----------------------------------------------------------
     def draw(self, screen: pygame.Surface) -> None:
+        if not getattr(self, "test_mode", False):
+            return
         vw, vh = screen.get_size()
         if self.target is not None:
             self._draw_target(screen, vw, vh)

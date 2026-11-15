@@ -611,6 +611,7 @@ def main() -> None:
     # living person, filterable by trade, town and nation, and Enter locks the
     # camera onto one of them and starts a log of HIS doings alone.
     g.observer_ = observer.Observer()
+    g.observer_.test_mode = g.test_mode    # never answers or draws outside test mode
     g.combat = Combat()
     g.blood = Blood()
     g.vignette = DamageVignette()
