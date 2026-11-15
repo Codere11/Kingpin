@@ -490,13 +490,7 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
                     screen.blit(_txt, (_tx, _ty))
             else:
                 _campfire(screen, int(_px), int(_py))
-    # THE SHIP, anchored off the coast at the player's spawn -- always on the
-    # chart, so the way home to the coast is never lost.
-    if ship is not None:
-        _spx, _spy = w2s(float(ship[0]), float(ship[1]))
-        if x0 - 2 <= _spx <= x0 + size + 2 and y0 - 2 <= _spy <= y0 + size + 2:
-            _ship_icon(screen, int(_spx), int(_spy))
-    # HIM -- a bright ring and dot, last and on top.
+    # HIM -- a bright ring and dot.
     px, py = w2s(player.x, player.y)
     inside = (x0 <= px <= x0 + size and y0 <= py <= y0 + size)
     if not inside:
@@ -509,6 +503,17 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
     if not inside:
         me = label_font.render("YOU", True, (250, 232, 140))
         screen.blit(me, (px + 13, py - me.get_height() // 2))
+    # THE SHIP, anchored off the coast at the player's spawn -- drawn LAST, on
+    # top of the player marker, so it is never hidden: at whole-world zoom the
+    # ship and the player sit on the same pixel of the coast.
+    if ship is not None:
+        _spx, _spy = w2s(float(ship[0]), float(ship[1]))
+        if x0 - 2 <= _spx <= x0 + size + 2 and y0 - 2 <= _spy <= y0 + size + 2:
+            _ship_icon(screen, int(_spx), int(_spy))
+            _sl = name_font.render("SHIP", True, (206, 220, 240))
+            _sh = name_font.render("SHIP", True, (10, 11, 12))
+            screen.blit(_sh, (int(_spx) - _sl.get_width() // 2 + 1, int(_spy) + 10))
+            screen.blit(_sl, (int(_spx) - _sl.get_width() // 2, int(_spy) + 9))
 
     font = pygame.font.SysFont("dejavusansmono", max(11, vh // 46), bold=True)
     small = pygame.font.SysFont("dejavusansmono", max(9, vh // 60))
