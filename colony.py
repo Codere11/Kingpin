@@ -381,7 +381,7 @@ def conquer_camp(g, native_camp) -> None:
     except Exception:
         pass
     try:
-        g.toast("The settlement is yours.")
+        g.toast("Settlement taken")
     except Exception:
         pass
     # THE PLAYER NAMES HIS NEW SETTLEMENT: "Settlement 1", "Settlement 2",

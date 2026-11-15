@@ -384,7 +384,7 @@ def commit_plot(placing, plot_start, placement_pos, toast, hubs, villages,
             plog.log("PHASE-HUB", _h.name, "at",
                      "%d,%d" % (int(_h.x), int(_h.y)),
                      "post", player.work_post)
-            toast("Plot staked -- this is your hub now:   %s" % _h.name)
+            toast("Plot staked")
         else:
             toast("Plot staked")
     placing = None
@@ -445,7 +445,6 @@ def try_place(g):
                                                   g.built_gates)
                     if _h is not None:
                         nemesis.PLACES.append(_h)
-                        g.toast("This is your hub now:   %s" % _h.name)
                         plog.log("HUB", "fenced", _h.name, "at",
                                  "%d,%d" % (int(_h.x), int(_h.y)),
                                  "%dx%d" % (_yard.w, _yard.h))
@@ -654,7 +653,7 @@ def try_place(g):
                 plog.log("PHASE-HUB", _h.name, "at",
                          "%d,%d" % (int(_h.x), int(_h.y)),
                          "post", g.player.work_post)
-                g.toast("Built -- this is your hub now:   %s" % _h.name)
+                g.toast("Built")
             else:
                 g.toast("Built")
         else:
