@@ -22,6 +22,7 @@ import economy
 import guns
 import nations
 import skills
+import sound
 import steering
 
 SOLDIER_VIEW = 430.0
@@ -1109,6 +1110,10 @@ class Horse:
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if not self.alive:
             return
+        # A live horse nickers -- occasionally, when the player is close.
+        if threat is not None and not getattr(threat, "dead", False):
+            if math.hypot(self.x - threat.x, self.y - threat.y) < 420.0:
+                sound.play("horse", min_gap=15.0)
         self._animal_baby_tick(dt)
         if self._animal_breeding_tick():
             return
@@ -1247,6 +1252,11 @@ class Bison(Enemy):
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if not self.alive:
             return
+        # A live bison lows -- occasionally, when the player is close enough
+        # to hear it. One-shot, throttled.
+        if target is not None and not getattr(target, "dead", False):
+            if math.hypot(self.x - target.x, self.y - target.y) < 560.0:
+                sound.play("buffalo", min_gap=12.0)
         self._animal_baby_tick(dt)
         if self._animal_breeding_tick():
             return

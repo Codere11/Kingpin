@@ -9,6 +9,7 @@ import pygame
 import math
 
 import economy
+import sound
 
 KINDS = ("insult", "praise", "threaten")
 # (opinion the target holds of the player, the target's mood)
@@ -107,6 +108,7 @@ def use_comm(target, kind, now):
     opd = economy.opinion_of(target, "player")
     cur = float(opd.get("player", 0.0))
     opd["player"] = max(-100.0, min(100.0, cur + op))
+    sound.play("threat" if kind == "threaten" else kind)
     try:
         import mind as _mind
         _mind.apply_mood(target, mood, reason=kind)

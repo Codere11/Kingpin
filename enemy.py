@@ -20,6 +20,7 @@ import face
 from physics import avoid_direction, segment_rect_hit
 import steering
 import guns
+import sound
 
 BODY = (150, 52, 52)
 BODY_DARK = (74, 24, 24)
@@ -156,6 +157,11 @@ class Enemy:
     def take_damage(self, amount: int, tranq: bool = False) -> bool:
         self.health -= amount
         self.hit_flash = 0.15
+        _k = getattr(self, "kind", "")
+        if _k == "wolf":
+            sound.play("wolf_attack")
+        elif _k == "bison":
+            sound.play("buffalo_attack")
         self.hurt_flash = face.HURT_SECONDS
         self.bleed = 6.0
         self.aware = True                # being shot gets his attention
@@ -310,6 +316,13 @@ class Enemy:
             self.bleed = max(0.0, self.bleed - dt)
         if not self.alive:
             return
+
+        # A live wolf howls -- occasionally, when the player is close enough
+        # to hear it. One-shot, throttled, never a drone.
+        if (getattr(self, "kind", "") == "wolf" and target is not None
+                and not getattr(target, "dead", False)
+                and math.hypot(self.x - target.x, self.y - target.y) < 520.0):
+            sound.play("wolf", min_gap=12.0)
 
         if self.aware:
             self.aware_timer -= dt

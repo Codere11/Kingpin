@@ -21,6 +21,7 @@ import guns
 import items
 import nemesis
 import ore
+import sound
 import village as village_mod
 import wildcrop
 from interior import Interior, fill_loot
@@ -55,6 +56,7 @@ def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
         combat.fire(muzzle_x, muzzle_y, player.facing_angle, distance,
                     shooter=player, owner="player", damage=dmg, team="player",
                     spread=skills.shot_spread(), arrow=True)
+        sound.play("shot_bow")
         skills.gain_shooting()
         return
     if player.reloading > 0.0 or player.gun_cd > 0.0:
@@ -68,6 +70,7 @@ def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
         player.reload_kind = kind
         player.reload_total = guns.RELOAD_LO.get(kind, 5.0)
         player.reloading = player.reload_total
+        sound.play("reload")
         toast("Reloading\u2026")
         return
     player.mags[kind] -= 1
@@ -86,6 +89,7 @@ def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
         combat.fire(muzzle_x, muzzle_y, player.facing_angle, distance,
                     shooter=player, owner="player", damage=guns.DAMAGE[kind],
                     team="player", spread=spread + extra)
+    sound.play("shot_rifle" if kind == guns.RIFLE else "shot_musket")
     skills.gain_shooting()
 
 
@@ -150,6 +154,7 @@ def use_axe(g, kills) -> int:
              * g.skills.axe_damage_scale())
     angle = g.player.facing_angle
     g.combat.spawn_swing(g.player.x, g.player.y, angle)
+    _flesh = False
 
     def in_arc(tx, ty, extra=0.0):
         dx, dy = tx - g.player.x, ty - g.player.y
@@ -170,6 +175,7 @@ def use_axe(g, kills) -> int:
                 except Exception:
                     pass
             enemy.take_damage(melee)
+            _flesh = True
             if _was_alive and not getattr(enemy, "alive", True):
                 if getattr(enemy, "kind", "") == "bison":
                     g.inventory.add("raw_meat", random.randint(5, 10))
@@ -188,6 +194,7 @@ def use_axe(g, kills) -> int:
     for rabbit in g.rabbits:
         if rabbit.alive and in_arc(rabbit.x, rabbit.y, rabbit.radius):
             died = rabbit.take_damage(melee)
+            _flesh = True
             g.blood.spawn(rabbit.x, rabbit.y, 8, 12.0)
             if died:
                 amount = random.randint(1, 2)
@@ -197,6 +204,7 @@ def use_axe(g, kills) -> int:
     for horse in getattr(g, "horses", ()):
         if horse.alive and in_arc(horse.x, horse.y, horse.radius):
             died = horse.take_damage(melee)
+            _flesh = True
             g.blood.spawn(horse.x, horse.y, 8, 14.0)
             if died:
                 g.toast("Felled a horse")
@@ -224,6 +232,7 @@ def use_axe(g, kills) -> int:
     for npc in _folk:
         if npc.alive and in_arc(npc.x, npc.y, npc.radius):
                 died = npc.take_damage(melee, record=False)
+                _flesh = True
                 g.work_lanes.damage(npc, melee)
                 # HE KNOWS THE MAN WHO HIT HIM -- and likes him twenty less.
                 try:
@@ -251,6 +260,9 @@ def use_axe(g, kills) -> int:
                 if died:
                     kills += 1
 
+    if _flesh:
+        sound.play("hit_flesh")
+
     struck = None
     nearest = 1e9
     for tree in g.trees.near(g.player.x, g.player.y, _m.AXE_REACH + 30.0):
@@ -267,6 +279,7 @@ def use_axe(g, kills) -> int:
             struck = tree
     if struck is not None:
         struck.strikes += 1
+        sound.play("hit_tree")
         g.combat.spawn_impact(struck.x, struck.y, (120, 90, 50))
         if struck.strikes >= _m.AXE_STRIKES:
             g.trees.fell(struck, g.now)

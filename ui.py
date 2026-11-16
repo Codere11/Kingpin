@@ -13,6 +13,7 @@ import pygame
 import items
 import plog
 import quality
+import sound
 from inventory import Inventory, ItemStack
 from quality import GRADES, merge as _qmerge
 
@@ -1530,6 +1531,7 @@ class ShipMarketPanel:
             self.hold.slots[i] = None
         if coin > 0.0:
             self.player.add("coin", int(round(coin)))
+            sound.play("coin")
             try:
                 self.g.toast("Sold %s for %d coin" % (good, int(round(coin))))
             except Exception:

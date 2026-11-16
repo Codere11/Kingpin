@@ -53,6 +53,10 @@ DATA_ARGS=()
 for _png in *.png; do
     [ -e "$_png" ] && DATA_ARGS+=(--add-data "$PWD/$_png:.")
 done
+# AND EVERY SOUND EFFECT, into its own Sounds/ folder inside the bundle.
+for _snd in Sounds/*.ogg; do
+    [ -e "$_snd" ] && DATA_ARGS+=(--add-data "$PWD/$_snd:Sounds")
+done
 
 "$VENV/bin/pyinstaller" \
     --noconfirm \
