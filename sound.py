@@ -7,6 +7,7 @@ sound can never crash the game or the headless tests.
 from __future__ import annotations
 
 import os
+import math
 import time
 
 import pygame
@@ -26,6 +27,10 @@ def _ensure() -> bool:
         try:
             if not pygame.mixer.get_init():
                 pygame.mixer.init()
+            # ENOUGH CHANNELS that a player's own action (an axe hit, a shot)
+            # always finds a free one -- the world's background noise must
+            # never starve the event sounds out.
+            pygame.mixer.set_num_channels(32)
             _mixer_ok = True
         except Exception:
             _mixer_ok = False
@@ -66,6 +71,16 @@ def play(name: str, volume: float = 1.0, min_gap: float = 0.0) -> None:
         snd.play()
     except Exception:
         pass
+
+
+def play_near(name: str, x: float, y: float, px: float, py: float,
+              radius: float = 620.0, volume: float = 1.0,
+              min_gap: float = 0.0) -> None:
+    """A WORLD sound: only fires when the source is within `radius` of the
+    player, so a farmer chopping three settlements away is silent."""
+    if math.hypot(x - px, y - py) > radius:
+        return
+    play(name, volume=volume, min_gap=min_gap)
 
 
 def set_volume(v: float) -> None:

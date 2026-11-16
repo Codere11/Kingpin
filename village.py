@@ -732,7 +732,7 @@ class NPC:
             a = angle + self.rng.uniform(-0.07, 0.07)
             combat.fire(x, y, a, distance, owner="enemy",
                         damage=_dmg, team=self.team)
-        sound.play("shot_rifle" if self.gun_kind == guns.RIFLE else "shot_musket")
+        self._snd("shot_rifle" if self.gun_kind == guns.RIFLE else "shot_musket")
 
     def add_threat(self, who) -> bool:
         """HE KNOWS WHO HIT HIM. One entry per man, added ONCE.
@@ -813,7 +813,7 @@ class NPC:
         if not getattr(self, "alive", True) or getattr(self, "dead", False):
             return True
         self.health -= amount
-        sound.play("npc_hurt")
+        self._snd("npc_hurt", radius=900.0)
         self.hit_flash = 0.15
         self.hurt_flash = face.HURT_SECONDS   # and his face says so
         self.bleed = 5.0
@@ -1137,13 +1137,14 @@ class NPC:
             if self.attack_cd <= 0.0:
                 self.attack_cd = 1.0
                 self._did_attack()
+                self._snd("warrior_attack", min_gap=2.0)
                 self.skills.gain_axe()
                 dmg = max(1, round((35.0 / 3.0) * self.skills.axe_damage_scale()))
                 if combat is not None:
                     combat.fire(self.x + ux * 16.0, self.y + uy * 16.0,
                                 math.atan2(dy, dx), dist + 80.0,
                                 owner="enemy", damage=dmg, team=self.team)
-                    sound.play("shot_bow")
+                    self._snd("shot_bow")
         # KEEP THE GAP, AND CLEAR THE LINE: back off when he is too close,
         # close in when too far, and strafe around whatever blocks the shot.
         if dist < 170.0:
@@ -1225,7 +1226,6 @@ class NPC:
                             _nat.escalate_war(g, exclude=camp)
                         except Exception:
                             pass
-                    sound.play("warrior_attack", min_gap=2.0)
                     if getattr(self, "weapon", None) == "bow":
                         self._native_bowman_step(dt, target,
                                                  getattr(g, "combat", None), g)
@@ -1282,6 +1282,19 @@ class NPC:
                 if getattr(p, "alive", True):
                     out.append(p)
         return out
+
+    def _snd(self, name: str, radius: float = 620.0, volume: float = 1.0,
+             min_gap: float = 0.0) -> None:
+        """Play a world sound ONLY if this man is near the player. A worker
+        three settlements away must be silent -- otherwise the whole country
+        chops and plants at once and drowns out the player's own axe."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        player = getattr(g, "player", None) if g is not None else None
+        if player is None:
+            return
+        sound.play_near(name, self.x, self.y, player.x, player.y,
+                        radius=radius, volume=volume, min_gap=min_gap)
 
     def _distribute_food(self, dt: float) -> bool:
         """A farmer with a full pack feeds the settlement FIRST: four of the
@@ -1557,7 +1570,7 @@ class NPC:
             self.produce_acc += dt
             if self.produce_acc >= ARTISAN_BATCH_SECONDS:
                 self.produce_acc = 0.0
-                sound.play("bench")
+                self._snd("bench", min_gap=0.8)
                 self.carry[leaf] = self.carry.get(leaf, 0) - 10
                 if self.carry.get(leaf, 0) <= 0:
                     self.carry.pop(leaf, None)
@@ -1620,7 +1633,7 @@ class NPC:
             _research.add_points(g, lvl * dt)
         except Exception:
             pass
-        sound.play("research", min_gap=6.0)
+        self._snd("research", min_gap=6.0)
         self._did_work()
 
     def _nearest_iron(self, g):
@@ -1777,7 +1790,7 @@ class NPC:
         self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
         if self.produce_acc >= product["seconds"]:
             self.produce_acc = 0.0
-            sound.play("bench")
+            self._snd("bench", min_gap=0.8)
             for in_item, need in recipe.items():
                 self.carry[in_item] = int(self.carry.get(in_item, 0)) - need
                 if self.carry.get(in_item, 0) <= 0:
@@ -1840,7 +1853,7 @@ class NPC:
         self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
         if self.produce_acc >= WEAVER_BATCH_SECONDS:
             self.produce_acc = 0.0
-            sound.play("bench")
+            self._snd("bench", min_gap=0.8)
             self.carry["cotton"] = int(self.carry.get("cotton", 0)) - 5
             if self.carry.get("cotton", 0) <= 0:
                 self.carry.pop("cotton", None)
@@ -1897,7 +1910,7 @@ class NPC:
         self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
         if self.produce_acc >= SPICEMAN_SECONDS:
             self.produce_acc = 0.0
-            sound.play("bench")
+            self._snd("bench", min_gap=0.8)
             self.carry["chili"] = int(self.carry.get("chili", 0)) - 5
             if self.carry.get("chili", 0) <= 0:
                 self.carry.pop("chili", None)
@@ -2081,7 +2094,7 @@ class NPC:
         self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
         if self.produce_acc >= product["seconds"]:
             self.produce_acc = 0.0
-            sound.play("bench")
+            self._snd("bench", min_gap=0.8)
             self.carry["iron_bar"] = int(self.carry.get("iron_bar", 0)) - need
             if self.carry.get("iron_bar", 0) <= 0:
                 self.carry.pop("iron_bar", None)
@@ -2848,7 +2861,7 @@ class NPC:
                 if not self._swing_tool("axe"):
                     return True
                 self.chop_timer = 0.0
-                sound.play("chop")
+                self._snd("chop", min_gap=0.5)
                 # drop the tree out of the world (no stump: he replants a
                 # sapling himself, like a field worker sows the next crop)
                 trees_obj = getattr(g, "trees", None) if g is not None else None
@@ -2975,7 +2988,7 @@ class NPC:
                     _note("FIELD   %s harvests %s at %d,%d"
                           % (getattr(self, "name", "?"), plot.kind, ttx, tty))
                 economy.harvest(village, self, plot.kind, self.rng)
-                sound.play("harvest")
+                self._snd("harvest", min_gap=0.3)
                 self.skills.gain_farming(0.02)  # reaping hones the hand, slowly
                 # the conquered farmer keeps a seed or two for the next sowing
                 if getattr(self, "conquered", False):
@@ -2987,7 +3000,7 @@ class NPC:
             if not self._swing_tool():
                 return True                     # no shovel: we must buy one
             world.set_plot(ttx, tty, "dirt", None)
-            sound.play("till")
+            self._snd("till", min_gap=0.3)
         elif action == "water":
             world.set_plot(ttx, tty, "fertile", None)
         else:                                    # plant the seed for that cell
@@ -2997,7 +3010,7 @@ class NPC:
                     return True                 # no seed in his pockets: cannot sow
             world.set_plot(ttx, tty, tkind, now,
                            crop.grow_seconds(self.skills.farming))
-            sound.play("plant")
+            self._snd("plant", min_gap=0.3)
         ground = getattr(world, "ground", None)
         if ground is not None:
             # FIRST PRIORITY WHEN WATCHED: a tile that changed ON SCREEN is
@@ -3950,7 +3963,7 @@ class NPC:
                 if distance <= 34.0 and self.attack_cd <= 0.0:
                     self.attack_cd = max(0.5, self.skills.axe_cooldown())
                     self._did_attack()
-                    sound.play("npc_attack", min_gap=1.5)
+                    self._snd("npc_attack", min_gap=1.5)
                     self.skills.gain_axe()
                     if hasattr(target, "take_damage"):
                         target.take_damage(max(1, round(
@@ -3981,7 +3994,7 @@ class NPC:
                         if self.attack_cd <= 0.0:
                             self.attack_cd = random.uniform(0.5, 0.9)
                         self._did_attack()
-                        sound.play("npc_attack", min_gap=1.5)
+                        self._snd("npc_attack", min_gap=1.5)
                         self._shoot(combat, mx, my, angle, distance + 120.0, 80, 80)
         else:
             # Axe work. Hold the range where the axe reaches and the teeth do
@@ -4014,7 +4027,7 @@ class NPC:
             if distance <= 46.0 and self.attack_cd <= 0.0:
                 self.attack_cd = 1.0
                 self._did_attack()
-                sound.play("npc_attack", min_gap=1.5)
+                self._snd("npc_attack", min_gap=1.5)
                 if hasattr(target, "take_damage"):
                     self.skills.gain_axe()
                     # A MAN WITH AN AXE SWINGS AN AXE; A MAN WITHOUT ONE SWINGS
