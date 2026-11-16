@@ -8,6 +8,7 @@ never spill outside its boundary.
 from __future__ import annotations
 
 import random
+import os
 
 import pygame
 
@@ -16,6 +17,11 @@ import sound
 
 BG = (14, 12, 16)
 TITLE = (226, 188, 98)
+
+# THE DEMO'S FIXED WORLD: run with SETTLEWEST_DEMO=1 and every new game uses
+# this seed, so the coast, the first settlement and the biomes are identical
+# in every recording.
+DEMO_SEED = 20240501
 TITLE_DARK = (58, 38, 8)
 BTN_BG = (34, 30, 26)
 BTN_BG_HOVER = (74, 58, 34)
@@ -380,7 +386,9 @@ def run(screen, clock, fullscreen=False, set_fullscreen=None):
                 persist.set_test(menu.test)
                 persist.set_slot(act)
                 if not persist.exists(act):
-                    persist.write({"seed": random.randint(1, 2 ** 31 - 1)}, act)
+                    _seed = (DEMO_SEED if os.environ.get("SETTLEWEST_DEMO")
+                             else random.randint(1, 2 ** 31 - 1))
+                    persist.write({"seed": _seed}, act)
                 return (act, menu.test)
         menu.draw(cur)
         pygame.display.flip()

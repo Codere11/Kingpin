@@ -218,6 +218,7 @@ def main() -> None:
     # so a windowed game leaves borders in the video. F11 switches between a
     # 1280x720 window and a true fullscreen surface that covers the screen.
     g.fullscreen = False
+    g.hud_hidden = False          # 'P' toggles the HUD for clean recording
 
     def set_fullscreen(fs: bool) -> None:
         g.fullscreen = bool(fs)

@@ -970,6 +970,8 @@ def run(g):
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_F11
                   and hasattr(g, "toggle_fullscreen")):
                 g.toggle_fullscreen()
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+                g.hud_hidden = not g.hud_hidden
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 # ESC USED TO PAUSE UNCONDITIONALLY, even with a menu already
                 # open -- so a panel that would not close left a man with no
@@ -3904,7 +3906,8 @@ def run(g):
         if not getattr(g.player, "aboard", False):
             g.player.draw(g.screen, g.cam_x, g.cam_y, g._sel0.defn.id if g._sel0 else None)
         g.combat.draw(g.screen, g.cam_x, g.cam_y)
-        g.draw_hunger_gray()
+        if not g.hud_hidden:
+            g.draw_hunger_gray()
 
         if g.game_over:
             # THE WINDOW IS THE WINDOW. While the world is drawn, the name
@@ -3925,7 +3928,8 @@ def run(g):
         else:
             if not g.player.dead:
                 g.damage = 1.0 - g.player.health / g.player.max_health
-                g.vignette.draw(g.screen, g.damage, g.now, g.player.hit_flash / 0.15)
+                if not g.hud_hidden:
+                    g.vignette.draw(g.screen, g.damage, g.now, g.player.hit_flash / 0.15)
 
             g.eye_world_x = g.player.x + g.player.facing[0] * 5.0
             g.eye_world_y = g.player.y + g.player.facing[1] * 5.0
@@ -3943,7 +3947,7 @@ def run(g):
             except Exception:
                 pass
 
-            if not g.inventory_open:
+            if not g.inventory_open and not g.hud_hidden:
                 draw_crosshair(g.screen, g.wmouse_x, g.wmouse_y)
 
             # ---- ...and back to the window ---------------------------------
@@ -3953,7 +3957,7 @@ def run(g):
             g.vw, g.vh = g.scr_w, g.scr_h
             if g.comm_mode:
                 comm.draw_bar(g.screen, g.font, g.vw, g.vh, g.comm)
-            else:
+            elif not g.hud_hidden:
                 g.hotbar.draw(g.screen)
             # THE INSPECTOR IS DRAWN ABOVE GROUND TOO.
             #
@@ -3967,9 +3971,10 @@ def run(g):
             # reading observer.open, which was True the whole time, and told
             # you it worked three times on that basis. State is not a picture.
             g.observer_.draw(g.screen)
-            g.hotbar.draw_stamina(g.screen, g.player.stamina / g.player.max_stamina,
-                                g.player.exhausted)
-            g.hotbar.draw_hunger(g.screen, g.player.hunger / g.player.max_hunger)
+            if not g.hud_hidden:
+                g.hotbar.draw_stamina(g.screen, g.player.stamina / g.player.max_stamina,
+                                    g.player.exhausted)
+                g.hotbar.draw_hunger(g.screen, g.player.hunger / g.player.max_hunger)
 
             if g.toast_time > 0.0:
                 g.toast_time = max(0.0, g.toast_time - g.dt)
