@@ -12,6 +12,7 @@ import random
 import biomes
 import crop
 import items
+import sound
 from world import TILE
 
 
@@ -22,6 +23,7 @@ def dig(world, ground, tx: int, ty: int, toast) -> bool:
         return False
     world.set_plot(tx, ty, "dirt")
     ground.invalidate_tile(tx, ty)
+    sound.play("till")
     toast("Dug up the soil")
     return True
 
@@ -74,6 +76,7 @@ def plant(world, ground, inventory, tx: int, ty: int, now: float, toast,
     plot.planted_at = now
     plot.grow = crop.grow_seconds(skill)      # HIS hand sets the clock too
     ground.invalidate_tile(tx, ty)
+    sound.play("plant")
     toast("Planted some %s" % items.get(kind_name(kind)).name.lower())
     return True
 
@@ -143,6 +146,7 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
         ground = getattr(world, "ground", None)
         if ground is not None:
             ground.invalidate_tile(tx, ty)
+    sound.play("harvest")
     toast("Harvested %d %s and %d %s"
           % (amount, items.get(item).name.lower(), seeds,
              items.get(seed).name.lower() if seed else "seeds"))
