@@ -1038,7 +1038,7 @@ def run(g):
                         _shx, _shy = g.ship_pos()
                         _wx = g.cam_x + event.pos[0] / g.zoom
                         _wy = g.cam_y + event.pos[1] / g.zoom
-                        if math.hypot(_wx - _shx, _wy - _shy) < 80.0:
+                        if math.hypot(_wx - _shx, _wy - _shy) < 120.0:
                             g.open_market()
                             g.consumed = True
                             break

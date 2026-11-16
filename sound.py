@@ -83,6 +83,17 @@ def play_near(name: str, x: float, y: float, px: float, py: float,
     play(name, volume=volume, min_gap=min_gap)
 
 
+def play_on_screen(name: str, x: float, y: float, cam_x: float, cam_y: float,
+                   vw: int, vh: int, margin: float = 40.0, volume: float = 1.0,
+                   min_gap: float = 0.0) -> None:
+    """ONLY WHAT IS ON THE PLAYER'S SCREEN makes sound: the source must sit
+    inside the camera's viewport (plus a small margin)."""
+    if (x < cam_x - margin or x > cam_x + vw + margin
+            or y < cam_y - margin or y > cam_y + vh + margin):
+        return
+    play(name, volume=volume, min_gap=min_gap)
+
+
 def set_volume(v: float) -> None:
     global _volume
     _volume = min(1.0, max(0.0, v))

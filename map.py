@@ -111,17 +111,20 @@ def _flag(screen: pygame.Surface, px: int, py: int) -> None:
 
 
 def _ship_icon(screen: pygame.Surface, px: int, py: int) -> None:
-    """The colonial ship, anchored offshore: a hull and one sail."""
+    """The colonial ship, anchored offshore: a hull and a sail, with a dark
+    halo so it reads against the coast border at any zoom."""
     hull = (116, 86, 56)
     sail = (238, 234, 218)
     mast = (70, 54, 38)
-    pygame.draw.polygon(screen, hull, [(px - 8, py + 2), (px + 8, py + 2),
-                                       (px + 4, py + 6), (px - 4, py + 6)])
-    pygame.draw.line(screen, mast, (px, py - 8), (px, py + 3), 1)
-    pygame.draw.polygon(screen, sail, [(px + 1, py - 8), (px + 8, py - 2),
-                                       (px + 1, py + 2)])
-    pygame.draw.polygon(screen, (170, 160, 140), [(px + 1, py - 8), (px + 8, py - 2),
-                                                  (px + 1, py + 2)], 1)
+    pygame.draw.circle(screen, (10, 12, 14), (px, py), 16)
+    pygame.draw.polygon(screen, hull, [(px - 13, py + 3), (px + 13, py + 3),
+                                       (px + 8, py + 9), (px - 8, py + 9)])
+    pygame.draw.line(screen, mast, (px, py - 12), (px, py + 4), 2)
+    pygame.draw.polygon(screen, sail, [(px + 2, py - 12), (px + 13, py - 2),
+                                       (px + 2, py + 3)])
+    pygame.draw.polygon(screen, (170, 160, 140), [(px + 2, py - 12),
+                                                  (px + 13, py - 2),
+                                                  (px + 2, py + 3)], 1)
 
 
 def _chart(world, cx: float, cy: float, half: float):

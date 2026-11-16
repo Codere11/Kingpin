@@ -813,7 +813,7 @@ class NPC:
         if not getattr(self, "alive", True) or getattr(self, "dead", False):
             return True
         self.health -= amount
-        self._snd("npc_hurt", radius=900.0)
+        self._snd("npc_hurt")
         self.hit_flash = 0.15
         self.hurt_flash = face.HURT_SECONDS   # and his face says so
         self.bleed = 5.0
@@ -1283,18 +1283,15 @@ class NPC:
                     out.append(p)
         return out
 
-    def _snd(self, name: str, radius: float = 620.0, volume: float = 1.0,
+    def _snd(self, name: str, volume: float = 1.0,
              min_gap: float = 0.0) -> None:
-        """Play a world sound ONLY if this man is near the player. A worker
-        three settlements away must be silent -- otherwise the whole country
-        chops and plants at once and drowns out the player's own axe."""
+        """Play a world sound ONLY if this man is on the player's screen."""
         camp = getattr(self, "native_camp", None)
         g = getattr(camp, "g", None) if camp is not None else None
-        player = getattr(g, "player", None) if g is not None else None
-        if player is None:
+        if g is None:
             return
-        sound.play_near(name, self.x, self.y, player.x, player.y,
-                        radius=radius, volume=volume, min_gap=min_gap)
+        sound.play_on_screen(name, self.x, self.y, g.cam_x, g.cam_y,
+                             g.vw, g.vh, volume=volume, min_gap=min_gap)
 
     def _distribute_food(self, dt: float) -> bool:
         """A farmer with a full pack feeds the settlement FIRST: four of the

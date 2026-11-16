@@ -321,7 +321,7 @@ class Enemy:
         # to hear it. One-shot, throttled, never a drone.
         if (getattr(self, "kind", "") == "wolf" and target is not None
                 and not getattr(target, "dead", False)
-                and math.hypot(self.x - target.x, self.y - target.y) < 520.0):
+                and math.hypot(self.x - target.x, self.y - target.y) < 320.0):
             sound.play("wolf", min_gap=12.0)
 
         if self.aware:
