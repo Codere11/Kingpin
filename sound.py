@@ -99,6 +99,10 @@ def set_volume(v: float) -> None:
     _volume = min(1.0, max(0.0, v))
 
 
+def get_volume() -> float:
+    return _volume
+
+
 def toggle_mute() -> bool:
     global _muted
     _muted = not _muted

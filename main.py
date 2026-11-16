@@ -219,13 +219,16 @@ def main() -> None:
     # 1280x720 window and a true fullscreen surface that covers the screen.
     g.fullscreen = False
 
-    def toggle_fullscreen() -> None:
-        g.fullscreen = not g.fullscreen
+    def set_fullscreen(fs: bool) -> None:
+        g.fullscreen = bool(fs)
         if g.fullscreen:
             g.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         else:
             g.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
         g.vw, g.vh = g.screen.get_size()
+
+    def toggle_fullscreen() -> None:
+        set_fullscreen(not g.fullscreen)
 
     import menu
     pygame.mouse.set_visible(True)
@@ -234,7 +237,7 @@ def main() -> None:
     if os.environ.get("KINGPIN_OBSERVE"):
         g.chosen = (0, True)      # 0 = new game, True = start
     else:
-        g.chosen = menu.run(g.screen, g.clock)
+        g.chosen = menu.run(g.screen, g.clock, g.fullscreen, set_fullscreen)
     if g.chosen is None:
         pygame.quit()
         return

@@ -12,6 +12,7 @@ import random
 import pygame
 
 import persist
+import sound
 
 BG = (14, 12, 16)
 TITLE = (226, 188, 98)
@@ -137,6 +138,10 @@ class Menu:
         self._rects: list[pygame.Rect] = []
         self._actions: list = []
         self._font_key = None
+        self.fullscreen = False
+        self.set_fullscreen = None
+        self.volume = sound.get_volume()
+        self.drag = False
 
     def _fonts(self, lw: int) -> None:
         if self._font_key != lw:
@@ -150,16 +155,27 @@ class Menu:
         lw, lh = max(1, w // scale), max(1, h // scale)
         self._fonts(lw)
         if self.page == "main":
-            # THREE BUTTONS, STACKED VERTICALLY and centred -- small enough to
+            # FOUR BUTTONS, STACKED VERTICALLY and centred -- small enough to
             # leave the subtitle clear, wide enough that SINGLEPLAYER never
             # truncates to "Single...".
             bw = max(104, int(lw * 0.38))
-            bh = max(14, int(lh * 0.085))
-            gap = max(6, int(lh * 0.02))
-            y0 = int(lh * 0.50)
+            bh = max(14, int(lh * 0.075))
+            gap = max(6, int(lh * 0.018))
+            y0 = int(lh * 0.47)
             self._rects = [pygame.Rect((lw - bw) // 2, y0 + i * (bh + gap),
-                                       bw, bh) for i in range(3)]
-            self._actions = ["singleplayer", "testmode", "quit"]
+                                       bw, bh) for i in range(4)]
+            self._actions = ["singleplayer", "testmode", "options", "quit"]
+        elif self.page == "options":
+            bw = max(140, int(lw * 0.5))
+            bh = max(16, int(lh * 0.07))
+            gap = max(10, int(lh * 0.03))
+            y0 = int(lh * 0.40)
+            self._rects = [
+                pygame.Rect((lw - bw) // 2, y0, bw, bh),
+                pygame.Rect((lw - bw) // 2, y0 + bh + gap, bw, bh),
+                pygame.Rect((lw - bw) // 2, y0 + 2 * (bh + gap), bw, bh),
+            ]
+            self._actions = ["volume", "fullscreen", "back"]
         else:
             bh = max(14, int(lh * 0.095))
             gap = max(6, int(lh * 0.026))
@@ -186,6 +202,41 @@ class Menu:
 
     def handle(self, event, w: int, h: int):
         scale, _lw, _lh = self._layout(w, h)
+        if self.page == "options":
+            if event.type == pygame.MOUSEMOTION:
+                lx, ly = event.pos[0] // scale, event.pos[1] // scale
+                self.hover = -1
+                for i, rect in enumerate(self._rects):
+                    if rect.collidepoint((lx, ly)):
+                        self.hover = i
+                if self.drag:
+                    r = self._rects[0]
+                    self.volume = max(0.0, min(1.0,
+                                               (lx - r.left) / max(1, r.width)))
+                    sound.set_volume(self.volume)
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                lx, ly = event.pos[0] // scale, event.pos[1] // scale
+                for i, rect in enumerate(self._rects):
+                    if rect.collidepoint((lx, ly)):
+                        act = self._actions[i]
+                        if act == "volume":
+                            self.drag = True
+                            self.volume = max(0.0, min(1.0,
+                                                       (lx - rect.left) / max(1, rect.width)))
+                            sound.set_volume(self.volume)
+                            return None
+                        if act == "fullscreen":
+                            self.fullscreen = not self.fullscreen
+                            if self.set_fullscreen is not None:
+                                self.set_fullscreen(self.fullscreen)
+                            return None
+                        return act
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                self.drag = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return "back"
+            return None
         if event.type == pygame.MOUSEMOTION:
             lx, ly = event.pos[0] // scale, event.pos[1] // scale
             self.hover = -1
@@ -218,7 +269,8 @@ class Menu:
         persist.set_test(self.test)
 
         title = "SETTLEWEST" if self.page == "main" else (
-            "TEST SAVES" if self.test else "SAVES")
+            "OPTIONS" if self.page == "options" else (
+                "TEST SAVES" if self.test else "SAVES"))
         t = self.title_font.render(title, False, TITLE)
         o = self.title_font.render(title, False, TITLE_DARK)
         tx = lw // 2 - t.get_width() // 2
@@ -226,8 +278,9 @@ class Menu:
         for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
             low.blit(o, (tx + ox, ty + oy))
         low.blit(t, (tx, ty))
-        sub = _fit(self.small_font, "Take  ·  Manage  ·  Sell", lw - 16, DIM)
-        low.blit(sub, (lw // 2 - sub.get_width() // 2, int(lh * 0.34)))
+        if self.page == "main":
+            sub = _fit(self.small_font, "Take  ·  Manage  ·  Sell", lw - 16, DIM)
+            low.blit(sub, (lw // 2 - sub.get_width() // 2, int(lh * 0.34)))
 
         for i, (rect, act) in enumerate(zip(self._rects, self._actions)):
             hovered = (i == self.hover)
@@ -238,14 +291,36 @@ class Menu:
                 low.blit(x, (rect.centerx - x.get_width() // 2,
                              rect.centery - x.get_height() // 2))
                 continue
-            if act in ("singleplayer", "quit", "back", "testmode"):
+            if act == "volume":
+                # MASTER SOUND SLIDER: dark track, filled to the current level.
+                pygame.draw.rect(low, BTN_BG, rect)
+                fill = rect.copy()
+                fill.width = max(0, int(rect.width * self.volume))
+                pygame.draw.rect(low, (86, 138, 74), fill)
+                pygame.draw.rect(low, BTN_BORDER_HOVER if hovered else BTN_BORDER, rect, 1)
+                pct = int(round(self.volume * 100.0))
+                text = _fit(self.btn_font, "MASTER SOUND: %d%%" % pct,
+                            rect.w - 10, BTN_TEXT)
+                low.blit(text, (rect.centerx - text.get_width() // 2,
+                                rect.centery - text.get_height() // 2))
+                continue
+            if act == "fullscreen":
+                pygame.draw.rect(low, BTN_BG_HOVER if hovered else BTN_BG, rect)
+                pygame.draw.rect(low, BTN_BORDER_HOVER if hovered else BTN_BORDER, rect, 1)
+                text = _fit(self.btn_font, "FULLSCREEN: %s" % ("YES" if self.fullscreen else "NO"),
+                            rect.w - 10, BTN_TEXT)
+                low.blit(text, (rect.centerx - text.get_width() // 2,
+                                rect.centery - text.get_height() // 2))
+                continue
+            if act in ("singleplayer", "quit", "back", "testmode", "options"):
                 test = (act == "testmode")
                 pygame.draw.rect(low, (TEST_HOVER if hovered else TEST_BG) if test
                                  else (BTN_BG_HOVER if hovered else BTN_BG), rect)
                 pygame.draw.rect(low, (TEST_BORDER_HOVER if hovered else TEST_BORDER) if test
                                  else (BTN_BORDER_HOVER if hovered else BTN_BORDER), rect, 1)
                 label = {"singleplayer": "SINGLEPLAYER", "quit": "QUIT GAME",
-                         "back": "BACK", "testmode": "TEST MODE"}[act]
+                         "back": "BACK", "testmode": "TEST MODE",
+                         "options": "OPTIONS"}[act]
             else:
                 made, houses, coins = persist.summary(act)
                 pygame.draw.rect(low, SLOT_HOVER if hovered else SLOT, rect)
@@ -264,15 +339,18 @@ class Menu:
         screen.blit(pygame.transform.scale(low, (w, h)), (0, 0))
 
 
-def run(screen, clock):
+def run(screen, clock, fullscreen=False, set_fullscreen=None):
     """Show the menu. Returns the chosen save slot, or None to quit."""
     menu = Menu()
+    menu.fullscreen = bool(fullscreen)
+    menu.set_fullscreen = set_fullscreen
     while True:
         clock.tick(60)
+        cur = pygame.display.get_surface() or screen
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return None
-            act = menu.handle(event, *screen.get_size())
+            act = menu.handle(event, *cur.get_size())
             if act is None:
                 continue
             if act == "quit":
@@ -284,6 +362,9 @@ def run(screen, clock):
             elif act == "testmode":
                 menu.test = True
                 menu.page = "saves"
+                menu.hover = -1
+            elif act == "options":
+                menu.page = "options"
                 menu.hover = -1
             elif act == "back":
                 menu.page = "main"
@@ -301,7 +382,7 @@ def run(screen, clock):
                 if not persist.exists(act):
                     persist.write({"seed": random.randint(1, 2 ** 31 - 1)}, act)
                 return (act, menu.test)
-        menu.draw(screen)
+        menu.draw(cur)
         pygame.display.flip()
 
 
