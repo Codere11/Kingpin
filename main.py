@@ -214,6 +214,18 @@ def main() -> None:
     pygame.display.set_caption("SettleWest")
     pygame.mouse.set_visible(False)
     g.clock = pygame.time.Clock()
+    # FULLSCREEN TOGGLE. The GPU Screen Recorder captures the whole desktop,
+    # so a windowed game leaves borders in the video. F11 switches between a
+    # 1280x720 window and a true fullscreen surface that covers the screen.
+    g.fullscreen = False
+
+    def toggle_fullscreen() -> None:
+        g.fullscreen = not g.fullscreen
+        if g.fullscreen:
+            g.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        else:
+            g.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+        g.vw, g.vh = g.screen.get_size()
 
     import menu
     pygame.mouse.set_visible(True)
@@ -1954,6 +1966,7 @@ def main() -> None:
     g.near_foodbox = near_foodbox
     g.food_box = food_box
     g.ship_pos = ship_pos
+    g.toggle_fullscreen = toggle_fullscreen
     g.open_horse = open_horse
     g.toggle_horse_escort = toggle_horse_escort
     g.open_gunsmith = open_gunsmith

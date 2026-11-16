@@ -967,6 +967,9 @@ def run(g):
                     pygame.mouse.set_visible(False)
                     if g._dn is not None:
                         g.open_trade_menu(g._dn)
+            elif (event.type == pygame.KEYDOWN and event.key == pygame.K_F11
+                  and hasattr(g, "toggle_fullscreen")):
+                g.toggle_fullscreen()
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 # ESC USED TO PAUSE UNCONDITIONALLY, even with a menu already
                 # open -- so a panel that would not close left a man with no
