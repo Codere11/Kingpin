@@ -511,10 +511,6 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
         _spx, _spy = w2s(float(ship[0]), float(ship[1]))
         if x0 - 2 <= _spx <= x0 + size + 2 and y0 - 2 <= _spy <= y0 + size + 2:
             _ship_icon(screen, int(_spx), int(_spy))
-            _sl = name_font.render("SHIP", True, (206, 220, 240))
-            _sh = name_font.render("SHIP", True, (10, 11, 12))
-            screen.blit(_sh, (int(_spx) - _sl.get_width() // 2 + 1, int(_spy) + 10))
-            screen.blit(_sl, (int(_spx) - _sl.get_width() // 2, int(_spy) + 9))
 
     font = pygame.font.SysFont("dejavusansmono", max(11, vh // 46), bold=True)
     small = pygame.font.SysFont("dejavusansmono", max(9, vh // 60))

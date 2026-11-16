@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""StratWest -- top-down open-world game prototype.
+"""SettleWest -- top-down open-world game prototype.
 
 WASD / arrows move, SHIFT sprints (limited stamina), the mouse aims, Esc quits.
 
@@ -211,7 +211,7 @@ def main() -> None:
     g = SimpleNamespace()
     pygame.init()
     g.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
-    pygame.display.set_caption("StratWest")
+    pygame.display.set_caption("SettleWest")
     pygame.mouse.set_visible(False)
     g.clock = pygame.time.Clock()
 

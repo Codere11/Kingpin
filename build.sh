@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build the standalone StratWest app. Fast rebuilds.
+# Build the standalone SettleWest app. Fast rebuilds.
 #
 #   ./build.sh
 #
@@ -45,7 +45,7 @@ if ! "$VENV/bin/cythonize" -i -3 village.py economy.py skills.py > /tmp/kingpin-
 fi
 
 echo "Building..."
-rm -rf "$DIST" StratWest.spec __pycache__
+rm -rf "$DIST" SettleWest.spec __pycache__
 
 # Bundle every PNG asset beside the executable, absolute so PyInstaller's
 # workpath/specpath never shadows the glob.
@@ -62,7 +62,7 @@ done
     --noconfirm \
     --onedir \
     --windowed \
-    --name StratWest \
+    --name SettleWest \
     --workpath "$WORK" \
     --specpath "$WORK" \
     --distpath "$DIST" \
@@ -75,8 +75,8 @@ done
 
 # Executable at the top level, with its runtime bundle next to it.
 rm -rf _internal
-mv "$DIST/StratWest/StratWest" ./StratWest
-mv "$DIST/StratWest/_internal" ./_internal
+mv "$DIST/SettleWest/SettleWest" ./SettleWest
+mv "$DIST/SettleWest/_internal" ./_internal
 rm -rf "$DIST"
 
-echo "Built $(pwd)/StratWest"
+echo "Built $(pwd)/SettleWest"

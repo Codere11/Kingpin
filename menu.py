@@ -217,7 +217,7 @@ class Menu:
         low.blit(_dim, (0, 0))
         persist.set_test(self.test)
 
-        title = "STRATWEST" if self.page == "main" else (
+        title = "SETTLEWEST" if self.page == "main" else (
             "TEST SAVES" if self.test else "SAVES")
         t = self.title_font.render(title, False, TITLE)
         o = self.title_font.render(title, False, TITLE_DARK)

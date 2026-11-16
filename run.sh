@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Run StratWest straight from source -- no build, starts in about a second.
+# Run SettleWest straight from source -- no build, starts in about a second.
 # Use this while iterating; only run ./build.sh when you want the standalone app.
 #
 set -euo pipefail
