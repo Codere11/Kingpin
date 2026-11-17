@@ -415,6 +415,7 @@ def run(g):
                                                                   pygame.K_ESCAPE):
                     g.worker_panel.close()
                     g.worker_panel_open = False
+                    g.persona = None
                     pygame.mouse.set_visible(False)
                 else:
                     g.worker_panel.handle_event(event)
@@ -997,6 +998,7 @@ def run(g):
                 # inspector and the inspector DOES answer it (main.py, the
                 # observer branch). TAB is free here, so TAB opens the pack.
                 g.inventory_open = not g.inventory_open
+                g.persona = g.player if g.inventory_open else None
                 pygame.mouse.set_visible(g.inventory_open)
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_0:
                 g.empty = g.hotbar.first_empty()
@@ -1107,6 +1109,7 @@ def run(g):
                                         g.inventory, _bag, top_rows=4,
                                         top_label=getattr(_n, "name", "PACK"))
                                     g.worker_panel_open = True
+                                    g.persona = _n
                                     g.consumed = True
                                     pygame.mouse.set_visible(True)
                                     break
@@ -3362,6 +3365,7 @@ def run(g):
                     g.chest_panel.draw(g.screen)
                 if g.workshop_open:
                     g.workshop_menu.draw(g.screen)
+                g.draw_persona()
                 if g.inventory_open:
                     g.panel.draw(g.screen)
                 if g.build_menu_open:
@@ -3555,6 +3559,7 @@ def run(g):
                 except Exception:
                     import traceback as _tb
                     _tb.print_exc()
+            g.draw_persona()
             if g.inventory_open:
                 g.panel.draw(g.screen)
             if g.folder_open:
@@ -4110,6 +4115,7 @@ def run(g):
         # frame the player is actually looking at.
         if g.dialogue_panel.open_:
             g.dialogue_panel.draw(g.screen)
+        g.draw_persona()
         if g.inventory_open:
             g.panel.draw(g.screen)
         if g.confirm_open:

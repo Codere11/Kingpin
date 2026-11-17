@@ -109,7 +109,7 @@ from trade import TradeMenu
 from workshop import WorkshopMenu
 from trees import Trees
 from ui import (BarracksPanel, ChestPanel, ConfirmMenu, FolderPanel, GunsmithPanel,
-                HorsePanel, Hotbar, InventoryPanel, MarketPanel, PauseMenu,
+                HorsePanel, Hotbar, InventoryPanel, MarketPanel, PauseMenu, PersonaCard,
                 ResearchPanel, RoutePanel, ShipMarketPanel, SignPanel, SmithPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
@@ -788,6 +788,26 @@ def main() -> None:
     # A HIRED MAN'S PACK, OPENED THE WAY A CHEST IS.
     g.worker_panel_open = False
     g.worker_panel = None
+    # THE PERSONA CARD: who is being looked at, and its card. Shown beside the
+    # worker's pack and the player's own inventory.
+    g.persona = None
+    g.persona_card = PersonaCard()
+
+    def draw_persona() -> None:
+        """Shift the side panels right and draw the persona card when someone
+        is open; when nobody is open, reset the panels to centre."""
+        if g.persona is None:
+            for _p in (g.panel, g.worker_panel, g.body_panel):
+                if _p is not None:
+                    _p.left_margin = 0
+            return
+        for _p in (g.panel, g.worker_panel, g.body_panel):
+            if _p is not None:
+                _p.left_margin = 170
+        try:
+            g.persona_card.draw(g.screen, g.persona)
+        except Exception:
+            pass
     # THE MARKET STALL: the player's counter, its prices, and its purse.
     g.stall_open = False
     g.stall_panel = None
@@ -1800,6 +1820,7 @@ def main() -> None:
         g.folder_open = False
         g.smith_open = g.workshop_open = g.confirm_open = g.map_open = False
         g.pause_open = g.build_menu_open = False
+        g.persona = None
         g.placing = None
         try:
             pygame.mouse.set_visible(False)
@@ -1971,6 +1992,7 @@ def main() -> None:
     g.food_box = food_box
     g.ship_pos = ship_pos
     g.toggle_fullscreen = toggle_fullscreen
+    g.draw_persona = draw_persona
     g.open_horse = open_horse
     g.toggle_horse_escort = toggle_horse_escort
     g.open_gunsmith = open_gunsmith

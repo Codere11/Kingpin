@@ -199,6 +199,7 @@ class InventoryPanel:
         self.player = None              # set by the frame, for the armor slot
         self.slot = slot
         self.pad = pad
+        self.left_margin = 0           # shifts the grid right for the persona card
         self.held: ItemStack | None = None
         self.held_from = None
         self._press = None
@@ -217,7 +218,7 @@ class InventoryPanel:
         grid_h = rows * slot + (rows + 1) * pad
         panel_w = grid_w
         panel_h = grid_h + 34 + 30 + slot + 16     # room for the armor slot
-        x0 = (sw - panel_w) // 2
+        x0 = self.left_margin + (sw - panel_w) // 2
         y0 = (sh - panel_h) // 2
         rects = []
         for r in range(rows):
@@ -464,6 +465,7 @@ class ChestPanel:
         self.filter_items = filter_items
         self.slot = slot
         self.pad = pad
+        self.left_margin = 0           # shifts the grid right for the persona card
         self.held: ItemStack | None = None
         self.held_from = None
         self._press = None
@@ -482,7 +484,7 @@ class ChestPanel:
         # arrows. Everything else stacks from the top as before.
         filter_h = 26 if self.filter_owner is not None else 0
         panel_h = title + filter_h + chest_h + gap + title + player_h + 14
-        x0 = (sw - board_w) // 2
+        x0 = self.left_margin + (sw - board_w) // 2
         y0 = (sh - panel_h) // 2
 
         chest_rects = []
@@ -2008,6 +2010,92 @@ class PauseMenu:
                             rect.centery - t.get_height() // 2))
         hint = self.font_small.render("Esc to resume", True, DIM)
         screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 22))
+
+
+class PersonaCard:
+    """An RPG-style card for a person: their portrait, name and occupation,
+    then their skills as gold bars. Drawn top-left, ~15% in from the corner."""
+
+    W = 320
+    _SKILLS = (("Axe", "axe", 0.0, 1.0),
+               ("Shooting", "shooting", 0.0, 1.0),
+               ("Farming", "farming", 0.0, 8.0),
+               ("Movement", "movement", 0.0, 1.0),
+               ("Research", "research", 1.0, 10.0),
+               ("Smithing", "smithing", 0.0, 8.0))
+    _ROLE = {"farmer": "Farmer", "warrior": "Warrior",
+             "animal_handler": "Animal Handler", "logger": "Logger",
+             "artisan": "Artisan", "researcher": "Researcher",
+             "miner": "Miner", "smith": "Smith", "weaver": "Weaver",
+             "spiceman": "Spiceman", "gunsmith": "Gunsmith",
+             "soldier": "Soldier", "unemployed": "Unemployed"}
+
+    def __init__(self):
+        self.font_name = pygame.font.SysFont("dejavusans", 17, bold=True)
+        self.font_occ = pygame.font.SysFont("dejavusans", 13, bold=True)
+        self.font_skill = pygame.font.SysFont("dejavusans", 12, bold=True)
+        self.portrait_size = 84
+
+    def _occupation(self, subject) -> str:
+        if getattr(subject, "is_player", False):
+            return "Settler"
+        nr = getattr(subject, "native_role", None)
+        if nr:
+            return self._ROLE.get(nr, str(nr).title())
+        try:
+            return subject.occupation()
+        except Exception:
+            return "Unknown"
+
+    def _portrait(self, subject) -> pygame.Surface:
+        s = self.portrait_size
+        surf = pygame.Surface((s, s))
+        surf.fill((30, 28, 26))
+        pygame.draw.rect(surf, (76, 76, 84), surf.get_rect(), 1)
+        try:
+            subject.draw(surf, subject.x - s / 2.0, subject.y - s / 2.0)
+        except Exception:
+            pass
+        return surf
+
+    def draw(self, screen: pygame.Surface, subject) -> None:
+        sw, sh = screen.get_size()
+        x = int(sw * 0.15)
+        y = int(sh * 0.15)
+        w = self.W
+        pad = 12
+        row_h = 19
+        name = getattr(subject, "name", "?") or "?"
+        occ = self._occupation(subject)
+        skills = getattr(subject, "skills", None)
+        h = pad + self.portrait_size + 6 + 22 + 18 + len(self._SKILLS) * row_h + pad
+        board = pygame.Surface((w, h), pygame.SRCALPHA)
+        pygame.draw.rect(board, (22, 20, 24, 246), board.get_rect(), border_radius=10)
+        pygame.draw.rect(board, (150, 110, 62), board.get_rect(), 2, border_radius=10)
+        board.blit(self._portrait(subject), ((w - self.portrait_size) // 2, pad))
+        yy = pad + self.portrait_size + 6
+        nm = self.font_name.render(name, True, (238, 230, 214))
+        board.blit(nm, ((w - nm.get_width()) // 2, yy))
+        yy += 21
+        ot = self.font_occ.render(occ, True, (196, 176, 128))
+        board.blit(ot, ((w - ot.get_width()) // 2, yy))
+        yy += 24
+        if skills is not None:
+            bar_x = pad + 84
+            bar_w = w - 2 * pad - 84
+            for label, attr, lo, hi in self._SKILLS:
+                val = float(getattr(skills, attr, 0.0) or 0.0)
+                pct = max(0.0, min(1.0, (val - lo) / (hi - lo)))
+                lab = self.font_skill.render(label, True, (216, 210, 196))
+                board.blit(lab, (pad, yy + 1))
+                pygame.draw.rect(board, (44, 42, 48), (bar_x, yy + 4, bar_w, 8),
+                                 border_radius=4)
+                if pct > 0.0:
+                    pygame.draw.rect(board, (226, 176, 90),
+                                     (bar_x, yy + 4, max(2, int(bar_w * pct)), 8),
+                                     border_radius=4)
+                yy += row_h
+        screen.blit(board, (x, y))
 
 
 class MarketPanel(ChestPanel):
