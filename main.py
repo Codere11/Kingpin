@@ -1661,7 +1661,7 @@ def main() -> None:
         g.first_field_kind = _colony.first_kind
         g.conquer_camp = _colony.conquer_camp
         g.sync_jobs = _colony.sync_jobs
-        g.nearest_camp = _colony._nearest_camp
+        g.nearest_camp = (lambda x, y: _colony._nearest_camp(g, x, y))
         # NO PEOPLE ARE HANDED TO THE PLAYER AT SPAWN. A conquered workforce
         # is WON: clear a native settlement's warriors and its farmers are his.
         plog.log("COLONY", "camp ready, empty")
