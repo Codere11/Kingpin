@@ -2034,7 +2034,7 @@ class PersonaCard:
         self.font_name = pygame.font.SysFont("dejavusans", 19, bold=True)
         self.font_occ = pygame.font.SysFont("dejavusans", 14, bold=True)
         self.font_skill = pygame.font.SysFont("dejavusans", 13, bold=True)
-        self.portrait_size = 150
+        self.portrait_size = 180
 
     def _occupation(self, subject) -> str:
         if (getattr(subject, "is_player", False)
@@ -2049,15 +2049,16 @@ class PersonaCard:
             return "Unknown"
 
     def _portrait(self, subject) -> pygame.Surface:
-        # Render the person small, then blow it up so he fills the frame.
-        small = 64
+        # Render the person 1:1, then scale up with nearest-neighbour so the
+        # sprite stays crisp (no smoothscale blur) -- big and sharp.
+        small = 72
         tmp = pygame.Surface((small, small))
         tmp.fill((40, 38, 34))
         try:
             subject.draw(tmp, subject.x - small / 2.0, subject.y - small / 2.0)
         except Exception:
             pass
-        return pygame.transform.smoothscale(tmp, (self.portrait_size, self.portrait_size))
+        return pygame.transform.scale(tmp, (self.portrait_size, self.portrait_size))
 
     def _level(self, val: float, lo: float, hi: float, bands: int) -> int:
         return max(0, min(bands, int((val - lo) / (hi - lo) * bands)))
@@ -2101,10 +2102,10 @@ class PersonaCard:
                 seg_w = max(4, (bar_w - (bands - 1) * 2) // bands)
                 for k in range(bands):
                     sx = bar_x + k * (seg_w + 2)
-                    col = (226, 176, 90) if k < lvl else (48, 46, 52)
+                    col = (226, 176, 90) if k < lvl else (72, 70, 78)
                     pygame.draw.rect(board, col, (sx, yy + 4, seg_w, 9),
                                      border_radius=2)
-                lv = self.font_skill.render("Lv %d" % lvl, True, (190, 172, 128))
+                lv = self.font_skill.render("Lv %d/%d" % (lvl, bands), True, (190, 172, 128))
                 board.blit(lv, (bar_x + bar_w + 6, yy + 1))
                 yy += row_h
         screen.blit(board, (x, y))
