@@ -685,6 +685,11 @@ class NPC:
         self.produce_acc = 0.0
         self.chop_timer = 0.0
         self._log_tree = None
+        self._trunks_cache = None    # cached orchard trunk rects (steering)
+        self._trunks_dirty = True
+        self._trunks_tick = 0
+        self._orchard_task = None    # cached (cut_tile, plant_tile) decision
+        self._orchard_task_tick = -999
         self.schedule = "home"       # time-of-day phase right now
         self.bond_partner = None     # who they walk out with in the evening
         self.bond = 0.0              # growing affection
@@ -2817,6 +2822,29 @@ class NPC:
                                           tree.y - trunk_w * 0.6,
                                           trunk_w, trunk_w * 1.5)
 
+    def _orchard_trunks(self, camp):
+        """The orchard's trunk rects, CACHED. It used to be rebuilt every
+        tick (O(orchard trees)); now it rebuilds only when a tree is planted
+        or felled, or every 30 ticks to catch the slow trunk growth."""
+        state = getattr(camp, "orchard_state", None) or {}
+        _tick = getattr(self, "_trunks_tick", 0)
+        _cached = getattr(self, "_trunks_cache", None)
+        if (_cached is not None
+                and not getattr(self, "_trunks_dirty", True)
+                and (_tick - getattr(self, "_trunks_built", -999)) < 30):
+            return _cached
+        trunks = []
+        for _st in state.values():
+            _tr = _st.get("tree") if _st else None
+            if _tr is not None and not getattr(_tr, "felled", False):
+                _trr = getattr(_tr, "trunk_rect", None)
+                if _trr is not None:
+                    trunks.append(_trr)
+        self._trunks_cache = trunks
+        self._trunks_dirty = False
+        self._trunks_built = _tick
+        return trunks
+
     def _work_orchard(self, dt: float, world, now: float) -> bool:
         """An orchard logger: plant a sapling on a bare tile, let it grow,
         cut a full tree down with the axe (the same chop as the player), and
@@ -2825,6 +2853,7 @@ class NPC:
         if camp is None:
             return False
         g = getattr(camp, "g", None)
+        self._trunks_tick = getattr(self, "_trunks_tick", 0) + 1
         self._grow_orchard(camp, now)
         job = getattr(self, "orchard_plot", None)
         plots = getattr(camp, "orchard_plots", None) or ()
@@ -2837,26 +2866,35 @@ class NPC:
         if state is None:
             state = {}
             camp.orchard_state = state
-        cut_tile = None
-        plant_tile = None
-        for (tx, ty) in tiles:
-            st = state.get((tx, ty))
-            tree = st.get("tree") if st else None
-            if tree is None or getattr(tree, "felled", False):
-                if plant_tile is None:
-                    plant_tile = (tx, ty)
-            elif tree.canopy_r >= float(st.get("target_r", 72.0)):
-                if cut_tile is None:
-                    cut_tile = (tx, ty)
+        # CACHE THE DECISION (which tile to cut / which to plant). It was a
+        # full orchard scan every tick; it re-scans only on a tree change or
+        # every 120 ticks to catch a sapling reaching full size.
+        _tick = getattr(self, "_trunks_tick", 0)
+        _task = getattr(self, "_orchard_task", None)
+        if (_task is not None
+                and not getattr(self, "_trunks_dirty", False)
+                and (_tick - getattr(self, "_orchard_task_tick", -999)) < 120):
+            cut_tile, plant_tile = _task
+        else:
+            cut_tile = None
+            plant_tile = None
+            for (tx, ty) in tiles:
+                st = state.get((tx, ty))
+                tree = st.get("tree") if st else None
+                if tree is None or getattr(tree, "felled", False):
+                    if plant_tile is None:
+                        plant_tile = (tx, ty)
+                elif tree.canopy_r >= float(st.get("target_r", 72.0)):
+                    if cut_tile is None:
+                        cut_tile = (tx, ty)
+            _task = (cut_tile, plant_tile)
+            self._orchard_task = _task
+            self._orchard_task_tick = _tick
+            cut_tile, plant_tile = _task
         # THE LOGGER WALKS FREELY AMONG HIS OWN ORCHARD TREES: every trunk in
         # the orchard is excluded from his steering, so he never orbits one.
-        _trunks = []
-        for _st in state.values():
-            _tr = _st.get("tree") if _st else None
-            if _tr is not None and not getattr(_tr, "felled", False):
-                _trr = getattr(_tr, "trunk_rect", None)
-                if _trr is not None:
-                    _trunks.append(_trr)
+        # CACHED (see _orchard_trunks) -- not rebuilt every tick.
+        _trunks = self._orchard_trunks(camp)
         if cut_tile is None and plant_tile is None:
             # nothing to do: every sapling is still growing
             tx = ctx * TILE + TILE / 2.0
@@ -2894,6 +2932,7 @@ class NPC:
                 economy.cut_wood(camp, self,
                                  self.rng.randint(FELL_LOGS_MIN, FELL_LOGS_MAX))
                 state.pop((ttx, tty), None)
+                self._trunks_dirty = True
                 self._did_work()
                 self.skills.gain_axe()
             return True
@@ -2920,6 +2959,7 @@ class NPC:
             tree = trees_obj.plant(wx, wy, 24.0, species=species, snowy=snowy)
         state[(ttx, tty)] = {"tree": tree, "target_r": self.rng.uniform(56.0, 90.0),
                              "planted_at": now}
+        self._trunks_dirty = True
         self._did_work()
         return True
 
