@@ -619,14 +619,10 @@ def _send_raiders(g, tx: float, ty: float, count: int = 3) -> None:
 
 def _launch_raid(g) -> None:
     """Choose a target by the priority order and send the warriors."""
-    pc = getattr(g, "player_camp", None)
     targets = []       # (obj, x, y, soldier_count)
     for c in _conquered_camps(g):
         targets.append((c, float(getattr(c, "x", 0.0)), float(getattr(c, "y", 0.0)),
                         _soldiers_near(g, getattr(c, "x", 0.0), getattr(c, "y", 0.0))))
-    if pc is not None:
-        px, py = float(getattr(pc, "x", 0.0)), float(getattr(pc, "y", 0.0))
-        targets.append((pc, px, py, _soldiers_near(g, px, py)))
     if not targets:
         return
     player = getattr(g, "player", None)

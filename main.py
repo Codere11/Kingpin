@@ -889,7 +889,8 @@ def main() -> None:
     g.field_raw = [None]              # the un-snapped click, to tell click from drag
     g.field_del = [False]             # right-drag: deleting, not adding
     g.field_designations: list = []   # [{"rect","type","kind"}], one per designation
-    g.player_camp = None              # the conquered settlement (colony.py)
+    g.player_camp = None              # the FIRST conquered settlement (legacy)
+    g.player_camps: list = []         # every conquered settlement, each its own
     g.sync_player_camp = None
     g.next_field_kind = None
     g.first_field_kind = None
@@ -1654,12 +1655,13 @@ def main() -> None:
     # him, ready to work whatever fields he designates.
     try:
         import colony as _colony
-        g.player_camp = _colony.make_camp(g)
+        g.player_camps = []
         g.sync_player_camp = _colony.sync_camp
         g.next_field_kind = _colony.next_kind
         g.first_field_kind = _colony.first_kind
         g.conquer_camp = _colony.conquer_camp
         g.sync_jobs = _colony.sync_jobs
+        g.nearest_camp = _colony._nearest_camp
         # NO PEOPLE ARE HANDED TO THE PLAYER AT SPAWN. A conquered workforce
         # is WON: clear a native settlement's warriors and its farmers are his.
         plog.log("COLONY", "camp ready, empty")

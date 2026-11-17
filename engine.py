@@ -820,7 +820,9 @@ def run(g):
                 elif g.near_sign() is not None:
                     _sg = g.near_sign()
                     g.sign_post = _sg
-                    g.sign_panel = SignPanel(_sg, g.player_camp, lambda: g.sync_jobs(g),
+                    _scamp = (g.nearest_camp(_sg.x, _sg.y)
+                              if hasattr(g, "nearest_camp") else g.player_camp)
+                    g.sign_panel = SignPanel(_sg, _scamp, lambda: g.sync_jobs(g),
                                              show_smiths=lambda: _smiths_available(g),
                                              show_weavers=lambda: _weavers_available(g),
                                              show_spicemen=lambda: _spicemen_available(g),

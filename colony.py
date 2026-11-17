@@ -91,46 +91,87 @@ def _tiles_of(rect, kind=None):
     return (ctx, cty), tiles
 
 
-def sync_camp(g) -> None:
-    """Rebuild the camp's farming handles from the current designations.
+def _camps(g):
+    """Every conquered settlement, each its own population and assignments."""
+    return [s for s in getattr(g, "native_settlements", {}).values()
+            if getattr(s, "conquered", False)]
 
-    One field = one farmer; one orchard = one logger. Extra workers idle.
-    """
-    camp = getattr(g, "player_camp", None)
-    if camp is None:
+
+def _campify(s, g) -> None:
+    """Give a conquered native settlement the full camp fields it needs to
+    run a population of its own (jobs, orchards, breeding)."""
+    if getattr(s, "workers", None) is None:
+        s.workers = []
+        s.loggers = []
+        s.artisans = []
+        s.researchers = []
+        s.miners = []
+        s.smiths = []
+        s.weavers = []
+        s.spicemen = []
+        s.gunsmiths = []
+        s.unemployed = []
+        s.orchard_plots = []
+        s.orchard_tiles = {}
+        s.orchard_state = {}
+        s._breeding = None
+        s._last_breed_day = -1
+        s._breeding_people = None
+        s._last_people_breed_day = -1
+    # the camp's pool is its living farmers (the native `people` was a count)
+    s.people = [n for n in getattr(s, "farmers", ()) or ()
+                if getattr(n, "alive", True)]
+    s.g = g
+
+
+def _nearest_camp(g, x: float, y: float):
+    camps = _camps(g)
+    if not camps:
+        return None
+    return min(camps, key=lambda c: (getattr(c, "x", 0.0) - x) ** 2
+               + (getattr(c, "y", 0.0) - y) ** 2)
+
+
+def sync_camp(g) -> None:
+    """Rebuild EACH conquered camp's farming handles from the designations
+    nearest to its fireplace. One field = one farmer; one orchard = one
+    logger. Extra workers idle."""
+    camps = _camps(g)
+    if not camps:
         return
-    plots = []
-    tiles = {}
-    orchards = []
-    orchard_tiles = {}
-    for fd in g.field_designations:
+    for camp in camps:
+        camp.farm_plots = []
+        camp.farm_tiles = {}
+        camp.orchard_plots = []
+        camp.orchard_tiles = {}
+    for fd in getattr(g, "field_designations", ()) or ():
         r = fd["rect"]
+        camp = _nearest_camp(g, r.x + r.w / 2.0, r.y + r.h / 2.0)
+        if camp is None:
+            continue
         if fd.get("type") == "orchard":
             (ctx, cty), tl = _tiles_of(r)
             # A REAL ORCHARD: trees every other tile, one empty block between
             # each pair, so no two trunks are ever adjacent. It looks natural
             # and a logger never has to thread a solid wall of trunks.
             tl = [(tx, ty) for (tx, ty) in tl if tx % 2 == 0 and ty % 2 == 0]
-            orchards.append((ctx, cty))
-            orchard_tiles[(ctx, cty)] = tl
+            camp.orchard_plots.append((ctx, cty))
+            camp.orchard_tiles[(ctx, cty)] = tl
         else:
             kind = fd.get("kind", "wheat")
             (ctx, cty), tl = _tiles_of(r, kind)
-            plots.append((ctx, cty, kind))
-            tiles[(ctx, cty)] = [(tx, ty, kind) for (tx, ty) in tl]
-    camp.farm_plots = plots
-    camp.farm_tiles = tiles
-    camp.orchard_plots = orchards
-    camp.orchard_tiles = orchard_tiles
-    # prune orchard trees that are no longer inside a designated orchard
-    keep_tiles = {t for tl in orchard_tiles.values() for t in tl}
-    for key in [k for k in camp.orchard_state if k not in keep_tiles]:
-        _drop_tree(camp, key)
-    # ONE WORKER, ONE PLOT
-    for i, n in enumerate(camp.workers):
-        n.farm_plot = i if i < len(plots) else None
-    for i, n in enumerate(camp.loggers):
-        n.orchard_plot = i if i < len(orchards) else None
+            camp.farm_plots.append((ctx, cty, kind))
+            camp.farm_tiles[(ctx, cty)] = [(tx, ty, kind) for (tx, ty) in tl]
+    for camp in camps:
+        # prune orchard trees that are no longer inside a designated orchard
+        keep_tiles = {t for tl in camp.orchard_tiles.values() for t in tl}
+        for key in [k for k in camp.orchard_state if k not in keep_tiles]:
+            _drop_tree(camp, key)
+        # ONE WORKER, ONE PLOT
+        for i, n in enumerate(camp.workers):
+            n.farm_plot = i if i < len(camp.farm_plots) else None
+        for i, n in enumerate(camp.loggers):
+            n.orchard_plot = i if i < len(camp.orchard_plots) else None
 
 
 def tick_breeding(g, dt: float) -> None:
@@ -189,7 +230,7 @@ def _end_breeding(pc) -> None:
 
 def _spawn_baby(g, a, b) -> None:
     """A newborn of the parents' kind, small, growing up over a day."""
-    pc = getattr(g, "player_camp", None)
+    pc = getattr(a, "native_camp", None) or getattr(g, "player_camp", None)
     if pc is None:
         return
     import creatures as _creatures
@@ -297,7 +338,7 @@ def _spawn_human_baby(g, a, b) -> None:
     import random as _random
     import biomes as _bio
     import village as village_mod
-    pc = getattr(g, "player_camp", None)
+    pc = getattr(a, "native_camp", None) or getattr(g, "player_camp", None)
     if pc is None:
         return
     mx, my = (a.x + b.x) / 2.0, (a.y + b.y) / 2.0
@@ -338,19 +379,17 @@ def _spawn_human_baby(g, a, b) -> None:
 
 def conquer_camp(g, native_camp) -> None:
     """All of a native camp's warriors are dead: the camp is the player's now.
-    Its farmers join his pool of conquered people; the sign-post (or a plain
-    default) decides how many of them farm, log, or go unemployed."""
+    Its own people stay with it -- one fireplace, one population, one set of
+    assignments -- and the nearest sign-post decides their jobs."""
     if getattr(native_camp, "conquered", False):
         return
     native_camp.conquered = True
-    pc = getattr(g, "player_camp", None)
-    if pc is None:
-        return
+    _campify(native_camp, g)
     for n in (getattr(native_camp, "farmers", ()) or ()):
         if not getattr(n, "alive", True):
             continue
         n.conquered = True
-        n.native_camp = pc
+        n.native_camp = native_camp      # stays with THIS settlement
         n._log_tree = None
         n.orchard_plot = None
         n.farm_plot = None
@@ -367,15 +406,19 @@ def conquer_camp(g, native_camp) -> None:
                     n.stock[_s] = int(n.stock.get(_s, 0)) + 3
         except Exception:
             n.stock["wheat_seed"] = int(n.stock.get("wheat_seed", 0)) + 3
-        if n not in pc.people:
-            pc.people.append(n)
     # THE LIVESTOCK ARE HIS TOO: a conquered horse carries goods to the ship.
     for a in (getattr(native_camp, "animals", ()) or ()):
         if getattr(a, "alive", True):
             a.conquered = True
             a.g = g
-            if a not in getattr(pc, "animals", ()):
-                pc.animals.append(a)
+    camps = getattr(g, "player_camps", None)
+    if camps is None:
+        camps = []
+        g.player_camps = camps
+    if native_camp not in camps:
+        camps.append(native_camp)
+    if getattr(g, "player_camp", None) is None:
+        g.player_camp = native_camp
     try:
         sync_jobs(g)
     except Exception:
@@ -396,19 +439,18 @@ def conquer_camp(g, native_camp) -> None:
         pass
 
 
-def sync_jobs(g) -> None:
-    """Reassign every conquered person from the sign-post's counts: the first
-    N farm, the next M log, the rest are unemployed. With no sign-post, all of
-    them farm. Then plots are handed out one to a worker, and any bench with a
-    chosen product takes an artisan from the unemployed pool."""
-    camp = getattr(g, "player_camp", None)
-    if camp is None:
-        return
+def _nearest_sign(g, camp):
+    signs = list(getattr(g, "built_signs", ()) or ())
+    if not signs:
+        return None
+    cx, cy = getattr(camp, "x", 0.0), getattr(camp, "y", 0.0)
+    return min(signs, key=lambda s: (s.x - cx) ** 2 + (s.y - cy) ** 2)
+
+
+def _assign_jobs(g, camp, sign) -> None:
+    """Assign one camp's people from its sign-post counts (or all farmers if
+    there is no sign-post)."""
     people = list(getattr(camp, "people", ()) or ())
-    sign = None
-    for s in getattr(g, "built_signs", ()) or ():
-        sign = s
-        break
     n_farmer = int(getattr(sign, "farmers", 0) or 0) if sign is not None else len(people)
     n_logger = int(getattr(sign, "loggers", 0) or 0) if sign is not None else 0
     n_artisan = int(getattr(sign, "artisans", 0) or 0) if sign is not None else 0
@@ -475,17 +517,23 @@ def sync_jobs(g) -> None:
             n.native_role = "unemployed"
             n.job = None
             camp.unemployed.append(n)
+
+
+def sync_jobs(g) -> None:
+    """Reassign every conquered camp from ITS OWN sign-post -- the nearest one
+    to its fireplace. With no sign-post, all of a camp's people farm."""
+    camps = _camps(g)
+    for camp in camps:
+        _assign_jobs(g, camp, _nearest_sign(g, camp))
     sync_artisans(g)
     sync_camp(g)
 
 
 def sync_artisans(g) -> None:
-    """Pair each artisan (assigned on the sign-post) with a bench that has a
-    chosen product. Benches with no product stay empty; artisans with no
-    bench idle until one is built. An unconfigured bench gets this biome's
-    default product, so an assigned man always has somewhere to go."""
-    camp = getattr(g, "player_camp", None)
-    if camp is None:
+    """Pair each camp's artisans with a bench near THAT camp that has a chosen
+    product. Benches with no product stay empty; artisans with no bench idle."""
+    camps = _camps(g)
+    if not camps:
         return
     benches = [wp for wp in getattr(g, "placed_work", ()) or ()
                if getattr(wp, "kind", None) == "lab"]
@@ -505,13 +553,19 @@ def sync_artisans(g) -> None:
             except Exception:
                 pass
         wp.artisan = None
-    pool = list(getattr(camp, "artisans", ()) or ())
+    for camp in camps:
+        for n in (getattr(camp, "artisans", ()) or ()):
+            n.artisan_bench = None
     for wp in benches:
         if getattr(wp, "product", None) is None:
             continue
-        u = next((n for n in pool if getattr(n, "artisan_bench", None) is None), None)
+        camp = _nearest_camp(g, wp.x, wp.y)
+        if camp is None:
+            continue
+        u = next((n for n in (getattr(camp, "artisans", ()) or ())
+                  if getattr(n, "artisan_bench", None) is None), None)
         if u is None:
-            break
+            continue
         u.artisan_bench = wp
         wp.artisan = u
 
@@ -621,7 +675,7 @@ def spawn_soldier(g, x: float, y: float):
     n.is_soldier = True
     n.defender = True
     n.conquered = False
-    n.native_camp = getattr(g, "player_camp", None)
+    n.native_camp = _nearest_camp(g, x, y) or getattr(g, "player_camp", None)
     n.weapon = "rifle"
     n.gun_kind = _guns.RIFLE
     n.mag = _guns.MAG[_guns.RIFLE]
