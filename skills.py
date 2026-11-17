@@ -91,13 +91,9 @@ class Skills:
                 + int(self.research) + int(self.smithing))
 
     def _note_levels(self, before: int) -> None:
-        """Raise the flag if this gain crossed a level.
-
-        THE PLAYER ONLY. This stands on gain_movement, which is called for
-        every walking villager on every frame -- a thousand men, sixty times a
-        second -- and four divisions apiece to notice something nobody is
-        watching. The shine is the player's, so the watching is the player's.
-        """
+        """Raise the flag if this gain crossed a level. The player and every
+        NPC both wear it: the player shines via award_levels(), an NPC shines
+        the same way when he is on screen (see NPC.draw)."""
         if before and self.levels_total() > before:
             self.just_leveled = True
 
@@ -124,12 +120,13 @@ class Skills:
     FARM_SLOW = 0.5
 
     def gain_farming(self, amount: float = 0.12) -> None:
-        _b = self.levels_total() if self.is_player else 0
+        _b = self.levels_total()
         if self.is_player:               # the player ploughs the OLD road
             self.farming = min(8.0, self.farming + amount * self.FARM_SLOW)
             self._note_levels(_b)
             return
         self.farming = self._step(self.farming, 8.0, 1.0)
+        self._note_levels(_b)
 
     def leaf_grade(self) -> int:
         """What this pair of hands produces: his skill, nothing else."""
@@ -146,18 +143,16 @@ class Skills:
     def gain_research(self, dt: float) -> None:
         """Two days behind the research desk is one level -- the slowest skill
         in the world, because it is paid in discoveries, not in swings."""
-        _b = self.levels_total() if self.is_player else 0
+        _b = self.levels_total()
         self.research = min(10.0, self.research + max(0.0, float(dt)) / 1200.0)
-        if self.is_player:
-            self._note_levels(_b)
+        self._note_levels(_b)
 
     # -- smithing -----------------------------------------------------------
     def gain_smithing(self, amount: float = 0.05) -> None:
         """The forge teaches slowly: eight grades of hands over a career."""
-        _b = self.levels_total() if self.is_player else 0
+        _b = self.levels_total()
         self.smithing = self._step(self.smithing, 8.0, 1.0)
-        if self.is_player:
-            self._note_levels(_b)
+        self._note_levels(_b)
 
     def smith_grade(self) -> int:
         """What this pair of hands turns out of the forge."""
@@ -187,7 +182,10 @@ class Skills:
         if random.random() < self.luck * min(1.0, distance / 20.0):
             self.movement = min(1.0, max(self.movement,
                                          (lvl + 1) * 0.125))
-        self._note_levels(_b)
+        if self.is_player:
+            self._note_levels(_b)
+        elif int(self.movement / 0.125) > lvl:
+            self.just_leveled = True
 
     def move_scale(self) -> float:
         """Walking/sprinting multiplier: 0.75 at start, 1.5 mastered."""
@@ -200,7 +198,7 @@ class Skills:
     # -- axe ----------------------------------------------------------------
     def gain_axe(self, amount: float = 1.0) -> None:
         # EVERYONE LEARNS THE AXE THE NEW WAY -- the player included.
-        _b = self.levels_total() if self.is_player else 0
+        _b = self.levels_total()
         self.axe = self._step(self.axe, 1.0, 0.125)
         self._note_levels(_b)
 
@@ -214,12 +212,13 @@ class Skills:
 
     # -- shooting -----------------------------------------------------------
     def gain_shooting(self, amount: float = 1.0) -> None:
-        _b = self.levels_total() if self.is_player else 0
+        _b = self.levels_total()
         if self.is_player:               # the player shoots the OLD road
             self.shooting = min(1.0, self.shooting + amount / SHOOT_NEED)
             self._note_levels(_b)
             return
         self.shooting = self._step(self.shooting, 1.0, 0.125)
+        self._note_levels(_b)
 
     def shot_spread(self) -> float:
         """Radians of aim wobble: 10 deg at start, dead-on when mastered."""

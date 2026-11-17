@@ -12,6 +12,7 @@ Each house stores two world rectangles:
 from __future__ import annotations
 
 import stats
+import effects
 
 import colorsys
 import functools
@@ -623,6 +624,7 @@ class NPC:
         self.work_flash = 0.0
         self.attack_flash = 0.0
         self.hurt_flash = 0.0
+        self.level_flash = 0.0         # the same shine as the player's level-up
         self.sly_flash = 0.0
         self.bleed = 0.0
         self.drip_timer = 0.0
@@ -887,6 +889,15 @@ class NPC:
             self.sly_flash -= dt
             if self.sly_flash < 0.0:
                 self.sly_flash = 0.0
+        # A REAL LEVEL-UP WEARS THE SAME SHINE AS THE PLAYER'S: the skills
+        # raise just_leveled, and this wears it off over 1.6 seconds.
+        if getattr(self.skills, "just_leveled", False):
+            self.skills.just_leveled = False
+            self.level_flash = 1.6
+        if self.level_flash > 0.0:
+            self.level_flash -= dt
+            if self.level_flash < 0.0:
+                self.level_flash = 0.0
         # THE MAN'S MIND: the spree, the brawl, the chat -- one place now.
         try:
             import mind as _mind
@@ -4177,6 +4188,10 @@ class NPC:
             screen.blit(label, (lx, ly))
         if getattr(self, "friendly", False):       # your nation's people
             pygame.draw.circle(screen, (110, 226, 226), (int(sx), int(sy)), 14, 2)
+        # THE LEVEL-UP SHINE, OVER HIM, while it lasts -- the same glow the
+        # player wears, drawn on screen only (he is in view by being drawn).
+        if getattr(self, "level_flash", 0.0) > 0.0:
+            effects.draw_level_up(screen, sx, sy, 1.0 - self.level_flash / 1.6)
         self._draw_use_fx(screen, sx, sy, hx, hy)
 
     def _draw_use_fx(self, screen, sx, sy, hx, hy) -> None:
