@@ -810,13 +810,25 @@ def main() -> None:
                 _p.left_margin = 170
 
     def draw_persona_card() -> None:
-        """The card itself, drawn last so the inventory/chest shade never covers it."""
+        """The card itself, drawn last so the inventory/chest shade never
+        covers it -- and aligned to the open panel's rectangle."""
         _s = getattr(g, "_persona_subject", None)
-        if _s is not None:
-            try:
-                g.persona_card.draw(g.screen, _s)
-            except Exception:
-                pass
+        if _s is None:
+            return
+        _panel = None
+        if g.inventory_open and getattr(g, "panel", None) is not None:
+            _panel = g.panel
+        elif g.worker_panel_open and getattr(g, "worker_panel", None) is not None:
+            _panel = g.worker_panel
+        elif g.body_open and getattr(g, "body_panel", None) is not None:
+            _panel = g.body_panel
+        if _panel is None:
+            return
+        try:
+            _rect = _panel._layout(*g.screen.get_size())[0]
+            g.persona_card.draw(g.screen, _s, _rect)
+        except Exception:
+            pass
     # THE MARKET STALL: the player's counter, its prices, and its purse.
     g.stall_open = False
     g.stall_panel = None
