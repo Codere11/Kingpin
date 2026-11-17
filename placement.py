@@ -318,7 +318,8 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
         w, h = (60, 16) if placing == "gate" else (140, 16)
         if not fence_horizontal:
             w, h = h, w
-        rect = pygame.Rect(int(x - w / 2), int(y - h / 2), w, h)
+        # FENCES SNAP TO THE SAME 1x1 MESH AS BLOCKS: top-left on a cell corner.
+        rect = pygame.Rect(int(x), int(y), w, h)
         return (0.0, -1.0), rect, rect.inflate(10, 10)
     if placing == "workshop":
         rect = pygame.Rect(int(x - WORKSHOP_W / 2), int(y - WORKSHOP_H / 2),

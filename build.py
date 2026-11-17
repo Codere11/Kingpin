@@ -17,8 +17,6 @@ BUILDINGS = [
     # are things a man puts on his own ground -- not only inside a house.
     # Only legal in the wilderness or in the player's own hub (see
     # hubs.land_ok), and in the wild the ground becomes his.
-    # A PLOT IS MARKED, NOT BUILT: no wood, and it is a rectangle he draws.
-    {"id": "plot", "name": "Plot", "wood": 0, "where": "outside"},
     # ...and the opposite: take something of his down with one click.
     {"id": "demolish", "name": "Demolish", "wood": 0, "where": "outside"},
     {"id": "lab", "name": "Artisan's bench", "wood": 150, "where": "outside"},
