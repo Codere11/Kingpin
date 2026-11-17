@@ -773,11 +773,8 @@ def draw_placing(g):
         # nothing to preview: the square is just a cursor
         pygame.draw.rect(g.screen, (255, 255, 255), rr, 2)
     else:
-        # THE MESH ONLY: every building shows a white outline over the squares
-        # it takes. No green/red fit tint -- fields and orchards keep their own
-        # drag rectangles, drawn elsewhere, and are not touched here.
+        # THE MESH ONLY: a plain white outline of the squares it takes.
         pygame.draw.rect(g.screen, (255, 255, 255), rr, 2)
-        pygame.draw.rect(g.screen, (0, 0, 0), rr.inflate(2, 2), 1)
     hint_text = "Click to place   ·   right-click to cancel"
     if g.placing in ("fence", "gate"):
         hint_text = "Click to place   ·   R to rotate   ·   right-click to cancel"

@@ -129,7 +129,6 @@ def draw_grid(screen, cam_x, cam_y, vw, vh, wmouse_x, wmouse_y):
     x = int(tx * TILE - cam_x)
     y = int(ty * TILE - cam_y)
     pygame.draw.rect(overlay, (255, 255, 255, 255), (x, y, TILE, TILE), 2)
-    pygame.draw.rect(overlay, (0, 0, 0, 160), (x - 1, y - 1, TILE + 2, TILE + 2), 1)
     screen.blit(overlay, (0, 0))
 
 
