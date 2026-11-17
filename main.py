@@ -571,8 +571,7 @@ def main() -> None:
     # it; the letter is the only thing in the game that will ever explain
     # anything, and it says who he is, what he owes, and how his trade pays.
     g._rng = random.Random((int(g._save.get("seed", 20240501)) ^ 0x5EED) & 0xFFFFFFFF)
-    g.player.name = "%s %s" % (g._rng.choice(village_mod.FIRST_NAMES),
-                             g._rng.choice(village_mod.LAST_NAMES))
+    g.player.name = "James"
     # HE IS ALREADY IN THE BOOK, AND ALREADY IN WORK. The letter says he has
     # just started as a smith; the board has to agree with the letter, so the
     # trade is his from the first frame and the debt is what the letter is
