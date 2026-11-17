@@ -2090,23 +2090,13 @@ class PersonaCard:
         board.blit(ot, ((w - ot.get_width()) // 2, yy))
         yy += 28
         if skills is not None:
-            label_w = 88
-            bar_x = pad + label_w
-            lv_w = 44
-            bar_w = w - 2 * pad - label_w - lv_w
             for label, attr, lo, hi, bands in self._SKILLS:
                 val = float(getattr(skills, attr, 0.0) or 0.0)
                 lvl = self._level(val, lo, hi, bands)
                 lab = self.font_skill.render(label, True, (216, 210, 196))
                 board.blit(lab, (pad, yy + 1))
-                seg_w = max(4, (bar_w - (bands - 1) * 2) // bands)
-                for k in range(bands):
-                    sx = bar_x + k * (seg_w + 2)
-                    col = (226, 176, 90) if k < lvl else (240, 240, 244)
-                    pygame.draw.rect(board, col, (sx, yy + 4, seg_w, 9),
-                                     border_radius=2)
-                lv = self.font_skill.render("Lv %d/%d" % (lvl, bands), True, (240, 240, 244))
-                board.blit(lv, (bar_x + bar_w + 6, yy + 1))
+                lv = self.font_skill.render("Lvl %d" % lvl, True, (240, 240, 244))
+                board.blit(lv, (w - pad - lv.get_width(), yy + 1))
                 yy += row_h
         screen.blit(board, (x, y))
 
