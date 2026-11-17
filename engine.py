@@ -3374,6 +3374,7 @@ def run(g):
                     g.trade_menu.draw(g.screen)
                 if g.pause_open:
                     g.pause_menu.draw(g.screen)
+                g.draw_persona_card()
             except Exception as _pe2:
                 plog.log("ROOM-PANEL-ERR", repr(_pe2)[:120])
             g.hotbar.draw(g.screen)
@@ -3608,6 +3609,7 @@ def run(g):
                 g.screen.blit(g.hint, (g.vw // 2 - g.hint.get_width() // 2, int(g.vh * 0.80)))
             if g.pause_open:
                 g.pause_menu.draw(g.screen)
+            g.draw_persona_card()
             if g.map_open:
                 try:
                     g._wh = 0
@@ -4154,6 +4156,7 @@ def run(g):
             g.compass_menu.draw(g.screen)
         if g.pause_open:
             g.pause_menu.draw(g.screen)
+        g.draw_persona_card()
         if g.map_open:
             try:
                 g._wh2 = 0

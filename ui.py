@@ -2037,7 +2037,8 @@ class PersonaCard:
         self.portrait_size = 84
 
     def _occupation(self, subject) -> str:
-        if getattr(subject, "is_player", False):
+        if (getattr(subject, "is_player", False)
+                or getattr(getattr(subject, "skills", None), "is_player", False)):
             return "Settler"
         nr = getattr(subject, "native_role", None)
         if nr:

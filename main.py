@@ -794,9 +794,13 @@ def main() -> None:
     g.persona_card = PersonaCard()
 
     def draw_persona() -> None:
-        """Shift the side panels right and draw the persona card when someone
-        is open; when nobody is open, reset the panels to centre."""
-        if g.persona is None:
+        """Shift the side panels right for the persona card; remember the
+        subject so the card itself can be drawn ON TOP of the panels' shades."""
+        subject = g.persona
+        if subject is None and g.inventory_open:
+            subject = g.player
+        g._persona_subject = subject
+        if subject is None:
             for _p in (g.panel, g.worker_panel, g.body_panel):
                 if _p is not None:
                     _p.left_margin = 0
@@ -804,10 +808,15 @@ def main() -> None:
         for _p in (g.panel, g.worker_panel, g.body_panel):
             if _p is not None:
                 _p.left_margin = 170
-        try:
-            g.persona_card.draw(g.screen, g.persona)
-        except Exception:
-            pass
+
+    def draw_persona_card() -> None:
+        """The card itself, drawn last so the inventory/chest shade never covers it."""
+        _s = getattr(g, "_persona_subject", None)
+        if _s is not None:
+            try:
+                g.persona_card.draw(g.screen, _s)
+            except Exception:
+                pass
     # THE MARKET STALL: the player's counter, its prices, and its purse.
     g.stall_open = False
     g.stall_panel = None
@@ -1993,6 +2002,7 @@ def main() -> None:
     g.ship_pos = ship_pos
     g.toggle_fullscreen = toggle_fullscreen
     g.draw_persona = draw_persona
+    g.draw_persona_card = draw_persona_card
     g.open_horse = open_horse
     g.toggle_horse_escort = toggle_horse_escort
     g.open_gunsmith = open_gunsmith
