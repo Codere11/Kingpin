@@ -670,6 +670,7 @@ class NPC:
         self.shoot_skill = self.rng.uniform(0.1, 0.8)
         self.farm_plot = None        # fixed plot this villager tends
         self.orchard_plot = None     # fixed orchard the logger works
+        self._field_task = None      # cached field task, so the scan runs once per action
         self.carry = {}              # surplus he is walking to the chest
         self.carry_grade = {}        # the grade of each carried item
         self.job = None              # "miner" / "smith" / "gunsmith" / "logger"
@@ -2922,17 +2923,11 @@ class NPC:
         self._did_work()
         return True
 
-    def _work_field(self, dt: float, world, now: float) -> bool:
-        """Tend the assigned field one action at a time: harvest a ripe crop,
-        plant fertile soil, water dug soil, or break fresh ground with a
-        shovel. Returns True while it is busy with the field."""
-        job: Any = self.farm_plot
-        village = self.village if self.village is not None else getattr(self, "native_camp", None)
-        if job is None or village is None or job >= len(village.farm_plots):
-            return False
-        ctx, cty, kind = village.farm_plots[job]
+    def _field_pick_task(self, village, ctx, cty, world, now):
+        """Scan the field ONCE and pick the next task (clear/harvest/plant/
+        water/till). Returns (ttx, tty, action, tkind) or None."""
         g = getattr(village, "g", None)
-        todo: dict = {}
+        todo = {}
         for ttx, tty, tkind in village.farm_tiles[(ctx, cty)]:
             # CLEAR THE GROUND FIRST: a tree, a wild plant, a placed block, or
             # a workbench in the way is removed before the tile can be farmed.
@@ -2942,57 +2937,53 @@ class NPC:
             plot = world.plot_at(ttx, tty)
             state = plot.kind if plot is not None else None
             if state in crop.FOOD_KINDS or state in crop.LEAF_KINDS or state in crop.FIBRE_KINDS:
-                # THE PLANTER'S HAND SETS THE TIME. A master brings a crop in
-                # in a minute; a green man takes three.
                 _grow = getattr(plot, "grow", None) or crop.GROW_SECONDS
                 if (plot.planted_at is not None
                         and now - plot.planted_at >= _grow):
                     todo.setdefault("harvest", (ttx, tty, tkind))
             elif state == "fertile":
-                # A CONQUERED FARMER NEEDS THE SEED IN HIS POCKETS to sow; a
-                # native farmer sows what the camp's own fields already carry.
                 if getattr(self, "conquered", False):
                     _seed = crop.CROP_SEED.get(tkind)
                     if _seed is not None and self._count_item(_seed) <= 0:
                         continue
-                todo.setdefault("plant", (ttx, tty, tkind))   # ready for the seed
+                todo.setdefault("plant", (ttx, tty, tkind))
             elif state == "dirt":
-                todo.setdefault("water", (ttx, tty, tkind))   # dug but dry
+                todo.setdefault("water", (ttx, tty, tkind))
             else:
-                todo.setdefault("till", (ttx, tty, tkind))    # grass: break it open
-        can_till = self.tool_uses > 0 or self.stock.get("shovel", 0) > 0
-        # ONE ACTION A TICK, AND EVERY PART OF THE FIELD GETS ITS TURN.
-        #
-        # This always tried harvest first, then plant, water, till -- and
-        # `todo` holds one tile per action. Five wheat tiles come ripe in a
-        # cycle, so there was nearly always a harvest to take, and the twenty
-        # GRASS tiles of the same field were never broken open at all: a farmer
-        # worked five tiles out of twenty-five for ever, grew no leaf, and the
-        # artisan upstream of him starved for stock. The order now rotates by
-        # one each action, so a ripe harvest cannot starve the tilling.
-        # HARVEST FIRST, so a ripe field is reaped tile after tile -- about one
-        # a second -- and tilling/planting only happens once nothing is ripe.
+                todo.setdefault("till", (ttx, tty, tkind))
         _order = ["clear", "harvest", "plant", "water", "till"]
-        task = None
         for action in _order:
             if action in todo:
-                ttx, tty, tkind = todo[action]   # the KIND travels with the task
-                task = (ttx, tty, action)
-                break
-        if task is not None and task[2] == "till" and not can_till:
-            # The ground is dead and we have nothing to break it with. Standing
-            # in a field we cannot work is not farming: go and buy a shovel.
-            # (Before this, a farmer with a grass field and no shovel idled by
-            # it forever -- his field died, he never learnt, and the plateau
-            # that froze the whole village at 205 harvests was this one line.)
-            self._go_to_market(dt)
-            return True
-        if task is None:                        # nothing to do: wait by the field
-            tx, ty = ctx * TILE + TILE / 2.0, cty * TILE + TILE / 2.0
-            if math.hypot(tx - self.x, ty - self.y) > 40.0:
-                self._step_toward(tx, ty, dt, 0.7)
-            return True
-        ttx, tty, action = task
+                ttx, tty, tkind = todo[action]
+                return (ttx, tty, action, tkind)
+        return None
+
+    def _work_field(self, dt: float, world, now: float) -> bool:
+        """Tend the assigned field one action at a time. The task is CACHED:
+        the field is scanned once per action, never once a frame."""
+        job: Any = self.farm_plot
+        village = self.village if self.village is not None else getattr(self, "native_camp", None)
+        if job is None or village is None or job >= len(village.farm_plots):
+            return False
+        ctx, cty, kind = village.farm_plots[job]
+        g = getattr(village, "g", None)
+
+        task = getattr(self, "_field_task", None)
+        if task is None:
+            task = self._field_pick_task(village, ctx, cty, world, now)
+            if task is None:                # nothing to do: wait by the field
+                tx, ty = ctx * TILE + TILE / 2.0, cty * TILE + TILE / 2.0
+                if math.hypot(tx - self.x, ty - self.y) > 40.0:
+                    self._step_toward(tx, ty, dt, 0.7)
+                return True
+            if task[2] == "till":
+                can_till = self.tool_uses > 0 or self.stock.get("shovel", 0) > 0
+                if not can_till:
+                    self._go_to_market(dt)
+                    return True
+            self._field_task = task
+
+        ttx, tty, action, tkind = task
         tx = ttx * TILE + TILE / 2.0
         ty = tty * TILE + TILE / 2.0
         if math.hypot(tx - self.x, ty - self.y) > 12.0:
@@ -3009,7 +3000,6 @@ class NPC:
                 economy.harvest(village, self, plot.kind, self.rng)
                 self._snd("harvest", min_gap=0.3)
                 self.skills.gain_farming(0.02)  # reaping hones the hand, slowly
-                # the conquered farmer keeps a seed or two for the next sowing
                 if getattr(self, "conquered", False):
                     _seed = crop.CROP_SEED.get(plot.kind)
                     if _seed is not None:
@@ -3032,9 +3022,6 @@ class NPC:
             self._snd("plant", min_gap=0.3)
         ground = getattr(world, "ground", None)
         if ground is not None:
-            # FIRST PRIORITY WHEN WATCHED: a tile that changed ON SCREEN is
-            # rebuilt right now, in this frame; a farmer's far-off field is
-            # queued to the worker thread as before.
             _immediate = False
             if g is not None:
                 _wx = ttx * TILE + TILE / 2.0
@@ -3043,6 +3030,7 @@ class NPC:
                         and g.cam_y - TILE <= _wy <= g.cam_y + g.vh + TILE):
                     _immediate = True
             ground.invalidate_tile(ttx, tty, immediate=_immediate)
+        self._field_task = None      # done: re-scan next tick
         self._did_work()           # planted, watered, reaped or broke ground
         return True
     def _did_work(self) -> None:
