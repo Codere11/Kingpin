@@ -643,6 +643,7 @@ def main() -> None:
     g.workshop_menu.free = g.test_mode
     g.pause_menu = PauseMenu()
     g.skills = Skills(is_player=True)   # the player's own road, see skills.py
+    g.player.skills = g.skills          # so the persona card reads his skills too
 
     g.enemies: list[Enemy] = []          # nation soldiers and wolves
 
