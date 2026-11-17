@@ -2698,11 +2698,22 @@ class NPC:
             if trees is not None:
                 _orch = getattr(getattr(self, "native_camp", None),
                                 "orchard_state", None)
-                for tree in trees.near(wx, wy, TILE * 0.7):
-                    if not getattr(tree, "felled", False):
-                        if _orch and (ttx, tty) in _orch:
-                            continue   # the logger's orchard tree, not the farmer's
-                        return "tree"
+                # An orchard tree on this tile is the logger's, not an
+                # obstruction. Anything else is a wild tree, found by a few
+                # cell lookups -- never trees.near(), which walked the whole
+                # planted list for every tile of a big field every tick.
+                if not (_orch and (ttx, tty) in _orch):
+                    _cell = getattr(trees, "CELL", 180)
+                    _cx = int(math.floor(wx / _cell))
+                    _cy = int(math.floor(wy / _cell))
+                    for _dx in (-1, 0, 1):
+                        for _dy in (-1, 0, 1):
+                            _tree = trees.tree(_cx + _dx, _cy + _dy)
+                            if _tree is None or getattr(_tree, "felled", False):
+                                continue
+                            if (math.hypot(_tree.x - wx, _tree.y - wy)
+                                    <= TILE * 0.7 + _tree.canopy_r):
+                                return "tree"
         try:
             import wildcrop as _wc
             if _wc.at(world, ttx, tty) is not None:
