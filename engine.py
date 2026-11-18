@@ -1041,18 +1041,10 @@ def run(g):
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     g._held = g.inventory.selected_stack()
                     g._held_id = g._held.defn.id if g._held else None
-                    # THE SHIP: click it and the market opens.
-                    try:
-                        import world as _world
-                        _shx, _shy = g.ship_pos()
-                        _wx = g.cam_x + event.pos[0] / g.zoom
-                        _wy = g.cam_y + event.pos[1] / g.zoom
-                        if math.hypot(_wx - _shx, _wy - _shy) < 120.0:
-                            g.open_market()
-                            g.consumed = True
-                            break
-                    except Exception:
-                        pass
+                    # THE SHIP IS CLICKED THROUGH click_a_man NOW (see
+                    # combat_actions.click_a_man): it is a fixed invincible
+                    # NPC in the same list as every other man, so the click
+                    # can never drift out of step with the camera.
                     # A CONQUERED HORSE: click opens its saddle bags.
                     try:
                         _wx = g.cam_x + event.pos[0] / g.zoom

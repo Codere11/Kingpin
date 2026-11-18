@@ -446,6 +446,17 @@ def click_a_man(g, at=None):
     # exactly one truth-teller in the world; if you are standing beside him
     # and you click, that click is for him -- no distance arithmetic, no
     # camera/zoom to get wrong, nothing left to fail.
+    # THE SHIP IS A LANDMARK, NOT A MAN: a wider click box, and it opens
+    # the market (open_ship) -- the SAME click that opens a person opens it.
+    _ship = getattr(g, "ship", None)
+    if _ship is not None and getattr(_ship, "alive", True):
+        _sd = math.hypot(_ship.x - wx, _ship.y - wy)
+        if _sd < 64.0 and (best is None or _sd <= bd):
+            if hasattr(g, "open_ship"):
+                g.open_ship()
+            pygame.mouse.set_visible(True)
+            plog.log("PICK", "ship", "at", int(_sd))
+            return (True, bopen, bpanel)
     if best is None or bd > 48.0:
         # NOTHING WAS CLICKED. This used to open the truth-teller whenever
         # he happened to be within 140 px OF THE PLAYER -- a third of the

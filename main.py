@@ -474,6 +474,14 @@ def main() -> None:
         if _found:
             break
     g._spawn = (_sx, _sy)
+    # THE SHIP IS A FIXED, INVINCIBLE MAN: it lives in the click-a-man list
+    # like any NPC, so clicking it works through the SAME path that opens
+    # every other person -- no separate ship-click coordinate math that can
+    # drift out of step with the camera.
+    g.ship_npc = SimpleNamespace(
+        x=float(_world.coast_x(_sy, g.world.seed) + 56.0),
+        y=float(_sy), alive=True, name="Ship",
+        is_ship=True, conquered=False, is_truth_teller=False)
     g._hx, g._hy = _sx, _sy
     g._home = None
     g._start = None
@@ -1037,6 +1045,7 @@ def main() -> None:
             zoom=ZOOM, truth=g._TRUTH, villages=g.villages,
             dialogue_panel=g.dialogue_panel, main_capital=_main_capital,
             toast=toast, open_trade=open_trade,
+            ship=getattr(g, "ship_npc", None), open_ship=open_market,
             body_open=g.body_open, body_panel=g.body_panel)
         _ok, g.body_open, g.body_panel = combat_actions.click_a_man(_g, at)
         return _ok
