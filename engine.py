@@ -255,22 +255,35 @@ def run(g):
                 g.toast("LEVEL UP    " + "   ".join(g._done))
             elif (g.test_mode and event.type == pygame.KEYDOWN
                   and event.key == pygame.K_k):
-                # TEST MODE ONLY. K spawns a MASTER melee fighter beside the
-                # player, so the dodge-and-counter can be looked at directly.
-                import creatures as _cr
-                _e = _cr.Soldier(g.player.x + 70.0, g.player.y + 40.0,
-                                 getattr(g.player, "nation", None) or 1,
-                                 melee=True, seed=random.randint(0, 2 ** 31),
-                                 color=(200, 70, 60))
-                _e.skills.axe = 1.0          # MAX melee: he outclasses you
-                _e.skills.shooting = 1.0
-                _e.skills.movement = 1.0
-                _e.manhunt = True            # hunt the player on sight
-                _e.hostile = True
-                _e._target = g.player
-                _e._retarget = 999.0
-                g.enemies.append(_e)
-                g.toast("Spawned a master axeman")
+                # TEST MODE ONLY. K spawns a MASTER NATIVE WARRIOR beside the
+                # player -- the proper native fighter, not the old soldier.
+                import village as _v
+                import types as _types
+                _w = _v.NPC(g.player.x + 70.0, g.player.y + 40.0,
+                            random.randint(0, 2 ** 31),
+                            name="Master Axeman", npc_id="test_master",
+                            role="Warrior")
+                _w.native = True
+                _w.native_role = "warrior"
+                _w.weapon = "axe"
+                _w.defender = True
+                _w.skills.axe = 1.0          # MAX melee: he outclasses you
+                _w.skills.shooting = 1.0
+                _w.stamina = getattr(_w, "max_stamina", 30.0)
+                _w.hide_armor = True
+                _w.max_health = 200
+                _w.health = 200
+                _camp = _types.SimpleNamespace(
+                    conquered=False, g=g, fireplace=None, conflict=False,
+                    warriors=[_w], ledger_goods=None, people=None)
+                _w.native_camp = _camp
+                if getattr(g, "_native_people", None) is None:
+                    g._native_people = []
+                g._native_people.append(_w)
+                if getattr(g, "_observe_npcs", None) is None:
+                    g._observe_npcs = []
+                g._observe_npcs.append(_w)
+                g.toast("Spawned a master native axeman")
             elif (g.test_mode and event.type == pygame.MOUSEBUTTONDOWN
                   and event.button == 1 and g.speed_button().collidepoint(event.pos)):
                 g.speed_i = (g.speed_i + 1) % len(g.SPEEDS)

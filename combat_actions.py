@@ -138,10 +138,12 @@ def use_pickaxe(player, combat, ore_field, inventory, pay_share, mark_dirty,
 
 
 def _melee_dodge_counter(g, enemy, angle) -> bool:
-    """A melee fighter whose axe skill beats the player's dodges the swing at
-    45 degrees to one side and answers with a lunge. Returns True when the
-    swing missed (the enemy dodged and counterattacked)."""
+    """A melee fighter whose axe skill beats the player's sidesteps the swing
+    at 45 degrees and answers with a lunge. The dodge is instant and bigger
+    than a step, with a visible dash trail. Returns True when the swing
+    missed (the enemy dodged and counterattacked)."""
     import face as _face
+    import skills as _skills
     _axe = getattr(getattr(enemy, "skills", None), "axe", 0.0)
     _diff = _axe - g.skills.axe
     if _diff <= 0.0:
@@ -152,15 +154,22 @@ def _melee_dodge_counter(g, enemy, angle) -> bool:
         return False
     _side = random.choice((-1.0, 1.0))
     _dodge = angle + _side * math.radians(45.0)
-    enemy.x += math.cos(_dodge) * 30.0
-    enemy.y += math.sin(_dodge) * 30.0
+    _ox, _oy = enemy.x, enemy.y
+    enemy.x += math.cos(_dodge) * 48.0
+    enemy.y += math.sin(_dodge) * 48.0
     enemy.facing = (math.cos(_dodge), math.sin(_dodge))
-    # A scuff of dust where he was -- the swing bit the air.
+    # VISIBLE AND QUICK: dust where he stood, dust where he lands, and a short
+    # dash trail between -- the eye reads the sidestep in one frame.
     try:
-        g.combat.spawn_impact(enemy.x, enemy.y, (150, 150, 150))
+        g.combat.spawn_impact(_ox, _oy, (210, 190, 140))
+        g.combat.spawn_impact(enemy.x, enemy.y, (210, 190, 140))
+        for _i in (1, 2, 3):
+            _fx = _ox + (enemy.x - _ox) * _i / 4.0
+            _fy = _oy + (enemy.y - _oy) * _i / 4.0
+            g.combat.spawn_impact(_fx, _fy, (240, 220, 170))
     except Exception:
         pass
-    # COUNTERATTACK: he is already inside, so the answer lands from the dodge.
+    # COUNTERATTACK: the answer lands from the sidestep, not from the old spot.
     _dx = g.player.x - enemy.x
     _dy = g.player.y - enemy.y
     _d = math.hypot(_dx, _dy) or 1.0
@@ -168,11 +177,18 @@ def _melee_dodge_counter(g, enemy, angle) -> bool:
     enemy.y += _dy / _d * 22.0
     enemy.facing = (_dx / _d, _dy / _d)
     enemy.attack_flash = _face.WAR_SECONDS
+    # A soldier carries his own damage; a native axeman swings 10 base (fists
+    # are a third -- see skills.UNARMED_WEAKNESS).
+    _base = getattr(enemy, "melee_damage", None)
+    if _base is None:
+        _armed = (getattr(enemy, "weapon", "") == "axe"
+                  or getattr(enemy, "stock", {}).get("axe", 0) > 0
+                  or getattr(enemy, "job", "") == "logger")
+        _base = 10.0 if _armed else 10.0 / _skills.UNARMED_WEAKNESS
     try:
-        _dmg = max(1, round(getattr(enemy, "melee_damage", 16)
-                            * enemy.skills.axe_damage_scale()))
+        _dmg = max(1, round(_base * enemy.skills.axe_damage_scale()))
     except Exception:
-        _dmg = 16
+        _dmg = max(1, round(_base))
     if hasattr(g.player, "take_damage"):
         g.player.take_damage(_dmg)
     try:
@@ -293,6 +309,12 @@ def use_axe(g, kills) -> int:
     _add_man(g.truth[0])
     for npc in _folk:
         if npc.alive and in_arc(npc.x, npc.y, npc.radius):
+                # A NATIVE AXE WARRIOR WHO OUTCLASSES THE PLAYER DODGES AND
+                # ANSWERS -- the same sidestep a master soldier has.
+                if (getattr(npc, "native_role", "") == "warrior"
+                        and getattr(npc, "weapon", "") == "axe"
+                        and _melee_dodge_counter(g, npc, angle)):
+                    continue
                 died = npc.take_damage(melee, record=False)
                 _flesh = True
                 g.work_lanes.damage(npc, melee)
