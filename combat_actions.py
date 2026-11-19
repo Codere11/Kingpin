@@ -257,12 +257,6 @@ def resolve_swing(g, kills) -> int:
         delta = abs(((math.atan2(dy, dx) - angle + math.pi) % (2.0 * math.pi)) - math.pi)
         return delta <= _m.AXE_ARC
 
-    def _blocked(enemy) -> bool:
-        """A fighter FACING the player meets the blow with his own weapon: he
-        soaks half the damage. Hit his side or back for the full cut."""
-        _fx, _fy = getattr(enemy, "facing", (0.0, 1.0))
-        return _fx * (g.player.x - enemy.x) + _fy * (g.player.y - enemy.y) > 0.0
-
     for enemy in g.enemies:
         if enemy.alive and in_arc(enemy.x, enemy.y, enemy.radius):
             # A MELEE FIGHTER WHO OUTCLASSES THE PLAYER DODGES AND ANSWERS:
@@ -280,10 +274,7 @@ def resolve_swing(g, kills) -> int:
                                          list(village_mod.PEOPLE))
                 except Exception:
                     pass
-            # A WARRIOR FACING YOU SOAKS HALF THE BLOW -- flank him.
-            _dmg = melee * 0.5 if (getattr(enemy, "melee", False)
-                                   and _blocked(enemy)) else melee
-            enemy.take_damage(_dmg)
+            enemy.take_damage(melee)
             _flesh = True
             if _was_alive and not getattr(enemy, "alive", True):
                 if getattr(enemy, "kind", "") == "bison":
@@ -346,11 +337,7 @@ def resolve_swing(g, kills) -> int:
                         and getattr(npc, "weapon", "") == "axe"
                         and _melee_dodge_counter(g, npc, angle)):
                     continue
-                # A WARRIOR FACING YOU SOAKS HALF THE BLOW -- flank him.
-                _dmg = melee * 0.5 if (getattr(npc, "native_role", "") == "warrior"
-                                       and getattr(npc, "weapon", "") == "axe"
-                                       and _blocked(npc)) else melee
-                died = npc.take_damage(_dmg, record=False)
+                died = npc.take_damage(melee, record=False)
                 _flesh = True
                 g.work_lanes.damage(npc, melee)
                 # HE KNOWS THE MAN WHO HIT HIM -- and likes him twenty less.

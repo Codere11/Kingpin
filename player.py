@@ -115,7 +115,7 @@ class Player:
         # the player had 100, so he was both the strongest blow in the world
         # and the frailest body that threw one. One standard, applied.
         self.max_health = stats.PLAYER_MAX_HEALTH
-        self.health = 100
+        self.health = self.max_health
         self.armor = None             # equipped armor item id, or None
         self.heal_rate = 1.5           # hp/s while well fed (hunger = satiety)
         self.radius = 12
