@@ -4074,20 +4074,24 @@ class NPC:
                         self._snd("npc_attack", min_gap=1.5)
                         self._shoot(combat, mx, my, angle, distance + 120.0, 80, 80)
         else:
-            # Axe work. THE SAME REACH AS THE PLAYER: a native warrior's axe
-            # reaches 64 px, exactly the player's -- whoever is in range hits.
+            # Axe work. THE SAME REACH AS THE PLAYER: the player's axe reaches
+            # 64 px PLUS the target's body, and so does the warrior's -- the
+            # player was able to stand just inside his own longer reach and
+            # hit the warrior while the warrior's plain 64 px could not reach
+            # back. Now whoever is in range hits.
+            _reach = 64.0 + getattr(target, "radius", 12.0)
             lunged = getattr(target, "lunging", 0.0) > 0.0
             sprint = self.stamina > 0.0
             step = self.combat_speed * ((1.9 if lunged else 1.6)
                                         if sprint else 1.0) * dt
             burn = 2.0 if lunged else 1.0
-            if distance > 64.0:                     # too far: close him down
+            if distance > _reach:                   # too far: close him down
                 self.x += ux * step
                 self.y += uy * step
                 self._wind(False, dt)
-            elif distance < 50.0:
+            elif distance < _reach - 14.0:
                 # He is getting inside the swing. Give a little ground, but
-                # keep the 64 px reach so the axe still lands.
+                # keep within reach so the axe still lands.
                 self.x -= ux * step
                 self.y -= uy * step
                 self._wind(sprint, dt, burn)
@@ -4097,7 +4101,7 @@ class NPC:
                 # what turns the duel into a race against your own wind.
                 self.stamina = max(0.0, self.stamina - 10.0 * dt)
             self.attack_cd -= dt
-            if distance <= 64.0 and self.attack_cd <= 0.0:
+            if distance <= _reach and self.attack_cd <= 0.0:
                 # THE SWING COMES AS FAST AS HIS SKILL: a master swings a
                 # fraction of a second, a green man once a second and a half.
                 self.attack_cd = max(0.35, self.skills.axe_cooldown())
