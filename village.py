@@ -185,6 +185,7 @@ WEAVER_BATCH_SECONDS = 10.0   # five cotton into one bolt of cloth at the loom
 SPICEMAN_SECONDS = 60.0      # five chilis into one bottle of sauce at the stall
 BIRTH_BOND = 18.0                    # seconds of evening friendship before a child
 PEACE_DELAY = 30.0                   # no children until this long after a death
+NPC_SWING_SECONDS = 0.30            # a native warrior's swing, drawn as an arc
 
 # THE PEOPLE OF THE REPUBLIC.
 #
@@ -623,6 +624,7 @@ class NPC:
         self.hit_flash = 0.0
         self.work_flash = 0.0
         self.attack_flash = 0.0
+        self.swing_anim = 0.0           # a visible weapon sweep (native warriors)
         self.hurt_flash = 0.0
         self.level_flash = 0.0         # the same shine as the player's level-up
         self.sly_flash = 0.0
@@ -887,6 +889,10 @@ class NPC:
             self.attack_flash -= dt
             if self.attack_flash < 0.0:
                 self.attack_flash = 0.0
+        if self.swing_anim > 0.0:
+            self.swing_anim -= dt
+            if self.swing_anim < 0.0:
+                self.swing_anim = 0.0
         if self.hurt_flash > 0.0:
             self.hurt_flash -= dt
             if self.hurt_flash < 0.0:
@@ -3096,6 +3102,24 @@ class NPC:
         self.attack_flash = face.WAR_SECONDS
         self.attacked_flash = 0.30
 
+    def _melee_swing(self, combat, angle: float) -> None:
+        """Animate a melee swing: a short weapon sweep. Only when the warrior
+        is actually on the player's screen -- off-screen fights don't spend a
+        frame animating something nobody can see."""
+        g = getattr(getattr(self, "native_camp", None), "g", None)
+        if g is not None:
+            vw = getattr(g, "vw", 0) or 0
+            vh = getattr(g, "vh", 0) or 0
+            if not (g.cam_x - 80.0 < self.x < g.cam_x + vw + 80.0
+                    and g.cam_y - 80.0 < self.y < g.cam_y + vh + 80.0):
+                return
+        self.swing_anim = NPC_SWING_SECONDS
+        if combat is not None:
+            try:
+                combat.spawn_swing(self.x, self.y, angle, width=0.7)
+            except Exception:
+                pass
+
     def _swing_tool(self, item: str = "shovel") -> bool:
         """Wear the tool in hand, taking a spare from the crate when it breaks.
         A finer tool lasts longer -- but never long enough to pay for itself,
@@ -4010,6 +4034,7 @@ class NPC:
                 if distance <= 34.0 and self.attack_cd <= 0.0:
                     self.attack_cd = max(0.5, self.skills.axe_cooldown())
                     self._did_attack()
+                    self._melee_swing(combat, math.atan2(dy, dx))
                     self._snd("npc_attack", min_gap=1.5)
                     self.skills.gain_axe()
                     if hasattr(target, "take_damage"):
@@ -4074,6 +4099,7 @@ class NPC:
             if distance <= 46.0 and self.attack_cd <= 0.0:
                 self.attack_cd = 1.0
                 self._did_attack()
+                self._melee_swing(combat, math.atan2(dy, dx))
                 self._snd("npc_attack", min_gap=1.5)
                 if hasattr(target, "take_damage"):
                     self.skills.gain_axe()
@@ -4149,6 +4175,21 @@ class NPC:
                 body = (74, 78, 76) if not flash else (242, 232, 232)
             pygame.draw.circle(screen, body, (int(sx), int(sy)), 10)
             pygame.draw.circle(screen, (44, 40, 36), (int(sx), int(sy)), 10, 2)
+        # A MELEE SWING: the axe sweeps through the facing angle while the
+        # swing timer runs. Only on-screen warriors reach this draw, and
+        # _melee_swing only starts the timer for on-screen fighters.
+        if self.swing_anim > 0.0:
+            _sw = 1.0 - self.swing_anim / NPC_SWING_SECONDS
+            _ang = math.atan2(fy, fx) - 1.15 + 2.3 * _sw
+            _hx2 = sx + fx * 6.0
+            _hy2 = sy + fy * 6.0
+            _ex = _hx2 + math.cos(_ang) * 20.0
+            _ey = _hy2 + math.sin(_ang) * 20.0
+            pygame.draw.line(screen, (116, 82, 46), (_hx2, _hy2), (_ex, _ey), 3)
+            _px, _py = -math.sin(_ang), math.cos(_ang)
+            pygame.draw.line(screen, (208, 208, 214),
+                             (_ex - _px * 6, _ey - _py * 6),
+                             (_ex + _px * 6, _ey + _py * 6), 3)
         head_r = 8
         face.hair(screen, hx, hy, head_r)          # long hair behind the head
         pygame.draw.circle(screen, (216, 172, 132), (int(hx), int(hy)), 8)
