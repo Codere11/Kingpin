@@ -4008,7 +4008,12 @@ class NPC:
             self.y -= uy * self.combat_speed * self.LUNGE_MULT * dt
             return
         self.lunge_cd = max(0.0, self.lunge_cd - dt)
-        if self.lunge_cd <= 0.0 and self._wants_lunge_away(target, distance):
+        # A NATIVE WARRIOR DOES NOT RUN BACKWARD. He stands his ground and
+        # answers with the 45-degree sidestep (combat_actions). The backward
+        # lunge stays for villagers fighting beasts.
+        if (getattr(self, "native_role", "") != "warrior"
+                and self.lunge_cd <= 0.0
+                and self._wants_lunge_away(target, distance)):
             self.lunging = self.LUNGE_SECONDS
             self.lunge_cd = self.LUNGE_CD
             self.stamina = max(0.0, self.stamina
@@ -4069,24 +4074,20 @@ class NPC:
                         self._snd("npc_attack", min_gap=1.5)
                         self._shoot(combat, mx, my, angle, distance + 120.0, 80, 80)
         else:
-            # Axe work. Hold the range where the axe reaches and the teeth do
-            # not: a wolf bites at 30, so dance at 33 to 40 and let him wear
-            # himself out. Use the legs -- and the wind -- to keep that gap.
-            # A lunge is the moment of truth: dig in and get out of the way,
-            # and it costs a man his wind to do it. No wind, and he is bitten.
+            # Axe work. THE SAME REACH AS THE PLAYER: a native warrior's axe
+            # reaches 64 px, exactly the player's -- whoever is in range hits.
             lunged = getattr(target, "lunging", 0.0) > 0.0
             sprint = self.stamina > 0.0
             step = self.combat_speed * ((1.9 if lunged else 1.6)
                                         if sprint else 1.0) * dt
             burn = 2.0 if lunged else 1.0
-            if distance > 46.0:                     # too far: close him down
+            if distance > 64.0:                     # too far: close him down
                 self.x += ux * step
                 self.y += uy * step
                 self._wind(False, dt)
-            elif distance < 38.0:
-                # He is getting inside the swing. Give ground -- a man who
-                # retreats faster than the wolf charges never gets bitten,
-                # because the wolf reaches 30 and the axe reaches 46.
+            elif distance < 50.0:
+                # He is getting inside the swing. Give a little ground, but
+                # keep the 64 px reach so the axe still lands.
                 self.x -= ux * step
                 self.y -= uy * step
                 self._wind(sprint, dt, burn)
@@ -4096,7 +4097,7 @@ class NPC:
                 # what turns the duel into a race against your own wind.
                 self.stamina = max(0.0, self.stamina - 10.0 * dt)
             self.attack_cd -= dt
-            if distance <= 46.0 and self.attack_cd <= 0.0:
+            if distance <= 64.0 and self.attack_cd <= 0.0:
                 # THE SWING COMES AS FAST AS HIS SKILL: a master swings a
                 # fraction of a second, a green man once a second and a half.
                 self.attack_cd = max(0.35, self.skills.axe_cooldown())
