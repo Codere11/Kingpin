@@ -394,8 +394,12 @@ class GroundRenderer:
         # everything in the sea and nothing on the land.
         _ox = np.arange(CHUNK, dtype=np.float32) + cx * CHUNK
         _oy = np.arange(CHUNK, dtype=np.float32) + cy * CHUNK
-        _Xf, _Yf = np.meshgrid(_ox, _oy)
-        _sea = _Xf > coast_x(_Yf, seed)
+        # THE COAST DEPENDS ONLY ON Y. Computing it per pixel was 256x256 fBm
+        # evaluations (65,536 of them) every chunk -- the single most expensive
+        # thing in _generate. The shoreline wiggles at a 300 px scale, so one
+        # sample per row is exactly the same picture.
+        _coast_row = coast_x(_oy, seed)               # shape (CHUNK,)
+        _sea = _ox[None, :] > _coast_row[:, None]     # broadcast to the chunk
         if _sea.any():
             _ov = np.zeros((CHUNK, CHUNK, 4), np.uint8)
             _ov[..., 0] = WATER[0]
