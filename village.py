@@ -4097,7 +4097,9 @@ class NPC:
                 self.stamina = max(0.0, self.stamina - 10.0 * dt)
             self.attack_cd -= dt
             if distance <= 46.0 and self.attack_cd <= 0.0:
-                self.attack_cd = 1.0
+                # THE SWING COMES AS FAST AS HIS SKILL: a master swings a
+                # fraction of a second, a green man once a second and a half.
+                self.attack_cd = max(0.35, self.skills.axe_cooldown())
                 self._did_attack()
                 self._melee_swing(combat, math.atan2(dy, dx))
                 self._snd("npc_attack", min_gap=1.5)

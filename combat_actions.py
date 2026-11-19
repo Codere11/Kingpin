@@ -149,14 +149,14 @@ def _melee_dodge_counter(g, enemy, angle) -> bool:
     if _diff <= 0.0:
         return False
     # THE CHANCE SCALES WITH THE GAP: a master over a green player dodges
-    # three swings in four; a slightly better man only now and then.
-    if random.random() >= min(0.75, _diff * 0.9):
+    # four swings in five; a slightly better man only now and then.
+    if random.random() >= min(0.80, _diff * 0.9):
         return False
     _side = random.choice((-1.0, 1.0))
     _dodge = angle + _side * math.radians(45.0)
     _ox, _oy = enemy.x, enemy.y
-    enemy.x += math.cos(_dodge) * 48.0
-    enemy.y += math.sin(_dodge) * 48.0
+    enemy.x += math.cos(_dodge) * 64.0
+    enemy.y += math.sin(_dodge) * 64.0
     enemy.facing = (math.cos(_dodge), math.sin(_dodge))
     # VISIBLE AND QUICK: dust where he stood, dust where he lands, and a short
     # dash trail between -- the eye reads the sidestep in one frame.
@@ -173,8 +173,8 @@ def _melee_dodge_counter(g, enemy, angle) -> bool:
     _dx = g.player.x - enemy.x
     _dy = g.player.y - enemy.y
     _d = math.hypot(_dx, _dy) or 1.0
-    enemy.x += _dx / _d * 22.0
-    enemy.y += _dy / _d * 22.0
+    enemy.x += _dx / _d * 32.0
+    enemy.y += _dy / _d * 32.0
     enemy.facing = (_dx / _d, _dy / _d)
     enemy.attack_flash = _face.WAR_SECONDS
     # A soldier carries his own damage; a native axeman swings 10 base (fists
