@@ -229,7 +229,15 @@ class Player:
         # A TRANQUILISED MAN IS NOT SHOT AGAIN. Once the dart is in him he is
         # being carried off; a second round does not undo that -- and it must
         # not game-over him out from under the militia's arms.
-        if self.dead or self.god or getattr(self, "sleep_t", 0.0) > 0.0:
+        if self.dead or getattr(self, "sleep_t", 0.0) > 0.0:
+            return
+        # A GOD STILL SHOWS THE BLOW. Test mode keeps the player alive, but
+        # the hit must be VISIBLE -- the flash and the blood -- so a fight can
+        # be watched properly; only the health loss is skipped.
+        if self.god:
+            self.hit_flash = 0.15
+            self.hurt_flash = face.HURT_SECONDS
+            self.bleed = 6.0
             return
         self.health = max(0, self.health - amount)
         self.hit_flash = 0.15
