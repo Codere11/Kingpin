@@ -137,6 +137,62 @@ def use_pickaxe(player, combat, ore_field, inventory, pay_share, mark_dirty,
         toast(f"Mining\u2026  {struck.strikes}/{ore.STRIKES}")
 
 
+def _melee_dodge_counter(g, enemy, angle) -> bool:
+    """A melee fighter whose axe skill beats the player's dodges the swing at
+    45 degrees to one side and answers with a lunge. Returns True when the
+    swing missed (the enemy dodged and counterattacked)."""
+    import face as _face
+    _axe = getattr(getattr(enemy, "skills", None), "axe", 0.0)
+    _diff = _axe - g.skills.axe
+    if _diff <= 0.0:
+        return False
+    # THE CHANCE SCALES WITH THE GAP: a master over a green player dodges
+    # three swings in four; a slightly better man only now and then.
+    if random.random() >= min(0.75, _diff * 0.9):
+        return False
+    _side = random.choice((-1.0, 1.0))
+    _dodge = angle + _side * math.radians(45.0)
+    enemy.x += math.cos(_dodge) * 30.0
+    enemy.y += math.sin(_dodge) * 30.0
+    enemy.facing = (math.cos(_dodge), math.sin(_dodge))
+    # A scuff of dust where he was -- the swing bit the air.
+    try:
+        g.combat.spawn_impact(enemy.x, enemy.y, (150, 150, 150))
+    except Exception:
+        pass
+    # COUNTERATTACK: he is already inside, so the answer lands from the dodge.
+    _dx = g.player.x - enemy.x
+    _dy = g.player.y - enemy.y
+    _d = math.hypot(_dx, _dy) or 1.0
+    enemy.x += _dx / _d * 22.0
+    enemy.y += _dy / _d * 22.0
+    enemy.facing = (_dx / _d, _dy / _d)
+    enemy.attack_flash = _face.WAR_SECONDS
+    try:
+        _dmg = max(1, round(getattr(enemy, "melee_damage", 16)
+                            * enemy.skills.axe_damage_scale()))
+    except Exception:
+        _dmg = 16
+    if hasattr(g.player, "take_damage"):
+        g.player.take_damage(_dmg)
+    try:
+        g.blood.spawn(g.player.x, g.player.y, 10, 16.0)
+    except Exception:
+        pass
+    try:
+        sound.play_on_screen("hit_flesh", g.player.x, g.player.y,
+                             g.cam_x, g.cam_y, g.vw, g.vh)
+        sound.play_on_screen("warrior_attack", enemy.x, enemy.y,
+                             g.cam_x, g.cam_y, g.vw, g.vh, min_gap=0.3)
+    except Exception:
+        pass
+    try:
+        g.toast("Missed!  %s slips aside and answers" % getattr(enemy, "name", "He"))
+    except Exception:
+        pass
+    return True
+
+
 def use_axe(g, kills) -> int:
     """Swing the axe: men, beasts, trees, fences, and doors in one arc."""
     import main as _m
@@ -165,6 +221,12 @@ def use_axe(g, kills) -> int:
 
     for enemy in g.enemies:
         if enemy.alive and in_arc(enemy.x, enemy.y, enemy.radius):
+            # A MELEE FIGHTER WHO OUTCLASSES THE PLAYER DODGES AND ANSWERS:
+            # the swing misses and he counters from the sidestep.
+            if (getattr(enemy, "melee", False)
+                    and not getattr(enemy, "is_militia", False)
+                    and _melee_dodge_counter(g, enemy, angle)):
+                continue
             _was_alive = getattr(enemy, "alive", True)
             if (getattr(enemy, "is_militia", False)
                     or getattr(enemy, "militia", False)):
