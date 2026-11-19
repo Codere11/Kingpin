@@ -184,8 +184,7 @@ class Player:
         self.hunger = max(self.hunger, 60.0)
 
     def can_swing(self) -> bool:
-        return (self.swing_cd <= 0.0 and self.wind_up <= 0.0
-                and self.recover <= 0.0 and self.stagger <= 0.0)
+        return self.swing_cd <= 0.0
 
     def start_swing(self) -> None:
         self.swing_cd = self.skill_axe_cd
@@ -242,12 +241,6 @@ class Player:
         # not game-over him out from under the militia's arms.
         if self.dead or getattr(self, "sleep_t", 0.0) > 0.0:
             return
-        # A LANDED BLOW STAGGERS, AND INTERRUPTS A WIND-UP: the swing he was
-        # loading dies with the flinch.
-        self.stagger = STAGGER_SECONDS
-        if self.wind_up > 0.0:
-            self.wind_up = 0.0
-            self._pending_swing = None
         # A GOD STILL SHOWS THE BLOW. Test mode keeps the player alive, but
         # the hit must be VISIBLE -- the flash and the blood -- so a fight can
         # be watched properly; only the health loss is skipped.
@@ -322,8 +315,6 @@ class Player:
 
         sprinting = (self.moving
                      and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT])
-                     and not (self.wind_up > 0.0 or self.recover > 0.0
-                              or self.swing_anim > 0.0)
                      and (self.god or (not self.exhausted and self.stamina > 0.0)))
         self.sprinting = sprinting
 

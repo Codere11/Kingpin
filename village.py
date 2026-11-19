@@ -4079,7 +4079,7 @@ class NPC:
             # player was able to stand just inside his own longer reach and
             # hit the warrior while the warrior's plain 64 px could not reach
             # back. Now whoever is in range hits.
-            _reach = 64.0 + getattr(target, "radius", 12.0)
+            _reach = 96.0 + getattr(target, "radius", 12.0)
             lunged = getattr(target, "lunging", 0.0) > 0.0
             sprint = self.stamina > 0.0
             step = self.combat_speed * ((1.9 if lunged else 1.6)

@@ -210,11 +210,9 @@ def _melee_dodge_counter(g, enemy, angle) -> bool:
 
 
 def use_axe(g, kills) -> int:
-    """Swing the axe: commit the blow now; the damage lands after the
-    wind-up (see resolve_swing). Men, beasts, trees, fences and doors in
-    one arc."""
+    """Swing the axe: men, beasts, trees, fences, and doors in one arc. The
+    blow lands NOW -- no wind-up, no stamina tax, no stagger lockout."""
     import main as _m
-    import player as _player
 
     if g.player.dead or not g.player.can_swing():
         return kills
@@ -226,14 +224,9 @@ def use_axe(g, kills) -> int:
               else _m.MELEE_DAMAGE / g.skills.UNARMED_WEAKNESS)
              * g.skills.axe_damage_scale())
     angle = g.player.facing_angle
-    g.player.wind_up = _player.SWING_WIND_UP
-    g.player._pending_swing = (angle, melee, _armed)
     g.player.start_swing()
-    # A SWING BURNS WIND: melee is a commitment, not a spam button.
-    if not g.player.god:
-        g.player.stamina = max(0.0, g.player.stamina
-                               - g.player.max_stamina * _player.SWING_STAMINA)
-    return kills
+    g.player._pending_swing = (angle, melee, _armed)
+    return resolve_swing(g, kills)
 
 
 def resolve_swing(g, kills) -> int:
@@ -245,7 +238,6 @@ def resolve_swing(g, kills) -> int:
         return kills
     g.player._pending_swing = None
     angle, melee, _armed = _p
-    g.player.recover = _player.SWING_RECOVER
     g.skills.gain_axe()
     g.combat.spawn_swing(g.player.x, g.player.y, angle)
     _flesh = False
@@ -259,12 +251,6 @@ def resolve_swing(g, kills) -> int:
 
     for enemy in g.enemies:
         if enemy.alive and in_arc(enemy.x, enemy.y, enemy.radius):
-            # A MELEE FIGHTER WHO OUTCLASSES THE PLAYER DODGES AND ANSWERS:
-            # the swing misses and he counters from the sidestep.
-            if (getattr(enemy, "melee", False)
-                    and not getattr(enemy, "is_militia", False)
-                    and _melee_dodge_counter(g, enemy, angle)):
-                continue
             _was_alive = getattr(enemy, "alive", True)
             if (getattr(enemy, "is_militia", False)
                     or getattr(enemy, "militia", False)):
@@ -331,12 +317,6 @@ def resolve_swing(g, kills) -> int:
     _add_man(g.truth[0])
     for npc in _folk:
         if npc.alive and in_arc(npc.x, npc.y, npc.radius):
-                # A NATIVE AXE WARRIOR WHO OUTCLASSES THE PLAYER DODGES AND
-                # ANSWERS -- the same sidestep a master soldier has.
-                if (getattr(npc, "native_role", "") == "warrior"
-                        and getattr(npc, "weapon", "") == "axe"
-                        and _melee_dodge_counter(g, npc, angle)):
-                    continue
                 died = npc.take_damage(melee, record=False)
                 _flesh = True
                 g.work_lanes.damage(npc, melee)

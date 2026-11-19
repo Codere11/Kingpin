@@ -1301,14 +1301,9 @@ def run(g):
             g.player.skill_speed = g.skills.move_scale()
             g.award_levels()
             g.player.skill_stamina = g.skills.stamina_scale()
-            g.player.skill_axe_cd = max(0.35, g.skills.axe_cooldown())
+            g.player.skill_axe_cd = g.skills.axe_cooldown()
             g._px0, g._py0 = g.player.x, g.player.y
             g.player.update(g.dt, g.keys, g.aim, 1.0)
-            # A COMMITTED SWING LANDS WHEN ITS WIND-UP RUNS OUT (indoors too).
-            if (getattr(g.player, "_pending_swing", None) is not None
-                    and getattr(g.player, "wind_up", 0.0) <= 0.0
-                    and hasattr(g, "resolve_swing")):
-                g.resolve_swing()
             g.skills.gain_movement(math.hypot(g.player.x - g._px0, g.player.y - g._py0))
             g.clamp_world()          # the world ends where the loading screen did
             g.settle_reload()
@@ -1441,7 +1436,7 @@ def run(g):
             g.player.skill_speed = g.skills.move_scale()
             g.award_levels()
             g.player.skill_stamina = g.skills.stamina_scale()
-            g.player.skill_axe_cd = max(0.35, g.skills.axe_cooldown())
+            g.player.skill_axe_cd = g.skills.axe_cooldown()
             g._px0, g._py0 = g.player.x, g.player.y
             # THE HEARTBEAT. Written from INSIDE the overworld update, every two
             # seconds of game time, so that "the world froze" has evidence: if
@@ -1515,11 +1510,6 @@ def run(g):
                 _riding.facing = g.player.facing
             else:
                 g.player.update(g.dt, g.keys, g.aim, 1.0 - 0.25 * g.foliage)
-            # A COMMITTED SWING LANDS WHEN ITS WIND-UP RUNS OUT.
-            if (getattr(g.player, "_pending_swing", None) is not None
-                    and getattr(g.player, "wind_up", 0.0) <= 0.0
-                    and hasattr(g, "resolve_swing")):
-                g.resolve_swing()
             if getattr(g.player, "aboard", False):
                 _tr = g._TEST_TRAIN[0]
                 if _tr is not None:

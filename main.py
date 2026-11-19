@@ -127,7 +127,7 @@ REACH = 104.0            # how far the player can work a tile
 # offers them, so the wage block and the board can never disagree about what
 # counts as "employed".
 _BOARD_TRADES = ("farm", "logger", "trader", "smith", "mine", "lab", "brewery")
-AXE_REACH = 64.0         # axe swing reach
+AXE_REACH = 96.0         # axe swing reach
 AXE_ARC = math.radians(78.0)
 AXE_STRIKES = 3          # hits to fell a tree
 # THE PLAYER HITS AS HARD AS A SOLDIER. He used to hit for 33 -- twice a
