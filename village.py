@@ -4096,10 +4096,12 @@ class NPC:
                 self.y -= uy * step
                 self._wind(sprint, dt, burn)
             else:
-                # Jockeying for the gap costs the legs even when you are not
-                # sprinting. There is no free breathing in a fight -- this is
-                # what turns the duel into a race against your own wind.
+                # Jockeying for the gap costs the legs, and the warrior CIRCLES:
+                # a sidestep around the player means two warriors attack from
+                # different angles, so dodging one does not dodge the other.
                 self.stamina = max(0.0, self.stamina - 10.0 * dt)
+                self.x += -uy * self.strafe_dir * self.combat_speed * 0.35 * dt
+                self.y += ux * self.strafe_dir * self.combat_speed * 0.35 * dt
             self.attack_cd -= dt
             if distance <= _reach and self.attack_cd <= 0.0:
                 # THE SWING COMES AS FAST AS HIS SKILL: a master swings a

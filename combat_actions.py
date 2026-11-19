@@ -210,13 +210,14 @@ def _melee_dodge_counter(g, enemy, angle) -> bool:
 
 
 def use_axe(g, kills) -> int:
-    """Swing the axe: men, beasts, trees, fences, and doors in one arc."""
+    """Swing the axe: commit the blow now; the damage lands after the
+    wind-up (see resolve_swing). Men, beasts, trees, fences and doors in
+    one arc."""
     import main as _m
+    import player as _player
 
     if g.player.dead or not g.player.can_swing():
         return kills
-    g.player.start_swing()
-    g.skills.gain_axe()
     # BARE HANDS. The same swing and the same skill whether or not the axe
     # is in the pack -- a fist simply is not an axe. See
     # g.skills.UNARMED_WEAKNESS: he hits for a quarter, and can still fight.
@@ -225,6 +226,27 @@ def use_axe(g, kills) -> int:
               else _m.MELEE_DAMAGE / g.skills.UNARMED_WEAKNESS)
              * g.skills.axe_damage_scale())
     angle = g.player.facing_angle
+    g.player.wind_up = _player.SWING_WIND_UP
+    g.player._pending_swing = (angle, melee, _armed)
+    g.player.start_swing()
+    # A SWING BURNS WIND: melee is a commitment, not a spam button.
+    if not g.player.god:
+        g.player.stamina = max(0.0, g.player.stamina
+                               - g.player.max_stamina * _player.SWING_STAMINA)
+    return kills
+
+
+def resolve_swing(g, kills) -> int:
+    """The wind-up is done: the committed swing lands NOW."""
+    import main as _m
+    import player as _player
+    _p = getattr(g.player, "_pending_swing", None)
+    if _p is None:
+        return kills
+    g.player._pending_swing = None
+    angle, melee, _armed = _p
+    g.player.recover = _player.SWING_RECOVER
+    g.skills.gain_axe()
     g.combat.spawn_swing(g.player.x, g.player.y, angle)
     _flesh = False
 
@@ -234,6 +256,12 @@ def use_axe(g, kills) -> int:
             return False
         delta = abs(((math.atan2(dy, dx) - angle + math.pi) % (2.0 * math.pi)) - math.pi)
         return delta <= _m.AXE_ARC
+
+    def _blocked(enemy) -> bool:
+        """A fighter FACING the player meets the blow with his own weapon: he
+        soaks half the damage. Hit his side or back for the full cut."""
+        _fx, _fy = getattr(enemy, "facing", (0.0, 1.0))
+        return _fx * (g.player.x - enemy.x) + _fy * (g.player.y - enemy.y) > 0.0
 
     for enemy in g.enemies:
         if enemy.alive and in_arc(enemy.x, enemy.y, enemy.radius):
@@ -252,7 +280,10 @@ def use_axe(g, kills) -> int:
                                          list(village_mod.PEOPLE))
                 except Exception:
                     pass
-            enemy.take_damage(melee)
+            # A WARRIOR FACING YOU SOAKS HALF THE BLOW -- flank him.
+            _dmg = melee * 0.5 if (getattr(enemy, "melee", False)
+                                   and _blocked(enemy)) else melee
+            enemy.take_damage(_dmg)
             _flesh = True
             if _was_alive and not getattr(enemy, "alive", True):
                 if getattr(enemy, "kind", "") == "bison":
@@ -315,7 +346,11 @@ def use_axe(g, kills) -> int:
                         and getattr(npc, "weapon", "") == "axe"
                         and _melee_dodge_counter(g, npc, angle)):
                     continue
-                died = npc.take_damage(melee, record=False)
+                # A WARRIOR FACING YOU SOAKS HALF THE BLOW -- flank him.
+                _dmg = melee * 0.5 if (getattr(npc, "native_role", "") == "warrior"
+                                       and getattr(npc, "weapon", "") == "axe"
+                                       and _blocked(npc)) else melee
+                died = npc.take_damage(_dmg, record=False)
                 _flesh = True
                 g.work_lanes.damage(npc, melee)
                 # HE KNOWS THE MAN WHO HIT HIM -- and likes him twenty less.

@@ -44,6 +44,12 @@ HOLD: dict[str, tuple[int, bool, float]] = {
 
 SWING_COOLDOWN = 1.5
 SWING_ANIM = 0.32
+# A SWING IS A COMMITMENT: the blow lands after a wind-up, and there is a
+# recovery beat before the next. Getting hit interrupts the wind-up.
+SWING_WIND_UP = 0.25
+SWING_RECOVER = 0.20
+SWING_STAMINA = 0.12      # fraction of max stamina a swing burns
+STAGGER_SECONDS = 0.30    # a landed hit stops him swinging for this long
 
 
 LUNGE_COST = 0.25          # a fourth of full stamina
@@ -128,6 +134,10 @@ class Player:
         self.exhausted = False
         self.sprinting = False
         self.swing_cd = 0.0
+        self.wind_up = 0.0             # seconds until the committed swing lands
+        self.recover = 0.0             # seconds after a swing before the next
+        self.stagger = 0.0             # seconds after being hit before swinging
+        self._pending_swing = None     # (angle, melee, armed) waiting to land
         self.attack_flash = 0.0
         self.hurt_flash = 0.0
         self.level_flash = 0.0
@@ -174,7 +184,8 @@ class Player:
         self.hunger = max(self.hunger, 60.0)
 
     def can_swing(self) -> bool:
-        return self.swing_cd <= 0.0
+        return (self.swing_cd <= 0.0 and self.wind_up <= 0.0
+                and self.recover <= 0.0 and self.stagger <= 0.0)
 
     def start_swing(self) -> None:
         self.swing_cd = self.skill_axe_cd
@@ -231,6 +242,12 @@ class Player:
         # not game-over him out from under the militia's arms.
         if self.dead or getattr(self, "sleep_t", 0.0) > 0.0:
             return
+        # A LANDED BLOW STAGGERS, AND INTERRUPTS A WIND-UP: the swing he was
+        # loading dies with the flinch.
+        self.stagger = STAGGER_SECONDS
+        if self.wind_up > 0.0:
+            self.wind_up = 0.0
+            self._pending_swing = None
         # A GOD STILL SHOWS THE BLOW. Test mode keeps the player alive, but
         # the hit must be VISIBLE -- the flash and the blood -- so a fight can
         # be watched properly; only the health loss is skipped.
@@ -259,6 +276,12 @@ class Player:
             self.hurt_flash = max(0.0, self.hurt_flash - dt)
         if self.swing_cd > 0.0:
             self.swing_cd = max(0.0, self.swing_cd - dt)
+        if self.wind_up > 0.0:
+            self.wind_up = max(0.0, self.wind_up - dt)
+        if self.recover > 0.0:
+            self.recover = max(0.0, self.recover - dt)
+        if self.stagger > 0.0:
+            self.stagger = max(0.0, self.stagger - dt)
         # A full belly mends a body: the player's hunger is satiety, so 80+ is well fed.
         if self.hunger >= 80.0 and self.health < self.max_health:
             self.health = min(self.max_health, self.health + self.heal_rate * dt)
@@ -299,6 +322,8 @@ class Player:
 
         sprinting = (self.moving
                      and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT])
+                     and not (self.wind_up > 0.0 or self.recover > 0.0
+                              or self.swing_anim > 0.0)
                      and (self.god or (not self.exhausted and self.stamina > 0.0)))
         self.sprinting = sprinting
 

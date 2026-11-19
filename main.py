@@ -1016,8 +1016,15 @@ def main() -> None:
         playerutil.use_first_aid(g.player, g.inventory, toast)
 
     def use_axe() -> None:
-        
-        _g = SimpleNamespace(
+        _g = _swing_g()
+        g.kills = combat_actions.use_axe(_g, g.kills)
+
+    def resolve_swing() -> None:
+        _g = _swing_g()
+        g.kills = combat_actions.resolve_swing(_g, g.kills)
+
+    def _swing_g():
+        return SimpleNamespace(
             player=g.player, skills=g.skills, inventory=g.inventory, combat=g.combat,
             enemies=g.enemies, blood=g.blood, rabbits=g.rabbits, horses=g.horses,
             hub_world=g.hub_world,
@@ -1029,7 +1036,6 @@ def main() -> None:
             work_lanes=g._WORK, now=g.now,
             toast=toast, mark_dirty=mark_dirty, pay_share=pay_share,
             commit_crime=commit_crime, see_murder=_see_murder, banish=banish)
-        g.kills = combat_actions.use_axe(_g, g.kills)
 
     def use_pickaxe() -> None:
         combat_actions.use_pickaxe(g.player, g.combat, g.ore_field, g.inventory,
@@ -2071,6 +2077,7 @@ def main() -> None:
     g.try_talk = try_talk
     g.update_hud = update_hud
     g.use_axe = use_axe
+    g.resolve_swing = resolve_swing
     g.use_barrel = use_barrel
     g.use_first_aid = use_first_aid
     g.use_pickaxe = use_pickaxe
