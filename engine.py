@@ -3989,6 +3989,32 @@ def run(g):
 
             if not g.inventory_open and not g.hud_hidden:
                 draw_crosshair(g.screen, g.wmouse_x, g.wmouse_y)
+                # THE SHIP IS ALWAYS FINDABLE: a small gold arrow at the
+                # screen edge points to it whenever it is off-screen.
+                try:
+                    _shx, _shy = g.ship_pos()
+                    _dx = _shx - g.player.x
+                    _dy = _shy - g.player.y
+                    _dist = math.hypot(_dx, _dy)
+                    _sx = _shx - g.cam_x
+                    _sy = _shy - g.cam_y
+                    if not (0.0 <= _sx <= g.vw and 0.0 <= _sy <= g.vh):
+                        _ux = _dx / _dist if _dist > 0.0 else 0.0
+                        _uy = _dy / _dist if _dist > 0.0 else 0.0
+                        _cx = g.vw / 2.0
+                        _cy = g.vh / 2.0
+                        _t = min((g.vw / 2.0 - 30.0) / (abs(_ux) + 1e-6),
+                                 (g.vh / 2.0 - 30.0) / (abs(_uy) + 1e-6))
+                        _ex = _cx + _ux * _t
+                        _ey = _cy + _uy * _t
+                        _ang = math.atan2(_uy, _ux)
+                        _pts = [(_ex + math.cos(_ang) * 12.0, _ey + math.sin(_ang) * 12.0),
+                                (_ex + math.cos(_ang + 2.4) * 9.0, _ey + math.sin(_ang + 2.4) * 9.0),
+                                (_ex + math.cos(_ang - 2.4) * 9.0, _ey + math.sin(_ang - 2.4) * 9.0)]
+                        pygame.draw.polygon(g.screen, (232, 200, 110), _pts)
+                        pygame.draw.polygon(g.screen, (120, 96, 46), _pts, 1)
+                except Exception:
+                    pass
 
             # ---- ...and back to the window ---------------------------------
             g.screen = g.real_screen
