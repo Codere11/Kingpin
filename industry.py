@@ -10,6 +10,7 @@ cover the wear with room to spare.
 
 from __future__ import annotations
 
+import math
 import random
 
 import pygame
@@ -523,7 +524,7 @@ class Workplace:
         if self.kind == "lab":
             return self._render_lab()
         if self.kind == "medicine_hut":
-            return self._render_lab()
+            return self._render_medicine_hut()
         if self.kind == "research":
             return self._render_research()
         if self.kind == "weaver":
@@ -719,6 +720,56 @@ class Workplace:
         pygame.draw.circle(surf, (206, 158, 74), (cx, oy + 16), 10)
         pygame.draw.circle(surf, (140, 104, 48), (cx, oy + 16), 10, 2)
         pygame.draw.rect(surf, (100, 74, 40), (cx + 7, oy + 10, 5, 12))
+        return surf
+
+    def _render_medicine_hut(self) -> pygame.Surface:
+        """A hide-and-pole medicine lodge, not a bench.
+
+        Top-down: an earth-toned dome, crossed roof poles, a painted medicine
+        wheel, a flap door, and drying herb bundles on a small rack.  It must
+        be readable at a glance beside the artisan's table and the forge.
+        """
+        w, h, pad = self.w, self.h, 16
+        surf = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+        ox, oy = pad, pad
+        cx, cy = ox + w / 2.0, oy + h / 2.0
+        hide, hide_l, hide_d = (176, 146, 98), (204, 176, 126), (112, 84, 50)
+        pole, pole_d = (126, 90, 54), (74, 52, 30)
+        # ground shadow
+        pygame.draw.ellipse(surf, (0, 0, 0, 78), (ox + 6, oy + h - 2, w - 12, 18))
+        # the hide dome
+        pygame.draw.ellipse(surf, hide_d, (ox + 5, oy + 8, w - 10, h - 12))
+        pygame.draw.ellipse(surf, hide, (ox + 8, oy + 11, w - 16, h - 18))
+        pygame.draw.ellipse(surf, hide_l, (ox + 17, oy + 17, w - 38, h - 34))
+        # the door flap, at the near side
+        pygame.draw.polygon(surf, (82, 58, 36), [(cx - 9, oy + h - 10),
+                                                (cx + 9, oy + h - 10),
+                                                (cx, oy + h - 28)])
+        pygame.draw.line(surf, hide_d, (cx, oy + h - 28), (cx, oy + h - 10), 1)
+        # crossed roof poles, tied at the crown
+        pygame.draw.line(surf, pole_d, (ox + 14, oy + 16), (cx, cy), 3)
+        pygame.draw.line(surf, pole_d, (ox + w - 14, oy + 16), (cx, cy), 3)
+        pygame.draw.line(surf, pole, (cx, cy), (cx, oy + 5), 3)
+        pygame.draw.circle(surf, pole_d, (int(cx), int(cy)), 4)
+        # a painted medicine wheel on the hide
+        rr = 10
+        for i, col in enumerate(((196, 72, 58), (226, 206, 150),
+                                 (66, 70, 82), (196, 154, 52))):
+            a0 = i * 90
+            pygame.draw.arc(surf, col, (cx - rr, cy - rr, rr * 2, rr * 2),
+                            math.radians(a0), math.radians(a0 + 90), 4)
+        pygame.draw.circle(surf, hide_d, (int(cx), int(cy)), rr, 1)
+        # drying herbs on a low rack beside the lodge
+        rx = ox + w - 15
+        pygame.draw.line(surf, pole, (rx, oy + 20), (rx, oy + h - 8), 2)
+        pygame.draw.line(surf, pole, (rx - 8, oy + 24), (rx + 1, oy + 24), 2)
+        for i, col in enumerate(((92, 126, 66), (128, 104, 56), (76, 112, 60))):
+            hx = rx - 6 + i * 5
+            pygame.draw.line(surf, col, (hx, oy + 25), (hx - 2, oy + 36), 2)
+            pygame.draw.line(surf, col, (hx, oy + 25), (hx + 2, oy + 36), 2)
+        # a little smoke from the smoke hole
+        pygame.draw.circle(surf, (208, 204, 194), (int(cx) - 2, int(cy) - 4), 2)
+        pygame.draw.circle(surf, (224, 220, 210), (int(cx) + 2, int(cy) - 8), 2)
         return surf
 
     def _render_research(self) -> pygame.Surface:

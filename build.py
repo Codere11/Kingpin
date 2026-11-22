@@ -8,6 +8,7 @@ floor and walls). The menu only offers what is valid where you are standing.
 
 from __future__ import annotations
 
+import math
 import pygame
 
 BUILDINGS = [
@@ -120,6 +121,35 @@ def target_icon(size: int = 46) -> pygame.Surface:
                      (int(size * 0.30), int(size * 0.94)), 2)
     pygame.draw.line(s, (110, 78, 48), (int(size * 0.66), int(size * 0.74)),
                      (int(size * 0.70), int(size * 0.94)), 2)
+    return s
+
+
+def medicine_icon(size: int = 46) -> pygame.Surface:
+    """A hide medicine lodge: dome, crossed poles, painted wheel."""
+    s = pygame.Surface((size, size), pygame.SRCALPHA)
+    hide, hide_l = (176, 146, 98), (204, 176, 126)
+    pole, pole_d = (126, 90, 54), (74, 52, 30)
+    cx, cy = size * 0.50, size * 0.54
+    pygame.draw.ellipse(s, (0, 0, 0, 55), (size * 0.10, size * 0.78,
+                                           size * 0.80, size * 0.16))
+    pygame.draw.ellipse(s, pole_d, (size * 0.12, size * 0.20,
+                                    size * 0.76, size * 0.66))
+    pygame.draw.ellipse(s, hide, (size * 0.15, size * 0.23,
+                                  size * 0.70, size * 0.59))
+    pygame.draw.ellipse(s, hide_l, (size * 0.30, size * 0.33,
+                                    size * 0.40, size * 0.34))
+    pygame.draw.line(s, pole_d, (size * 0.22, size * 0.30), (cx, cy), 2)
+    pygame.draw.line(s, pole_d, (size * 0.78, size * 0.30), (cx, cy), 2)
+    pygame.draw.line(s, pole, (cx, cy), (cx, size * 0.14), 2)
+    pygame.draw.circle(s, pole_d, (int(cx), int(cy)), 2)
+    rr = size * 0.13
+    for i, col in enumerate(((196, 72, 58), (226, 206, 150),
+                             (66, 70, 82), (196, 154, 52))):
+        pygame.draw.arc(s, col, (cx - rr, cy - rr, rr * 2, rr * 2),
+                        math.radians(i * 90), math.radians(i * 90 + 90), 2)
+    pygame.draw.polygon(s, (82, 58, 36), [(size * 0.44, size * 0.82),
+                                         (size * 0.56, size * 0.82),
+                                         (size * 0.50, size * 0.66)])
     return s
 
 
@@ -572,7 +602,7 @@ class BuildMenu:
 
             icon_fn = {"house": house_icon, "workshop": workshop_icon,
                        "lab_table": lab_icon, "lab": lab_icon,
-                       "medicine_hut": lab_icon,
+                       "medicine_hut": medicine_icon,
                        "research": research_icon,
                        "weaver": weaver_icon,
                        "spice": spice_icon,
