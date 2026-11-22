@@ -2,8 +2,8 @@
 
 Read this first. It is the map of the codebase, written from skimming the code,
 not from memory. The game was previously **GetWorld → StratWest → SettleWest**;
-the old world (towns, war, hubs, gulag) is still on disk but is **not the
-game** anymore.
+the old world (towns, war, hubs, gulag) has been removed from the live tree;
+what remains is the colonization game.
 
 ---
 
@@ -93,6 +93,8 @@ The two most important render/input facts:
 | Ship | `main.py` `ship_pos()` / `open_market()` | spawn coast +56 offshore; click opens market; gold HUD edge-arrow points to it |
 | Saves | `save/` (manifest + gzip chunks), `persist.py` (dirs/crash log) | `saves/slot_N/save.json` + `chunks/`; contract in `SAVE.md` |
 | NPC mind | `NPC.md` | MBTI, traits, mood, breaks, doctor, player personality; phase-gated |
+| NPC foundation | `persona.py`, `mood.py`, `doctor.py` | pure type/mood/doctor data; no live hooks yet |
+| NPC lab | `npclab.py` | test-mode fixture: six labelled subjects, F5–F8 overlay |
 | Sound | `sound.py` | one-shot, on-screen gated |
 | Guns | `guns.py` | musket/double/rifle + ammo |
 | Vision/light | `vision.py`, `life.py` | cone of sight, night glow (cached) |

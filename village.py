@@ -528,6 +528,22 @@ class NPC:
     opinion: Any = None
     at_court: Any = False        # a mayor: at the capital, or at home
 
+    # -- THE MIND (NPC.md).  Plain data, saved automatically by save/people.
+    # Mutable defaults are None on purpose: a list or dict on the class would
+    # be shared by every person in the world.  persona.ensure() normalises
+    # them to [] / {} for old saves and new people alike.
+    mbti: Any = ""
+    traits: Any = None
+    trauma_points: Any = 0.0
+    medicines_received: Any = 0
+    mental_known: Any = False
+    mood_thoughts: Any = None
+    mood_target: Any = 50.0
+    break_state: Any = "normal"
+    break_until: Any = 0.0
+    break_cooldown: Any = 0.0
+    frustration: Any = 0.0
+
     _break_off: Any = 0.0        # consumption raises his breaking point
     _break_off_until: Any = 0.0   # ...and it wears off three minutes later
     _consume_mood_off: Any = 0.0  # the mood the fix added, to remove on expiry

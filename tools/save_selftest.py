@@ -89,6 +89,22 @@ def _snapshot(g):
         "camp_uid": getattr(camp, "_save_uid", None),
         "camp_conquered": bool(getattr(camp, "conquered", False)),
         "camp_people": people,
+        "mind": (None if not (getattr(camp, "farmers", ()) or ()) else {
+            "mbti": getattr(camp.farmers[0], "mbti", ""),
+            "traits": sorted(getattr(camp.farmers[0], "traits", ()) or ()),
+            "trauma_points": round(float(getattr(camp.farmers[0],
+                                               "trauma_points", 0.0)), 3),
+            "medicines_received": int(getattr(camp.farmers[0],
+                                               "medicines_received", 0)),
+            "mental_known": bool(getattr(camp.farmers[0], "mental_known", False)),
+            "mood_target": round(float(getattr(camp.farmers[0],
+                                                "mood_target", 50.0)), 3),
+            "mood_thoughts": dict(getattr(camp.farmers[0],
+                                          "mood_thoughts", {}) or {}),
+            "break_state": getattr(camp.farmers[0], "break_state", "normal"),
+            "frustration": round(float(getattr(camp.farmers[0],
+                                                "frustration", 0.0)), 3),
+        }),
         "camp_workers": [getattr(n, "id", "") for n in
                          (getattr(camp, "workers", ()) or ())],
         "camp_no_make": (sorted(__import__("work").banned(camp.farmers[0]))
@@ -204,6 +220,16 @@ def _make(g):
         worker.job = "farmer"
         worker.native_role = "farmer"
         camp.workers.append(worker)
+        # NPC mind fields: the round-trip must carry the new data too.
+        worker.mbti = "INTJ"
+        worker.traits = ["smart"]
+        worker.trauma_points = 12.5
+        worker.medicines_received = 2
+        worker.mental_known = True
+        worker.mood_target = 44.0
+        worker.mood_thoughts = {"hungry": {"delta": -6.0, "stacks": 2}}
+        worker.break_state = "annoyed"
+        worker.frustration = 3.0
 
     px, py = float(g.player.x), float(g.player.y)
     tx, ty = int(px // 32) + 3, int(py // 32) + 4

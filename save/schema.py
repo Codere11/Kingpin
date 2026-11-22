@@ -16,7 +16,7 @@ from __future__ import annotations
 FORMAT = "settlewest-save"
 
 # The state document.  Bump for any change to a key's meaning or shape.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # The generated world's layout contract.  Bump when native.build / world
 # geometry changes enough that saved positions would point at different ground.
@@ -29,7 +29,21 @@ class SaveError(Exception):
     """A save could not be read, or is not a save this build can use."""
 
 
-_MIGRATIONS: dict[int, object] = {}
+def _migrate_1_to_2(manifest: dict) -> dict:
+    """Schema 2 adds NPC mind fields and built-object condition.
+
+    The fields are additive and every reader has a class default, so there is
+    no data to rewrite here.  The version bump records that a writer from this
+    build may include them.
+    """
+    out = dict(manifest)
+    out["schema"] = 2
+    return out
+
+
+_MIGRATIONS: dict[int, object] = {
+    1: _migrate_1_to_2,
+}
 
 
 def migrate(manifest: dict) -> dict:

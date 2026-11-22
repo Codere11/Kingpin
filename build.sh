@@ -51,6 +51,18 @@ echo "Checking the save round-trip..."
 "$VENV/bin/python" tools/save_selftest.py make > /tmp/kingpin-save-make.log 2>&1 || { echo "  SAVE SELFTEST (make) FAILED"; tail -20 /tmp/kingpin-save-make.log; exit 1; }
 "$VENV/bin/python" tools/save_selftest.py verify > /tmp/kingpin-save-verify.log 2>&1 || { echo "  SAVE SELFTEST (verify) FAILED"; tail -20 /tmp/kingpin-save-verify.log; exit 1; }
 
+# THE NPC FOUNDATION IS PURE AND FAST TO CHECK.  If the type table, the job
+# multipliers or the mood arithmetic drift, fail before spending a build.
+echo "Checking persona and mood..."
+"$VENV/bin/python" tools/persona_selftest.py > /tmp/kingpin-persona.log 2>&1 || { echo "  PERSONA SELFTEST FAILED"; tail -20 /tmp/kingpin-persona.log; exit 1; }
+
+# THE LAB MUST ALSO SURVIVE A SAVE.  This uses the test slot only; it never
+# reads or writes the player's normal save.
+echo "Checking the NPC lab round-trip..."
+"$VENV/bin/python" tools/npclab_selftest.py make > /tmp/kingpin-npclab-make.log 2>&1 || { echo "  NPC LAB SELFTEST (make) FAILED"; tail -20 /tmp/kingpin-npclab-make.log; exit 1; }
+"$VENV/bin/python" tools/npclab_selftest.py verify > /tmp/kingpin-npclab-verify.log 2>&1 || { echo "  NPC LAB SELFTEST (verify) FAILED"; tail -20 /tmp/kingpin-npclab-verify.log; exit 1; }
+"$VENV/bin/python" tools/npclab_keytest.py > /tmp/kingpin-npclab-keys.log 2>&1 || { echo "  NPC LAB KEYTEST FAILED"; tail -20 /tmp/kingpin-npclab-keys.log; exit 1; }
+
 echo "Building..."
 rm -rf "$DIST" SettleWest.spec __pycache__
 
@@ -77,6 +89,10 @@ done
     --exclude-module unittest \
     --exclude-module pydoc \
     --exclude-module doctest \
+    --hidden-import persona \
+    --hidden-import mood \
+    --hidden-import doctor \
+    --hidden-import npclab \
     "${DATA_ARGS[@]}" \
     main.py 2>&1 | tail -1
 

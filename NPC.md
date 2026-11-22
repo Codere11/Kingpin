@@ -667,6 +667,14 @@ Do not start the next phase before that.
 
 ## Phase 0 — Foundation and lab (no gameplay balance yet)
 
+> **Status: implemented as Phase 0-lite.**  The lab currently has six subjects
+> (INTJ, ISFP, ESTJ, ENFP, ISTP, ENTJ), F5 hide, F6 reset, F7 next, F8 mood.
+> F9/F10, the Medicine Hut, breakables and the full 16-subject set stay for the
+> later phases.  `npclab.py`, `persona.py`, `mood.py` and `doctor.py` exist;
+> the live camps and AI are untouched.  Automated checks are in
+> `tools/persona_selftest.py`, `tools/npclab_selftest.py` and
+> `tools/npclab_keytest.py`, all run by `./build.sh`.
+
 Build:
 
 - `persona.py`, `mood.py`, `doctor.py`, `npclab.py` skeleton;

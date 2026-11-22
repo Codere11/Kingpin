@@ -234,6 +234,28 @@ def run(g):
                 # the world does not stop for a menu.
                 pass
             elif (g.test_mode and event.type == pygame.KEYDOWN
+                  and event.key in (pygame.K_F5, pygame.K_F6,
+                                    pygame.K_F7, pygame.K_F8)):
+                # THE NPC LAB (NPC.md Phase 0).  Test mode only; the normal
+                # game never imports or builds it.
+                try:
+                    import npclab as _npclab
+                    if event.key == pygame.K_F5:
+                        _npclab.toggle(g)
+                    elif event.key == pygame.K_F6:
+                        _npclab.reset(g)
+                    elif event.key == pygame.K_F7:
+                        _npclab.next_subject(g)
+                    elif event.key == pygame.K_F8:
+                        _npclab.cycle_mood(g)
+                except Exception as _lab_exc:
+                    g.toast("NPC lab: %s" % _lab_exc)
+                    try:
+                        import plog as _plog
+                        _plog.log("NPC-LAB-KEY", repr(_lab_exc)[:160])
+                    except Exception:
+                        pass
+            elif (g.test_mode and event.type == pygame.KEYDOWN
                   and event.key == pygame.K_l):
                 # TEST MODE ONLY. L puts ONE LEVEL on a random skill, so the
                 # level-up shine can be looked at without earning it -- which
@@ -3046,6 +3068,11 @@ def run(g):
                 g.player.draw(g.screen, g.cam_x, g.cam_y, g._sel.defn.id if g._sel else None)
             g.observer_.draw(g.screen)
             try:
+                import npclab as _npclab_draw
+                _npclab_draw.draw(g)
+            except Exception:
+                pass
+            try:
                 if g.chest_open:
                     g.chest_panel.draw(g.screen)
                 if g.workshop_open:
@@ -3647,6 +3674,11 @@ def run(g):
             # reading observer.open, which was True the whole time, and told
             # you it worked three times on that basis. State is not a picture.
             g.observer_.draw(g.screen)
+            try:
+                import npclab as _npclab_draw2
+                _npclab_draw2.draw(g)
+            except Exception:
+                pass
             if not g.hud_hidden:
                 g.hotbar.draw_stamina(g.screen, g.player.stamina / g.player.max_stamina,
                                     g.player.exhausted)
