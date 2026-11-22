@@ -20,6 +20,7 @@ import mood
 import native
 import persona
 import village
+import world as world_mod
 
 # Round-trippable through save/camps.registry_key: ("starter", n) writes
 # "starter:n" and reads back as the same tuple.  The camp is marked starter
@@ -98,20 +99,89 @@ def _attach(g, camp, subjects) -> None:
             _unique_append(g._observe_npcs, n)
 
 
-def _clear_spot(g):
-    """Pick a dry, open-enough centre for the lab without touching the coast."""
-    x0, y0 = float(g.player.x), float(g.player.y)
-    for dx, dy in ((760.0, 80.0), (0.0, 760.0), (-760.0, 80.0),
-                   (0.0, -760.0), (760.0, 760.0), (-760.0, -760.0)):
-        cx, cy = x0 + dx, y0 + dy
+def _coast(g, y):
+    try:
+        return float(world_mod.coast_x(float(y), int(g.world.seed)))
+    except Exception:
+        return None
+
+
+def _dry_at(g, cx, cy, radius=520.0):
+    """True when the whole camp footprint is inland, not just its centre.
+
+    The spawn coast runs north-south with ocean to the EAST.  Checking only
+    the centre tile was not enough: the camp ring and fields could still reach
+    into the water (or the walk there could be blocked by it).
+    """
+    coast = _coast(g, cy)
+    if coast is not None and float(cx) > coast - 900.0:
+        return False
+    for ox, oy in ((0.0, 0.0),
+                   (-radius, 0.0), (radius, 0.0),
+                   (0.0, -radius), (0.0, radius),
+                   (-radius, -radius), (-radius, radius),
+                   (radius, -radius), (radius, radius)):
         try:
-            if g.world.tile_kind(int(cx // block.TILE),
-                                 int(cy // block.TILE)) == "ocean":
-                continue
+            if g.world.tile_kind(int((cx + ox) // block.TILE),
+                                 int((cy + oy) // block.TILE)) == "ocean":
+                return False
         except Exception:
             pass
-        return cx, cy
-    return x0 + 760.0, y0 + 80.0
+    return True
+
+
+def _clear_spot(g):
+    """Pick a dry centre.  West/inland first: east is always the ocean."""
+    x0, y0 = float(g.player.x), float(g.player.y)
+    # WEST FIRST.  The old order tried east, which is exactly where the coast
+    # is; every lab ended up on the far side of impassable water.
+    candidates = ((-760.0, 80.0), (-1100.0, 40.0), (-760.0, -520.0),
+                  (-760.0, 620.0), (-1400.0, 80.0),
+                  (0.0, 760.0), (0.0, -760.0), (760.0, 760.0),
+                  (760.0, -760.0))
+    for dx, dy in candidates:
+        cx, cy = x0 + dx, y0 + dy
+        if _dry_at(g, cx, cy):
+            return cx, cy
+    # Last resort: straight inland, away from the coast, even if close.
+    coast = _coast(g, y0)
+    if coast is not None:
+        return min(x0 - 400.0, coast - 1000.0), y0 + 80.0
+    return x0 - 760.0, y0 + 80.0
+
+
+def _camp_valid(g, camp):
+    try:
+        return _dry_at(g, float(camp.x), float(camp.y))
+    except Exception:
+        return True
+
+
+def _discard(g, camp):
+    """Drop a lab that was built in the sea (older F6 did exactly that)."""
+    if camp is None:
+        return
+    doomed = [n for n in (getattr(g, "_native_people", ()) or ())
+              if getattr(n, "native_camp", None) is camp]
+    doomed += [n for n in (getattr(camp, "unemployed", ()) or ())
+               if n not in doomed]
+    for n in doomed:
+        for seq_name in ("_native_people", "_observe_npcs"):
+            seq = getattr(g, seq_name, None) or ()
+            if n in seq:
+                try:
+                    seq.remove(n)
+                except ValueError:
+                    pass
+    for key, value in list((getattr(g, "native_settlements", {}) or {}).items()):
+        if value is camp:
+            try:
+                del g.native_settlements[key]
+            except Exception:
+                pass
+    g._npc_lab = None
+    g._npc_subjects = []
+    g._npc_sel = 0
 
 
 def _spawn_subjects(g, camp):
@@ -166,6 +236,9 @@ def _reset_subjects(subjects):
 def reset(g):
     """F6: build if needed, then put the subjects back at their marks."""
     camp = _find_camp(g)
+    if camp is not None and not _camp_valid(g, camp):
+        _discard(g, camp)
+        camp = None
     if camp is None:
         camp = _build_camp(g)
         if camp is None:
@@ -213,13 +286,17 @@ def _build_camp(g):
     subjects = _spawn_subjects(g, camp)
     camp.unemployed = list(subjects)
     _attach(g, camp, subjects)
-    _toast(g, "NPC lab built at %d,%d" % (int(cx), int(cy)))
+    _side = "west" if cx < float(g.player.x) else "east"
+    _toast(g, "NPC lab built %s at %d,%d" % (_side, int(cx), int(cy)))
     return camp
 
 
 def ensure(g):
     """Find or rebuild the lab without resetting it."""
     camp = _find_camp(g)
+    if camp is not None and not _camp_valid(g, camp):
+        _discard(g, camp)
+        camp = None
     if camp is None:
         camp = _build_camp(g)
         if camp is None:

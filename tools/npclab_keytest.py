@@ -48,6 +48,19 @@ def main():
         camp = getattr(g, "_npc_lab", None)
         subjects = list(getattr(g, "_npc_subjects", ()) or ())
         assert camp is not None, "F6 did not build the lab"
+        assert camp.x < g.player.x, ("lab is east of the player (the ocean "
+                                     "side): %.1f vs %.1f"
+                                     % (camp.x, g.player.x))
+        try:
+            import world as _world
+            _coast = _world.coast_x(camp.y, g.world.seed)
+            assert camp.x < _coast - 900.0, ("lab is too close to the coast: "
+                                             "%.1f vs %.1f"
+                                             % (camp.x, _coast))
+        except AssertionError:
+            raise
+        except Exception:
+            pass
         assert len(subjects) == 6, "lab has %d subjects" % len(subjects)
         assert g._npc_sel == 1, "F7 did not advance selection: %r" % g._npc_sel
         n = subjects[1]
