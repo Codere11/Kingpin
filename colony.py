@@ -63,6 +63,7 @@ def make_camp(g) -> object:
         "loggers": [],             # the conquered LOGGERS
         "artisans": [],            # the conquered ARTISANS (on benches)
         "researchers": [],         # the conquered RESEARCHERS (at the bench)
+        "doctors": [],             # the conquered DOCTORS (at the Medicine Hut)
         "miners": [],              # the conquered MINERS (iron in the snow)
         "smiths": [],              # the conquered SMITHS (iron bars at the forge)
         "weavers": [],             # the conquered WEAVERS (cotton to cloth at the loom)
@@ -105,6 +106,7 @@ def _campify(s, g) -> None:
         s.loggers = []
         s.artisans = []
         s.researchers = []
+        s.doctors = []
         s.miners = []
         s.smiths = []
         s.weavers = []
@@ -118,6 +120,8 @@ def _campify(s, g) -> None:
         s._last_breed_day = -1
         s._breeding_people = None
         s._last_people_breed_day = -1
+    if getattr(s, "doctors", None) is None:
+        s.doctors = []
     # the camp's pool is its living farmers (the native `people` was a count)
     s.people = [n for n in getattr(s, "farmers", ()) or ()
                 if getattr(n, "alive", True)]
@@ -448,76 +452,62 @@ def _nearest_sign(g, camp):
 
 
 def _assign_jobs(g, camp, sign) -> None:
-    """Assign one camp's people from its sign-post counts (or all farmers if
-    there is no sign-post)."""
+    """Assign one camp's people from its sign-post counts.
+
+    One ordered list, so adding a job cannot leave the slice boundaries wrong.
+    Without a sign-post everyone farms.
+    """
     people = list(getattr(camp, "people", ()) or ())
-    n_farmer = int(getattr(sign, "farmers", 0) or 0) if sign is not None else len(people)
-    n_logger = int(getattr(sign, "loggers", 0) or 0) if sign is not None else 0
-    n_artisan = int(getattr(sign, "artisans", 0) or 0) if sign is not None else 0
-    n_researcher = int(getattr(sign, "researchers", 0) or 0) if sign is not None else 0
-    n_miner = int(getattr(sign, "miners", 0) or 0) if sign is not None else 0
-    n_smith = int(getattr(sign, "smiths", 0) or 0) if sign is not None else 0
-    n_weaver = int(getattr(sign, "weavers", 0) or 0) if sign is not None else 0
-    n_spiceman = int(getattr(sign, "spicemen", 0) or 0) if sign is not None else 0
-    n_gunsmith = int(getattr(sign, "gunsmiths", 0) or 0) if sign is not None else 0
-    camp.workers = []
-    camp.loggers = []
-    camp.artisans = []
-    camp.researchers = []
-    camp.miners = []
-    camp.smiths = []
-    camp.weavers = []
-    camp.spicemen = []
-    camp.gunsmiths = []
-    camp.unemployed = []
-    for i, n in enumerate(people):
+    def count(key, default=0):
+        if sign is None:
+            return default
+        return int(getattr(sign, key, 0) or 0)
+    order = [
+        ("farmer", count("farmers", len(people))),
+        ("logger", count("loggers")),
+        ("artisan", count("artisans")),
+        ("researcher", count("researchers")),
+        ("doctor", count("doctors")),
+        ("miner", count("miners")),
+        ("smith", count("smiths")),
+        ("weaver", count("weavers")),
+        ("spiceman", count("spicemen")),
+        ("gunsmith", count("gunsmiths")),
+    ]
+    for attr in ("workers", "loggers", "artisans", "researchers", "doctors",
+                 "miners", "smiths", "weavers", "spicemen", "gunsmiths",
+                 "unemployed"):
+        setattr(camp, attr, [])
+    roster = {
+        "farmer": "workers", "logger": "loggers", "artisan": "artisans",
+        "researcher": "researchers", "doctor": "doctors",
+        "miner": "miners", "smith": "smiths", "weaver": "weavers",
+        "spiceman": "spicemen", "gunsmith": "gunsmiths",
+    }
+    i = 0
+    for role, amount in order:
+        for _ in range(max(0, amount)):
+            if i >= len(people):
+                break
+            n = people[i]
+            i += 1
+            n.orchard_plot = None
+            n.farm_plot = None
+            n.artisan_bench = None
+            n.native_role = role
+            n.job = role
+            getattr(camp, roster[role]).append(n)
+            if role == "smith" and getattr(n, "smith_product", None) is None:
+                n.smith_product = "iron_bar"
+            if role == "gunsmith" and getattr(n, "gunsmith_product", None) is None:
+                n.gunsmith_product = "musket"
+    for n in people[i:]:
         n.orchard_plot = None
         n.farm_plot = None
         n.artisan_bench = None
-        if i < n_farmer:
-            n.native_role = "farmer"
-            n.job = "farmer"
-            camp.workers.append(n)
-        elif i < n_farmer + n_logger:
-            n.native_role = "logger"
-            n.job = "logger"
-            camp.loggers.append(n)
-        elif i < n_farmer + n_logger + n_artisan:
-            n.native_role = "artisan"
-            n.job = "artisan"
-            camp.artisans.append(n)
-        elif i < n_farmer + n_logger + n_artisan + n_researcher:
-            n.native_role = "researcher"
-            n.job = "researcher"
-            camp.researchers.append(n)
-        elif i < n_farmer + n_logger + n_artisan + n_researcher + n_miner:
-            n.native_role = "miner"
-            n.job = "miner"
-            camp.miners.append(n)
-        elif i < n_farmer + n_logger + n_artisan + n_researcher + n_miner + n_smith:
-            n.native_role = "smith"
-            n.job = "smith"
-            if getattr(n, "smith_product", None) is None:
-                n.smith_product = "iron_bar"   # default: smelt ore into bars
-            camp.smiths.append(n)
-        elif i < n_farmer + n_logger + n_artisan + n_researcher + n_miner + n_smith + n_weaver:
-            n.native_role = "weaver"
-            n.job = "weaver"
-            camp.weavers.append(n)
-        elif i < n_farmer + n_logger + n_artisan + n_researcher + n_miner + n_smith + n_weaver + n_spiceman:
-            n.native_role = "spiceman"
-            n.job = "spiceman"
-            camp.spicemen.append(n)
-        elif i < n_farmer + n_logger + n_artisan + n_researcher + n_miner + n_smith + n_weaver + n_spiceman + n_gunsmith:
-            n.native_role = "gunsmith"
-            n.job = "gunsmith"
-            n.gunsmith_product = "musket"   # default: the only gun he can start with
-            camp.gunsmiths.append(n)
-        else:
-            n.native_role = "unemployed"
-            n.job = None
-            camp.unemployed.append(n)
-
+        n.native_role = "unemployed"
+        n.job = None
+        camp.unemployed.append(n)
 
 def sync_jobs(g) -> None:
     """Reassign every conquered camp from ITS OWN sign-post -- the nearest one

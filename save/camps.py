@@ -16,17 +16,17 @@ from . import context as _context
 from . import people as people_mod
 from . import store
 
-JOB_LISTS = ("workers", "loggers", "artisans", "researchers", "miners",
-             "smiths", "weavers", "spicemen", "gunsmiths", "unemployed",
-             "farmers", "warriors", "handlers")
+JOB_LISTS = ("workers", "loggers", "artisans", "researchers", "doctors",
+             "miners", "smiths", "weavers", "spicemen", "gunsmiths",
+             "unemployed", "farmers", "warriors", "handlers")
 
 SKIP = {
     "g", "fireplace", "people", "people_count", "animals",
     "orchard_state", "_breeding", "_breeding_people",
     "farm_tiles", "orchard_tiles", "ledger_lots", "_save_uid", "_save_key", "_saved",
     "farmers", "warriors", "handlers", "workers", "loggers", "artisans",
-    "researchers", "miners", "smiths", "weavers", "spicemen", "gunsmiths",
-    "unemployed",
+    "researchers", "doctors", "miners", "smiths", "weavers", "spicemen",
+    "gunsmiths", "unemployed",
 }
 
 

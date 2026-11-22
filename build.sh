@@ -56,6 +56,7 @@ echo "Checking the save round-trip..."
 echo "Checking persona and mood..."
 "$VENV/bin/python" tools/persona_selftest.py > /tmp/kingpin-persona.log 2>&1 || { echo "  PERSONA SELFTEST FAILED"; tail -20 /tmp/kingpin-persona.log; exit 1; }
 "$VENV/bin/python" tools/card_selftest.py > /tmp/kingpin-card.log 2>&1 || { echo "  CARD SELFTEST FAILED"; tail -20 /tmp/kingpin-card.log; exit 1; }
+"$VENV/bin/python" tools/doctor_selftest.py > /tmp/kingpin-doctor.log 2>&1 || { echo "  DOCTOR SELFTEST FAILED"; tail -20 /tmp/kingpin-doctor.log; exit 1; }
 
 # THE LAB MUST ALSO SURVIVE A SAVE.  This uses the test slot only; it never
 # reads or writes the player's normal save.

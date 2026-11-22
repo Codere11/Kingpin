@@ -681,7 +681,8 @@ Do not start the next phase before that.
 > record; F9, the Medicine Hut, breakables and the full 16-subject set stay for
 > the later phases.  `npclab.py`, `persona.py`, `mood.py` and `doctor.py` exist;
 > the live camps and AI are untouched.  Automated checks are in
-> `tools/persona_selftest.py`, `tools/npclab_selftest.py` and
+> `tools/persona_selftest.py`, `tools/card_selftest.py`,
+> `tools/doctor_selftest.py`, `tools/npclab_selftest.py` and
 > `tools/npclab_keytest.py`, all run by `./build.sh`.
 
 Build:
@@ -829,10 +830,12 @@ state, and nothing is silently deleted.
 
 ## Phase 6 — Doctor, medicine, mental state
 
-> **Status: the card gate is implemented, test-only.**  The NPC card and watch
-> panel show “No medical record” until `medicines_received > 0`; the lab’s F10
-> administers one medicine so the reveal can be tested.  Real doctor production,
-> the Medicine Hut and the delivery loop are still to build.
+> **Status: implemented.**  The NPC card and watch panel show “No medical
+> record” until `medicines_received > 0`.  The Medicine Hut is a buildable
+> workplace; the doctor job is on the sign-post; the doctor gathers tobacco,
+> dried mushroom and alcohol, makes medicine at the hut, and delivers it to
+> hurt or unexamined people.  The first dose permanently unlocks the record.
+> The lab’s F10 remains a fast test path.
 
 Build:
 

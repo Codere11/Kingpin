@@ -522,6 +522,8 @@ class Workplace:
             return self._render_mine()
         if self.kind == "lab":
             return self._render_lab()
+        if self.kind == "medicine_hut":
+            return self._render_lab()
         if self.kind == "research":
             return self._render_research()
         if self.kind == "weaver":

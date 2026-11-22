@@ -797,7 +797,7 @@ class SignPanel:
     def _jobs(self):
         jobs = [("Farmers", "farmers"), ("Loggers", "loggers"),
                 ("Artisans", "artisans"), ("Researchers", "researchers"),
-                ("Miners", "miners")]
+                ("Doctors", "doctors"), ("Miners", "miners")]
         if self.show_smiths is not None and self.show_smiths():
             jobs.append(("Smiths", "smiths"))
         if self.show_weavers is not None and self.show_weavers():
@@ -2028,7 +2028,8 @@ class PersonaCard:
              "artisan": "Artisan", "researcher": "Researcher",
              "miner": "Miner", "smith": "Smith", "weaver": "Weaver",
              "spiceman": "Spiceman", "gunsmith": "Gunsmith",
-             "soldier": "Soldier", "unemployed": "Unemployed"}
+             "doctor": "Doctor", "soldier": "Soldier",
+             "unemployed": "Unemployed"}
 
     def __init__(self):
         self.font_name = pygame.font.SysFont("dejavusans", 19, bold=True)

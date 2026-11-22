@@ -20,6 +20,8 @@ BUILDINGS = [
     # ...and the opposite: take something of his down with one click.
     {"id": "demolish", "name": "Demolish", "wood": 0, "where": "outside"},
     {"id": "lab", "name": "Artisan's bench", "wood": 150, "where": "outside"},
+    {"id": "medicine_hut", "name": "Medicine Hut", "wood": 180,
+     "where": "outside"},
     {"id": "research", "name": "Research bench", "wood": 150, "where": "outside"},
     # A LOOM IS GEARS -- not wood -- and only once Textiles is researched.
     {"id": "weaver", "name": "Weaver's loom", "wood": 0,
@@ -570,6 +572,7 @@ class BuildMenu:
 
             icon_fn = {"house": house_icon, "workshop": workshop_icon,
                        "lab_table": lab_icon, "lab": lab_icon,
+                       "medicine_hut": lab_icon,
                        "research": research_icon,
                        "weaver": weaver_icon,
                        "spice": spice_icon,

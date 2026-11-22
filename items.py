@@ -102,6 +102,9 @@ REGISTRY: dict[str, ItemDef] = {
                               stackable=True, max_stack=100, quality=True),
     "first_aid": ItemDef("first_aid", "First-Aid Kit", "Patches you back up.",
                          stackable=True, max_stack=10),
+    "medicine": ItemDef("medicine", "Medicine",
+                        "A doctor's dose. The first one reveals a person's medical record.",
+                        stackable=True, max_stack=20),
     "axe": ItemDef("axe", "Axe", "Chops trees for wood. Also works on people."),
     "wood": ItemDef("wood", "Wood", "Timber, for building and burning.",
                     stackable=True, max_stack=100),
@@ -925,6 +928,28 @@ def _draw_bread(s: int) -> pygame.Surface:
     return surf
 
 
+def _draw_medicine(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    glass, glass_l, glass_d = (154, 202, 188), (214, 240, 228), (76, 118, 108)
+    cork, cork_d = (174, 126, 70), (104, 72, 38)
+    pygame.draw.rect(surf, glass, (0.32 * s, 0.30 * s, 0.36 * s, 0.56 * s),
+                     border_radius=int(0.08 * s))
+    pygame.draw.rect(surf, glass_d, (0.32 * s, 0.30 * s, 0.36 * s, 0.56 * s),
+                     int(0.05 * s), border_radius=int(0.08 * s))
+    pygame.draw.rect(surf, glass_l, (0.38 * s, 0.36 * s, 0.10 * s, 0.34 * s),
+                     border_radius=int(0.04 * s))
+    pygame.draw.rect(surf, cork, (0.36 * s, 0.20 * s, 0.28 * s, 0.13 * s),
+                     border_radius=int(0.03 * s))
+    pygame.draw.rect(surf, cork_d, (0.36 * s, 0.20 * s, 0.28 * s, 0.13 * s),
+                     max(1, int(0.03 * s)), border_radius=int(0.03 * s))
+    # a simple red cross on the label
+    pygame.draw.rect(surf, (188, 58, 54),
+                     (0.45 * s, 0.50 * s, 0.10 * s, 0.22 * s))
+    pygame.draw.rect(surf, (188, 58, 54),
+                     (0.39 * s, 0.56 * s, 0.22 * s, 0.10 * s))
+    return surf
+
+
 _DRAWERS = {
     "wheat": _draw_wheat,
     "wheat_wort": _draw_wort,
@@ -964,6 +989,7 @@ _DRAWERS = {
     "agave_seed": _draw_agave_seed,
     "tobacco": _draw_tobacco,
     "first_aid": _draw_first_aid,
+    "medicine": _draw_medicine,
     "axe": _draw_axe,
     "wood": _draw_wood,
     "coin": _draw_coin,

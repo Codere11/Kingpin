@@ -14,6 +14,7 @@ from __future__ import annotations
 import stats
 import effects
 import persona
+import doctor
 
 import colorsys
 import functools
@@ -1275,12 +1276,17 @@ class NPC:
         if camp is None:
             return []
         people = getattr(camp, "people", None)
-        if people is not None:
+        if isinstance(people, list):
             return [p for p in people if getattr(p, "alive", True)]
         out = []
-        for attr in ("farmers", "warriors", "handlers"):
+        seen = set()
+        for attr in ("farmers", "warriors", "handlers", "workers", "loggers",
+                     "artisans", "researchers", "doctors", "miners",
+                     "smiths", "weavers", "spicemen", "gunsmiths",
+                     "unemployed"):
             for p in (getattr(camp, attr, ()) or ()):
-                if getattr(p, "alive", True):
+                if getattr(p, "alive", True) and id(p) not in seen:
+                    seen.add(id(p))
                     out.append(p)
         return out
 
@@ -1386,6 +1392,34 @@ class NPC:
         if not carry:
             self._did_work()
         return True
+
+    def _take_ingredient(self, item: str, need: int, dt: float) -> bool:
+        """Take from the camp ledger first, then a chest.
+
+        True means the doctor should return this frame (walking or picking up).
+        """
+        if need <= 0:
+            return False
+        camp = getattr(self, "native_camp", None)
+        store = getattr(camp, "ledger_goods", None) if camp is not None else None
+        if isinstance(store, dict) and int(store.get(item, 0) or 0) > 0:
+            got = min(need, int(store[item]))
+            store[item] = int(store[item]) - got
+            self.carry[item] = int(self.carry.get(item, 0) or 0) + got
+            need -= got
+            if need <= 0:
+                return False
+        chest = self._chest_with(item, need)
+        if chest is None:
+            return False
+        if math.hypot(chest.x - self.x, chest.y - self.y) > 20.0:
+            self._step_toward(chest.x, chest.y, dt)
+            return True
+        taken, _grade = self._take_from_chest(chest, item, need)
+        if taken > 0:
+            self.carry[item] = int(self.carry.get(item, 0) or 0) + taken
+            return True
+        return False
 
     def _chest_accepting(self, item: str):
         """The nearest chest whose filter is None ('Any') or this item."""
@@ -1725,6 +1759,129 @@ class NPC:
          "seconds": 60.0, "needs": "reinforced_armor",
          "name": "Reinforced armor", "desc": "10 bars + 10 textiles \u2192 1 suit"},
     )
+
+    def _pick_patient(self):
+        """The nearest person of this camp who is hurt or still unexamined."""
+        best, bd = None, 1e18
+        for p in self._camp_people():
+            if p is self or not getattr(p, "alive", True):
+                continue
+            hurt = float(getattr(p, "health", 0)) < float(getattr(p, "max_health", 0))
+            unexamined = int(getattr(p, "medicines_received", 0) or 0) <= 0
+            if not (hurt or unexamined):
+                continue
+            d = (p.x - self.x) ** 2 + (p.y - self.y) ** 2
+            if d < bd:
+                best, bd = p, d
+        return best
+
+    def _work_doctor(self, dt: float) -> None:
+        """Make medicine, then carry it to the hurt and the unexamined.
+
+        The first medicine is an examination: it sets medicines_received and
+        mental_known permanently.  The patient scan is cached and runs once
+        every doctor.SCAN_SECONDS, never once per frame for every person.
+        """
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        if g is None:
+            self._native_idle(dt)
+            return
+        hut = self._nearest_workplace(g, "medicine_hut")
+        if hut is None:
+            self._native_idle(dt)
+            return
+
+        # 1. Carry medicine to a patient.
+        if int(self.carry.get("medicine", 0) or 0) > 0:
+            target = getattr(self, "_doc_target", None)
+            if target is not None:
+                hurt = (float(getattr(target, "health", 0))
+                        < float(getattr(target, "max_health", 0)))
+                unexamined = int(getattr(target, "medicines_received", 0) or 0) <= 0
+                if (not getattr(target, "alive", True)
+                        or not (hurt or unexamined)):
+                    target = None
+                    self._doc_target = None
+            if target is None:
+                self._doc_scan_t = getattr(self, "_doc_scan_t", 0.0) - dt
+                if self._doc_scan_t <= 0.0:
+                    self._doc_scan_t = doctor.SCAN_SECONDS
+                    target = self._pick_patient()
+                    self._doc_target = target
+            if target is not None:
+                if math.hypot(target.x - self.x, target.y - self.y) > 20.0:
+                    self._step_toward(target.x, target.y, dt)
+                    return
+                self.carry["medicine"] = int(self.carry.get("medicine", 0)) - 1
+                if self.carry.get("medicine", 0) <= 0:
+                    self.carry.pop("medicine", None)
+                try:
+                    target.health = target.max_health
+                except Exception:
+                    pass
+                target.medicines_received = int(getattr(target, "medicines_received", 0) or 0) + 1
+                target.mental_known = True
+                try:
+                    if getattr(target, "mood_thoughts", None) is None:
+                        target.mood_thoughts = {}
+                    target.mood_thoughts["medicine"] = {
+                        "delta": 4.0, "expires_at": float(g.now) + 120.0,
+                        "stacks": 1}
+                except Exception:
+                    pass
+                self._doc_target = None
+                self._doc_scan_t = 0.0
+                self._did_work()
+                try:
+                    import plog
+                    plog.log("MEDICINE", getattr(target, "name", "?"),
+                             "treated by", getattr(self, "name", "?"))
+                except Exception:
+                    pass
+                return
+            # No patient: keep the dose at the hut rather than wander.
+            self._wait_at_post(hut, dt)
+            return
+
+        # 2. Gather one tobacco, one dried mushroom, one alcohol.
+        for item, need in doctor.RECIPE.items():
+            have = int(self.carry.get(item, 0) or 0)
+            if have < need:
+                if self._take_ingredient(item, need - have, dt):
+                    return
+        if not any(int(self.carry.get(a, 0) or 0) > 0 for a in doctor.ALCOHOL):
+            for alcohol in doctor.ALCOHOL:
+                if self._take_ingredient(alcohol, 1, dt):
+                    return
+                if int(self.carry.get(alcohol, 0) or 0) > 0:
+                    break
+        missing = any(int(self.carry.get(i, 0) or 0) < n
+                      for i, n in doctor.RECIPE.items())
+        if missing or not any(int(self.carry.get(a, 0) or 0) > 0
+                              for a in doctor.ALCOHOL):
+            self._wait_at_post(hut, dt)
+            return
+
+        # 3. Work the bench.
+        if self._wp_go(hut, dt, 24.0):
+            return
+        self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
+        if self.produce_acc >= doctor.MEDICINE_SECONDS:
+            self.produce_acc = 0.0
+            for item, need in doctor.RECIPE.items():
+                self.carry[item] = int(self.carry.get(item, 0) or 0) - need
+                if self.carry.get(item, 0) <= 0:
+                    self.carry.pop(item, None)
+            for alcohol in doctor.ALCOHOL:
+                if int(self.carry.get(alcohol, 0) or 0) > 0:
+                    self.carry[alcohol] = int(self.carry[alcohol]) - 1
+                    if self.carry[alcohol] <= 0:
+                        self.carry.pop(alcohol, None)
+                    break
+            self.carry["medicine"] = int(self.carry.get("medicine", 0) or 0) + doctor.DOSES_PER_BATCH
+            self._did_work()
+            self._snd("bench", min_gap=0.8)
 
     def _work_smith(self, dt: float) -> None:
         """A smith works the forge: iron ore into iron bars, iron bars into
@@ -2380,6 +2537,9 @@ class NPC:
             return
         if _nat and getattr(self, "native_role", "") == "researcher":
             self._work_research(dt)
+            return
+        if _nat and getattr(self, "native_role", "") == "doctor":
+            self._work_doctor(dt)
             return
         if _nat and getattr(self, "native_role", "") == "miner":
             self._work_mine(dt)
