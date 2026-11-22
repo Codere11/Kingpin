@@ -19,7 +19,6 @@ import economy
 import farm
 import guns
 import items
-import nemesis
 import ore
 import sound
 import village as village_mod
@@ -252,14 +251,6 @@ def resolve_swing(g, kills) -> int:
     for enemy in g.enemies:
         if enemy.alive and in_arc(enemy.x, enemy.y, enemy.radius):
             _was_alive = getattr(enemy, "alive", True)
-            if (getattr(enemy, "is_militia", False)
-                    or getattr(enemy, "militia", False)):
-                try:
-                    import detain as _da
-                    _da.militia_attacked(g.player, enemy, list(g.enemies),
-                                         list(village_mod.PEOPLE))
-                except Exception:
-                    pass
             enemy.take_damage(melee)
             _flesh = True
             if _was_alive and not getattr(enemy, "alive", True):
@@ -267,12 +258,6 @@ def resolve_swing(g, kills) -> int:
                     g.inventory.add("raw_meat", random.randint(5, 10))
                     g.inventory.add("hide", random.randint(30, 50))
                     g.toast("Killed a bison   +meat +hides")
-                try:
-                    import detain as _dk
-                    _dk.militia_killed(g.player, enemy, list(g.enemies),
-                                       list(village_mod.PEOPLE))
-                except Exception:
-                    pass
             g.blood.spawn(enemy.x, enemy.y, 8, 14.0)
             if (g.player.nation is not None
                     and getattr(enemy, "nation", None) == g.player.nation):
@@ -903,11 +888,6 @@ def on_click(g):
         if farm.harvest(g.world, g.inventory, plot, g.now, g.toast, grade,
                         skill=g.skills.farming,
                         tx=tx, ty=ty, share=g.pay_share):
-            # LEAF IS ILLEGAL. Any agent close enough to have watched it
-            # g.now knows it, and says so to the next one he meets.
-            nemesis.note_offence_seen(g.player, "grew",
-                                      crop.LEAF_ITEM.get(plot.kind,
-                                                         plot.kind))
             # The same rate the farmers get. At the old default (0.12) the
             # g.player reached skill 8 in ~67 harvests -- SSS tobacco by day
             # two, against three weeks for the men who do it for a living.
@@ -935,9 +915,6 @@ def on_click(g):
     if wild is not None:
         wildcrop.harvest(g.world, tx, ty, wild[0], wild[1], g.inventory, g.toast,
                          share=g.pay_share)
-        if wild[0] in crop.LEAF_KINDS:
-            nemesis.note_offence_seen(g.player, "grew",
-                                      crop.LEAF_ITEM.get(wild[0], wild[0]))
         g.skills.gain_farming(0.02)      # wild or sown, the hand learns alike
         return
 

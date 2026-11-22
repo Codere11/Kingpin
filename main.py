@@ -32,16 +32,13 @@ import time
 
 import pygame
 import plog
-import worldio
 import worldbuild
 import houseuse
 import houseroom
 import hudtime
-import newsbubble
 import nearby
 import playerutil
-import interact
-import savegame
+import save as savemod
 import combat_actions
 import life
 import render
@@ -51,8 +48,6 @@ import placement
 import crop
 import smoke
 import biomes
-import board
-import boardapi
 import compass
 import economy
 import items
@@ -60,14 +55,12 @@ import industry
 import quality
 import farm
 import fence
-import gate
 import guns
 import map as mapmod
 import hubs
 import ore
 import persist
 import steering
-import nemesis
 import observer
 # A TOP-LEVEL IMPORT, not a local one inside a function. PyInstaller follows
 # static imports when it decides what to bundle; a `import deaths` buried in a
@@ -77,7 +70,6 @@ import observer
 import deaths
 import dialogue
 import village as village_mod
-import war
 import work
 import wildcrop
 import world
@@ -86,8 +78,6 @@ from blood import Blood
 from build import BuildMenu, build_cost, build_materials
 import stall as stall_mod
 import corpse as corpse_mod
-import folders as folders_mod
-import manhunt
 from combat import Combat, segment_circle_hit
 from creatures import (Bison, Horse, Patrol, Rabbit, Soldier, Wolf, is_trader,
                        choose_target as
@@ -255,8 +245,20 @@ def main() -> None:
     persist.set_slot(g.slot)
     pygame.mouse.set_visible(False)
 
-    g._save = persist.read()
-    g.world = World(seed=int(g._save.get("seed", 20240501)))
+    # THE SAVE'S SEED IS READ BEFORE THE WORLD IS MADE. The old code read a
+    # JSON seed from a file that the save writer had overwritten with pickle
+    # bytes, so every launch after the first built a different world.
+    try:
+        g._load_manifest = savemod.load_manifest(g.slot)
+    except Exception as _se:
+        # A damaged NEW save must not be silently replaced by a new game.
+        plog.log("SAVE-HEADER-ERROR", repr(_se)[:240])
+        raise
+    _seed = (int(g._load_manifest["seed"])
+             if g._load_manifest is not None
+             else savemod.initial_seed(g.slot))
+    g._save = {"seed": _seed}
+    g.world = World(seed=_seed)
     g.ground = GroundRenderer(g.world)
     g.world.ground = g.ground          # so soil edits from anywhere can redraw
     g.scatter = Scatter(g.world.seed, g.world)
@@ -290,25 +292,13 @@ def main() -> None:
     # That is why a man at a gate saw no wall and no guard, and why a settlement
     # looked like a patch of berries with nothing around it. 1.8 seconds at the
     # loading screen is cheaper than a world that lies about where it is.
-    g._cached = None
-    if g._cached is not None:
-        g.villages = g._cached
-        g.ground.villages_v = g.villages
-        # THE REGISTER OF PEOPLE IS REBUILT AFTER A LOAD. Unpickling does not
-        # call __init__, so a restored villager never put himself in it, and
-        # the world would have walked nobody at all.
-        print("registered from the cache: %d people, %d houses"
-              % (village_mod.rebuild_people(g.villages),
-                 village_mod.rebuild_houses(g.villages)))
-    else:
-        worldbuild.load_world(g.screen, g.clock, g.villages, g.world)  # every village, before the first step
-        # THE POPULATION IS SET BEFORE THE CACHE IS WRITTEN. Writing it after
-        # meant the cache held 2,084 people and every later launch restored all
-        # of them and then threw half away again.
-        worldbuild.set_world_population(g.villages)
-        worldio.save_cached_world(g.villages, g.world.seed)
-        village_mod.rebuild_people(g.villages)
-        village_mod.rebuild_houses(g.villages)
+    # THE OLD VILLAGE LATTICE IS GONE. There is nothing to lay out and no
+    # world cache to trust: the native camps are built around the player, and
+    # the save restores them at their saved positions.  The build keeps the
+    # population pass for the native camp code that still asks for it.
+    worldbuild.load_world(g.screen, g.clock, g.villages, g.world)
+    village_mod.rebuild_people(g.villages)
+    village_mod.rebuild_houses(g.villages)
 
     # ---- THE HUBS IN THE WILD -- not villages; no war can be declared
     # on one, because no one admits it exists.
@@ -352,23 +342,6 @@ def main() -> None:
                                 - min(r.y for r in g._built)):
             if any(r.collidepoint(_t.x, _t.y) for r in g._built):
                 _t.felled = True
-
-    # ---- A THOUSAND PEOPLE, AND A THOUSAND CAP, ALWAYS ------------------
-    #
-    # The last word on the size of the world, and it runs on BOTH paths -- a
-    # fresh build and a restored save -- because an older save carries its own
-    # `capacity` and `rebuild_people` trims every town down to it. That is
-    # where two thirds of the world has been disappearing: the world is built
-    # with 58 people a town, an older save says 17, and the register is cut to
-    # the smaller number before anyone takes a step. Whatever a file says, the
-    # world begins at the size it was designed for.
-    g._pop = worldbuild.set_world_population(g.villages)
-    if g._pop <= 0:
-        print("WARNING: the world has no people at all")
-    else:
-        print("population set to %d over %d towns"
-              % (g._pop, len(list(g.villages.villages))))
-
 
     # ---- BUILD THE GROUND UNDER THE PLAYER **INSIDE THE LOADING SCREEN** ----
     #
@@ -629,7 +602,7 @@ def main() -> None:
     g.hotbar = Hotbar(g.inventory, visible=8)
     g.panel = InventoryPanel(g.inventory)
     g.panel.player = g.player
-    g.board_panel = board.BoardPanel()
+    g.board_panel = None
     # TEST MODE'S INSPECTOR AND LOCK-ON. See observer.py -- 'I' lists every
     # living person, filterable by trade, town and nation, and Enter locks the
     # camera onto one of them and starts a log of HIS doings alone.
@@ -655,25 +628,8 @@ def main() -> None:
     g.enemies: list[Enemy] = []          # nation soldiers and wolves
 
     # ---- THE TEST ENGINE, running the whole network once ----------------
-    g._TEST_TRAIN = [None]
     g._panic_t = [0.0]           # gunfire -> the crowd breaks and runs
     g._EXPRESS = [False]         # the engine is running for the camp, not touring
-    try:
-        import train as _train_mod
-        import rail as _rail_t
-        _rail_t.ensure(g.villages.villages)
-        g._rt = _rail_t.tour()
-        if g._rt:
-            g._TEST_TRAIN[0] = _train_mod.Train(g._rt)
-            plog.log("TRAIN-START", len(g._rt), "route points,",
-                     int(_rail_t.count()[1]), "px of track")
-    except Exception as _te:
-        plog.log("TRAIN-ERROR", repr(_te)[:160])
-    try:
-        import rail as _rail0
-        _rail0.ensure(g.villages.villages)
-    except Exception as _re0:
-        plog.log("RAIL-ERROR", repr(_re0)[:120])
     g.armies: list = []                  # columns on the march, this campaign
     g.world.enemies = g.enemies            # so villagers can spot a predator
     # WHO CAN SEE A THING HAPPEN: the whole living population, for witnesses.
@@ -967,32 +923,60 @@ def main() -> None:
     g.WITNESS_PX = 900.0        # close enough to have watched it happen
 
     def _see_murder(victim) -> None:
-        interact.see_murder(victim)
+        return None
 
     def _meet_army(trader, army, now) -> None:
-        interact.meet_army(trader, army, now)
+        return None
 
     def make_tradeable(npc):
-        return interact.make_tradeable(npc, random)
+        """Give a man the purse/larder fields the trade panel expects."""
+        if getattr(npc, "coins", None) is None:
+            npc.coins = 30 + (abs(hash((getattr(npc, "x", 0.0),
+                                        getattr(npc, "y", 0.0)))) % 45)
+            npc.trade_demand = 4
+            npc.restock_timer = 0.0
+            npc.stock = {}
+        if getattr(npc, "stock", None) is None:
+            npc.stock = {}
+        if getattr(npc, "job", None) is None:
+            npc.job = "soldier"
+        if not hasattr(npc, "wants_product"):
+            npc.wants_product = "cigar"
+        if not hasattr(npc, "wants_drink"):
+            npc.wants_drink = "beer"
+        if not hasattr(npc, "yearning"):
+            npc.yearning = 0.85
+        if not hasattr(npc, "quality_pref"):
+            npc.quality_pref = 0
+        if not hasattr(npc, "rng"):
+            npc.rng = random.Random(int(abs(hash((npc.x, npc.y)))) & 0xFFFFFFFF)
+        if getattr(npc, "trade_demand", 0) <= 0:
+            npc.trade_demand = 4
+        if not getattr(npc, "name", None):
+            npc.name = "a soldier"
+        return npc
 
     def guard_search(npc) -> None:
-        interact.guard_search(npc, g.inventory, g.player, toast, commit_crime, random)
+        return None
 
     def open_trade(npc) -> None:
-        interact.open_trade(npc, make_tradeable, g.player, _main_capital,
-                            g.dialogue_panel, pygame, plog)
+        make_tradeable(npc)
+        g.dialogue_panel.open(npc, g.player, _main_capital()[0])
+        pygame.mouse.set_visible(True)
+        plog.log("TALK", "opened with", getattr(npc, "name", "?"))
 
     def open_trade_menu(npc) -> None:
-        
-        g.trade_open, g.trade_menu = interact.open_trade_menu(
-            npc, make_tradeable, g.player, g.inventory, toast, village_mod,
-            TradeMenu, pygame, plog)
+        make_tradeable(npc)
+        g.trade_menu = TradeMenu(g.inventory, npc, g.player)
+        g.trade_open = True
+        pygame.mouse.set_visible(True)
+        plog.log("TRADE", "opened with", getattr(npc, "name", "?"))
 
     def nearest_hostile(npc):
-        return interact.nearest_hostile(npc, g.player)
+        return None
 
     def commit_crime(where=None) -> None:
-        interact.commit_crime(where, g.villages, g.player, g.now, g._WORK)
+        return None
 
     def player_hunted() -> bool:
         return playerutil.player_hunted(g.visible_villages)
@@ -1135,7 +1119,7 @@ def main() -> None:
         g.placing = placement.commit_plot(g.placing, g.plot_start, placement_pos,
                                         toast, hubs, g.villages, g.hub_world,
                                         g.player, g.built_plots, mark_dirty,
-                                        nemesis, plog)
+                                        plog)
 
     def try_place() -> None:
         
@@ -1243,7 +1227,7 @@ def main() -> None:
             villages=g.villages, hub_world=g.hub_world, trees=g.trees, vw=g.vw, vh=g.vh,
             pygame=pygame, fence=fence, built_fences=g.built_fences,
             camp_walls=g.camp_walls, built_gates=g.built_gates, player=g.player,
-            _TEST_TRAIN=g._TEST_TRAIN, corpse_mod=corpse_mod, now=g.now, crop=crop,
+            corpse_mod=corpse_mod, now=g.now, crop=crop,
             world=g.world, wildcrop=wildcrop, ore_field=g.ore_field,
             enemies=g.enemies, rabbits=g.rabbits, horses=g.horses, built_houses=g.built_houses,
             _TRUTH=g._TRUTH, _draws=g._draws, plog=plog,
@@ -1261,21 +1245,19 @@ def main() -> None:
     g._heard: set = set()       # (village, army, nation): what he already knows
 
     def hear_news() -> None:
-        newsbubble.hear_news(g.player, g._chat, g._hear_at, g._heard, g.visible_villages,
-                             g.now, nation_name)
+        return None
 
     def tick_news(dt: float) -> None:
-        newsbubble.tick_news(g._chat, dt)
+        return None
 
     def draw_news(surf, cam_x: float, cam_y: float, w: int, h: int) -> None:
-        newsbubble.draw_news(surf, cam_x, cam_y, w, h, g._chat, g.player,
-                             g._news_lab, g.speech_font)
+        return None
 
     def pay_share(item: str, gained: int) -> int:
         return nearby.pay_share(item, gained, g.player, g.inventory, toast)
 
     def near_board():
-        return nearby.near_board(g.player, g.visible_villages, REACH)
+        return None
 
     def near_chest() -> bool:
         return houseuse.near_chest(g.player, g.inside_house)
@@ -1466,14 +1448,16 @@ def main() -> None:
         return hudtime.near_fireplace(g.player, g.inside_house)
 
     def join_army(npc) -> None:
-        interact.join_army(npc, g.player, toast, nation_name, economy, g.inventory,
-                           g.armies)
+        toast("There is no army to join.")
 
     def leave_army() -> None:
-        interact.leave_army(g.player, toast)
+        g.player.nation = None
+        g.player.army = None
+        g.player.wage = 0
+        toast("You left the army")
 
     def player_hidden_in_village() -> bool:
-        return interact.player_hidden_in_village(g.player, g.visible_villages, math)
+        return False
 
     # One index of the fight, rebuilt once a frame. A fighter only ever
     # considers what is within reach of it, so the cost is linear in the
@@ -1501,7 +1485,7 @@ def main() -> None:
         return hudtime.day_phase(g.now, DAY_LENGTH)
 
     def _nearest_town():
-        return interact.nearest_town(g.player, g.villages, WORLD_BORDER)
+        return None
 
     def speed_button() -> pygame.Rect:
         return hudtime.speed_button(g.vw, g.vh)
@@ -1555,29 +1539,9 @@ def main() -> None:
         g.save_timer = min(g.save_timer, 2.0)
 
     def save_now() -> None:
-        _g = SimpleNamespace(
-            built_houses=g.built_houses, villages=g.villages, player=g.player,
-            inventory=g.inventory, panel=g.panel, skills=g.skills, now=g.now, kills=g.kills,
-            world=g.world, compass_state=g.compass_state, ore_field=g.ore_field,
-            trees=g.trees, built_fences=g.built_fences, built_gates=g.built_gates,
-            built_plots=g.built_plots, placed_work=g.placed_work, hub_world=g.hub_world,
-            train=g._TEST_TRAIN, inside_house=g.inside_house)
-        savegame.write(_g)
-
-    def load_now() -> None:
-        
-        _g = SimpleNamespace(
-            villages=g.villages, player=g.player, inventory=g.inventory, panel=g.panel,
-            enemies=g.enemies, built_houses=g.built_houses, built_fences=g.built_fences,
-            built_gates=g.built_gates, built_plots=g.built_plots, placed_work=g.placed_work,
-            hub_world=g.hub_world, train=g._TEST_TRAIN, camp_walls=g.camp_walls,
-            width=WIDTH, height=HEIGHT, zoom=ZOOM, now=g.now, kills=g.kills,
-            world=g.world, observer_=g.observer_, active_chaos=g.active_chaos,
-            compass_state=g.compass_state, ore_field=g.ore_field,
-            ground=g.ground, cam_x=g.cam_x, cam_y=g.cam_y, skills=g.skills, trees=g.trees)
-        savegame.restore(_g)
-        g.now, g.kills = _g.now, _g.kills
-        g.cam_x, g.cam_y = _g.cam_x, _g.cam_y
+        # A lazy save: compose the snapshot over the next frames and write it
+        # off the main thread.  The safe-exit path uses savemod.save_now.
+        savemod.request(g, "event")
 
     # -- first frame --------------------------------------------------------
     g.font = pygame.font.SysFont("dejavusans", 18)
@@ -1601,6 +1565,7 @@ def main() -> None:
     g.sleep_timer = 0.0
     g.save_timer = 20.0
     g.save_dirty = False
+    g._autosave_timer = 300.0      # a lazy save every five minutes
     g.settle_timer = 8.0        # how often a nation looks to its own vacancies
     g.house_timer = 1.0         # how often a household shares its larder
     g.demand_timer = 20.0       # how often the crown asks after its own war
@@ -1609,16 +1574,47 @@ def main() -> None:
     g.player._away = 0.0
     g.player.settled_at = None
     g.player.job = None
-    load_now()
-    # THE COAST IS WHERE HE WAKES, whatever the save says. Re-applied AFTER
-    # the load, because the save's old position is the last word otherwise and
-    # drags him back inland, away from the ship and the ocean.
+    # ---- THE SAVE, READ BEFORE ANY CAMP IS BUILT -----------------------
+    # The manifest is already known (it supplied the world seed).  Read the
+    # chunks now, and put the player where the save says he was BEFORE the
+    # native camps are laid out, because the home and starter camps are built
+    # around him.
+    g._save_data = None
+    g._loaded_save = False
+    if g._load_manifest is not None:
+        try:
+            g._save_data = savemod.load_all(g.slot)
+            g._loaded_save = g._save_data is not None
+        except Exception as _le:
+            plog.log("SAVE-READ-ERROR", repr(_le)[:240])
+            raise
+
     import world as _world
-    g.player.x = g._spawn[0]
-    g.player.y = g._spawn[1]
-    # FACE THE SEA: the ship is offshore to the east, and the vision cone must
-    # look at it or the whole ocean -- ship included -- sits in the dark.
-    g.player.facing = (1.0, 0.0)
+    if g._loaded_save:
+        _man = g._save_data[0]
+        g.player.x, g.player.y = savemod.world_position(_man)
+        _facing = ((_man.get("player") or {}).get("facing"))
+        if _facing and len(_facing) >= 2:
+            g.player.facing = (float(_facing[0]), float(_facing[1]))
+        # Time and the counters are needed BEFORE native.build generates the
+        # camps that have no saved chunk, or their crops are dated wrong.
+        g.now = float(_man.get("now", 0.0))
+        g.kills = int(_man.get("kills", 0))
+        g.war_alarms = int(_man.get("war_alarms", 0))
+        g.conquered_count = int(_man.get("conquered_count", 0))
+        _spawn = _man.get("spawn")
+        if _spawn and len(_spawn) >= 2:
+            g._spawn = (float(_spawn[0]), float(_spawn[1]))
+        _ship = _man.get("ship")
+        if _ship and len(_ship) >= 2 and getattr(g, "ship_npc", None) is not None:
+            g.ship_npc.x, g.ship_npc.y = float(_ship[0]), float(_ship[1])
+        plog.log("SAVE", "loaded slot", g.slot, "seed", g.world.seed,
+                 "at", "%d,%d" % (int(g.player.x), int(g.player.y)))
+    else:
+        # A NEW GAME WAKES ON THE BEACH, facing the sea.
+        g.player.x = g._spawn[0]
+        g.player.y = g._spawn[1]
+        g.player.facing = (1.0, 0.0)
     g.cam_x = g.player.x - WIDTH / (2.0 * ZOOM)
     g.cam_y = g.player.y - HEIGHT / (2.0 * ZOOM)
     # Rebuild the ground under him NOW and force the static layer to recompose,
@@ -1627,44 +1623,34 @@ def main() -> None:
         g.ground.refresh_around(g.player.x, g.player.y, WIDTH, HEIGHT)
     except Exception:
         pass
-    # AN AXE IN HIS HAND, ONCE THE SAVE HAS HAD ITS SAY. The starting kit is
-    # added before the save is read -- so a restored pack overwrote it and a
-    # man who loaded a game had no axe at all. Anyone with nothing to cut with
-    # gets one; a man who already has a tool keeps his own.
-    if (g.inventory.count_of("axe") <= 0
+    # A NEW MAN WITH NOTHING TO CUT WITH GETS AN AXE. A loaded man keeps
+    # exactly the pack the save gave him.
+    if (not g._loaded_save
+            and g.inventory.count_of("axe") <= 0
             and g.inventory.count_of("pickaxe") <= 0):
         g.inventory.add("axe", 1)
-        mark_dirty()
-
-    # ...AND THE WORLD IS A THOUSAND PEOPLE AFTER THE LOAD, TOO. The save is
-    # laid over the rosters and can only make them smaller; this is the one
-    # place that says how big the country is, whatever a file remembers.
-    try:
-        g._pop2 = worldbuild.set_world_population(g.villages)
-        plog.log("WORLD", "population after the load:", g._pop2)
-    except Exception as _pe:
-        plog.log("WORLD-ERROR", repr(_pe)[:200])
 
     # THE NATIVE SETTLEMENTS: the home camp three hundred blocks inland, plus
     # every lattice cell within the simulated distance, each a ring of teepees
-    # and fields around a fire. Built AFTER the population pass.
+    # and fields around a fire.
     g.native_settlements = {}
     g.native_settlement = None
-    try:
-        import native as _native
-        import world as _w
-        _nseed = (int(g.world.seed) ^ 0x7E7E) & 0xFFFFFFFF
-        _ns_x = _w.coast_x(g.player.y, g.world.seed) - 300 * 32.0
-        _home = _native.build(g, _ns_x, g.player.y, _nseed)
-        _home.cell = None
-        g.native_settlements["home"] = _home
-        g.native_settlement = _home
-        _made = _native.ensure_near(g, g.player.x, g.player.y, _native.NATIVE_RADIUS)
-        _native.spawn_starter_camps(g)
-        plog.log("NATIVE", "home at %.0f,%.0f + %d native settlements"
-                 % (_home.x, _home.y, len(_made)))
-    except Exception as _ne:
-        plog.log("NATIVE-ERROR", repr(_ne)[:200])
+    if not g._loaded_save:
+        try:
+            import native as _native
+            import world as _w
+            _nseed = (int(g.world.seed) ^ 0x7E7E) & 0xFFFFFFFF
+            _ns_x = _w.coast_x(g.player.y, g.world.seed) - 300 * 32.0
+            _home = _native.build(g, _ns_x, g.player.y, _nseed)
+            _home.cell = None
+            g.native_settlements["home"] = _home
+            g.native_settlement = _home
+            _made = _native.ensure_near(g, g.player.x, g.player.y, _native.NATIVE_RADIUS)
+            _native.spawn_starter_camps(g)
+            plog.log("NATIVE", "home at %.0f,%.0f + %d native settlements"
+                     % (_home.x, _home.y, len(_made)))
+        except Exception as _ne:
+            plog.log("NATIVE-ERROR", repr(_ne)[:200])
 
     # THE PLAYER'S OWN SETTLEMENT: a camp and three conquered farmers beside
     # him, ready to work whatever fields he designates.
@@ -1683,14 +1669,35 @@ def main() -> None:
     except Exception as _ce:
         plog.log("COLONY-ERROR", repr(_ce)[:200])
 
+    # ---- PUT THE SAVED WORLD BACK ---------------------------------------
+    # The bindings above are what the restore uses to rebuild the camps; the
+    # restore itself builds them at their saved positions and then overlays
+    # people, jobs, fields, the built world, the player and the systems.
+    if g._loaded_save:
+        try:
+            g._load_ctx = savemod.restore(g, *g._save_data)
+            g.cam_x = g.player.x - WIDTH / (2.0 * ZOOM)
+            g.cam_y = g.player.y - HEIGHT / (2.0 * ZOOM)
+            try:
+                g.ground.refresh_around(g.player.x, g.player.y, WIDTH, HEIGHT)
+                g.trees.visible(g.cam_x, g.cam_y, *g.screen.get_size())
+            except Exception:
+                pass
+            plog.log("SAVE", "restored", len(getattr(g, "_native_people", ())),
+                     "native people,", len(getattr(g, "player_camps", ())),
+                     "conquered camps")
+        except Exception as _re:
+            import traceback as _tb
+            plog.log("SAVE-RESTORE-ERROR", repr(_re)[:240])
+            plog.log("SAVE-RESTORE-TRACE", _tb.format_exc())
+            raise
+
     # ONE COTTON PLANT, RIGHT BESIDE THE SPAWN, full grown so it can be seen
     # and picked the moment he opens his eyes. (removed: no test cotton at spawn)
 
     # THE MAN WHO ANSWERS QUESTIONS IS NOT A CASUALTY OF A SAVE LOAD.
-    # `load_now` rebuilds every town's roll up to its capacity, and he is the
-    # LAST man appended to his town -- so the cap dropped him, and he survived
-    # only as a handle: clickable, but off the roster and therefore not drawn.
-    # He is put back, with the room to hold him.
+    # A restored camp's roster is authoritative; this handle is not in a saved
+    # camp, so it is put back into the register it was created for.
     if g._truth is not None:
         g._home_town = getattr(g._truth, "village", None)
         if g._home_town is not None:
@@ -1738,17 +1745,6 @@ def main() -> None:
     except Exception as _te:
         plog.log("TRADES-ERROR", repr(_te)[:200])
 
-    try:
-        g._ta, g._ha = nemesis.plant(g.villages, g.hub_world, g.world.seed)
-        nemesis.seed_chief(g.villages, g.player, g.world.seed)
-        nemesis.issue()          # secret news: who is told what, and nobody else
-        nemesis.set_places(g.villages, g.hub_world)   # for naming where a crime was
-        plog.log("SERVICE", nemesis.summary(g.villages, g.hub_world),
-                 "| planted", g._ta, "town /", g._ha, "hub")
-        plog.log("SERVICE", nemesis.secret_summary())
-    except Exception as _se:
-        plog.log("SERVICE-ERROR", repr(_se)[:200])
-
     # ---- WHAT THE LANES SAW ----------------------------------------------
     # A lane notices an offence and sends the offender's id, the verb, the
     # goods, where he stood and which of its agents were close enough to watch.
@@ -1766,9 +1762,6 @@ def main() -> None:
             g._BY_ID[str(getattr(_c.npc, "id", ""))] = _c.npc
     except Exception:
         pass
-
-    def _on_offences(events) -> None:
-        playerutil.on_offences(events, g._BY_ID, nemesis)
 
     # (the sink is attached once the lanes exist -- see below)
 
@@ -1905,17 +1898,6 @@ def main() -> None:
     # without ever being looked at. Measured in a live day: 132 purchases, 13
     # loads, 2 sales, and ZERO searches. A wall with nobody on the gate is not a
     # border.
-    try:
-        for _v in g.villages.villages:
-            if getattr(_v, "is_hub", False) or getattr(_v, "patrol", None):
-                continue
-            _v.patrol = make_village_patrol(_v, 4)
-            g.enemies.extend(_v.patrol)
-            _v.patrol_timer = 30.0
-        print("gate guards raised for %d settlements" % len(g.villages.villages))
-    except Exception as _ge:
-        print("gate guard pass failed: %r" % (_ge,))
-
     # ---- THE LANES: THE FRAME, THE HUBS, THE SETTLEMENTS -----------------
     # Two forked processes (see workers.py): process 1 owns the hubs, their
     # people and the free traders; process 2 owns the settlements, their books
@@ -1927,28 +1909,15 @@ def main() -> None:
     # WHAT THE LANES SAW, and how often agents pass it on.
     g._posted: dict = {}
     g._walk_log: dict = {}
-    g._WORK.offence_sink = _on_offences
     g._WORK.stall_sink = _on_stall_sales
 
     # A SEARCH THAT FOUND SOMETHING: the agents of THAT settlement know.
     g._SETTLE_TOWNS = [v for v in g.villages.villages
                      if not getattr(v, "is_hub", False)]
 
-    def _on_caught(events) -> None:
-        playerutil.on_caught(events, g._BY_ID, g._SETTLE_TOWNS, nemesis)
-
-    g._WORK.caught_sink = _on_caught
     g._tell_timer = 0.0
 
-    class _BoardAPI:
-        def __init__(self):
-            self._api = boardapi.BoardAPI(g.player, g.inventory, g._WORK)
-        def hire(self, town, kind, cb) -> None:
-            self._api.hire(town, kind, cb)
-        def sell(self, town, offers, cb) -> None:
-            self._api.sell(town, offers, cb)
-
-    g._BOARD_API = _BoardAPI()
+    g._BOARD_API = None
 
     # ---- THE HANG WATCHDOG ------------------------------------------------
     # A freeze leaves no traceback: the process is alive and nothing is
@@ -1968,7 +1937,6 @@ def main() -> None:
         pass
 
     # bind the wrappers onto g so the loop can call them
-    g._BoardAPI = _BoardAPI
     g._commit_plot = _commit_plot
     g._csay = _csay
     g._dump_trace = _dump_trace
@@ -1977,8 +1945,6 @@ def main() -> None:
     g._main_capital = _main_capital
     g._meet_army = _meet_army
     g._nearest_town = _nearest_town
-    g._on_caught = _on_caught
-    g._on_offences = _on_offences
     g._on_stall_sales = _on_stall_sales
     g._own_things = _own_things
     g._see_murder = _see_murder
@@ -2012,7 +1978,6 @@ def main() -> None:
     g.hub_stall = hub_stall
     g.join_army = join_army
     g.leave_army = leave_army
-    g.load_now = load_now
     g.make_tradeable = make_tradeable
     g.make_village_patrol = make_village_patrol
     g.mark_dirty = mark_dirty
@@ -2086,7 +2051,11 @@ def main() -> None:
 
     g._WORK.stop()
     pygame.mouse.set_visible(True)
-    save_now()
+    # Safe exit: finish any snapshot in flight and write it synchronously.
+    try:
+        savemod.save_now(g, "exit")
+    except Exception as _xe:
+        plog.log("SAVE-EXIT-ERROR", repr(_xe)[:200])
     pygame.quit()
 
 

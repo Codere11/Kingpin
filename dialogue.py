@@ -21,7 +21,6 @@ import pygame
 
 import plog
 
-import war
 import work
 
 # THE GAME'S CLOCK, set by main once a frame. Dialogue is opened by a click and
@@ -170,34 +169,8 @@ def _nation(n) -> str:
 
 
 def news_answer(npc) -> str:
-    """WHAT HE HAS BEEN TOLD -- his own list, dated, and nothing else.
-
-    News is CARRIED in this world, man to man (war.tell, note_capture), so what
-    he repeats is what actually reached him, and war.prune_news gives it a
-    fifteen-day life. Nothing here is the town's knowledge or the crown's: it
-    is his. If he was also told that YOU did for a man, that is news too.
-    """
-    now = NOW[0]
-    fresh = [e for e in list(getattr(npc, "news", ()) or ())
-             if len(e) >= 5 and now - e[0] < war.WAR_NEWS_LIFETIME]
-    parts = []
-    if fresh:
-        fresh.sort(key=lambda e: e[0], reverse=True)
-        e = fresh[0]
-        days = max(0, int((now - e[0]) / 600.0))
-        when = ("today" if days == 0 else
-                "yesterday" if days == 1 else "%d days ago" % days)
-        parts.append("%s has taken %s. I heard it %s."
-                     % (_nation(e[4]), e[1], when))
-    try:
-        import village as _vm
-        if _vm.PLAYER_ID in getattr(npc, "knows", ()):
-            parts.append("And they say you did for a man.")
-    except Exception:
-        pass
-    if not parts:
-        return "Nothing. Nobody tells me anything."
-    return " ".join(parts)
+    """The old war news network is gone; a man has nothing to repeat."""
+    return "Nothing. Nobody tells me anything."
 
 
 def regard_answer(score: float) -> str:
@@ -482,11 +455,6 @@ class Dialogue:
             return ""
         grade = int(getattr(self, "price_grade", 3))
         new = stall.set_price(item, grade, stall.price_of(item, grade) + delta)
-        try:
-            import orders
-            orders.order(self.player, self.npc, "price", item=item, value=new)
-        except Exception:
-            pass
         plog.log("WORK", self.who, "price", item, "grade", grade, "->", new)
         self.answer = self._price_line()
         return "answer"

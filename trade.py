@@ -12,7 +12,6 @@ import pygame
 import economy
 import face
 import items
-import nemesis
 from quality import GRADES, SELL_VALUE, letter, sell_coins
 
 BORDER = (72, 72, 80)
@@ -334,15 +333,6 @@ class TradeMenu:
             self.npc.trade_demand = max(0, self.npc.trade_demand - sold)
             if self.npc.trade_demand <= 0:
                 self.npc.restock_timer = RESTOCK_SECONDS
-            # SELLING LEAF OR A MADE DRUG IS AN OFFENCE, and any agent close
-            # enough to have watched the deal now knows it.
-            _pl = getattr(self, "player", None)
-            if _pl is not None and stack.defn.id in (nemesis.ILLEGAL_LEAF
-                                                     + nemesis.ILLEGAL_DRUGS):
-                try:
-                    nemesis.note_offence_seen(_pl, "sold", stack.defn.id)
-                except Exception:
-                    pass
             self._smirk()          # he bought off you, and he knows it
             return True
         if kind == "sell_none":

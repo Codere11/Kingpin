@@ -13,7 +13,6 @@ import fence
 import math
 import random
 import hubs
-import nemesis
 import plog
 from interior import (Interior, BARREL_H, BARREL_W, BREW_H, BREW_W, LAB_H, LAB_W, WORKSHOP_H, WORKSHOP_W)
 import stall as stall_mod
@@ -349,7 +348,7 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
 
 
 def commit_plot(placing, plot_start, placement_pos, toast, hubs, villages,
-               hub_world, player, built_plots, mark_dirty, nemesis, plog):
+               hub_world, player, built_plots, mark_dirty, plog):
 
     """A PLOT IS A RECTANGLE HE DRAWS: no cost, no bench, just ground."""
     start = plot_start[0]
@@ -379,7 +378,6 @@ def commit_plot(placing, plot_start, placement_pos, toast, hubs, villages,
         _h = hub_world.add_player_hub(player, rect.inflate(120, 120).copy(),
                                       [], [])
         if _h is not None:
-            nemesis.PLACES.append(_h)
             player.work_post = (_h.x, _h.y + 40)
             player.hub = _h
             plog.log("PHASE-HUB", _h.name, "at",
@@ -445,7 +443,6 @@ def try_place(g):
                     _h = g.hub_world.add_player_hub(g.player, _yard, _ring,
                                                   g.built_gates)
                     if _h is not None:
-                        nemesis.PLACES.append(_h)
                         plog.log("HUB", "fenced", _h.name, "at",
                                  "%d,%d" % (int(_h.x), int(_h.y)),
                                  "%dx%d" % (_yard.w, _yard.h))
@@ -648,7 +645,6 @@ def try_place(g):
             _yard = _wp.rect.inflate(320, 320).copy()
             _h = g.hub_world.add_player_hub(g.player, _yard, [], [])
             if _h is not None:
-                nemesis.PLACES.append(_h)
                 g.player.work_post = (_h.x, _h.y + 40)
                 g.player.hub = _h
                 plog.log("PHASE-HUB", _h.name, "at",

@@ -37,6 +37,8 @@ def taken(world, tx: int, ty: int) -> bool:
     """True while a picked plant has not yet grown back. Wild food returns to
     the same spot on the same clock as a sown crop -- no tilling, no seed, no
     tending. Otherwise every foraged meal permanently eats the world."""
+    if (tx, ty) in getattr(world, "wild_cleared", ()):
+        return True                       # a camp's ring, or a placed block
     when = world.wild_eaten.get((tx, ty))
     if when is None:
         return False
@@ -65,12 +67,6 @@ def density_at(x: float, y: float) -> float:
     ground is frozen waste and the crop falls away to a FIFTIETH of that --
     nothing like enough to live on, which is the whole point of a border.
     """
-    try:
-        import gulag as _g
-        if _g.inside(x, y, 140.0):
-            return 0.0                      # NOT ONE MUSHROOM IN THE CAMP
-    except Exception:
-        pass
     try:
         import biomes as _b
         ramp = _b._waste_ramp(x, y)
@@ -111,13 +107,6 @@ def _plant(world, tx: int, ty: int):
         if biomes.biome_name(_t, _h) == "savanna" and (h >> 4) % 4 == 0:
             _kind = "cotton"
         got = (_kind, (h >> 4) % STAGES)
-        # NOTHING GROWS ON THE PERMANENT WAY.
-        try:
-            import rail
-            if rail.blocked(x, y):
-                got = None
-        except Exception:
-            pass
     _PLANT[key] = got
     return got
 

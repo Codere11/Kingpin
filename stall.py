@@ -388,11 +388,7 @@ class Stall:
         """WHAT THE LANE IS TOLD, once a second. Only what a cart can carry --
         a cart has no business with a rifle, and carrying one would be cargo it
         could not count (caravans.GOODS)."""
-        try:
-            import caravans
-            carryable = set(caravans.GOODS)
-        except Exception:
-            carryable = set()
+        carryable = set()          # no carts remain to buy from a stall
         lots = {}
         for item, grade, n, p in self.offered(carryable):
             lots.setdefault(item, {})[int(grade)] = [int(n), int(p)]

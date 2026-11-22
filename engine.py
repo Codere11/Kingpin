@@ -4,6 +4,11 @@ import sys
 import time
 import threading
 import comm
+import save as savemod
+import village as village_mod
+import work
+import corpse as corpse_mod
+import creatures
 
 
 def _bench_products(g, wp):
@@ -1240,14 +1245,16 @@ def run(g):
             g.screen.fill((0, 0, 0))
             pygame.display.flip()
             continue
-        # Autosave: whatever else happens, progress is never more than this far
-        # behind (covers a crash on exit losing the session).
-        g.save_timer -= g.dt
-        if g.save_timer <= 0.0 and not g.game_over and not g.player.dead:
-            g.save_timer = 20.0
-            if g.save_dirty:
-                g.save_dirty = False
-                g.save_now()
+        # Autosave: lazy, every five minutes.  The snapshot is composed a
+        # few milliseconds per frame and written off the main thread, so the
+        # save never lands as a stutter; the action-driven save_now() calls
+        # just ask for the same lazy job sooner.
+        g._autosave_timer = max(0.0, float(getattr(g, "_autosave_timer", 300.0))
+                                - g.dt)
+        if g._autosave_timer <= 0.0 and not g.game_over and not g.player.dead:
+            g._autosave_timer = 300.0
+            g.save_now()
+        savemod.tick(g)
         g.door_cooldown = max(0.0, g.door_cooldown - g.dt)
         g.work_cd = max(0.0, g.work_cd - g.dt)
         # WHY IS HE NOT MOVING? Every frame that any of these is set skips the
@@ -1374,17 +1381,6 @@ def run(g):
                 # the town.
                 if (abs(village.x - g.player.x) < village.radius + 3000.0
                         and abs(village.y - g.player.y) < village.radius + 3000.0):
-                    # THE SEARCH, EVERY FRAME: one guard, the men near him,
-                    # and nothing else in the world.
-                    try:
-                        import gate as gate_mod
-                        g._r2 = gate_mod.tick_town(g.world_dt, village)
-                        if g._r2 is not None and g._r2[0] == "caught":
-                            village.provoke()
-                        elif g._r2 is not None:
-                            pass
-                    except Exception:
-                        pass
                     # THE TOWN'S BOOKS, TEN TIMES A SECOND. They are all
                     # day-guarded anyway; asking sixty times a second whether
                     # the day has changed was most of the town phase's cost.
@@ -1458,51 +1454,6 @@ def run(g):
                          "dt", round(g.dt, 3), "board", g.board_open,
                          "dead", g.player.dead,
                          "hp", int(g.player.health))
-            if getattr(g.player, "aboard", False):
-                _tr = g._TEST_TRAIN[0]
-                if _tr is not None:
-                    if not g._EXPRESS[0]:
-                        # AN EXPRESS, NOT A TOUR: somebody is aboard and the
-                        # camp is where he is going.
-                        try:
-                            import gulag as _gl_x
-                            import train as _tmx
-                            import rail as _railx
-                            g._glx, g._gly = _gl_x.gate_point()
-                            g._len = _tr.to_camp((g._glx, g._gly))
-                            g._EXPRESS[0] = True
-                            plog.log("EXPRESS", "the engine runs for the camp |",
-                                     int(g._len), "px of track |",
-                                     round(g._len / _tmx.TRAIN_SPEED / 60.0, 1),
-                                     "minutes")
-                        except Exception as _xe:
-                            plog.log("EXPRESS-ERR", repr(_xe)[:140])
-                    g.player.x, g.player.y = _tr.x, _tr.y
-                    g.cam_x = g.player.x - g.vw / 2.0
-                    g.cam_y = g.player.y - g.vh / 2.0
-                    try:
-                        import gulag as _gl_end
-                        if ((_tr.x - _gl_end.gate_point()[0]) ** 2
-                                + (_tr.y - _gl_end.gate_point()[1]) ** 2) < 600.0 ** 2:
-                            # THE END OF THE LINE IS THE CAMP
-                            g._detain_release = True
-                            try:
-                                import detain as _dr
-                                _dr.release_kit(g.player, None)
-                                # the tour resumes; the express is over
-                                try:
-                                    import rail as _railr
-                                    _tr.set_route(_railr.tour())
-                                    g._EXPRESS[0] = False
-                                except Exception:
-                                    pass
-                                plog.log("DROP-OFF", "the player is put down at the camp",
-                                         "with the other", len(getattr(_tr, "aboard", []) or []),
-                                         "prisoners")
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
             if getattr(g.player, "sleep_t", 0.0) > 0.0:
                 g.player.sleep_t = max(0.0, g.player.sleep_t - g.dt)
                 g.keys = _NO_KEYS
@@ -1518,51 +1469,6 @@ def run(g):
                 _riding.facing = g.player.facing
             else:
                 g.player.update(g.dt, g.keys, g.aim, 1.0 - 0.25 * g.foliage)
-            if getattr(g.player, "aboard", False):
-                _tr = g._TEST_TRAIN[0]
-                if _tr is not None:
-                    if not g._EXPRESS[0]:
-                        # AN EXPRESS, NOT A TOUR: somebody is aboard and the
-                        # camp is where he is going.
-                        try:
-                            import gulag as _gl_x
-                            import train as _tmx
-                            import rail as _railx
-                            g._glx, g._gly = _gl_x.gate_point()
-                            g._len = _tr.to_camp((g._glx, g._gly))
-                            g._EXPRESS[0] = True
-                            plog.log("EXPRESS", "the engine runs for the camp |",
-                                     int(g._len), "px of track |",
-                                     round(g._len / _tmx.TRAIN_SPEED / 60.0, 1),
-                                     "minutes")
-                        except Exception as _xe:
-                            plog.log("EXPRESS-ERR", repr(_xe)[:140])
-                    g.player.x, g.player.y = _tr.x, _tr.y
-                    g.cam_x = g.player.x - g.vw / 2.0
-                    g.cam_y = g.player.y - g.vh / 2.0
-                    try:
-                        import gulag as _gl_end
-                        if ((_tr.x - _gl_end.gate_point()[0]) ** 2
-                                + (_tr.y - _gl_end.gate_point()[1]) ** 2) < 600.0 ** 2:
-                            # THE END OF THE LINE IS THE CAMP
-                            g._detain_release = True
-                            try:
-                                import detain as _dr
-                                _dr.release_kit(g.player, None)
-                                # the tour resumes; the express is over
-                                try:
-                                    import rail as _railr
-                                    _tr.set_route(_railr.tour())
-                                    g._EXPRESS[0] = False
-                                except Exception:
-                                    pass
-                                plog.log("DROP-OFF", "the player is put down at the camp",
-                                         "with the other", len(getattr(_tr, "aboard", []) or []),
-                                         "prisoners")
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
             if getattr(g.player, "sleep_t", 0.0) > 0.0:
                 try:
                     g._z = g.font.render("Zzz", True, (232, 232, 240))
@@ -1721,38 +1627,8 @@ def run(g):
                                      _nat.NATIVE_RADIUS)
                 except Exception:
                     pass
-            if g._lane_timer <= 0.0 and g._lane_ids != g._lane_seen:
-                g._lane_seen = g._lane_ids
-                g._lane_timer = 4.0
-                g._all_t = list(g.villages.villages)
-                g._LANES.recut(g._all_t, main_towns=g.visible_villages)
-                if g._LANES.ok(g._all_t, village_mod.TRAVELLERS,
-                             village_mod.PEOPLE):
-                    g._LANE_TOWNS = g._LANES.towns_for(0)
-                    g._LANE_PEOPLE = g._LANES.people_for(0)
-                else:
-                    # A LANE LOST A MAN, and this used to answer by stepping
-                    # THE WHOLE WORLD instead: every town and every soul, from
-                    # scratch, once a second. MEASURED, it is what froze the
-                    # game for eighty-five seconds after the first frame and
-                    # never stopped freezing.
-                    #
-                    # The cut is a partition of ownership and it is nearly
-                    # right -- a handful of men fall outside it and the old
-                    # answer was to throw the whole partition away for their
-                    # sake. The repair is to HAND THE MISSING MEN BACK to the
-                    # lane rather than to abandon it: same set in, a set
-                    # difference out, and nobody is dropped.
-                    g._LANE_TOWNS = g._LANES.towns_for(0)
-                    g._LANE_PEOPLE = g._LANES.people_for(0)
-                    g._seen = set(map(id, g._LANE_PEOPLE))
-                    g._missing = [m for m in village_mod.PEOPLE if id(m) not in g._seen]
-                    if g._missing:
-                        g._LANE_PEOPLE = list(g._LANE_PEOPLE) + g._missing
-                    if not g._lane_warned:
-                        g._lane_warned = True
-                        print("LANES: cut lost %d men -- handed back, not "
-                              "re-cutting the world" % len(g._missing))
+            g._LANE_TOWNS = []
+            g._LANE_PEOPLE = list(getattr(village_mod, "PEOPLE", ()))
             g.view_trees = g.trees.visible(g.cam_x, g.cam_y, g.vw, g.vh)
             g.view_ore = g.ore_field.visible(g.cam_x, g.cam_y, g.vw, g.vh)
             for village in g.visible_villages:        # 5 border guards per village
@@ -2006,10 +1882,6 @@ def run(g):
                 for _s in _a.soldiers:
                     if _s.alive and not getattr(_s, "settled", False):
                         g.enemies.append(_s)
-            # ...and the standing army: bodies on the capital's streets
-            for _s in war.STANDING:
-                if _s.alive:
-                    g.enemies.append(_s)
             for enemy in g.enemies:
                 if enemy.alive:
                     # A marching column out in the open is walked by war.march
@@ -2139,18 +2011,6 @@ def run(g):
                                  colliders=g.e_colliders)
                     enemy.x, enemy.y = resolve_circle_rects(
                         enemy.x, enemy.y, enemy.radius, g.e_colliders)
-                    # A MILITIAMAN WHO SEES A MAN CONSUME GOES AND ASKS.
-                    if (getattr(enemy, "is_militia", False)
-                            or getattr(enemy, "militia", False)):
-                        try:
-                            import question as _q
-                            _tv = getattr(enemy, "guard_village", None)
-                            _ppl = getattr(_tv, "npcs", ()) if _tv is not None else ()
-                            if _ppl:
-                                _q.tick(enemy, _ppl, g.now, g.dt, g.e_occluders,
-                                        g.combat, g.player)
-                        except Exception:
-                            pass
 
             for village in g.visible_villages:
                 for npc in village.npcs:
@@ -2184,15 +2044,6 @@ def run(g):
                                          g.nearest_hostile)
                     except Exception:
                         pass
-                # The crown's wars. A capital whose purse is deep enough calls
-                # up its nation's idle men once a day; the column then marches,
-                # fights, and either takes the village or comes home.
-                g._wd = int(g.now / DAY_LENGTH)
-                for _army in war.declare(g.villages, g._wd, g.now):
-                    g.armies.append(_army)
-                    g.toast("%s calls up %d men and marches on %s"
-                          % (_army.capital.name, _army.start,
-                             _army.target.name))
                 # RECONCILE. Every living soldier of every army must be in the
                 # list the world walks, every tick, no matter which path put him
                 # there. Trusting a single extend() at muster time meant the
@@ -2306,20 +2157,6 @@ def run(g):
                              ", ".join("%d %s" % (q, i)
                                        for i, q in g.player.kit_pending)))
                     g.player.kit_pending = []
-                for _army, _res, _info in war.update(g.armies, g.world_dt, g.now):
-                    if _res == "taken":
-                        g.toast("%s has fallen to %s   +%d coins of spoils"
-                              % (_army.last_name, _army.capital.name, _info))
-                    elif _res == "march":
-                        g.toast("%s's army marches on %s"
-                              % (_army.capital.name, _info.name))
-                    elif _res == "reinforced":
-                        g.enemies.extend(_info)
-                        g.toast("%d men march out to join %s's army"
-                              % (len(_info), _army.capital.name))
-                    elif _res == "broken":
-                        g.toast("%s's army is broken and straggles home"
-                              % _army.capital.name)
                 # a soldier who has settled in a taken village, or gone home,
                 # is no longer a body on the map
                 for _army in g.armies:
@@ -2398,15 +2235,6 @@ def run(g):
                                 _e.hostile = True
                                 _e.aware = True
                                 _e.aware_timer = 60.0
-                # ALL THE SOLDIERS ARE DEAD: the town empties. This is the
-                # mouth of the whole system -- the people who watched you do it
-                # run to the next town, and tell them on the way in.
-                if (village.provoked and not getattr(village, "_exodus", False)
-                        and not any(b.alive for b in village.defenders())):
-                    village._exodus = True
-                    g._dests = war.friendly_neighbours(g.villages, village)
-                    if g._dests:
-                        war.rout(village, g._dests, g.now)
                 # THE BUBBLE, NOT THE VIEW. `visible()` is a DRAWING cull --
                 # a fence is big, so it returns every town whose wall is
                 # anywhere near the frame. Stepping each of those costs a dozen
@@ -2415,17 +2243,6 @@ def run(g):
                 # the town.
                 if (abs(village.x - g.player.x) < village.radius + 3000.0
                         and abs(village.y - g.player.y) < village.radius + 3000.0):
-                    # THE SEARCH, EVERY FRAME: one guard, the men near him,
-                    # and nothing else in the world.
-                    try:
-                        import gate as gate_mod
-                        g._r2 = gate_mod.tick_town(g.world_dt, village)
-                        if g._r2 is not None and g._r2[0] == "caught":
-                            village.provoke()
-                        elif g._r2 is not None:
-                            pass
-                    except Exception:
-                        pass
                     # THE TOWN'S BOOKS, TEN TIMES A SECOND. They are all
                     # day-guarded anyway; asking sixty times a second whether
                     # the day has changed was most of the town phase's cost.
@@ -2601,15 +2418,6 @@ def run(g):
                         g.blood.spawn(g.player.x, g.player.y, 7, 14.0)
                         bullet.remove = True
                         break
-                    if (bullet.shooter is g.player
-                            and (getattr(obj, "is_militia", False)
-                                 or getattr(obj, "militia", False))):
-                        try:
-                            import detain as _db
-                            _db.militia_attacked(g.player, obj, list(g.enemies),
-                                                 list(village_mod.PEOPLE))
-                        except Exception:
-                            pass
                     g._dart = (getattr(bullet, "dart", False)
                              and getattr(obj, "kind", "") not in ("wolf", "rabbit"))
                     if (not getattr(bullet, "dart", False)
@@ -2808,13 +2616,6 @@ def run(g):
                 for _h in list(village_mod.HOUSES):
                     _h.tick(1.0)
 
-            # AGENTS TELL EACH OTHER. Twice a second is enough for a meeting
-            # in a square; the test is a distance, not a line of sight.
-            g._tell_timer -= g.dt
-            if g._tell_timer <= 0.0:
-                g._tell_timer = 0.5
-                nemesis.spread_on_contact()
-
             # WHERE THE MEN WALK TO. The frame owns the yard; the lane owns
             # the men, so the post is relayed -- and cleared when one is let go.
             _wp = getattr(g.player, "work_post", None)
@@ -2858,10 +2659,6 @@ def run(g):
                                  "distance", int(_d), "px after",
                                  int(g.now - g._seen[0]), "s")
 
-            try:
-                nemesis.set_now(g.now)
-            except Exception:
-                pass
             # ---- GUNFIRE SCATTERS A CROWD ------------------------------
             try:
                 g._panic_t[0] += g.dt
@@ -2875,70 +2672,8 @@ def run(g):
             # ---- THE CAMP'S PEOPLE --------------------------------------
             # (removed: the old town world is gone)
 
-            # ---- THE TEST TRAIN -----------------------------------------
-            try:
-                _tr = g._TEST_TRAIN[0]
-                if _tr is not None and not _tr.done:
-                    _tr.update(g.world_dt if g.world_tick else g.dt)
-                    try:
-                        import train as _tm2
-                        _tm2.KNOCK[:] = [k for k in _tm2.KNOCK
-                                         if not k.settled or k.life < 8.0]
-                        for _k in _tm2.KNOCK:
-                            _k.update(g.dt, g.blood, corpse_mod)
-                        _tr.hit_people(list(village_mod.PEOPLE), list(g.enemies),
-                                       g.player, g.blood)
-                    except Exception as _ke:
-                        plog.log("TRAIN-KILL-ERR", repr(_ke)[:120])
-                    if int(g.now * 4) != int(getattr(_tr, "_ck", -1)):
-                        _tr._ck = g.now * 4
-                        g._towns_near = [v for v in g.villages.villages
-                                       if abs(v.x - _tr.x) < 9000.0
-                                       and abs(v.y - _tr.y) < 9000.0]
-                        _tr.check(g.world, g._towns_near, g.built_houses,
-                                  g.placed_work, g.camp_walls)
-            except Exception as _te2:
-                plog.log("TRAIN-ERROR", repr(_te2)[:160])
-            if int(g.now) % 60 == 0:
-                try:
-                    folders_mod.prune(g.now)
-                except Exception:
-                    pass
-
-            # ---- THE DEAD STAY WHERE THEY FALL --------------------------
-            g._last_death = getattr(g._WORK, "_last_death", None)
-            for _rec in g._WORK.take_deaths():
-                _rec = tuple(_rec) + (False, [], False, [])
-                (_dx, _dy, _who, g._pack, g._grade, g._cloth, g._agent, g._facts,
-                 g._worker, g._bag) = _rec[:10]
-                g._fid = None
-                if g._agent:
-                    # THE FOLDER IN HIS POCKET: everything the service told him.
-                    g._fid = folders_mod.new_folder(_who, g._facts, g.now)
-                    plog.log("FOLDER", _who, "carried",
-                             len(folders_mod.FOLDERS[g._fid]["msgs"]), "message(s)")
-                corpse_mod.spawn(_dx, _dy, _who, g.now, g._cloth,
-                                 g._bag or g._pack, g._grade, folder=g._fid)
-                plog.log("CORPSE", _who, "fell at",
-                         "%d,%d" % (int(_dx), int(_dy)),
-                         "carrying", len(g._bag) or len(g._pack))
-                if g._worker:
-                    # A BODY IS EVIDENCE. An agent who comes upon one of the
-                    # player's dead learns that the yard has a leader.
-                    try:
-                        for _a in nemesis.agents():
-                            if not getattr(_a, "alive", True):
-                                continue
-                            if ((_a.x - _dx) ** 2 + (_a.y - _dy) ** 2
-                                    > nemesis.SEEN_PX ** 2):
-                                continue
-                            if nemesis.note_leader(_a, at=(_dx, _dy)):
-                                plog.log("LEADER", getattr(_a, "name", "?"),
-                                         "saw the body of", _who,
-                                         "and learned who leads the yard")
-                            break
-                    except Exception:
-                        pass
+            # Native deaths spawn their own bodies in NPC.die(); the old lane
+            # death queue is gone. Bodies still age and vanish here.
             for _gone in corpse_mod.update(g.now):
                 plog.log("CORPSE", _gone.name, "is bones and gone")
 
@@ -3000,7 +2735,6 @@ def run(g):
             # AND A BITTER ONE IS NOT SACKED: he stays on the payroll, and the
             # first service man to come near him turns him. Nothing is said to
             # the player -- that is the point of it.
-            work.turn_the_bitter(g.player, nemesis.agents())
 
             g.settle_timer -= g.dt
             if g.settle_timer <= 0.0:
@@ -3025,21 +2759,6 @@ def run(g):
                     if math.hypot(_tr.x - g._lead.x, _tr.y - g._lead.y) > 300.0:
                         continue
                     g._meet_army(_tr, _a, g.now)
-            # THE CROWN ASKS, once a day: its strongest column's last five
-            # days, and three days for a rider to bring the answer.
-            g.demand_timer -= g.dt
-            if g.demand_timer <= 0.0:
-                g.demand_timer = DAY_LENGTH
-                for _v in g.villages.villages:
-                    # ONLY WHEN THERE IS NO OFFER OUT. Re-posting every day
-                    # made the crown's offer perpetual, and a deadline that
-                    # never arrives is not a deadline.
-                    _d = getattr(_v, "demand", None)
-                    if (getattr(_v, "is_capital", False)
-                            and (_d is None or g.now > _d["expires"])):
-                        war.post_demand(_v, g.armies, g.now)   # a lapsed offer is
-                        # replaced: the crown asks again, and again, until it
-                        # is told. Without this it asked once and went quiet.
             # A HUNTING PARTY IS NEVER CULLED BY DISTANCE. It is sent to a
             # place, not to the player: it stands there until it is met or
             # killed. Without this line the ten men were created, logged, and
@@ -3048,7 +2767,6 @@ def run(g):
             g.enemies[:] = [e for e in g.enemies
                           if getattr(e, "follow", False)
                           or getattr(e, "manhunt", False)
-                          or getattr(e, "gulag", False)
                           or getattr(e, "guard_village", None) is not None
                           or getattr(e, "patrol_center", None) is not None
                           or math.hypot(e.x - g.player.x, e.y - g.player.y) < 6500.0]
@@ -3150,59 +2868,6 @@ def run(g):
 
             g.ground.update(6, g.cam_x, g.cam_y, g.vw, g.vh)   # worker builds ahead of us
             g.trees.update(g.now)                        # stumps grow back
-
-            # THE BARN IS ENTERED BY WALKING THROUGH ITS DOOR, the way a house
-            # is -- and lands in the mine's own room branch, so the drawing and
-            # the way out are the mine's.
-            g.prison_cd = max(0.0, g.prison_cd - g.dt)
-            if g.inside_house is None and g.inside_mine is None and g.prison_cd <= 0.0:
-                try:
-                    import gulag as _gbar
-                    g._bar = _gbar.prison()
-                except Exception:
-                    g._bar = None
-                g._doors = []
-                if g._bar is not None:
-                    g._doors.append(g._bar)
-                try:
-                    import holding as _hwalk
-                    g._doors.extend(_hwalk.cells())
-                except Exception:
-                    pass
-                g._hit = None
-                for _d in g._doors:
-                    g._dx2 = g.player.x - _d.door[0]
-                    g._dy2 = g.player.y - _d.door[1]
-                    if g._dx2 * g._dx2 + g._dy2 * g._dy2 < 26.0 * 26.0:
-                        g._hit = _d
-                        break
-                if g._hit is not None:
-                    g.mine_out = (g.player.x, g.player.y)
-                    g.inside_mine = g._hit
-                    g.player._mine_latch = True
-                    g.player.x = g._hit.room.W / 2.0
-                    g.player.y = g._hit.room.H - 70.0
-                    g.cam_x = g.player.x - g.vw / 2.0
-                    g.cam_y = g.player.y - g.vh / 2.0
-                    pygame.mouse.set_visible(True)
-                    plog.log("ENTER-CELL", getattr(g._hit, "kind", "?"), "at",
-                             int(g._hit.x), int(g._hit.y))
-                    continue
-                if g._bar is not None:
-                    g._ddx = g.player.x - g._bar.door[0]
-                    g._ddy = g.player.y - g._bar.door[1]
-                    if g._ddx * g._ddx + g._ddy * g._ddy < 26.0 * 26.0:
-                        g.mine_out = (g.player.x, g.player.y)
-                        g.inside_mine = g._bar
-                        g.player._mine_latch = True
-                        g.player.x = g._bar.room.W / 2.0
-                        g.player.y = g._bar.room.H - 90.0
-                        g.cam_x = g.player.x - g.vw / 2.0
-                        g.cam_y = g.player.y - g.vh / 2.0
-                        pygame.mouse.set_visible(True)   # the cursor stays
-                        plog.log("ENTER-BARN", "through the door at",
-                                 int(g._bar.door[0]), int(g._bar.door[1]))
-                        continue
 
             if False:   # THE INTERIOR SYSTEM IS GONE: houses and mines are not entered
                 g.candidates = list(g.built_houses)
@@ -3342,11 +3007,6 @@ def run(g):
             else:
                 g.player.x, g.player.y = g._room.clamp(g.player.x, g.player.y)
             if getattr(g._room, "is_cell", False):
-                try:
-                    import detain as _det_c
-                    _det_c.player_tick(g.player, g._TEST_TRAIN[0], g.dt)
-                except Exception:
-                    pass
                 if getattr(g.player, "aboard", False):
                     g.inside_mine = None
                     g.inside_house = None
@@ -3381,14 +3041,6 @@ def run(g):
             g._room.draw(g.screen, g.cam_x, g.cam_y, g._draw_w, g._draw_h)
             if getattr(g._room, "is_house", False):
                 g.draw_placing()
-            if getattr(g._room, "is_prison", False):
-                # SIMPLY DARK: one flat veil over the room, nothing else. No
-                # hole to follow the man, no rectangles to leave edges.
-                try:
-                    import gulag as _gdark
-                    _gdark.darken(g.screen)
-                except Exception:
-                    pass
             g._sel = g.inventory.selected_stack()
             if not getattr(g.player, "aboard", False):
                 g.player.draw(g.screen, g.cam_x, g.cam_y, g._sel.defn.id if g._sel else None)
@@ -3790,45 +3442,6 @@ def run(g):
                 break
 
         g.draw_trees = g.trees.visible(g.cam_x, g.cam_y, g.vw, g.vh)
-        # ---- THE GATE ------------------------------------------------------
-        # Everything about it lives in gate.py now: close -> he comes to you ->
-        # ten seconds, bar under him -> one roll -> aggro or through. This block
-        # only reports what the module decided.
-        try:
-            import gate as gate_mod
-            # A MAN RIDING THE TRAIN IS NOT AT A GATE. No guard steps up to
-            # him, nobody searches him, nobody shouts.
-            _res = (None if (g._inside_now or getattr(g.player, "aboard", False))
-                    else gate_mod.tick(g.dt, g.player, g.villages.villages, g.inventory))
-            if _res is not None:
-                _kind, g._town, g._units = _res
-                plog.log("SEARCHED", _kind, "units", g._units,
-                         "town", getattr(g._town, "name", "?"))
-                if _kind == "caught":
-                    # HE MAKES SPACE, THEN SHOOTS: the toast is the player
-                    # being told, and the town only erupts when the round goes.
-                    g.toast("Searched. %d found. Run." % g._units)
-                    nemesis.note_caught(g.player, g._town, g._units)
-                    gate_mod.begin_caught(g.player, g._town, g._units)
-                elif _kind == "fled":
-                    g.toast("You broke away from the guard. He shouts.")
-                    g.commit_crime(g._town)
-                elif g._units > 0:
-                    g.toast("Searched clean   (smuggling %.1f)" % g.player.smuggling)
-                else:
-                    g.toast("Searched and waved through")
-            if gate_mod.tick_caught(g.dt, g.player) == "shot":
-                gate_mod.fire_shot(g.player, g.combat)
-                g.commit_crime(g._town)
-                gate_mod.caught_over()
-            g._pg = gate_mod.progress()
-            if g._pg > 0.0 and gate_mod.guard_of() is not None:
-                g._gg = gate_mod.guard_of()
-                Player._draw_action_bar(g.screen, g._gg.x - g.cam_x, g._gg.y - g.cam_y, g._pg)
-        except Exception:
-            import traceback as _tb
-            _tb.print_exc()
-
         # CROSSING A WALL WITHOUT BEING WAVED THROUGH IS AGGRO -- and the crime
         # is the CROSSING, not standing inside. This read "he is inside the
         # fence and not waved by", so a game that now BEGINS in a square
@@ -3853,9 +3466,6 @@ def run(g):
                 # guard remembers him until he has actually GONE AWAY: out of
                 # the town's reach, when he is a stranger again.
                 g._pass = g._was or getattr(g.player, "waved_by", None)
-                if g._pass is not None and gate.pass_expired(g.player, g._pass):
-                    g.player.waved_by = None
-                    g.player.aggro_village = None
             elif g._here is not g._was:
                 if getattr(g.player, "waved_by", None) is not g._here:
                     if getattr(g.player, "aggro_village", None) is not g._here:

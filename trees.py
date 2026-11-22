@@ -407,7 +407,7 @@ class Tree:
     # thousand sprites between them.
     __slots__ = ("x", "y", "canopy_r", "trunk_rect", "sx", "sy",
                  "strikes", "felled", "felled_at", "species", "size_class",
-                 "variant", "flip", "snowy", "_atlas")
+                 "variant", "flip", "snowy", "_atlas", "_save_uid")
 
     def __init__(self, x, y, radius, variant, flip, atlas, species="broadleaf",
                  snowy=False):
@@ -580,39 +580,12 @@ class Trees:
         key = (cx, cy)
         if key in self._cache:
             got = self._cache[key]
-            # CACHED TREES TOO. The forest is built long before the railway is
-            # laid out, so every tree on the corridor was already in this cache
-            # -- and a cache hit walked straight past the check below.
-            if got is not None:
-                try:
-                    import rail
-                    if rail.blocked(got.x, got.y, 52.0):
-                        return None
-                except Exception:
-                    pass
             return got
         here = self._position(cx, cy)
         if here is None:
             self._cache[key] = None
             return None
         x, y, code, species, snowy = here
-        # ...AND NO TREE STANDS ON IT EITHER.
-        try:
-            import rail
-            if rail.blocked(x, y, 52.0):
-                self._cache[key] = None
-                return None
-        except Exception:
-            pass
-        # AND NOT ONE WILD TREE INSIDE THE CAMP: the only trees there are the
-        # fifty the warders planted, in their rows.
-        try:
-            import gulag
-            if gulag.inside(x, y, 30.0):
-                self._cache[key] = None
-                return None
-        except Exception:
-            pass
 
         # Nearest neighbouring tree: the 8 cells around this one are enough,
         # because two trees two cells apart (>= ~324 px) can never overlap
@@ -701,13 +674,6 @@ class Trees:
         for t in getattr(self, "_planted", ()) or ():
             if math.hypot(t.x - x, t.y - y) <= radius + t.canopy_r:
                 out.append(t)
-        # THE LAST WORD ON THE PERMANENT WAY: nothing on the corridor is ever
-        # returned, whatever cached it or planted it.
-        try:
-            import rail as _rail
-            out = [t for t in out if not _rail.blocked(t.x, t.y, 52.0)]
-        except Exception:
-            pass
         return out
 
     def foliage(self, x: float, y: float) -> float:

@@ -2177,11 +2177,7 @@ class FolderPanel:
 
     # -- data --------------------------------------------------------------
     def _folder(self):
-        try:
-            import folders
-            return folders.read(self.fid)
-        except Exception:
-            return None
+        return None
 
     def _pages(self) -> int:
         got = self._folder()

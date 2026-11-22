@@ -25,32 +25,6 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
     for rect in g.built_gates:
         if view.colliderect(rect):
             g.fence.draw_gate(target, cx, cy, rect)
-    # THE CAMP, drawn on the ground.
-    try:
-        import gulag as _gulag_d
-        _gulag_d.draw(target, cx, cy, view)
-    except Exception as _ge2:
-        if not getattr(main, "_ge2_seen", False):
-            render._ge2_seen = True
-            import traceback as _tb2
-            plog.log("GULAG-DRAW-ERROR", repr(_ge2)[:120])
-            plog.log("GULAG-TRACE", _tb2.format_exc()[:900])
-    # THE RAILWAY, on the ground under everything that stands on it.
-    try:
-        import rail as _rail
-        _rail.ensure(g.villages.villages)
-        _rail.draw(target, cx, cy, g.vw, g.vh)
-    except Exception as _re:
-        plog.log("RAIL-ERROR", repr(_re)[:120])
-    # ...AND THEN THE ENGINE, ON TOP OF ITS OWN TRACK. Riding, though, the
-    # ground is painted first and the track goes over it: from the train
-    # the rail is the thing that matters, not the grass under it.
-    if not getattr(g.player, "aboard", False):
-        try:
-            g._TEST_TRAIN[0].draw(target, cx, cy)
-            g._TEST_TRAIN[0].draw_knocked(target, cx, cy)
-        except Exception:
-            pass
     items = []
     # THE DEAD ARE ON THE GROUND. Bodies are sorted into the same painter's
     # list as the living, so a man walking in front of a corpse stands in
@@ -188,22 +162,6 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
         _block.draw_blocks(target, getattr(g, "built_blocks", {}), cx, cy, view)
     except Exception:
         pass
-    if getattr(g.player, "aboard", False):
-        # RIDING: the permanent way is drawn OVER the ground, and the
-        # engine over the rail.
-        try:
-            import rail as _rail_r
-            _rail_r.ensure(g.villages.villages)
-            _rail_r.draw(target, cx, cy, g.vw, g.vh)
-        except Exception:
-            pass
-        try:
-            g._TEST_TRAIN[0].draw(target, cx, cy)
-            g._TEST_TRAIN[0].draw_knocked(target, cx, cy)
-        except Exception:
-            pass
-
-
 def draw_boot(surface, title, prog, pygame) -> None:
     w, h = surface.get_size()
     surface.fill((14, 12, 16))

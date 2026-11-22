@@ -911,15 +911,7 @@ def wants(npc, item: str) -> int:
         short = int(STOCK_WOOD - house_wood(house))
         return min(8, short) if short > 0 else 0
     if item in ARMS:
-        # THE ARMS TRADE, AND WHO IS IN IT. A musketeer is the crown, which
-        # arms its soldiers off its own people, and the caravan, which carries
-        # what is cheap here to where it is dear. A VILLAGER DOES NOT SHOP FOR
-        # A GUN: left to the 3% fallback below he would, and every man who
-        # bought one would drop out of the levy as "already a fighting man"
-        # (see war._takeable) -- a war lost to a rounding error.
-        if npc.trade_state != "none":
-            return 1                 # a caravan will carry one, for the margin
-        return 0
+        return 0                      # nobody in a native camp buys a gun
     if item in TOOLS:
         return 2 if needs_tool(npc, item) else 0     # a spare, while he is there
     # A soldier traded with at a gate has no `rng` of his own, and this

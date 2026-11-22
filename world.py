@@ -119,6 +119,10 @@ class World:
         self.ground = None                                # set by main once built
         self.wild_removed: set[tuple[int, int]] = set()   # picked wild plants (legacy)
         self.wild_eaten: dict[tuple[int, int], float] = {}  # tile -> time it grows back
+        # PERMANENTLY CLEARED GROUND (a camp's ring, a placed block).  This is
+        # derived from the camps and blocks, not state: keeping it apart from
+        # wild_eaten means a save never iterates 185,000 camp tiles.
+        self.wild_cleared: set[tuple[int, int]] = set()
         self.wild_forced: dict[tuple[int, int], tuple] = {}  # hand-placed wild plants
         self._kind_cache: dict[tuple[int, int], str] = {}    # terrain, once
         self.wild_cells: dict = {}                        # wild-plant cache

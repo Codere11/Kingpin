@@ -44,6 +44,13 @@ if ! "$VENV/bin/cythonize" -i -3 village.py economy.py skills.py > /tmp/kingpin-
     tail -5 /tmp/kingpin-cython.log
 fi
 
+# THE SAVE ROUND-TRIP IS PART OF THE BUILD.  A save that writes a file but
+# does not bring the world back is worse than no save at all, so the build
+# refuses to produce an executable that cannot save and load itself.
+echo "Checking the save round-trip..."
+"$VENV/bin/python" tools/save_selftest.py make > /tmp/kingpin-save-make.log 2>&1 || { echo "  SAVE SELFTEST (make) FAILED"; tail -20 /tmp/kingpin-save-make.log; exit 1; }
+"$VENV/bin/python" tools/save_selftest.py verify > /tmp/kingpin-save-verify.log 2>&1 || { echo "  SAVE SELFTEST (verify) FAILED"; tail -20 /tmp/kingpin-save-verify.log; exit 1; }
+
 echo "Building..."
 rm -rf "$DIST" SettleWest.spec __pycache__
 

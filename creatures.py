@@ -185,11 +185,6 @@ class Soldier(Enemy):
                 self.x += _dx / _d * _step
                 self.y += _dy / _d * _step
                 if _d < 30.0:
-                    try:
-                        import detain
-                        detain.deposit(_v, _cell)
-                    except Exception:
-                        pass
                     self.carry_victim = None
                     self.carry_cell = None
                     # back to his post
@@ -1541,14 +1536,6 @@ def is_trader(obj) -> bool:
             or getattr(obj, "job", None) == "trader")
 
 
-def _g_inside(npc) -> bool:
-    try:
-        import gulag as _g
-        return _g.inside(getattr(npc, "x", 0.0), getattr(npc, "y", 0.0))
-    except Exception:
-        return False
-
-
 def choose_target(creature, player, enemies, rabbits, villages, squad=(),
                   persons=None):
     """The nearest thing ``creature`` should be attacking, or None."""
@@ -1556,34 +1543,6 @@ def choose_target(creature, player, enemies, rabbits, villages, squad=(),
                  for v in villages)
     cands = []
     if creature.kind == "soldier":
-        if getattr(creature, "gulag", False):
-            # A CAMP GUARD SHOOTS ANYBODY INSIDE THE FENCE WHO IS NOT ONE OF
-            # HIS OWN. That is the whole of the law out here.
-            try:
-                import gulag as _g
-                _camp = getattr(creature, "_player", None) or player
-                _here = _g.inside(getattr(_camp, "x", 0.0),
-                                  getattr(_camp, "y", 0.0), 40.0)
-            except Exception:
-                _camp, _here = player, False
-            if _here and not _camp.dead:
-                cands.append(_camp)
-            pool = list(persons or ())
-            for v in villages:
-                pool.extend(getattr(v, "npcs", ()) or ())
-            for npc in pool:
-                if (getattr(npc, "alive", True) and not npc.in_interior
-                        and not getattr(npc, "gulag", False)
-                        and _g_inside(npc)):
-                    cands.append(npc)
-            best, best_d2 = None, 1e30
-            for c in cands:
-                if getattr(c, "dead", False):
-                    continue
-                d2 = (c.x - creature.x) ** 2 + (c.y - creature.y) ** 2
-                if d2 < best_d2:
-                    best_d2, best = d2, c
-            return best
         if getattr(creature, "manhunt", False):
             # A HUNTING PARTY HAS STANDING ORDERS. The leader and every known
             # man of his organisation are fair game on sight, whatever nation

@@ -11,7 +11,6 @@ import math
 
 import economy
 import items
-import nemesis
 import quality
 
 
@@ -67,7 +66,6 @@ def use_barrel(player, inside_house, inventory, skills, now, toast) -> None:
             hands = skills.leaf_grade()
             g = quality.clamp(int(round((hands + given) / 2.0)))
             inventory.add(out, count, g)
-            nemesis.note_offence_seen(player, "made", out)   # drugs, broached
             skills.gain_farming(0.02 * min(count, 10))
             toast("%d %s  (%s)" % (count, items.get(out).name, quality.letter(g)))
         return
@@ -115,7 +113,6 @@ def craft_at_table(player, inventory, skills, toast) -> None:
         if stack.count <= 0:
             inventory.slots[idx] = None
         inventory.add(out, 1, g)
-        nemesis.note_offence_seen(player, "made", out)   # drugs, at a bench
         skills.gain_farming(0.02)          # you learn at the bench too
         toast("Made a %s  (%s)" % (items.get(out).name, quality.letter(g)))
         return

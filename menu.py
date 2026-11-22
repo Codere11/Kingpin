@@ -13,6 +13,7 @@ import os
 import pygame
 
 import persist
+import save as savemod
 import sound
 
 BG = (14, 12, 16)
@@ -328,7 +329,7 @@ class Menu:
                          "back": "BACK", "testmode": "TEST MODE",
                          "options": "OPTIONS"}[act]
             else:
-                made, houses, coins = persist.summary(act)
+                made, houses, coins = savemod.summary(act)
                 pygame.draw.rect(low, SLOT_HOVER if hovered else SLOT, rect)
                 pygame.draw.rect(low, BTN_BORDER_HOVER if hovered else BTN_BORDER, rect, 1)
                 if made:
@@ -377,7 +378,7 @@ def run(screen, clock, fullscreen=False, set_fullscreen=None):
                 menu.hover = -1
             elif isinstance(act, tuple) and act[0] == "delete":
                 persist.set_test(menu.test)
-                went = persist.delete(act[1])
+                went = savemod.delete(act[1])
                 menu.hover = -1
                 menu.toast = ("Save deleted" if went
                               else "Nothing there to delete")
@@ -385,10 +386,10 @@ def run(screen, clock, fullscreen=False, set_fullscreen=None):
             elif isinstance(act, int):
                 persist.set_test(menu.test)
                 persist.set_slot(act)
-                if not persist.exists(act):
+                if not savemod.exists(act):
                     _seed = (DEMO_SEED if os.environ.get("SETTLEWEST_DEMO")
                              else random.randint(1, 2 ** 31 - 1))
-                    persist.write({"seed": _seed}, act)
+                    savemod.new_game(act, _seed)
                 return (act, menu.test)
         menu.draw(cur)
         pygame.display.flip()

@@ -174,6 +174,6 @@ def _clear_cell(g, tx, ty):
         except Exception:
             pass
     try:
-        g.world.wild_eaten[(tx, ty)] = float("inf")
+        g.world.wild_cleared.add((tx, ty))
     except Exception:
         pass

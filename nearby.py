@@ -37,14 +37,6 @@ def near_workplace(player, placed_work, visible_villages):
         for _wp in _v.workplaces:
             if _wp.rect.inflate(170, 170).collidepoint(player.x, player.y):
                 return _wp
-    try:
-        import gulag as _g
-        _p = _g.prison()
-        if _p is not None and _p.rect.inflate(170, 170).collidepoint(player.x,
-                                                                  player.y):
-            return _p
-    except Exception:
-        pass
     return None
 
 

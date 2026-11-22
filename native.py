@@ -111,7 +111,8 @@ def native_center(gx: int, gy: int, seed: int):
     return (gx + 0.5) * NATIVE_SPACING + jx, (gy + 0.5) * NATIVE_SPACING + jy
 
 
-def _clear_trees(g, cx: float, cy: float, radius: float) -> None:
+def _clear_trees(g, cx: float, cy: float, radius: float,
+                 clear_planted: bool = True, clear_stumps: bool = True) -> None:
     trees = getattr(g, "trees", None)
     if trees is None:
         return
@@ -129,18 +130,23 @@ def _clear_trees(g, cx: float, cy: float, radius: float) -> None:
                 # them is the slow part of founding one.
                 trees._cache[(gx, gy)] = None
                 trees._presence[(gx, gy)] = None
-        for t in list(getattr(trees, "_stumps", ())):
-            if math.hypot(t.x - cx, t.y - cy) <= radius:
-                try:
-                    trees._stumps.remove(t)
-                except Exception:
-                    pass
-        for t in list(getattr(trees, "_planted", ())):
-            if math.hypot(t.x - cx, t.y - cy) <= radius:
-                try:
-                    trees._planted.remove(t)
-                except Exception:
-                    pass
+        # A REBUILT SAVED CAMP MUST NOT SWALLOW THE PLAYER'S ORCHARD.
+        # The camp is regenerated around the same fireplace on every load;
+        # the trees and stumps the save restored are not the camp's to clear.
+        if clear_stumps:
+            for t in list(getattr(trees, "_stumps", ())):
+                if math.hypot(t.x - cx, t.y - cy) <= radius:
+                    try:
+                        trees._stumps.remove(t)
+                    except Exception:
+                        pass
+        if clear_planted:
+            for t in list(getattr(trees, "_planted", ())):
+                if math.hypot(t.x - cx, t.y - cy) <= radius:
+                    try:
+                        trees._planted.remove(t)
+                    except Exception:
+                        pass
     except Exception:
         pass
 
@@ -160,7 +166,7 @@ def _clear_wild(g, cx: float, cy: float, radius: float) -> None:
                 wx = tx * TILE + TILE / 2.0
                 wy = ty * TILE + TILE / 2.0
                 if math.hypot(wx - cx, wy - cy) <= radius:
-                    world.wild_eaten[(tx, ty)] = float("inf")
+                    world.wild_cleared.add((tx, ty))
     except Exception:
         pass
 
@@ -188,7 +194,8 @@ def _clear_ore(g, cx: float, cy: float, radius: float) -> None:
         pass
 
 
-def build(g, cx: float, cy: float, seed: int):
+def build(g, cx: float, cy: float, seed: int,
+          clear_planted: bool = True, clear_stumps: bool = True):
     """Lay a whole native settlement around (cx, cy) and return it.
 
     The settlement object keeps its own positions and people so the game can
@@ -249,7 +256,8 @@ def build(g, cx: float, cy: float, seed: int):
         half = (5 * TILE / 2.0) if kind == food_kind else (3 * TILE / 2.0)
         max_r = max(max_r, math.hypot(wx - cx, wy - cy) + half)
     clearance = max_r + CLEAR_BLOCKS * TILE
-    _clear_trees(g, cx, cy, clearance)
+    _clear_trees(g, cx, cy, clearance, clear_planted=clear_planted,
+                 clear_stumps=clear_stumps)
     _clear_wild(g, cx, cy, clearance)
     _clear_ore(g, cx, cy, clearance)
 
@@ -281,6 +289,12 @@ def build(g, cx: float, cy: float, seed: int):
                         continue
                 except Exception:
                     pass
+                # A SAVED PLOT IS ALREADY PLANTED. The camp is rebuilt from
+                # its seed on every load, and it must not reset the age of a
+                # crop the save has just restored.
+                if world.plot_at(ctx + dx, cty + dy) is not None:
+                    tiles.append((ctx + dx, cty + dy, kind))
+                    continue
                 age = crop.GROW_SECONDS * rng.uniform(0.50, 1.05)
                 world.set_plot(ctx + dx, cty + dy, kind, now - age)
                 tiles.append((ctx + dx, cty + dy, kind))

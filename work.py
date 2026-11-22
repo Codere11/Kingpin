@@ -216,11 +216,6 @@ def set_market(player, npc, on: bool) -> bool:
     if on and market_stall(player) is None:
         return False
     npc.to_market = bool(on)
-    try:
-        import orders
-        orders.order(player, npc, "market" if on else "chest")
-    except Exception:
-        pass
     return True
 
 
@@ -249,11 +244,6 @@ def fire(player, npc) -> bool:
     npc.job = None
     npc.work_post = None              # his own town's day again
     like(npc, LIKE_FOR_FIRING)
-    try:
-        import orders
-        orders.order(player, npc, "fire")
-    except Exception:
-        pass
     try:
         import economy as _e
         _e._note("FIRED     %-16s by the player; he likes him %d now"
@@ -357,11 +347,6 @@ def hire(player, npc, trade: str) -> dict:
         npc.strike_timer = 0.0
     like(npc, LIKE_FOR_HIRING)          # being taken on is worth something
     try:
-        import orders
-        orders.order(player, npc, "hire", item=trade)
-    except Exception:
-        pass
-    try:
         import plog
         plog.log("PHASE-HIRED", getattr(npc, "name", "?"), "as", trade,
                  "wage", wage, "post", getattr(player, "work_post", None),
@@ -382,40 +367,8 @@ TURN_PX = 160.0             # an agent close enough to have a word with him
 
 
 def turn_the_bitter(player, agents, radius: float = TURN_PX) -> list:
-    """A WORKER WHO HATES YOU KEEPS WORKING -- AND IS TURNED.
-
-    He is not sent away: he stays in the yard, on the payroll, doing the work
-    he was hired for. But the first time one of the service's men comes close
-    enough to speak to him, he becomes one of them -- and everything he sees
-    from then on belongs to the chief.
-    """
-    turned = []
-    held = getattr(player, "workers", None)
-    if not held or not agents:
-        return turned
-    try:
-        import nemesis
-    except Exception:
-        return turned
-    live = [n for n in held if getattr(n, "alive", True)]
-    r2 = radius * radius
-    for n in live:
-        if not hates(n, player) or nemesis.is_service(n):
-            continue
-        for a in agents:
-            if a is n or not getattr(a, "alive", True):
-                continue
-            if ((a.x - n.x) ** 2 + (a.y - n.y) ** 2) > r2:
-                continue
-            if nemesis.turn(n):
-                turned.append(n)
-                try:
-                    import orders
-                    orders.leak(n)      # everything he knew about the yard
-                except Exception:
-                    pass
-            break
-    return turned
+    """The old secret-service turning is gone."""
+    return []
 
 
 SEEDS = ("wheat_seed", "seed_bag")
@@ -808,12 +761,6 @@ def set_not_sold(npc, item, stop: bool, player=None) -> bool:
         not_sold(npc).add(item)
     else:
         not_sold(npc).discard(item)
-    try:
-        import orders
-        orders.order(player, npc, "stop_selling" if stop else "sell_again",
-                     item=item)
-    except Exception:
-        pass
     return stop
 
 
@@ -825,12 +772,6 @@ def set_banned(npc, item, stop: bool, player=None) -> bool:
         banned(npc).add(item)
     else:
         banned(npc).discard(item)
-    try:
-        import orders
-        orders.order(player, npc, "stop_making" if stop else "make_again",
-                     item=item)
-    except Exception:
-        pass
     return stop
 
 
@@ -984,12 +925,6 @@ def _deposit_stacks(npc, dst, only, into_stall: bool, player=None) -> dict:
             if s.count <= 0:
                 inv.slots[i] = None
             out["moved"][item] = out["moved"].get(item, 0) + room
-            try:
-                import orders
-                orders.handoff(player, npc, item, room,
-                               "stall" if into_stall else "chest")
-            except Exception:
-                pass
     for s in inv.slots:
         if s is not None and s.defn.id in allowed and int(s.count) > 0:
             out["left"][s.defn.id] = out["left"].get(s.defn.id, 0) + int(s.count)

@@ -34,8 +34,11 @@ Hard rules:
 * **After editing `village.py` / `economy.py` / `skills.py` you MUST `./build.sh`.**
   A stale compiled `.so` silently shadows the `.py` and your edit does nothing.
 * **`build.sh` exits non-zero on a Cython failure on purpose** — do not bypass.
-* **Every field needs a class default.** Old saves / unpickled objects never run
+* **Every field needs a class default.** Restored objects may not run
   `__init__`, so a new field with no class default crashes restored objects.
+* **Saves are plain data, not pickle.** Read `SAVE.md` before adding a field,
+  a reference, a camp, a building or a new system. The round-trip runs inside
+  `./build.sh` and refuses a build that cannot save and load itself.
 * **Class constants are read through `self.`** in cythonised modules; a bare
   `CONSTANT` inside a method is a Cython "undeclared name" error.
 * **The exe is windowed: stdout is swallowed.** Anything you need to see goes to
@@ -88,7 +91,8 @@ The two most important render/input facts:
 | UI | `ui.py` (panels), `items.py` (icons), `build.py`+`placement.py` (build menu), `menu.py` (title) |
 | Map | `map.py` | one fixed world image, zoom/pan view |
 | Ship | `main.py` `ship_pos()` / `open_market()` | spawn coast +56 offshore; click opens market; gold HUD edge-arrow points to it |
-| Saves | `savegame.py`, `persist.py`, `chunksave.py` | `saves/save_0.json` + chunk dir |
+| Saves | `save/` (manifest + gzip chunks), `persist.py` (dirs/crash log) | `saves/slot_N/save.json` + `chunks/`; contract in `SAVE.md` |
+| NPC mind | `NPC.md` | MBTI, traits, mood, breaks, doctor, player personality; phase-gated |
 | Sound | `sound.py` | one-shot, on-screen gated |
 | Guns | `guns.py` | musket/double/rifle + ammo |
 | Vision/light | `vision.py`, `life.py` | cone of sight, night glow (cached) |
@@ -112,17 +116,27 @@ The two most important render/input facts:
 
 ---
 
-## 5. LEGACY / OLD WORLD (still on disk, still imported, not the spine)
+## 5. LEGACY / OLD WORLD (cleanup done)
 
-`war.py`, `hubs.py`, `lanes_mp.py`, `nemesis.py`, `manhunt.py`, `board.py`,
-`trade.py`, `fence.py`, `gate.py`, `gulag.py`, `prison.py`, `rail.py`,
-`train.py`, `detain.py`, `caravans.py`, `enemy.py`, `stall.py`, `folders.py`,
-`worldmap.py`, `worldbuild.py`, plus helpers (`boardapi.py`, `govbeer.py`,
-`holding.py`, `resettle.py`, `orders.py`, `newsbubble.py`, `lanes.py`).
+The old pre-pivot simulation has been removed from the live tree. Deleted:
+`war.py`, `rail.py`, `gulag.py`, `nemesis.py`, `orders.py`, `caravans.py`,
+`gate.py`, `train.py`, `detain.py`, `holding.py`, `prison.py`, `folders.py`,
+`board.py`, `boardapi.py`, `manhunt.py`, `newsbubble.py`, `interact.py`,
+`governance` helpers, `socio.py`, `grief.py`, `brawl.py`, `question.py`,
+`worldmap.py`, `resettle.py`, `govbeer.py`.
 
-They are the pre-pivot GetWorld code. They are **still imported by main/engine**
-so they cannot be blindly deleted, but the live gameplay does not run through
-them. Removal was on the roadmap; do it only if asked.
+`village.py` no longer contains the `Village` class; `Villages` is an empty
+registry. `hubs.py` is only the player's fenced yard. `worldbuild.py` is only
+wild spawns/loot/targeting. `mind.py` is only the luxury-consumption mood hook.
+
+Compatibility stubs remain for `lanes.py` / `lanes_mp.py` because the frame
+still calls an empty worker-lane object; they run nothing. `stall.py` is the
+player's market stall, not the old town simulation. `economy.py`, `work.py`,
+`dialogue.py` and `trade.py` contain reusable native/interaction code and some
+dormant town helpers; they are not the old simulation and are kept.
+
+`enemy.py` and `fence.py` are shared live modules (animals; steering/pathfinding)
+and must stay.
 
 ---
 
