@@ -93,8 +93,8 @@ The two most important render/input facts:
 | Ship | `main.py` `ship_pos()` / `open_market()` | spawn coast +56 offshore; click opens market; gold HUD edge-arrow points to it |
 | Saves | `save/` (manifest + gzip chunks), `persist.py` (dirs/crash log) | `saves/slot_N/save.json` + `chunks/`; contract in `SAVE.md` |
 | NPC mind | `NPC.md` | MBTI, traits, mood, breaks, doctor, player personality; phase-gated |
-| NPC foundation | `persona.py`, `mood.py`, `doctor.py` | pure type/mood/doctor data; no live hooks yet |
-| NPC lab | `npclab.py` | test-mode fixture: six labelled subjects, F5–F8 overlay |
+| NPC foundation | `persona.py`, `mood.py`, `doctor.py` | deterministic types, pure mood/doctor data; farmer S/N hook live |
+| NPC lab | `npclab.py` | test-mode fixture: eight labelled subjects incl. S/N farmers, F5–F8 overlay |
 | Sound | `sound.py` | one-shot, on-screen gated |
 | Guns | `guns.py` | musket/double/rifle + ammo |
 | Vision/light | `vision.py`, `life.py` | cone of sight, night glow (cached) |

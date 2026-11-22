@@ -2072,7 +2072,8 @@ class PersonaCard:
         name = getattr(subject, "name", "?") or "?"
         occ = self._occupation(subject)
         skills = getattr(subject, "skills", None)
-        h = pad + self.portrait_size + 8 + 24 + 20 + len(self._SKILLS) * row_h + pad
+        h = (pad + self.portrait_size + 8 + 24 + 20 + 20
+             + len(self._SKILLS) * row_h + pad)
         # Aligned with the inventory panel: to its left, vertically centred.
         x = panel_rect.left - gap - w
         if x < 6:
@@ -2088,7 +2089,11 @@ class PersonaCard:
         yy += 24
         ot = self.font_occ.render(occ, True, (190, 172, 128))
         board.blit(ot, ((w - ot.get_width()) // 2, yy))
-        yy += 28
+        yy += 24
+        typ = getattr(subject, "mbti", "") or "—"
+        mt = self.font_occ.render("MBTI %s" % typ, True, (152, 196, 224))
+        board.blit(mt, ((w - mt.get_width()) // 2, yy))
+        yy += 24
         if skills is not None:
             for label, attr, lo, hi, bands in self._SKILLS:
                 val = float(getattr(skills, attr, 0.0) or 0.0)

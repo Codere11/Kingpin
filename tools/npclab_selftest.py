@@ -5,7 +5,7 @@
     python tools/npclab_selftest.py verify
 
 `make` builds the lab in a test save, writes mind data on one subject, and
-saves.  `verify` boots that save and checks the lab, the six types and the
+saves.  `verify` boots that save and checks the lab, the eight types and the
 mind fields came back.  It never touches a normal save.
 """
 

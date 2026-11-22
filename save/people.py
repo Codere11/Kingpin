@@ -101,6 +101,14 @@ def restore(n, rec: dict, ctx: "_context.Context") -> object:
             codec.inventory_restore(inv, rec["pack"])
         except Exception:
             pass
+    # OLD SAVES HAVE NO TYPE. The fields are additive, so a missing mbti is
+    # normal; assign it deterministically from the same stable id the save
+    # already uses. New saves carry it and keep it unchanged.
+    try:
+        import persona
+        persona.ensure(n)
+    except Exception:
+        pass
     refs = rec.get("refs") or {}
     ctx.later(lambda: _resolve(n, refs, ctx))
     return n

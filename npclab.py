@@ -1,7 +1,7 @@
 """npclab.py -- the test-mode-only NPC lab.
 
 This is a fixture, not a settlement the normal game ever sees.  It builds a
-small camp near the player with six labelled subjects, and leaves the live
+small camp near the player with eight labelled subjects, and leaves the live
 world, the live camps and the normal save alone.  All controls are gated by
 engine.test_mode.
 
@@ -16,6 +16,7 @@ import math
 import pygame
 
 import block
+import crop as crop_mod
 import mood
 import native
 import persona
@@ -30,12 +31,16 @@ LAB_KEY = ("starter", 9999)
 LAB_SEED = 0x4C414230          # "LAB0"
 
 SUBJECTS = (
-    ("T-INTJ", "INTJ"),
-    ("T-ISFP", "ISFP"),
-    ("T-ESTJ", "ESTJ"),
-    ("T-ENFP", "ENFP"),
-    ("T-ISTP", "ISTP"),
-    ("T-ENTJ", "ENTJ"),
+    ("T-INTJ", "INTJ", "idle"),
+    ("T-ISFP", "ISFP", "idle"),
+    ("T-ESTJ", "ESTJ", "idle"),
+    ("T-ENFP", "ENFP", "idle"),
+    ("T-ISTP", "ISTP", "idle"),
+    ("T-ENTJ", "ENTJ", "idle"),
+    # The paired farmer test from NPC.md T1: same work, one sensing and one
+    # intuitive, on their own one-tile plots.
+    ("T-S-FARM", "ISFJ", "farmer"),
+    ("T-N-FARM", "INTJ", "farmer"),
 )
 
 PANEL_BG = (18, 18, 22)
@@ -71,18 +76,19 @@ def _find_camp(g):
 
 
 def _subjects_from(camp):
-    out = []
+    found = {}
     for name in ("unemployed", "workers", "farmers"):
         for n in (getattr(camp, name, None) or ()):
             if str(getattr(n, "id", "")).startswith("lab_"):
-                out.append(n)
-    if not out:
-        pool = getattr(camp, "people", None)
-        if isinstance(pool, list):
-            for n in pool:
-                if str(getattr(n, "id", "")).startswith("lab_"):
-                    out.append(n)
-    return out
+                found[getattr(n, "name", "")] = n
+    pool = getattr(camp, "people", None)
+    if isinstance(pool, list):
+        for n in pool:
+            if str(getattr(n, "id", "")).startswith("lab_"):
+                found[getattr(n, "name", "")] = n
+    # CANONICAL ORDER.  The save restores the camp's rosters in their own
+    # order; F7 must still walk the same list it built on the first frame.
+    return [found[label] for label, _typ, _role in SUBJECTS if label in found]
 
 
 def _attach(g, camp, subjects) -> None:
@@ -184,24 +190,57 @@ def _discard(g, camp):
     g._npc_sel = 0
 
 
+def _ensure_farm_plots(g, camp):
+    """Two isolated one-tile plots west of the lab, owned by the pair."""
+    done = getattr(camp, "_lab_farm_plots", None)
+    if done is not None:
+        return list(done)
+    plots = []
+    world = g.world
+    for i in range(2):
+        cx = int((float(camp.x) - (4.0 + i) * block.TILE) // block.TILE)
+        cy = int((float(camp.y) + (i * 2 - 1) * block.TILE) // block.TILE)
+        try:
+            world.set_plot(cx, cy, "grass", None)
+        except Exception:
+            pass
+        kind = getattr(camp, "food_kind", "wheat")
+        camp.farm_plots.append((cx, cy, kind))
+        camp.farm_tiles[(cx, cy)] = [(cx, cy, kind)]
+        plots.append(len(camp.farm_plots) - 1)
+    camp._lab_farm_plots = list(plots)
+    return plots
+
+
 def _spawn_subjects(g, camp):
     made = []
-    for i, (label, typ) in enumerate(SUBJECTS):
+    farm_plots = _ensure_farm_plots(g, camp)
+    food_item = (getattr(camp, "food_item", None)
+                 or crop_mod.FOOD_ITEM.get(getattr(camp, "food_kind", ""),
+                                           "bread"))
+    farmer_i = 0
+    for i, (label, typ, role) in enumerate(SUBJECTS):
         ang = (2.0 * math.pi * i / len(SUBJECTS)) + 0.25
         x = float(camp.x) + math.cos(ang) * (block.TILE * 5.0)
         y = float(camp.y) + math.sin(ang) * (block.TILE * 5.0)
         n = village.NPC(x, y, LAB_SEED ^ (i * 2654435761),
-                        name=label, npc_id="lab_%s" % typ,
+                        name=label, npc_id="lab_%s" % label,
                         role="Lab Subject")
         n.native = True
-        n.native_role = "unemployed"
-        n.job = "unemployed"
+        n.native_role = role
+        n.job = "unemployed" if role == "idle" else role
         n.native_camp = camp
+        if role == "farmer":
+            n.farm_plot = farm_plots[farmer_i % len(farm_plots)]
+            farmer_i += 1
+            n.stock[food_item] = 60
+            n.stock["shovel"] = 1
+            n.tool_uses = 100
         n.home = (x, y)
         n.speed = 52.0
         n.base_speed = 52.0
         n.wear = "normal"
-        n._save_uid = "person:lab_%s" % typ
+        n._save_uid = "person:lab_%s" % label
         n.mbti = typ
         n.mood = mood.DEFAULT_MOOD
         n.mood_target = mood.DEFAULT_MOOD
@@ -236,7 +275,8 @@ def _reset_subjects(subjects):
 def reset(g):
     """F6: build if needed, then put the subjects back at their marks."""
     camp = _find_camp(g)
-    if camp is not None and not _camp_valid(g, camp):
+    if camp is not None and (not _camp_valid(g, camp)
+                             or len(_subjects_from(camp)) != len(SUBJECTS)):
         _discard(g, camp)
         camp = None
     if camp is None:
@@ -294,7 +334,8 @@ def _build_camp(g):
 def ensure(g):
     """Find or rebuild the lab without resetting it."""
     camp = _find_camp(g)
-    if camp is not None and not _camp_valid(g, camp):
+    if camp is not None and (not _camp_valid(g, camp)
+                             or len(_subjects_from(camp)) != len(SUBJECTS)):
         _discard(g, camp)
         camp = None
     if camp is None:

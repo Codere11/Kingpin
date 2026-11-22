@@ -61,12 +61,30 @@ def main():
             raise
         except Exception:
             pass
-        assert len(subjects) == 6, "lab has %d subjects" % len(subjects)
+        assert len(subjects) == 8, "lab has %d subjects" % len(subjects)
         assert g._npc_sel == 1, "F7 did not advance selection: %r" % g._npc_sel
         n = subjects[1]
         assert n.mood == 35.0, "F8 did not change mood: %r" % n.mood
-        print("NPCLAB KEYTEST: PASS -- F6 built 6, F7 selected %s, F8 mood %.0f"
-              % (getattr(n, "name", "?"), n.mood))
+        import persona
+        for sub in subjects:
+            assert getattr(sub, "mbti", ""), ("no MBTI on %s"
+                                              % getattr(sub, "name", "?"))
+        # A generated native, not one the lab typed by hand: this proves the
+        # NPC constructor assigns a type too.
+        natives = [x for x in getattr(g, "_native_people", ())
+                   if not str(getattr(x, "id", "")).startswith("lab_")]
+        assert natives and all(getattr(x, "mbti", "") for x in natives), \
+            "generated native NPC without MBTI"
+        sf = next(x for x in subjects if x.name == "T-S-FARM")
+        nf = next(x for x in subjects if x.name == "T-N-FARM")
+        assert sf.farm_plot is not None and nf.farm_plot is not None
+        assert persona.is_sensing(sf) and persona.is_intuitive(nf)
+        assert persona.work_mult(sf, "farmer") > persona.work_mult(nf, "farmer")
+        print("NPCLAB KEYTEST: PASS -- F6 built 8, F7 selected %s, F8 mood %.0f, "
+              "S/N farmer affinity %.2f/%.2f"
+              % (getattr(n, "name", "?"), n.mood,
+                 persona.work_mult(sf, "farmer"),
+                 persona.work_mult(nf, "farmer")))
 
     engine.run = wrapped_run
     gamemain.main()

@@ -387,10 +387,12 @@ class Observer:
         screen.blit(board, panel.topleft)
         head = self.font.render("WATCHING  %s" % n.name, True, (240, 226, 172))
         screen.blit(head, (panel.left + 10, panel.top + 8))
+        _typ = getattr(n, "mbti", "") or ""
         info = self.small.render(
-            "%s of %s, nation %s   coin %d" % (job_of(n),
-                getattr(getattr(n, "village", None), "name", "?"),
-                getattr(n, "nation", None), n.coins),
+            "%s%s of %s, nation %s   coin %d"
+            % (job_of(n), ("  MBTI %s" % _typ) if _typ else "",
+               getattr(getattr(n, "village", None), "name", "?"),
+               getattr(n, "nation", None), n.coins),
             True, (198, 176, 128))
         screen.blit(info, (panel.left + 10, panel.top + 26))
         show = self.log[-(h // 14 - 3):]

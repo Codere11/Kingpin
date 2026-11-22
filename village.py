@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import stats
 import effects
+import persona
 
 import colorsys
 import functools
@@ -734,6 +735,9 @@ class NPC:
         self.bedroll = None           # the bedroll tile this person sleeps on
         economy.setup(self)          # goods, coin, hunger, craving, duty
         self._trade_timer = self.rng.uniform(0.5, 2.5)
+        # DETERMINISTIC TYPE. The id is stable across loads, so this is the
+        # same letters every time; it is not a live-RNG draw.
+        persona.ensure(self)
 
     def _tick_gun(self, dt: float) -> None:
         if self.reload_timer > 0.0:
@@ -3036,6 +3040,14 @@ class NPC:
             return False
         ctx, cty, kind = village.farm_plots[job]
         g = getattr(village, "g", None)
+        # ONE REAL AFFINITY HOOK (NPC.md Phase 1): a sensing farmer walks the
+        # field and learns the work faster than an intuitive one.  It is a
+        # multiplier, not a new rule, and an untyped/legacy farmer is neutral.
+        try:
+            _work_mult = persona.work_mult(self, "farmer")
+            _gain_mult = persona.gain_mult_for_job(self, "farmer", "farming")
+        except Exception:
+            _work_mult = _gain_mult = 1.0
 
         task = getattr(self, "_field_task", None)
         if task is None:
@@ -3043,7 +3055,7 @@ class NPC:
             if task is None:                # nothing to do: wait by the field
                 tx, ty = ctx * TILE + TILE / 2.0, cty * TILE + TILE / 2.0
                 if math.hypot(tx - self.x, ty - self.y) > 40.0:
-                    self._step_toward(tx, ty, dt, 0.7)
+                    self._step_toward(tx, ty, dt, 0.7 * _work_mult)
                 return True
             if task[2] == "till":
                 can_till = self.tool_uses > 0 or self.stock.get("shovel", 0) > 0
@@ -3056,7 +3068,7 @@ class NPC:
         tx = ttx * TILE + TILE / 2.0
         ty = tty * TILE + TILE / 2.0
         if math.hypot(tx - self.x, ty - self.y) > 12.0:
-            self._step_toward(tx, ty, dt)
+            self._step_toward(tx, ty, dt, _work_mult)
             return True
         if action == "clear":
             self._field_clear(ttx, tty, g, world, now)
@@ -3068,7 +3080,7 @@ class NPC:
                           % (getattr(self, "name", "?"), plot.kind, ttx, tty))
                 economy.harvest(village, self, plot.kind, self.rng)
                 self._snd("harvest", min_gap=0.3)
-                self.skills.gain_farming(0.02)  # reaping hones the hand, slowly
+                self.skills.gain_farming(0.02 * _gain_mult)  # reaping hones the hand, slowly
                 if getattr(self, "conquered", False):
                     _seed = crop.CROP_SEED.get(plot.kind)
                     if _seed is not None:

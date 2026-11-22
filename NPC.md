@@ -667,8 +667,9 @@ Do not start the next phase before that.
 
 ## Phase 0 — Foundation and lab (no gameplay balance yet)
 
-> **Status: implemented as Phase 0-lite.**  The lab currently has six subjects
-> (INTJ, ISFP, ESTJ, ENFP, ISTP, ENTJ), F5 hide, F6 reset, F7 next, F8 mood.
+> **Status: implemented as Phase 0-lite.**  The lab currently has eight subjects
+> (INTJ, ISFP, ESTJ, ENFP, ISTP, ENTJ, plus a sensing and an intuitive farmer),
+> F5 hide, F6 reset, F7 next, F8 mood.
 > F9/F10, the Medicine Hut, breakables and the full 16-subject set stay for the
 > later phases.  `npclab.py`, `persona.py`, `mood.py` and `doctor.py` exist;
 > the live camps and AI are untouched.  Automated checks are in
@@ -698,6 +699,12 @@ Pass condition: the lab is visible, labeled, and controllable; no normal save
 is touched.
 
 ## Phase 1 — MBTI assignment, distribution, job affinity
+
+> **Status: Phase 1-lite implemented.**  Every NPC gets a deterministic type
+> in `NPC.__init__`, old saved people get one in `save/people.restore`, and
+> the farmer work/gain hook is live.  Other jobs and the full T1 comparison
+> remain for the next slice.  The lab has two extra farmers: `T-S-FARM` and
+> `T-N-FARM`, on isolated plots.
 
 Build:
 
