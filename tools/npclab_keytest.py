@@ -103,6 +103,9 @@ def main():
             "generated native NPC without MBTI"
         assert all(not str(getattr(x, "name", "")).startswith("T-")
                    for x in subjects), "type leaked into a subject's name"
+        import native as _native_names
+        assert all(getattr(x, "name", "") in _native_names._NAMES
+                   for x in subjects), "lab subject has a non-native name"
         sf = next(x for x in subjects
                   if x.native_role == "farmer" and persona.is_sensing(x))
         nf = next(x for x in subjects

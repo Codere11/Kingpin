@@ -34,16 +34,17 @@ LAB_SEED = 0x4C414230          # "LAB0"
 # only on the medical record; it is not part of the name or a label over
 # their head.  The key is internal and only keeps the fixture/save order.
 SUBJECTS = (
-    ("a", "Mira", "INTJ", "idle"),
-    ("b", "Tomas", "ISFP", "idle"),
-    ("c", "Anya", "ESTJ", "idle"),
-    ("d", "Boris", "ENFP", "idle"),
-    ("e", "Lena", "ISTP", "idle"),
-    ("f", "Ravi", "ENTJ", "idle"),
+    ("a", "Awan", "INTJ", "idle"),
+    ("b", "Kiona", "ISFP", "idle"),
+    ("c", "Takoda", "ESTJ", "idle"),
+    ("d", "Yuma", "ENFP", "idle"),
+    ("e", "Nashoba", "ISTP", "idle"),
+    ("f", "Chenoa", "ENTJ", "idle"),
     # The paired farmer test from NPC.md T1: same work, one sensing and one
-    # intuitive, on their own one-tile plots.
-    ("g", "Sena", "ISFJ", "farmer"),
-    ("h", "Niko", "INTJ", "farmer"),
+    # intuitive, on their own one-tile plots.  The second field is the role,
+    # never part of the name.
+    ("g", "Migina", "ISFJ", "farmer"),
+    ("h", "Ohanzee", "INTJ", "farmer"),
 )
 
 PANEL_BG = (18, 18, 22)
@@ -259,7 +260,17 @@ def _spawn_subjects(g, camp):
 
 
 def _reset_subjects(subjects):
+    canonical = {"lab_" + key: (label, typ)
+                 for key, label, typ, _role in SUBJECTS}
     for n in subjects:
+        # Keep a lab carried over from an older build in step with the
+        # canonical fixture: ordinary name, type private.
+        _canon = canonical.get(str(getattr(n, "id", "")))
+        if _canon is not None:
+            try:
+                n.name, n.mbti = _canon
+            except Exception:
+                pass
         home = getattr(n, "home", None)
         if home is not None:
             try:

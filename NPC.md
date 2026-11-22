@@ -640,7 +640,7 @@ The lab is a test fixture. It does not affect a normal save.
 The test-mode overlay shows for the selected subject:
 
 ```
-Mira   job=artisan   S/N: N (+15% / +25% skill)
+Awan   job=artisan   S/N: N (+15% / +25% skill)
 mood 24 / target 18    break: normal
 traits: Smart, Green Thumb
 thoughts: insulted -8 x2, hungry -6, slept_outside -6
@@ -711,8 +711,8 @@ is touched.
 > **Status: Phase 1-lite implemented.**  Every NPC gets a deterministic type
 > in `NPC.__init__`, old saved people get one in `save/people.restore`, and
 > the farmer work/gain hook is live.  Other jobs and the full T1 comparison
-> remain for the next slice.  The lab has two extra farmers, Sena and Niko,
-> on isolated plots.
+> remain for the next slice.  The lab has two extra farmers, Migina and
+> Ohanzee, on isolated plots.
 
 Build:
 

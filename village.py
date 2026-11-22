@@ -188,48 +188,6 @@ BIRTH_BOND = 18.0                    # seconds of evening friendship before a ch
 PEACE_DELAY = 30.0                   # no children until this long after a death
 NPC_SWING_SECONDS = 0.30            # a native warrior's swing, drawn as an arc
 
-# THE PEOPLE OF THE REPUBLIC.
-#
-# One country, four tongues: Russian, Ukrainian, Georgian and Polish, mixed in
-# the same villages the way a Soviet republic really was. Given names are
-# transliterated into plain letters -- no diacritics -- because a missing glyph
-# in a bitmap font is a box, and a man whose name draws as a box is not a man
-# with a name.
-FIRST_NAMES = [
-    # Russian
-    "Ivan", "Dmitri", "Sergei", "Nikolai", "Pavel", "Mikhail", "Boris",
-    "Yuri", "Andrei", "Grigori", "Fyodor", "Vasily", "Pyotr", "Lev",
-    "Arkady", "Stepan", "Konstantin", "Vladimir", "Alexei", "Igor",
-    "Vera", "Nadya", "Irina", "Olga", "Tatiana", "Zoya", "Galina", "Larisa",
-    # Ukrainian
-    "Taras", "Bohdan", "Ostap", "Mykola", "Petro", "Dmytro", "Vasyl",
-    "Yurii", "Andriy", "Serhiy", "Oksana", "Kateryna", "Halyna", "Olena",
-    "Nadiya", "Svitlana",
-    # Georgian
-    "Giorgi", "Davit", "Levan", "Zurab", "Irakli", "Vakhtang", "Nodar",
-    "Otar", "Shota", "Tengiz", "Nino", "Tamar", "Ketevan", "Manana", "Lela",
-    # Polish
-    "Stanislaw", "Kazimierz", "Wladyslaw", "Zbigniew", "Tadeusz", "Jerzy",
-    "Marek", "Piotr", "Krzysztof", "Andrzej", "Jakub", "Tomasz", "Ryszard",
-    "Halina", "Jadwiga", "Krystyna", "Zofia", "Danuta", "Ewa",
-]
-LAST_NAMES = [
-    # Russian
-    "Volkov", "Sokolov", "Morozov", "Orlov", "Medvedev", "Kuznetsov",
-    "Petrov", "Zaitsev", "Komarov", "Lebedev", "Novikov", "Yegorov",
-    "Barsukov", "Zimin", "Karpov",
-    # Ukrainian
-    "Shevchenko", "Bondarenko", "Kovalenko", "Tkachenko", "Melnyk",
-    "Kravchenko", "Oliynyk", "Savchenko", "Rudenko", "Marchenko",
-    "Lysenko", "Hrytsenko", "Bondar", "Tkachuk",
-    # Georgian
-    "Beridze", "Kapanadze", "Giorgadze", "Tsiklauri", "Gelashvili",
-    "Abashidze", "Japaridze", "Mgeladze", "Dolidze", "Chkheidze",
-    # Polish
-    "Kowalski", "Nowak", "Wisniewski", "Wojcik", "Kaminski", "Lewandowski",
-    "Zielinski", "Szymanski", "Wozniak", "Dabrowski", "Kozlowski", "Mazur",
-    "Krawczyk", "Piotrowski",
-]
 # THE FLAVOUR TITLES ARE GONE.
 #
 # There was a list of eight occupations here -- "Gunsmith", "Moonshiner",

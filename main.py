@@ -522,10 +522,10 @@ def main() -> None:
                     if getattr(g._origin_town, "fence_rect", None) is not None
                     else (random.choice(g._towns_t) if g._towns_t else None))
         if g._tt_town is not None:
+            import native as _native_names
             g._truth = village_mod.NPC(
                 g.player.x + 44.0, g.player.y, random.randrange(1 << 30),
-                "%s %s" % (random.choice(village_mod.FIRST_NAMES),
-                           random.choice(village_mod.LAST_NAMES)),
+                random.choice(_native_names._NAMES),
                 "truth_teller", "Truth-teller", g._tt_town)
             g._truth.job = random.choice(
                 ["farm", "logger", "mine", "smith", "trader",
