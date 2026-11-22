@@ -326,8 +326,8 @@ class Observer:
             if hit:
                 pygame.draw.rect(screen, (52, 46, 36),
                                  (panel.left + 8, y - 2, panel.width - 16, ROW))
-            line = ("%-16s %-9s %-14s nat %-3s  coin %6d  food %3d  hunger %3d%s"
-                    % (n.name, job_of(n),
+            line = ("%-16s %-9s %-4s %-12s nat %-3s  coin %6d  food %3d  hunger %3d%s"
+                    % (n.name, job_of(n), getattr(n, "mbti", "") or "?",
                        getattr(getattr(n, "village", None), "name", "?"),
                        getattr(n, "nation", None), n.coins,
                        sum(int(n.stock.get(f, 0))
