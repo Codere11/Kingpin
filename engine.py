@@ -1243,6 +1243,27 @@ def run(g):
                         pygame.mouse.set_visible(True)
                         plog.log("BODY-OPEN", getattr(g._body, "name", "?"))
                         break
+                    # TEST MODE: CLICK ANY NATIVE TO READ THEIR CARD, even
+                    # with a weapon in hand.  The card itself still refuses to
+                    # show a mind until that person has a medical record.
+                    if g.test_mode:
+                        try:
+                            _wx = g.cam_x + event.pos[0] / g.zoom
+                            _wy = g.cam_y + event.pos[1] / g.zoom
+                            _best, _bd = None, 44.0
+                            for _n in list(getattr(g, "_native_people", ())):
+                                if not getattr(_n, "alive", True):
+                                    continue
+                                _d = math.hypot(_n.x - _wx, _n.y - _wy)
+                                if _d < _bd:
+                                    _best, _bd = _n, _d
+                            if _best is not None:
+                                g.persona = _best
+                                g.npc_card_open = True
+                                pygame.mouse.set_visible(True)
+                                break
+                        except Exception:
+                            pass
                     # A WEAPON IS AN ATTACK, NOT A CONVERSATION.
                     if g._held_id not in ("axe", "pickaxe", "rifle", "shotgun", "bow",
                                          "musket", "double_shot"):
