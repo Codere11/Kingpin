@@ -59,7 +59,7 @@ def _make(g):
     assert camp is not None
     subjects = list(g._npc_subjects)
     # One subject gets a full Phase 0 mind record, so the save test is real.
-    n = next(x for x in subjects if getattr(x, "name", "") == "T-ENFP")
+    n = next(x for x in subjects if getattr(x, "mbti", "") == "ENFP")
     n.traits = ["smart"]
     n.mood = 35.0
     n.mood_target = 25.0

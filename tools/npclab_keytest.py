@@ -101,8 +101,12 @@ def main():
                    if not str(getattr(x, "id", "")).startswith("lab_")]
         assert natives and all(getattr(x, "mbti", "") for x in natives), \
             "generated native NPC without MBTI"
-        sf = next(x for x in subjects if x.name == "T-S-FARM")
-        nf = next(x for x in subjects if x.name == "T-N-FARM")
+        assert all(not str(getattr(x, "name", "")).startswith("T-")
+                   for x in subjects), "type leaked into a subject's name"
+        sf = next(x for x in subjects
+                  if x.native_role == "farmer" and persona.is_sensing(x))
+        nf = next(x for x in subjects
+                  if x.native_role == "farmer" and persona.is_intuitive(x))
         assert sf.farm_plot is not None and nf.farm_plot is not None
         assert persona.is_sensing(sf) and persona.is_intuitive(nf)
         assert persona.work_mult(sf, "farmer") > persona.work_mult(nf, "farmer")

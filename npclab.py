@@ -30,17 +30,20 @@ import world as world_mod
 LAB_KEY = ("starter", 9999)
 LAB_SEED = 0x4C414230          # "LAB0"
 
+# Test subjects get ordinary names.  Their type is a private field, shown
+# only on the medical record; it is not part of the name or a label over
+# their head.  The key is internal and only keeps the fixture/save order.
 SUBJECTS = (
-    ("T-INTJ", "INTJ", "idle"),
-    ("T-ISFP", "ISFP", "idle"),
-    ("T-ESTJ", "ESTJ", "idle"),
-    ("T-ENFP", "ENFP", "idle"),
-    ("T-ISTP", "ISTP", "idle"),
-    ("T-ENTJ", "ENTJ", "idle"),
+    ("a", "Mira", "INTJ", "idle"),
+    ("b", "Tomas", "ISFP", "idle"),
+    ("c", "Anya", "ESTJ", "idle"),
+    ("d", "Boris", "ENFP", "idle"),
+    ("e", "Lena", "ISTP", "idle"),
+    ("f", "Ravi", "ENTJ", "idle"),
     # The paired farmer test from NPC.md T1: same work, one sensing and one
     # intuitive, on their own one-tile plots.
-    ("T-S-FARM", "ISFJ", "farmer"),
-    ("T-N-FARM", "INTJ", "farmer"),
+    ("g", "Sena", "ISFJ", "farmer"),
+    ("h", "Niko", "INTJ", "farmer"),
 )
 
 PANEL_BG = (18, 18, 22)
@@ -79,16 +82,19 @@ def _subjects_from(camp):
     found = {}
     for name in ("unemployed", "workers", "farmers"):
         for n in (getattr(camp, name, None) or ()):
-            if str(getattr(n, "id", "")).startswith("lab_"):
-                found[getattr(n, "name", "")] = n
+            ident = str(getattr(n, "id", ""))
+            if ident.startswith("lab_"):
+                found[ident] = n
     pool = getattr(camp, "people", None)
     if isinstance(pool, list):
         for n in pool:
-            if str(getattr(n, "id", "")).startswith("lab_"):
-                found[getattr(n, "name", "")] = n
+            ident = str(getattr(n, "id", ""))
+            if ident.startswith("lab_"):
+                found[ident] = n
     # CANONICAL ORDER.  The save restores the camp's rosters in their own
     # order; F7 must still walk the same list it built on the first frame.
-    return [found[label] for label, _typ, _role in SUBJECTS if label in found]
+    return [found["lab_" + key] for key, _name, _typ, _role in SUBJECTS
+            if ("lab_" + key) in found]
 
 
 def _attach(g, camp, subjects) -> None:
@@ -219,12 +225,12 @@ def _spawn_subjects(g, camp):
                  or crop_mod.FOOD_ITEM.get(getattr(camp, "food_kind", ""),
                                            "bread"))
     farmer_i = 0
-    for i, (label, typ, role) in enumerate(SUBJECTS):
+    for i, (key, label, typ, role) in enumerate(SUBJECTS):
         ang = (2.0 * math.pi * i / len(SUBJECTS)) + 0.25
         x = float(camp.x) + math.cos(ang) * (block.TILE * 5.0)
         y = float(camp.y) + math.sin(ang) * (block.TILE * 5.0)
         n = village.NPC(x, y, LAB_SEED ^ (i * 2654435761),
-                        name=label, npc_id="lab_%s" % label,
+                        name=label, npc_id="lab_%s" % key,
                         role="Lab Subject")
         n.native = True
         n.native_role = role
@@ -240,7 +246,7 @@ def _spawn_subjects(g, camp):
         n.speed = 52.0
         n.base_speed = 52.0
         n.wear = "normal"
-        n._save_uid = "person:lab_%s" % label
+        n._save_uid = "person:lab_%s" % key
         n.mbti = typ
         n.mood = mood.DEFAULT_MOOD
         n.mood_target = mood.DEFAULT_MOOD

@@ -614,7 +614,8 @@ real save. The lab is built by a test-mode-only module, `npclab.py`.
 Near the player, on a fixed seed and a fixed layout:
 
 - one **lab camp** with a fireplace and bedrolls;
-- 16 test subjects, one per MBTI type, named `T-INTJ`, `T-ISFP`, etc.;
+- 16 test subjects, one per MBTI type, each with an ordinary name — the type is
+  a private field, never part of the name;
 - two paired farmers (one S, one N) on identical fields;
 - a farmer S and a farmer N for Green Thumb;
 - a Medicine Hut, lab bench, forge, dummy and target;
@@ -639,7 +640,7 @@ The lab is a test fixture. It does not affect a normal save.
 The test-mode overlay shows for the selected subject:
 
 ```
-T-INTJ   job=artisan   S/N: N (+15% / +25% skill)
+Mira   job=artisan   S/N: N (+15% / +25% skill)
 mood 24 / target 18    break: normal
 traits: Smart, Green Thumb
 thoughts: insulted -8 x2, hungry -6, slept_outside -6
@@ -674,8 +675,8 @@ Do not start the next phase before that.
 ## Phase 0 — Foundation and lab (no gameplay balance yet)
 
 > **Status: implemented as Phase 0-lite.**  The lab currently has eight subjects
-> (INTJ, ISFP, ESTJ, ENFP, ISTP, ENTJ, plus a sensing and an intuitive farmer),
-> F5 hide, F6 reset, F7 next, F8 mood, F10 give one medicine.  The overlay
+> (ordinary names; their types are private), plus a sensing and an intuitive
+> farmer.  F5 hide, F6 reset, F7 next, F8 mood, F10 give one medicine.  The overlay
 > hides MBTI/traits/mood until the selected (or clicked) person has a medical
 > record; F9, the Medicine Hut, breakables and the full 16-subject set stay for
 > the later phases.  `npclab.py`, `persona.py`, `mood.py` and `doctor.py` exist;
@@ -710,8 +711,8 @@ is touched.
 > **Status: Phase 1-lite implemented.**  Every NPC gets a deterministic type
 > in `NPC.__init__`, old saved people get one in `save/people.restore`, and
 > the farmer work/gain hook is live.  Other jobs and the full T1 comparison
-> remain for the next slice.  The lab has two extra farmers: `T-S-FARM` and
-> `T-N-FARM`, on isolated plots.
+> remain for the next slice.  The lab has two extra farmers, Sena and Niko,
+> on isolated plots.
 
 Build:
 
