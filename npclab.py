@@ -377,6 +377,27 @@ def cycle_mood(g):
     _toast(g, "%s mood %.0f" % (getattr(n, "name", "?"), got))
 
 
+def give_medicine(g):
+    """Test-only administration: the first medicine unlocks the record."""
+    ensure(g)
+    subjects = getattr(g, "_npc_subjects", [])
+    if not subjects:
+        return
+    # If a card is open on a clicked native (a warrior, for example), treat
+    # that person; otherwise treat the F7 selection.
+    n = getattr(g, "persona", None)
+    if n is None or not getattr(n, "native", False):
+        n = subjects[int(getattr(g, "_npc_sel", 0)) % len(subjects)]
+    n.medicines_received = int(getattr(n, "medicines_received", 0) or 0) + 1
+    n.mental_known = True
+    try:
+        n.health = n.max_health
+    except Exception:
+        pass
+    _toast(g, "%s examined: medical record unlocked"
+           % getattr(n, "name", "?"))
+
+
 def _toast(g, text):
     try:
         g.toast(text)
@@ -399,28 +420,32 @@ def draw(g):
         n = subjects[sel % len(subjects)] if subjects else None
         lines = [
             ("NPC LAB  TEST ONLY", PANEL_HOT),
-            ("F5 hide   F6 reset   F7 next   F8 mood", PANEL_DIM),
+            ("F5 hide  F6 reset  F7 next  F8 mood  F10 medicine", PANEL_DIM),
         ]
         if n is None:
             lines.append(("no lab: press F6", PANEL_TEXT))
         else:
-            lines.append(("%d/%d  %s   MBTI %s"
+            lines.append(("%d/%d  %s   job=%s"
                           % (sel + 1, len(subjects),
                              getattr(n, "name", "?"),
-                             getattr(n, "mbti", "?")), PANEL_TEXT))
-            lines.append(("job=%s   mood %.0f / target %.0f   break=%s"
-                          % (getattr(n, "job", "?"),
-                             float(getattr(n, "mood", 50.0)),
-                             float(getattr(n, "mood_target", 50.0)),
-                             getattr(n, "break_state", "normal")), PANEL_TEXT))
-            lines.append(("traits: %s"
-                          % (", ".join(getattr(n, "traits", ()) or ()) or "none"),
-                          PANEL_DIM))
-            lines.append(("thoughts: %s" % mood.thought_summary(n), PANEL_DIM))
-            lines.append(("medicine %d   mental record %s"
-                          % (int(getattr(n, "medicines_received", 0) or 0),
-                             "yes" if getattr(n, "mental_known", False) else "no"),
-                          PANEL_DIM))
+                             getattr(n, "job", "?")), PANEL_TEXT))
+            known = persona.mental_known(n)
+            if not known:
+                lines.append(("MEDICAL RECORD: NO", PANEL_DIM))
+                lines.append(("F10 gives one medicine and unlocks it", PANEL_DIM))
+            else:
+                lines.append(("MBTI %s   medicine %d"
+                              % (getattr(n, "mbti", "?"),
+                                 int(getattr(n, "medicines_received", 0) or 0)),
+                              PANEL_TEXT))
+                lines.append(("mood %.0f / target %.0f   break=%s"
+                              % (float(getattr(n, "mood", 50.0)),
+                                 float(getattr(n, "mood_target", 50.0)),
+                                 getattr(n, "break_state", "normal")), PANEL_TEXT))
+                lines.append(("traits: %s"
+                              % (", ".join(getattr(n, "traits", ()) or ()) or "none"),
+                              PANEL_DIM))
+                lines.append(("thoughts: %s" % mood.thought_summary(n), PANEL_DIM))
         lh = 18
         width = max(360, max(font.size(text)[0] for text, _ in lines) + 24)
         height = 12 + lh * len(lines)

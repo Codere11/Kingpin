@@ -2063,17 +2063,80 @@ class PersonaCard:
     def _level(self, val: float, lo: float, hi: float, bands: int) -> int:
         return max(0, min(bands, int((val - lo) / (hi - lo) * bands)))
 
+    def _medical_lines(self, subject):
+        """What the card may say about the mind, and nothing more.
+
+        The mind is private until a doctor has given this person medicine.
+        The first medicine is an examination: it sets mental_known and the
+        record is then permanent.  No other screen is allowed to leak this.
+        """
+        if (getattr(subject, "is_player", False)
+                or getattr(getattr(subject, "skills", None), "is_player", False)):
+            return [("PERSONALITY", (190, 172, 128)),
+                    ("Your own record is always visible.", (160, 156, 148)),
+                    ("Not tracked in this build yet.", (128, 124, 118))]
+        try:
+            import persona as _persona
+            known = _persona.mental_known(subject)
+        except Exception:
+            known = (bool(getattr(subject, "mental_known", False))
+                     or int(getattr(subject, "medicines_received", 0) or 0) > 0)
+        if not known:
+            return [("MEDICAL RECORD", (190, 172, 128)),
+                    ("No medical record.", (160, 156, 148)),
+                    ("A doctor has not examined this person.",
+                     (128, 124, 118))]
+        try:
+            import mood as _mood
+            summary = _mood.thought_summary(subject, limit=3)
+        except Exception:
+            summary = "none"
+        traits = ", ".join(getattr(subject, "traits", ()) or ()) or "none"
+        if len(traits) > 44:
+            traits = traits[:41] + "..."
+        typ = getattr(subject, "mbti", "") or "?"
+        job = (getattr(subject, "job", None)
+               or getattr(subject, "native_role", None) or "idle")
+        fit = "neutral"
+        try:
+            import persona as _persona
+            mult = _persona.work_mult(subject, job)
+            if mult > 1.01:
+                fit = "good fit (+%d%%)" % round((mult - 1.0) * 100)
+            elif mult < 0.99:
+                fit = "poor fit (%d%%)" % round((mult - 1.0) * 100)
+        except Exception:
+            pass
+        if len(summary) > 46:
+            summary = summary[:43] + "..."
+        return [("MEDICAL RECORD", (190, 172, 128)),
+                ("MBTI %s    Medicine %d"
+                 % (typ, int(getattr(subject, "medicines_received", 0) or 0)),
+                 (152, 196, 224)),
+                ("Traits: %s" % traits, (216, 210, 196)),
+                ("Mood %.0f / target %.0f   break: %s"
+                 % (float(getattr(subject, "mood", 50.0)),
+                    float(getattr(subject, "mood_target", 50.0)),
+                    getattr(subject, "break_state", "normal")),
+                 (216, 210, 196)),
+                ("Thoughts: %s" % summary, (166, 162, 154)),
+                ("Job: %s   %s" % (job, fit), (166, 162, 154))]
+
     def draw(self, screen: pygame.Surface, subject, panel_rect) -> None:
         sw, sh = screen.get_size()
         w = self.W
         gap = 16
         pad = 14
         row_h = 22
+        med_h = 18
         name = getattr(subject, "name", "?") or "?"
         occ = self._occupation(subject)
         skills = getattr(subject, "skills", None)
-        h = (pad + self.portrait_size + 8 + 24 + 20 + 20
-             + len(self._SKILLS) * row_h + pad)
+        med_lines = self._medical_lines(subject)
+        h = (pad + self.portrait_size + 8 + 24 + 20 + 10
+             + len(med_lines) * med_h
+             + (len(self._SKILLS) * row_h if skills is not None else 0)
+             + pad)
         # Aligned with the inventory panel: to its left, vertically centred.
         x = panel_rect.left - gap - w
         if x < 6:
@@ -2089,11 +2152,11 @@ class PersonaCard:
         yy += 24
         ot = self.font_occ.render(occ, True, (190, 172, 128))
         board.blit(ot, ((w - ot.get_width()) // 2, yy))
-        yy += 24
-        typ = getattr(subject, "mbti", "") or "—"
-        mt = self.font_occ.render("MBTI %s" % typ, True, (152, 196, 224))
-        board.blit(mt, ((w - mt.get_width()) // 2, yy))
-        yy += 24
+        yy += 20 + 10
+        for text, color in med_lines:
+            img = self.font_skill.render(text, True, color)
+            board.blit(img, (pad, yy))
+            yy += med_h
         if skills is not None:
             for label, attr, lo, hi, bands in self._SKILLS:
                 val = float(getattr(skills, attr, 0.0) or 0.0)

@@ -164,6 +164,12 @@ def has_trait(npc, trait: str) -> bool:
     return trait in (getattr(npc, "traits", None) or ())
 
 
+def mental_known(npc) -> bool:
+    """The mind is readable only after at least one medicine.  Permanent."""
+    return (bool(getattr(npc, "mental_known", False))
+            or int(getattr(npc, "medicines_received", 0) or 0) > 0)
+
+
 def can_green_thumb(npc) -> bool:
     """Green Thumb is the one hard MBTI gate: S only, never N."""
     return is_sensing(npc) and not has_trait(npc, "green_thumb")

@@ -755,6 +755,7 @@ def main() -> None:
     # THE PERSONA CARD: who is being looked at, and its card. Shown beside the
     # worker's pack and the player's own inventory.
     g.persona = None
+    g.npc_card_open = False
     g.persona_card = PersonaCard()
 
     def draw_persona() -> None:
@@ -786,6 +787,11 @@ def main() -> None:
             _panel = g.worker_panel
         elif g.body_open and getattr(g, "body_panel", None) is not None:
             _panel = g.body_panel
+        elif getattr(g, "npc_card_open", False):
+            # A CARD WITHOUT A PACK. The rect is only used for anchoring the
+            # card to the right of the screen; no inventory panel is open.
+            _sw, _sh = g.screen.get_size()
+            _panel = pygame.Rect(_sw - 12, _sh // 2, 1, 1)
         if _panel is None:
             return
         try:
@@ -1038,6 +1044,29 @@ def main() -> None:
             ship=getattr(g, "ship_npc", None), open_ship=open_market,
             body_open=g.body_open, body_panel=g.body_panel)
         _ok, g.body_open, g.body_panel = combat_actions.click_a_man(_g, at)
+        # TEST MODE: a lab subject or warrior is not a trade partner and was
+        # never a candidate in click_a_man.  A click on any native person
+        # opens their card; the card itself decides whether the mind is
+        # readable (only after medicine).
+        if not _ok and getattr(g, "test_mode", False):
+            if at is not None:
+                _mx, _my = at
+            else:
+                _mx, _my = pygame.mouse.get_pos()
+            _wx = g.cam_x + _mx / ZOOM
+            _wy = g.cam_y + _my / ZOOM
+            _best, _bd = None, 44.0
+            for _n in list(getattr(g, "_native_people", ())):
+                if not getattr(_n, "alive", True):
+                    continue
+                _d = math.hypot(_n.x - _wx, _n.y - _wy)
+                if _d < _bd:
+                    _best, _bd = _n, _d
+            if _best is not None:
+                g.persona = _best
+                g.npc_card_open = True
+                pygame.mouse.set_visible(True)
+                _ok = True
         return _ok
 
     def on_click() -> None:
@@ -1852,6 +1881,7 @@ def main() -> None:
         g.smith_open = g.workshop_open = g.confirm_open = g.map_open = False
         g.pause_open = g.build_menu_open = False
         g.persona = None
+        g.npc_card_open = False
         g.placing = None
         try:
             pygame.mouse.set_visible(False)

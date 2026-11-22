@@ -596,6 +596,12 @@ Minimal hooks in existing files:
 Because `village.py`, `economy.py` and `skills.py` are Cython, any change there
 requires `./build.sh`; the build must pass before a physical test.
 
+**Performance rule:** the mind is data on the person, not a per-frame system.
+No code walks every NPC to maintain mood or draw a card.  The card reads only the
+one person it is open on; the observer list does not show mind fields; the lab
+overlay reads only the selected subject.  Hundreds of conquered people cost no
+per-frame UI work.
+
 ---
 
 # 9. TEST MODE: THE NPC LAB
@@ -669,9 +675,10 @@ Do not start the next phase before that.
 
 > **Status: implemented as Phase 0-lite.**  The lab currently has eight subjects
 > (INTJ, ISFP, ESTJ, ENFP, ISTP, ENTJ, plus a sensing and an intuitive farmer),
-> F5 hide, F6 reset, F7 next, F8 mood.
-> F9/F10, the Medicine Hut, breakables and the full 16-subject set stay for the
-> later phases.  `npclab.py`, `persona.py`, `mood.py` and `doctor.py` exist;
+> F5 hide, F6 reset, F7 next, F8 mood, F10 give one medicine.  The overlay
+> hides MBTI/traits/mood until the selected (or clicked) person has a medical
+> record; F9, the Medicine Hut, breakables and the full 16-subject set stay for
+> the later phases.  `npclab.py`, `persona.py`, `mood.py` and `doctor.py` exist;
 > the live camps and AI are untouched.  Automated checks are in
 > `tools/persona_selftest.py`, `tools/npclab_selftest.py` and
 > `tools/npclab_keytest.py`, all run by `./build.sh`.
@@ -820,6 +827,11 @@ Pass condition: the break is a real, cancellable/endable event, not a permanent
 state, and nothing is silently deleted.
 
 ## Phase 6 — Doctor, medicine, mental state
+
+> **Status: the card gate is implemented, test-only.**  The NPC card and watch
+> panel show “No medical record” until `medicines_received > 0`; the lab’s F10
+> administers one medicine so the reveal can be tested.  Real doctor production,
+> the Medicine Hut and the delivery loop are still to build.
 
 Build:
 

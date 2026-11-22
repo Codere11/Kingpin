@@ -235,7 +235,7 @@ def run(g):
                 pass
             elif (g.test_mode and event.type == pygame.KEYDOWN
                   and event.key in (pygame.K_F5, pygame.K_F6,
-                                    pygame.K_F7, pygame.K_F8)):
+                                    pygame.K_F7, pygame.K_F8, pygame.K_F10)):
                 # THE NPC LAB (NPC.md Phase 0).  Test mode only; the normal
                 # game never imports or builds it.
                 try:
@@ -248,6 +248,8 @@ def run(g):
                         _npclab.next_subject(g)
                     elif event.key == pygame.K_F8:
                         _npclab.cycle_mood(g)
+                    elif event.key == pygame.K_F10:
+                        _npclab.give_medicine(g)
                 except Exception as _lab_exc:
                     g.toast("NPC lab: %s" % _lab_exc)
                     try:
@@ -1040,7 +1042,7 @@ def run(g):
                 # the pause menu when nothing is.
                 if (g.inventory_open or g.trade_open or g.board_open or g.chest_open
                         or g.worker_panel_open or g.stall_open or g.body_open
-                        or g.folder_open
+                        or g.folder_open or g.npc_card_open
                         or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.market_open or g.research_open or g.workshop_open or g.confirm_open
                         or g.map_open or g.build_menu_open or g.placing is not None):
                     g.close_modals()

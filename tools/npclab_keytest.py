@@ -39,6 +39,7 @@ def main():
             pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F6),
             pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F7),
             pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F8),
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F10),
             pygame.event.Event(pygame.QUIT),
         ]
 
@@ -65,6 +66,31 @@ def main():
         assert g._npc_sel == 1, "F7 did not advance selection: %r" % g._npc_sel
         n = subjects[1]
         assert n.mood == 35.0, "F8 did not change mood: %r" % n.mood
+        assert n.mental_known and n.medicines_received == 1, \
+            "F10 did not unlock the medical record"
+        # The card is the only place the mind is shown, and only after that.
+        _unknown = g.persona_card._medical_lines(subjects[0])
+        _utext = " ".join(line for line, _c in _unknown)
+        assert "No medical record" in _utext and "MBTI" not in _utext
+        _known = g.persona_card._medical_lines(n)
+        _ktext = " ".join(line for line, _c in _known)
+        assert "MBTI" in _ktext and "Medicine 1" in _ktext
+        g.persona = subjects[0]
+        g.npc_card_open = True
+        g.draw_persona()
+        g.draw_persona_card()
+        assert getattr(g, "_persona_subject", None) is subjects[0]
+        # A click on a lab native (not a conquered worker) opens the card.
+        g.npc_card_open = False
+        g.persona = None
+        _target = subjects[2]
+        g.cam_x = _target.x
+        g.cam_y = _target.y
+        assert g.click_a_man((0, 0)) is True
+        assert g.npc_card_open and g.persona is _target
+        import npclab
+        npclab.give_medicine(g)
+        assert _target.mental_known and _target.medicines_received == 1
         import persona
         for sub in subjects:
             assert getattr(sub, "mbti", ""), ("no MBTI on %s"

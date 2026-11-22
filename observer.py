@@ -326,8 +326,8 @@ class Observer:
             if hit:
                 pygame.draw.rect(screen, (52, 46, 36),
                                  (panel.left + 8, y - 2, panel.width - 16, ROW))
-            line = ("%-16s %-9s %-4s %-12s nat %-3s  coin %6d  food %3d  hunger %3d%s"
-                    % (n.name, job_of(n), getattr(n, "mbti", "") or "?",
+            line = ("%-16s %-9s %-14s nat %-3s  coin %6d  food %3d  hunger %3d%s"
+                    % (n.name, job_of(n),
                        getattr(getattr(n, "village", None), "name", "?"),
                        getattr(n, "nation", None), n.coins,
                        sum(int(n.stock.get(f, 0))
@@ -387,7 +387,13 @@ class Observer:
         screen.blit(board, panel.topleft)
         head = self.font.render("WATCHING  %s" % n.name, True, (240, 226, 172))
         screen.blit(head, (panel.left + 10, panel.top + 8))
-        _typ = getattr(n, "mbti", "") or ""
+        try:
+            import persona as _persona
+            _known = _persona.mental_known(n)
+        except Exception:
+            _known = (bool(getattr(n, "mental_known", False))
+                      or int(getattr(n, "medicines_received", 0) or 0) > 0)
+        _typ = (getattr(n, "mbti", "") or "") if _known else ""
         info = self.small.render(
             "%s%s of %s, nation %s   coin %d"
             % (job_of(n), ("  MBTI %s" % _typ) if _typ else "",
@@ -395,7 +401,13 @@ class Observer:
                getattr(n, "nation", None), n.coins),
             True, (198, 176, 128))
         screen.blit(info, (panel.left + 10, panel.top + 26))
-        show = self.log[-(h // 14 - 3):]
+        log_y = panel.top + 46
+        if not _known:
+            screen.blit(self.small.render("No medical record", True,
+                                          (140, 136, 128)),
+                        (panel.left + 10, panel.top + 40))
+            log_y += 12
+        show = self.log[-(h // 14 - 4):]
         for i, line in enumerate(show):
             screen.blit(self.small.render(line, True, (222, 218, 208)),
-                        (panel.left + 10, panel.top + 46 + i * 14))
+                        (panel.left + 10, log_y + i * 14))
