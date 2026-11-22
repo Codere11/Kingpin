@@ -95,6 +95,42 @@ def check_traits():
     assert persona.skill_gain_mult(stupid, "farming") == 0.75
     assert persona.skill_gain_mult(strong, "axe") == 1.30
     assert persona.skill_gain_mult(strong, "farming") == 1.0
+    assert persona.melee_mult(strong) == 1.30
+
+    # Born traits are deterministic and Smart/Stupid never coexist.
+    a = P("ISTJ", id="born_7")
+    b = P("ISTJ", id="born_7")
+    persona.ensure(a)
+    persona.ensure(b)
+    assert a.traits == b.traits
+    assert not ("smart" in a.traits and "stupid" in a.traits)
+
+    # Trauma accumulates harder for F, softer for T, and becomes a trait.
+    f = P("INFJ")
+    t = P("INTJ")
+    persona.add_trauma(f, 10)
+    persona.add_trauma(t, 10)
+    assert f.trauma_points == 15.0
+    assert t.trauma_points == 7.5
+    f.trauma_points = 99.0
+    assert persona.add_trauma(f, 1)
+    assert persona.has_trait(f, "traumatized")
+    return True
+
+
+def check_green_thumb_learning():
+    class R:
+        def random(self):
+            return 0.0
+    class Skills:
+        farming = 8.0
+    s = P("ISFJ")
+    s.skills = Skills()
+    assert persona.maybe_green_thumb(s, R())
+    assert persona.has_trait(s, "green_thumb")
+    n = P("INTJ")
+    n.skills = Skills()
+    assert not persona.maybe_green_thumb(n, R())
     return True
 
 
@@ -117,6 +153,7 @@ def main():
     check_jobs()
     check_green_thumb()
     check_traits()
+    check_green_thumb_learning()
     check_mood()
     print("PERSONA SELFTEST: PASS")
 

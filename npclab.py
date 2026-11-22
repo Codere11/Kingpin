@@ -251,7 +251,6 @@ def _spawn_subjects(g, camp):
         n.mbti = typ
         n.mood = mood.DEFAULT_MOOD
         n.mood_target = mood.DEFAULT_MOOD
-        n.traits = []
         n.mood_thoughts = {}
         persona.ensure(n, force=False)
         mood.ensure(n)

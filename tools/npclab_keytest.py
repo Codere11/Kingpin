@@ -101,6 +101,8 @@ def main():
                    if not str(getattr(x, "id", "")).startswith("lab_")]
         assert natives and all(getattr(x, "mbti", "") for x in natives), \
             "generated native NPC without MBTI"
+        assert all(getattr(x, "traits_rolled", False) for x in natives), \
+            "generated native NPC without rolled traits"
         assert all(not str(getattr(x, "name", "")).startswith("T-")
                    for x in subjects), "type leaked into a subject's name"
         import native as _native_names

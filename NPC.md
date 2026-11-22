@@ -737,6 +737,13 @@ observed performance all agree.
 
 ## Phase 2 — Traits
 
+> **Status: implemented (first pass).**  Born traits are rolled once from the
+> stable id; Smart/Stupid affect action-based skill gain, Strong affects melee
+> damage, Green Thumb is learned from a harvest and boosts the crop, and
+> Traumatized is learned from damage or a nearby death.  All traits stay hidden
+> until the medical record is unlocked.  The lab gives its subjects their born
+> traits, so treating them can reveal some.
+
 Build:
 
 - born traits;

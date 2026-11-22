@@ -682,6 +682,12 @@ def harvest(village, npc, kind: str, rng) -> None:
         count = max(1, int(round(count * _crop.yield_scale(npc.skills.farming))))
     except Exception:
         pass
+    try:
+        import persona as _persona
+        if _persona.has_trait(npc, "green_thumb"):
+            count = max(count + 1, int(round(count * 1.20)))
+    except Exception:
+        pass
     if kind == "wheat":                    # thresh it too: bread, and grain
         grain = rng.randint(2, 4)
         npc.stock["wheat"] = npc.stock.get("wheat", 0) + grain

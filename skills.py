@@ -68,6 +68,9 @@ class Skills:
     # A LEVEL WAS JUST CROSSED. Class default, for the same reason as the two
     # above: an unpickled Skills object does not run __init__.
     just_leveled = False
+    # SMART/STUPID: a born-trait multiplier on action-based learning.  Class
+    # default so an old unpickled Skills object keeps the old rate.
+    trait_gain = 1.0
 
     def __init__(self, is_player: bool = False) -> None:
         self.farming = 0.0            # 0..8, grows with harvesting
@@ -107,6 +110,7 @@ class Skills:
         """
         lvl = int(value / band)
         rate = LEVEL_RATES[lvl] if lvl < len(LEVEL_RATES) else TAIL_RATE
+        rate *= max(0.1, float(getattr(self, "trait_gain", 1.0) or 1.0))
         nxt = value + rate
         if random.random() < self.luck:
             nxt = max(nxt, (lvl + 1) * band)

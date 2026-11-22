@@ -41,6 +41,12 @@ MISS_GAIN = 0.75
 
 TRAITS = ("smart", "stupid", "strong", "green_thumb", "traumatized")
 
+BORN_SMART = 0.06
+BORN_STRONG = 0.08
+GREEN_THUMB_BASE = 0.002
+GREEN_THUMB_SKILL = 0.0015
+TRAUMA_LIMIT = 100.0
+
 
 def _key(npc) -> str:
     """A stable string for a person.  Never id(obj)."""
@@ -88,6 +94,12 @@ def ensure(npc, force: bool = False) -> str:
             npc.traits = []
         except Exception:
             pass
+    if not getattr(npc, "traits_rolled", False):
+        roll_born_traits(npc)
+        try:
+            npc.traits_rolled = True
+        except Exception:
+            pass
     if getattr(npc, "mood_thoughts", None) is None:
         try:
             npc.mood_thoughts = {}
@@ -110,6 +122,11 @@ def ensure(npc, force: bool = False) -> str:
             npc.break_state = "normal"
         except Exception:
             pass
+    try:
+        if getattr(npc, "skills", None) is not None:
+            npc.skills.trait_gain = skill_gain_mult(npc, "")
+    except Exception:
+        pass
     return assign(npc, force=force)
 
 
@@ -158,6 +175,71 @@ def work_mult(npc, job) -> float:
     if str(job or "") == "artisan" and is_feeling(npc):
         out *= 1.15
     return out
+
+
+def _hash_roll(key: str, salt: str) -> int:
+    digest = hashlib.blake2b((str(key) + "|" + salt).encode("utf-8"),
+                             digest_size=8).digest()
+    return int.from_bytes(digest, "big") % 10000
+
+
+def roll_born_traits(npc) -> None:
+    """Roll only the born traits, deterministically, once per person."""
+    traits = list(getattr(npc, "traits", None) or ())
+    if "smart" in traits or "stupid" in traits:
+        pass
+    else:
+        roll = _hash_roll(_key(npc), "born")
+        if roll < int(BORN_SMART * 10000):
+            traits.append("smart")
+        elif roll < int((BORN_SMART * 2) * 10000):
+            traits.append("stupid")
+    if "strong" not in traits and _hash_roll(_key(npc), "strong") < int(BORN_STRONG * 10000):
+        traits.append("strong")
+    try:
+        npc.traits = traits
+    except Exception:
+        pass
+
+
+def add_trauma(npc, amount: float) -> bool:
+    """Damage and witnessed deaths accumulate. F takes it harder, T less."""
+    if amount <= 0:
+        return False
+    factor = 1.5 if is_feeling(npc) else (0.75 if is_thinking(npc) else 1.0)
+    npc.trauma_points = float(getattr(npc, "trauma_points", 0.0) or 0.0) + max(1.0, float(amount)) * factor
+    if (npc.trauma_points >= TRAUMA_LIMIT
+            and not has_trait(npc, "traumatized")):
+        traits = list(getattr(npc, "traits", None) or ())
+        traits.append("traumatized")
+        try:
+            npc.traits = traits
+        except Exception:
+            pass
+        return True
+    return False
+
+
+def maybe_green_thumb(npc, rng) -> bool:
+    """A working S farmer can learn Green Thumb from a harvest."""
+    if not can_green_thumb(npc):
+        return False
+    if float(getattr(getattr(npc, "skills", None), "farming", 0.0)) < 1.0:
+        return False
+    chance = GREEN_THUMB_BASE + GREEN_THUMB_SKILL * float(npc.skills.farming)
+    if rng.random() >= chance:
+        return False
+    traits = list(getattr(npc, "traits", None) or ())
+    traits.append("green_thumb")
+    try:
+        npc.traits = traits
+    except Exception:
+        pass
+    return True
+
+
+def melee_mult(npc) -> float:
+    return 1.30 if has_trait(npc, "strong") else 1.0
 
 
 def has_trait(npc, trait: str) -> bool:

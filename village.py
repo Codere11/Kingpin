@@ -494,6 +494,7 @@ class NPC:
     # them to [] / {} for old saves and new people alike.
     mbti: Any = ""
     traits: Any = None
+    traits_rolled: Any = False
     trauma_points: Any = 0.0
     medicines_received: Any = 0
     mental_known: Any = False
@@ -802,6 +803,10 @@ class NPC:
         if not getattr(self, "alive", True) or getattr(self, "dead", False):
             return True
         self.health -= amount
+        try:
+            persona.add_trauma(self, amount)
+        except Exception:
+            pass
         self._snd("npc_hurt")
         self.hit_flash = 0.15
         self.hurt_flash = face.HURT_SECONDS   # and his face says so
@@ -1053,6 +1058,17 @@ class NPC:
             camp = getattr(self, "native_camp", None)
             g = getattr(camp, "g", None) if camp is not None else None
             if g is not None:
+                # WITNESSES CARRY THE DEATH. One pass on death only, never
+                # per frame; only nearby living people accumulate trauma.
+                try:
+                    for _w in list(getattr(g, "_native_people", ()) or ()):
+                        if _w is self or not getattr(_w, "alive", True):
+                            continue
+                        if ((_w.x - self.x) ** 2 + (_w.y - self.y) ** 2
+                                <= 520.0 ** 2):
+                            persona.add_trauma(_w, 10)
+                except Exception:
+                    pass
                 try:
                     import corpse as _corpse
                     _corpse.spawn(self.x, self.y, getattr(self, "name", "a native"),
@@ -1073,7 +1089,7 @@ class NPC:
                 if g is not None and job:
                     _attr = {"farmer": "farmers", "logger": "loggers",
                              "artisan": "artisans", "researcher": "researchers",
-                             "miner": "miners", "smith": "smiths",
+                             "doctor": "doctors", "miner": "miners", "smith": "smiths",
                              "weaver": "weavers", "spiceman": "spicemen",
                              "gunsmith": "gunsmiths"}.get(job)
                     if _attr:
@@ -1083,8 +1099,8 @@ class NPC:
                                 setattr(_s, _attr, _n - 1)
                                 break
                 for _bucket in ("workers", "loggers", "artisans", "researchers",
-                                "miners", "smiths", "weavers", "spicemen",
-                                "gunsmiths", "unemployed", "people"):
+                                "doctors", "miners", "smiths", "weavers",
+                                "spicemen", "gunsmiths", "unemployed", "people"):
                     _lst = getattr(camp, _bucket, None) if camp is not None else None
                     if _lst and self in _lst:
                         try:
@@ -3199,10 +3215,17 @@ class NPC:
                 economy.harvest(village, self, plot.kind, self.rng)
                 self._snd("harvest", min_gap=0.3)
                 self.skills.gain_farming(0.02 * _gain_mult)  # reaping hones the hand, slowly
+                try:
+                    persona.maybe_green_thumb(self, self.rng)
+                except Exception:
+                    pass
                 if getattr(self, "conquered", False):
                     _seed = crop.CROP_SEED.get(plot.kind)
                     if _seed is not None:
-                        self._give_item(_seed, 1 + (1 if self.rng.random() < 0.5 else 0))
+                        _nseed = 1 + (1 if self.rng.random() < 0.5 else 0)
+                        if persona.has_trait(self, "green_thumb"):
+                            _nseed += 1
+                        self._give_item(_seed, _nseed)
             world.set_plot(ttx, tty, "grass", None)     # the soil is spent
         elif action == "till":
             if not self._swing_tool():
@@ -4180,7 +4203,8 @@ class NPC:
                     self.skills.gain_axe()
                     if hasattr(target, "take_damage"):
                         target.take_damage(max(1, round(
-                            (35.0 / 3.0) * self.skills.axe_damage_scale())))
+                            (35.0 / 3.0) * self.skills.axe_damage_scale()
+                            * persona.melee_mult(self))))
                 return
             preferred = 220.0
             if distance > preferred + 40.0:
@@ -4258,7 +4282,8 @@ class NPC:
                     _base = (10.0 if _armed
                              else 10.0 / skills.UNARMED_WEAKNESS)
                     target.take_damage(max(1, round(
-                        _base * self.skills.axe_damage_scale())))
+                        _base * self.skills.axe_damage_scale()
+                        * persona.melee_mult(self))))
                     # AND HE REMEMBERS THE FACE: twenty points of liking gone.
                     try:
                         import economy as _eco
