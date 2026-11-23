@@ -167,6 +167,17 @@ def _special_npc_click(g, pos) -> bool:
             return False
         g.persona = _best
         g.npc_card_open = True
+        g._wn = _best
+        try:
+            if g.worker_panel is not None:
+                g.worker_panel.close()
+        except Exception:
+            pass
+        g.worker_panel = ChestPanel(
+            g.inventory, work.bag(_best), top_rows=4,
+            top_label=getattr(_best, "name", "PACK"))
+        g.worker_panel_open = True
+        g.npc_tab = "inventory"
         pygame.mouse.set_visible(True)
         try:
             import player_mind as _pm
@@ -562,7 +573,10 @@ def run(g):
                 else:
                     g.body_panel.handle_event(event)
             elif g.worker_panel_open:
-                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
+                if (getattr(g, "npc_tab_click", None) is not None
+                        and g.npc_tab_click(event)):
+                    pass
+                elif event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):
                     g.worker_panel.close()
                     g.worker_panel_open = False
@@ -3382,7 +3396,11 @@ def run(g):
             if g.stall_open:
                 g.stall_panel.draw(g.screen)
             if g.worker_panel_open:
-                g.worker_panel.draw(g.screen)
+                if getattr(g, "npc_tab", "inventory") == "mind":
+                    g.draw_mind_panel()
+                else:
+                    g.worker_panel.draw(g.screen)
+                    g.draw_npc_tabs()
             if g.chest_open:
                 g.chest_panel.draw(g.screen)
             if g.sign_open:
@@ -3944,7 +3962,11 @@ def run(g):
         if g.workshop_open:
             g.workshop_menu.draw(g.screen)
         if g.worker_panel_open:
-            g.worker_panel.draw(g.screen)
+            if getattr(g, "npc_tab", "inventory") == "mind":
+                g.draw_mind_panel()
+            else:
+                g.worker_panel.draw(g.screen)
+                g.draw_npc_tabs()
         if g.stall_open:
             g.stall_panel.draw(g.screen)
         if g.body_open:

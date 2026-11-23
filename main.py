@@ -99,7 +99,8 @@ from trade import TradeMenu
 from workshop import WorkshopMenu
 from trees import Trees
 from ui import (BarracksPanel, ChestPanel, ConfirmMenu, FolderPanel, GunsmithPanel,
-                HorsePanel, Hotbar, InventoryPanel, MarketPanel, PauseMenu, PersonaCard,
+                HorsePanel, Hotbar, InventoryPanel, MarketPanel, MindPanel,
+                PauseMenu, PersonaCard,
                 ResearchPanel, RoutePanel, ShipMarketPanel, SignPanel, SmithPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
@@ -756,7 +757,9 @@ def main() -> None:
     # worker's pack and the player's own inventory.
     g.persona = None
     g.npc_card_open = False
+    g.npc_tab = "inventory"
     g.persona_card = PersonaCard()
+    g.mind_panel = MindPanel()
 
     def draw_persona() -> None:
         """Shift the side panels right for the persona card; remember the
@@ -807,6 +810,47 @@ def main() -> None:
                 plog.log("PERSONA-CARD-ERR", repr(_ce)[:180])
             except Exception:
                 pass
+    def npc_tab_rects():
+        if not g.worker_panel_open or g.worker_panel is None:
+            return []
+        panel = g.worker_panel._layout(*g.screen.get_size())[0]
+        y = max(4, panel.top - 34)
+        return [(pygame.Rect(panel.left + 8, y, 124, 28), "inventory"),
+                (pygame.Rect(panel.left + 140, y, 124, 28), "mind")]
+
+    def npc_tab_click(event) -> bool:
+        if (event.type != pygame.MOUSEBUTTONDOWN or event.button != 1
+                or not g.worker_panel_open):
+            return False
+        for rect, tab in npc_tab_rects():
+            if rect.collidepoint(event.pos):
+                g.npc_tab = tab
+                pygame.mouse.set_visible(True)
+                return True
+        return False
+
+    def draw_npc_tabs() -> None:
+        if not g.worker_panel_open or g.worker_panel is None:
+            return
+        for rect, tab in npc_tab_rects():
+            active = (getattr(g, "npc_tab", "inventory") == tab)
+            pygame.draw.rect(g.screen, (52, 46, 36) if active else (30, 30, 36),
+                             rect, border_radius=6)
+            pygame.draw.rect(g.screen, (222, 176, 88) if active else (110, 100, 86),
+                             rect, 2, border_radius=6)
+            label = "INVENTORY" if tab == "inventory" else "MIND"
+            img = g.font.render(label, True,
+                                (242, 226, 172) if active else (170, 164, 152))
+            g.screen.blit(img, (rect.centerx - img.get_width() // 2,
+                                rect.centery - img.get_height() // 2))
+
+    def draw_mind_panel() -> None:
+        if not g.worker_panel_open or g.worker_panel is None or g.persona is None:
+            return
+        panel = g.worker_panel._layout(*g.screen.get_size())[0]
+        g.mind_panel.draw(g.screen, g.persona, panel, g, g.persona_card)
+        draw_npc_tabs()
+
     # THE MARKET STALL: the player's counter, its prices, and its purse.
     g.stall_open = False
     g.stall_panel = None
@@ -2074,6 +2118,9 @@ def main() -> None:
     g.choose_target = choose_target
     g.clamp_world = clamp_world
     g.click_a_man = click_a_man
+    g.npc_tab_click = npc_tab_click
+    g.draw_npc_tabs = draw_npc_tabs
+    g.draw_mind_panel = draw_mind_panel
     g.close_modals = close_modals
     g.commit_crime = commit_crime
     g.craft_at_table = craft_at_table

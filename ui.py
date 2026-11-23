@@ -2208,6 +2208,35 @@ class PersonaCard:
         screen.blit(board, (x, y))
 
 
+class MindPanel:
+    """The second tab of a person's window: mood and medical record."""
+
+    def __init__(self):
+        self.font_title = pygame.font.SysFont("dejavusans", 18, bold=True)
+        self.font = pygame.font.SysFont("dejavusans", 13)
+
+    def draw(self, screen, subject, panel_rect, g, persona_card) -> None:
+        sw, sh = screen.get_size()
+        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 120))
+        screen.blit(shade, (0, 0))
+        board = pygame.Surface(panel_rect.size, pygame.SRCALPHA)
+        pygame.draw.rect(board, (22, 20, 18, 244), board.get_rect(),
+                         border_radius=12)
+        pygame.draw.rect(board, (150, 118, 78), board.get_rect(), 2,
+                         border_radius=12)
+        screen.blit(board, panel_rect.topleft)
+        title = "MIND — %s" % getattr(subject, "name", "?")
+        screen.blit(self.font_title.render(title, True, (238, 224, 190)),
+                    (panel_rect.left + 14, panel_rect.top + 12))
+        y = panel_rect.top + 42
+        lines = persona_card._medical_lines(subject, g)
+        for text, color in lines:
+            img = self.font.render(text, True, color)
+            screen.blit(img, (panel_rect.left + 14, y))
+            y += 19
+
+
 class MarketPanel(ChestPanel):
     """THE MARKET STALL, OPENED LIKE A CHEST.
 
