@@ -2530,6 +2530,13 @@ class NPC:
             self.sleep_t = max(0.0, self.sleep_t - dt)
             self.moving = False
             return
+        # A MAJOR BREAK OWNS THE BODY.  Without this, the normal work/idle
+        # update ran after _break_action and walked the man back toward the
+        # campfire (or his job) -- so a "breaking spree" looked like he was
+        # following whoever happened to be near the fire.  Berserk and spree
+        # are driven entirely by _break_action until the state ends.
+        if getattr(self, "break_state", "normal") in ("berserk", "breaking_spree"):
+            return
         # THE PLAYER'S OWN PEOPLE: babies grow, breeders face each other, and
         # at night they sleep on their bedrolls.
         if getattr(self, "native", False):
