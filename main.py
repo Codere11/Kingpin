@@ -787,18 +787,26 @@ def main() -> None:
             _panel = g.worker_panel
         elif g.body_open and getattr(g, "body_panel", None) is not None:
             _panel = g.body_panel
-        elif getattr(g, "npc_card_open", False):
-            # A CARD WITHOUT A PACK. The rect is only used for anchoring the
-            # card to the right of the screen; no inventory panel is open.
+        if getattr(g, "npc_card_open", False) and _panel is None:
+            # A CARD WITHOUT A PACK.  This is a plain pygame.Rect, NOT a panel
+            # with a _layout method -- calling _layout on it raised, and the
+            # catch below silently swallowed the card every time.
             _sw, _sh = g.screen.get_size()
-            _panel = pygame.Rect(_sw - 12, _sh // 2, 1, 1)
-        if _panel is None:
+            _rect = pygame.Rect(_sw - 12, _sh // 2, 1, 1)
+        elif _panel is not None:
+            _rect = _panel._layout(*g.screen.get_size())[0]
+        else:
             return
         try:
-            _rect = _panel._layout(*g.screen.get_size())[0]
             g.persona_card.draw(g.screen, _s, _rect, g)
-        except Exception:
-            pass
+        except Exception as _ce:
+            # Never silently erase the card again.  The old blank card was a
+            # swallowed pygame.Rect._layout error.
+            try:
+                import plog
+                plog.log("PERSONA-CARD-ERR", repr(_ce)[:180])
+            except Exception:
+                pass
     # THE MARKET STALL: the player's counter, its prices, and its purse.
     g.stall_open = False
     g.stall_panel = None
