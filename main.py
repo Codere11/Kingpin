@@ -1100,7 +1100,7 @@ def main() -> None:
         # never a candidate in click_a_man.  A click on any native person
         # opens their card; the card itself decides whether the mind is
         # readable (only after medicine).
-        if not _ok and getattr(g, "test_mode", False):
+        if not _ok:
             if at is not None:
                 _mx, _my = at
             else:
@@ -1110,6 +1110,11 @@ def main() -> None:
             _best, _bd = None, 44.0
             for _n in list(getattr(g, "_native_people", ())):
                 if not getattr(_n, "alive", True):
+                    continue
+                _camp = getattr(_n, "native_camp", None)
+                if not (getattr(g, "test_mode", False)
+                        or getattr(_n, "conquered", False)
+                        or getattr(_camp, "lab", False)):
                     continue
                 _d = math.hypot(_n.x - _wx, _n.y - _wy)
                 if _d < _bd:
