@@ -15,8 +15,12 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 
 def main():
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((900, 700))
     import industry
     import village
+    import ui
 
     hut = industry.Workplace("medicine_hut", 0.0, 0.0, 1234)
     camp = SimpleNamespace(
@@ -49,11 +53,22 @@ def main():
     camp.people = [doc, patient]
     camp.farmers = [patient]
 
-    # The sign-post assignment must be able to put a man in the doctor role.
+    # The sign-post assignment must be able to put a man in the doctor role,
+    # and the actual job-post [+] button must be the thing that does it.
     import colony
-    sign = SimpleNamespace(doctors=1)
+    sign = SimpleNamespace(farmers=0, loggers=0, artisans=0,
+                           researchers=0, doctors=0, miners=0,
+                           smiths=0, weavers=0, spicemen=0, gunsmiths=0)
+    synced = []
+    panel = ui.SignPanel(sign, camp, lambda: synced.append(True))
+    _p, rows = panel._rects(900, 700)
+    _row = next(r for r in rows if r[1] == "doctors")
+    panel.handle_event(pygame.event.Event(
+        pygame.MOUSEBUTTONDOWN, button=1, pos=_row[3].center))
+    assert sign.doctors == 1 and synced, "Doctors [+] did not fire"
     colony._assign_jobs(g, camp, sign)
     assert doc in camp.doctors, "sign-post did not assign a doctor"
+    assert doc.job == "doctor" and doc.native_role == "doctor"
 
     for _ in range(300):
         doc._work_doctor(0.1)
