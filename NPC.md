@@ -331,15 +331,11 @@ break ends.
 
 Add to `Chest`, `FoodBox`, `SignPost`, `Workplace`:
 
-- `max_condition = 100`, `condition = 100`, `broken = False`;
+- `max_condition = 100`, `condition = 100`;
 - break-spree damage 35 per hit (fists 12);
-- at 0 → `broken = True`;
-- repair interaction near a broken object with the relevant materials
-  (10 wood for chest/food box/sign; 10 wood + 10 iron for a workplace);
-- `condition`/`broken` are saved by the built-object provider.
-
-No contents are destroyed. This is important: a break must create a mess, not
-silently delete the player’s goods.
+- at 0 → the object is **destroyed and removed from the world**;
+- everything it held is destroyed with it; there is no repair and no loot;
+- the lab fixture chest has 40 condition so the behaviour is quick to test.
 
 ## 4.6 What mood does not do
 
@@ -827,10 +823,10 @@ Pass condition: minor breaks are visible, readable, and temporary.
 > **Status: first pass implemented.**  Berserk finds the least-liked person
 > within 300 px and fights; breaking spree finds the nearest breakable object
 > within 400 px and damages it.  Chests, signs, food boxes and workplaces have
-> condition/broken state, save it, and can be repaired by clicking them (10
-> wood, or 10 wood + 10 iron for a workplace; free in test mode).  Broken
-> workplaces stop their worker.  The lab adds one breakable chest near the
-> subject ring.  Contents are never deleted.
+> condition.  When condition reaches zero the object is **destroyed**: it is
+> removed from the world and everything it held is gone with it.  There is no
+> repair and no ghost inventory.  The lab adds a fragile 40-condition chest so
+> the destruction can be seen in a few hits.
 
 Build:
 

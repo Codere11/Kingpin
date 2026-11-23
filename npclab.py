@@ -200,8 +200,12 @@ def _discard(g, camp):
 
 def _ensure_breakables(g, camp):
     """One breakable chest west of the fire, so F9's spree has a target."""
-    if getattr(camp, "_lab_breakables", False):
-        return
+    # A destroyed chest is gone from built_chests; make a fresh fixture one
+    # when the next test needs it.  An existing nearby chest counts.
+    for _c in (getattr(g, "built_chests", ()) or ()):
+        if math.hypot(float(getattr(_c, "x", 0.0)) - float(camp.x),
+                      float(getattr(_c, "y", 0.0)) - float(camp.y)) < 400.0:
+            return
     try:
         chest = placement.Chest(float(camp.x) + block.TILE * 4.0,
                                 float(camp.y) + block.TILE * 2.0)
@@ -434,11 +438,15 @@ def force_break(g):
         # broken; reset the fixture's breakables so F9 is repeatable.  This
         # touch is only for the lab, never for a real settlement.
         if getattr(camp, "lab", False):
-            for _c in (getattr(g, "built_chests", ()) or ()):
-                if getattr(_c, "broken", False) or getattr(_c, "max_condition", 100.0) != 40.0:
-                    _c.max_condition = 40.0
-                    _c.broken = False
-                    _c.condition = 40.0
+            # Echo of an old build: a "broken" chest is not a repairable prop
+            # any more.  Remove it before making the next fixture.
+            for _c in list(getattr(g, "built_chests", ()) or ()):
+                if getattr(_c, "broken", False):
+                    try:
+                        g.built_chests.remove(_c)
+                    except ValueError:
+                        pass
+            _ensure_breakables(g, camp)
     subjects = list(getattr(g, "_npc_subjects", ()) or ())
     n = getattr(g, "persona", None)
     if n is None or not getattr(n, "native", False):

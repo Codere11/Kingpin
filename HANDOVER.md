@@ -96,6 +96,7 @@ The two most important render/input facts:
 | NPC foundation | `persona.py`, `mood.py`, `doctor.py` | deterministic types, born/learned traits, thought-based mood, medicine recipe; farmer S/N hook live; card gated by medicine |
 | NPC lab | `npclab.py` | test-mode fixture: eight ordinarily named subjects incl. S/N farmers and a breakable chest; F5–F10 break/mood/medicine |
 | Doctor | `doctor.py`, `village._work_doctor`, `industry` Medicine Hut | make medicine from tobacco + dried mushroom + alcohol, deliver, heal and unlock the record |
+| Destruction | `village._break_action` | spree damages breakables; at 0 condition the object and contents are removed |
 | Sound | `sound.py` | one-shot, on-screen gated |
 | Guns | `guns.py` | musket/double/rifle + ammo |
 | Vision/light | `vision.py`, `life.py` | cone of sight, night glow (cached) |

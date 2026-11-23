@@ -18,11 +18,11 @@ def main():
     import pygame
     pygame.init()
     pygame.display.set_mode((640, 480))
-    import engine
     import placement
     import village
 
     chest = placement.Chest(100.0, 100.0)
+    chest.inventory.add("coin", 5)
     camp = SimpleNamespace(x=100.0, y=100.0, g=None, people=[],
                            farmers=[], warriors=[], handlers=[], workers=[],
                            loggers=[], artisans=[], researchers=[], doctors=[],
@@ -75,13 +75,9 @@ def main():
         now += 0.2
         if chest.broken:
             break
-    assert chest.broken, "spree did not break the chest"
-    assert chest.condition <= 0.0
-
-    assert engine._repair_broken(g, chest.x, chest.y)
-    assert not chest.broken
-    assert chest.condition == chest.max_condition
-    print("MAJOR BREAK SELFTEST: PASS -- spree broke the chest, repair restored it")
+    assert chest not in g.built_chests, "broken chest still exists in the world"
+    assert getattr(chest, "inventory", None) is None, "broken chest kept its contents"
+    print("MAJOR BREAK SELFTEST: PASS -- spree destroyed the chest and its contents")
 
 
 if __name__ == "__main__":

@@ -4274,16 +4274,42 @@ class NPC:
         damage = 35.0 if armed else 12.0
         target.condition = max(0.0, float(getattr(target, "condition", 100.0)) - damage)
         if target.condition <= 0.0:
-            target.broken = True
+            # DESTROYED MEANS DESTROYED.  The object leaves the world and
+            # everything it held goes with it -- no repair, no loot, no ghost
+            # inventory.  A chest is not a visual state.
             self._spree_broken = int(getattr(self, "_spree_broken", 0) or 0) + 1
             self._break_target = None
+            _kind = type(target).__name__
+            for _seq_name in ("built_chests", "built_signs", "built_foodboxes",
+                              "placed_work"):
+                _seq = getattr(g, _seq_name, None)
+                if _seq is not None and target in _seq:
+                    try:
+                        _seq.remove(target)
+                    except ValueError:
+                        pass
             try:
-                g.toast("%s broken" % type(target).__name__)
+                if target in (getattr(g.player, "workplaces", ()) or ()):
+                    g.player.workplaces.remove(target)
+            except Exception:
+                pass
+            try:
+                target.worker = None
+            except Exception:
+                pass
+            try:
+                # The chest's contents are destroyed with it, not left on a
+                # dead object someone could still reach.
+                target.inventory = None
+            except Exception:
+                pass
+            try:
+                g.toast("%s destroyed" % _kind)
             except Exception:
                 pass
             try:
                 import plog
-                plog.log("BROKEN", type(target).__name__, "by",
+                plog.log("DESTROYED", _kind, "by",
                          getattr(self, "name", "?"))
             except Exception:
                 pass
