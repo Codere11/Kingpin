@@ -45,16 +45,13 @@ def _set(npc, tid, delta, now, seconds=180.0):
         mood.ensure_thought(npc, tid, delta, now, seconds)
 
 
-def update(npc, now: float) -> None:
-    """Add/remove the thoughts caused by the world around this person."""
+def _temperature(npc, now: float) -> None:
     g = _g(npc)
     if g is None:
         return
     camp = getattr(npc, "native_camp", None)
     warmth = _near_fire(npc, g, camp)
     inside = bool(getattr(npc, "in_interior", False))
-
-    # TEMPERATURE.  The world temperature is 0 cold .. 1 hot.
     try:
         temp = float(g.world.temperature(npc.x, npc.y))
     except Exception:
@@ -62,14 +59,17 @@ def update(npc, now: float) -> None:
     if warmth or inside:
         _set(npc, "cold", None, now)
         _set(npc, "freezing", None, now)
+        _set(npc, "hot", None, now)
         _set(npc, "warm", 3.0, now, 120.0)
     elif temp < 0.10:
         _set(npc, "freezing", -9.0, now)
         _set(npc, "cold", None, now)
+        _set(npc, "hot", None, now)
         _set(npc, "warm", None, now)
     elif temp < 0.24:
         _set(npc, "cold", -5.0, now)
         _set(npc, "freezing", None, now)
+        _set(npc, "hot", None, now)
         _set(npc, "warm", None, now)
     elif temp > 0.82:
         _set(npc, "hot", -4.0, now)
@@ -82,8 +82,17 @@ def update(npc, now: float) -> None:
         _set(npc, "hot", None, now)
         _set(npc, "warm", None, now)
 
+
+def _environment(npc, now: float) -> None:
+    g = _g(npc)
+    if g is None:
+        return
+    camp = getattr(npc, "native_camp", None)
+    inside = bool(getattr(npc, "in_interior", False))
+
     # SHELTER / SLEEP.
-    if inside or getattr(npc, "asleep", False) and getattr(npc, "bed", None) is not None:
+    if inside or (getattr(npc, "asleep", False)
+                  and getattr(npc, "bed", None) is not None):
         _set(npc, "sheltered", 2.0, now, 300.0)
     else:
         _set(npc, "sheltered", None, now)
@@ -115,7 +124,8 @@ def update(npc, now: float) -> None:
         _set(npc, "crowded", None, now)
 
     # SAFETY.
-    conflict = bool(getattr(camp, "conflict", False)) or int(getattr(g, "war_alarms", 0)) > 0
+    conflict = (bool(getattr(camp, "conflict", False))
+                or int(getattr(g, "war_alarms", 0)) > 0)
     if conflict:
         _set(npc, "threatened", -6.0, now)
         _set(npc, "safe", None, now)
@@ -134,3 +144,25 @@ def update(npc, now: float) -> None:
         _set(npc, "lonely", -2.0, now, 300.0)
     else:
         _set(npc, "lonely", None, now)
+
+
+def tick(npc, now: float, dt: float) -> None:
+    """Per-NPC timers: temperature ~60s, the rest ~30s."""
+    if getattr(npc, "_needs_temp_t", None) is None:
+        try:
+            npc._needs_temp_t = float(npc.rng.uniform(0.0, 60.0))
+        except Exception:
+            npc._needs_temp_t = 0.0
+    if getattr(npc, "_needs_env_t", None) is None:
+        try:
+            npc._needs_env_t = float(npc.rng.uniform(0.0, 30.0))
+        except Exception:
+            npc._needs_env_t = 0.0
+    npc._needs_temp_t -= dt
+    if npc._needs_temp_t <= 0.0:
+        npc._needs_temp_t = 60.0
+        _temperature(npc, now)
+    npc._needs_env_t -= dt
+    if npc._needs_env_t <= 0.0:
+        npc._needs_env_t = 30.0
+        _environment(npc, now)

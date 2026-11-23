@@ -169,6 +169,9 @@ def check_needs():
     n.yearning = 0.0
     n.bond_partner = None
     n._camp_people = lambda: [n]
+    n._mood_t = 0.0
+    n._needs_temp_t = 0.0
+    n._needs_env_t = 0.0
     mood.tick(n, 10.0, 2.0)
     assert "freezing" in n.mood_thoughts
     assert "safe" in n.mood_thoughts
@@ -196,6 +199,7 @@ def check_mood():
     q.max_health = 100.0
     q.stamina = 10.0
     q.max_stamina = 100.0
+    q._mood_t = 0.0
     mood.tick(q, 10.0, 2.0)
     assert "starving" in q.mood_thoughts
     assert "hurt" in q.mood_thoughts
@@ -203,6 +207,7 @@ def check_mood():
     assert q.mood_target == 28.0
     assert q.mood == 44.5
     mood.add_thought(q, "insult", -10.0, 10.0, seconds=1.0)
+    q._mood_t = 0.0
     mood.tick(q, 20.0, 2.0)
     assert "insult" not in q.mood_thoughts
     return True

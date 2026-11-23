@@ -55,7 +55,7 @@ def ensure(npc):
         # would update on the same frame every two seconds; a small random
         # offset spreads the work and the behaviour across the interval.
         try:
-            npc._mood_t = float(npc.rng.uniform(0.0, 2.0))
+            npc._mood_t = float(npc.rng.uniform(0.0, 30.0))
         except Exception:
             try:
                 npc._mood_t = 0.0
@@ -330,7 +330,7 @@ def ensure_thought(npc, tid: str, delta: float, now: float,
                      "stacks": 1}
 
 
-def tick(npc, now: float, dt: float, interval: float = 2.0) -> None:
+def tick(npc, now: float, dt: float, interval: float = 30.0) -> None:
     """Cheap periodic mood step: once every two seconds, never per frame.
 
     Environmental thoughts (hunger, injury, exhaustion) are refreshed here;
@@ -388,7 +388,7 @@ def tick(npc, now: float, dt: float, interval: float = 2.0) -> None:
 
     try:
         import needs as _needs
-        _needs.update(npc, now)
+        _needs.tick(npc, now, interval)
     except Exception:
         pass
     npc.mood_target = target_from_thoughts(npc)
