@@ -1071,8 +1071,10 @@ def main() -> None:
                 _mx, _my = pygame.mouse.get_pos()
             _wx = g.cam_x + _mx / ZOOM
             _wy = g.cam_y + _my / ZOOM
-            _bd = 48.0
+            _bd = 64.0
             _pool = list(getattr(g, "_native_people", ()) or ())
+            _pool += [x for x in (getattr(g, "_observe_npcs", ()) or ())
+                      if x not in _pool]
             try:
                 _pool += list(village_mod.TRAVELLERS)
             except Exception:
@@ -1107,8 +1109,11 @@ def main() -> None:
                 _mx, _my = pygame.mouse.get_pos()
             _wx = g.cam_x + _mx / ZOOM
             _wy = g.cam_y + _my / ZOOM
-            _best, _bd = None, 44.0
-            for _n in list(getattr(g, "_native_people", ())):
+            _best, _bd = None, 64.0
+            _pool = list(getattr(g, "_native_people", ()) or ())
+            _pool += [x for x in (getattr(g, "_observe_npcs", ()) or ())
+                      if x not in _pool]
+            for _n in _pool:
                 if not getattr(_n, "alive", True):
                     continue
                 _camp = getattr(_n, "native_camp", None)
