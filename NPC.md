@@ -410,8 +410,12 @@ Where it appears:
 
 - the existing PersonaCard when the player opens a worker’s pack or the
   person’s inspection panel;
-- for the player, always (player MBTI, no traits in this pass);
-- a “No medical record” line for untreated NPCs.
+- for the player, always (player MBTI, no traits in this pass).
+
+Before treatment the card shows only an **observed mood**, rounded to the
+nearest 20 (65 reads as 60, 73 as 80), plus the single strongest positive and
+strongest negative reason.  Everything else — MBTI, traits, exact mood, all
+thoughts, break state, job fit — waits for the first medicine.
 
 The medicine reveals the mind; it does not create it. The player can meet a
 person, treat them later, and then see what was always there.

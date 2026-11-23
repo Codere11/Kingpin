@@ -40,6 +40,8 @@ def main():
     lines = card._medical_lines(subject)
     text = " ".join(line for line, _color in lines)
     assert "No medical record" in text, text
+    assert "Mood about 20" in text, text
+    assert "Worse: Insulted -16" in text, text
     assert "MBTI" not in text, text
     assert "smart" not in text, text
     assert "INTJ" not in text, text

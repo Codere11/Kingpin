@@ -517,7 +517,15 @@ def draw(g):
                              getattr(n, "job", "?")), PANEL_TEXT))
             known = persona.mental_known(n)
             if not known:
-                lines.append(("MEDICAL RECORD: NO", PANEL_DIM))
+                _pos, _neg = mood.biggest_drivers(n)
+                lines.append(("MOOD — OBSERVED (no medical record)", PANEL_DIM))
+                lines.append(("mood about %.0f" % mood.observed_mood(n), PANEL_TEXT))
+                if _pos is not None:
+                    lines.append(("better: %s %+.0f" % (_pos[0].title(), _pos[1]),
+                                  (126, 184, 132)))
+                if _neg is not None:
+                    lines.append(("worse: %s %+.0f" % (_neg[0].title(), _neg[1]),
+                                  (208, 112, 104)))
                 lines.append(("F10 gives one medicine and unlocks it", PANEL_DIM))
             else:
                 lines.append(("MBTI %s   medicine %d"

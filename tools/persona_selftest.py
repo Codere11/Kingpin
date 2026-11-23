@@ -160,6 +160,10 @@ def check_mood():
     p.mood_thoughts = {"hungry": {"delta": -8.0, "stacks": 2}}
     assert mood.target_from_thoughts(p, base=50.0) == 34.0
     assert "hungry" in mood.thought_summary(p)
+    p.mood = 65.0
+    assert mood.observed_mood(p) == 60.0
+    p.mood = 73.0
+    assert mood.observed_mood(p) == 80.0
 
     q = P()
     q.hunger = 90.0

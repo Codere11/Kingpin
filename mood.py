@@ -398,6 +398,34 @@ def tick(npc, now: float, dt: float, interval: float = 2.0) -> None:
         pass
 
 
+def observed_mood(npc) -> float:
+    """The mood the player can read without a medical record.
+
+    It is rounded to the nearest 20: 65 reads as 60, 73 as 80.  The real
+    value still drives behaviour; only the card is blurred.
+    """
+    value = clamp(getattr(npc, "mood", DEFAULT_MOOD))
+    return clamp(int(value / 20.0 + 0.5) * 20.0)
+
+
+def biggest_drivers(npc):
+    """The strongest positive and negative reason, for an unread mind."""
+    ensure(npc)
+    pos = None
+    neg = None
+    for tid, thought in (getattr(npc, "mood_thoughts", None) or {}).items():
+        try:
+            total = float(thought.get("delta", 0.0)) * int(thought.get("stacks", 1))
+        except Exception:
+            continue
+        rec = (str(tid).replace("_", " "), total)
+        if total > 0.0 and (pos is None or total > pos[1]):
+            pos = rec
+        elif total < 0.0 and (neg is None or total < neg[1]):
+            neg = rec
+    return pos, neg
+
+
 def thought_summary(npc, limit=4):
     ensure(npc)
     thoughts = getattr(npc, "mood_thoughts", None) or {}

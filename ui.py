@@ -2101,13 +2101,33 @@ class PersonaCard:
             known = (bool(getattr(subject, "mental_known", False))
                      or int(getattr(subject, "medicines_received", 0) or 0) > 0)
         if not known:
-            return [("MEDICAL RECORD", (190, 172, 128)),
+            # NO RECORD: only the observable mood, blurred to the nearest 20,
+            # and the single strongest reason up and down.  Everything else
+            # waits for the doctor.
+            try:
+                import mood as _mood
+                _shown = _mood.observed_mood(subject)
+                _pos, _neg = _mood.biggest_drivers(subject)
+                _lines = [("MOOD — OBSERVED", (190, 172, 128)),
+                          ("Mood about %.0f" % _shown, (216, 210, 196))]
+                if _pos is not None:
+                    _lines.append(("Better: %s %+.0f"
+                                   % (_pos[0].title(), _pos[1]), (126, 184, 132)))
+                if _neg is not None:
+                    _lines.append(("Worse: %s %+.0f"
+                                   % (_neg[0].title(), _neg[1]), (208, 112, 104)))
+                _lines.append(("No medical record — mood only.",
+                               (128, 124, 118)))
+                return _lines
+            except Exception:
+                pass
+            return [("MOOD — OBSERVED", (190, 172, 128)),
                     ("No medical record.", (160, 156, 148)),
                     ("A doctor has not examined this person.",
                      (128, 124, 118))]
         try:
             import mood as _mood
-            summary = _mood.thought_summary(subject, limit=3)
+            summary = _mood.thought_summary(subject, limit=6)
         except Exception:
             summary = "none"
         traits = ", ".join(getattr(subject, "traits", ()) or ()) or "none"
