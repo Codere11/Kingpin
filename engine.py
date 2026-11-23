@@ -131,7 +131,8 @@ def _special_npc_click(g, pos) -> bool:
                 _seq = getattr(_camp, _attr, None)
                 if isinstance(_seq, list):
                     _pool += [x for x in _seq if x not in _pool]
-        _best, _bd = None, 80.0
+        _best, _bd = None, 1e18
+        _nearest = 1e18
         for _n in _pool:
             if not getattr(_n, "alive", True):
                 continue
@@ -141,8 +142,27 @@ def _special_npc_click(g, pos) -> bool:
             if not (_lab or getattr(_n, "conquered", False)):
                 continue
             _d = math.hypot(_n.x - _wx, _n.y - _wy)
-            if _d < _bd:
+            _nearest = min(_nearest, _d)
+            # The lab is a test fixture: a broad radius is deliberate.  Real
+            # conquered people keep a tight one.
+            _limit = 300.0 if _lab else 80.0
+            if _d < _limit and _d < _bd:
                 _best, _bd = _n, _d
+        # PHYSICAL CLICK LOG.  This records what the real window click became.
+        try:
+            import os as _os
+            _path = _os.path.expanduser("~/.kingpin_saves/click.log")
+            with open(_path, "a") as _fh:
+                _fh.write("%s pos=%s test=%s cam=%.1f,%.1f zoom=%.2f world=%.1f,%.1f nearest=%s\n"
+                          % (time.strftime("%H:%M:%S"), pos,
+                             getattr(g, "test_mode", "?"),
+                             float(getattr(g, "cam_x", 0.0)),
+                             float(getattr(g, "cam_y", 0.0)),
+                             float(getattr(g, "zoom", 1.0)),
+                             _wx, _wy,
+                             "none" if _nearest > 1e8 else int(_nearest)))
+        except Exception:
+            pass
         if _best is None:
             return False
         g.persona = _best
