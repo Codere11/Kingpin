@@ -918,8 +918,15 @@ def main() -> None:
         hudtime.clamp_world(g.player, WORLD_BORDER)
 
     def try_talk() -> bool:
-        return life.try_talk(g._TRUTH, village_mod, pygame, g.cam_x, g.cam_y, ZOOM,
-                             g.dialogue_panel, g.player, _main_capital, plog)
+        _talked = life.try_talk(g._TRUTH, village_mod, pygame, g.cam_x, g.cam_y, ZOOM,
+                                g.dialogue_panel, g.player, _main_capital, plog)
+        if _talked:
+            try:
+                import player_mind as _pm
+                _pm.observe(g, "initiated")
+            except Exception:
+                pass
+        return _talked
 
     def respawn() -> None:
         
@@ -1054,7 +1061,9 @@ def main() -> None:
             ship=getattr(g, "ship_npc", None), open_ship=open_market,
             body_open=g.body_open, body_panel=g.body_panel)
         _ok, g.body_open, g.body_panel = combat_actions.click_a_man(_g, at)
-        if _ok:
+        # E is a CONVERSATION started by the player -- not every click on a
+        # trader, a corpse or a chest.  A dialogue panel is the distinction.
+        if _ok and getattr(g.dialogue_panel, "open_", False):
             try:
                 import player_mind as _pm
                 _pm.observe(g, "initiated")
