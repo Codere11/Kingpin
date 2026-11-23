@@ -2064,7 +2064,7 @@ class PersonaCard:
     def _level(self, val: float, lo: float, hi: float, bands: int) -> int:
         return max(0, min(bands, int((val - lo) / (hi - lo) * bands)))
 
-    def _medical_lines(self, subject):
+    def _medical_lines(self, subject, g=None):
         """What the card may say about the mind, and nothing more.
 
         The mind is private until a doctor has given this person medicine.
@@ -2073,6 +2073,24 @@ class PersonaCard:
         """
         if (getattr(subject, "is_player", False)
                 or getattr(getattr(subject, "skills", None), "is_player", False)):
+            if g is not None:
+                try:
+                    import player_mind as _pm
+                    s = _pm.summary(g)
+                    lines = [("PERSONALITY — THIS PLAYTHROUGH",
+                              (190, 172, 128))]
+                    for pos, neg, (letter, pct, total) in s["axes"]:
+                        lines.append(("%s/%s  %3.0f%%   now %s"
+                                      % (pos, neg, pct, letter),
+                                      (216, 210, 196)))
+                    lines.append(("Letters %s   started %s"
+                                  % (s["letters"], s["start_type"]),
+                                  (152, 196, 224)))
+                    if s["line"]:
+                        lines.append((s["line"], (166, 162, 154)))
+                    return lines
+                except Exception:
+                    pass
             return [("PERSONALITY", (190, 172, 128)),
                     ("Your own record is always visible.", (160, 156, 148)),
                     ("Not tracked in this build yet.", (128, 124, 118))]
@@ -2123,7 +2141,7 @@ class PersonaCard:
                 ("Thoughts: %s" % summary, (166, 162, 154)),
                 ("Job: %s   %s" % (job, fit), (166, 162, 154))]
 
-    def draw(self, screen: pygame.Surface, subject, panel_rect) -> None:
+    def draw(self, screen: pygame.Surface, subject, panel_rect, g=None) -> None:
         sw, sh = screen.get_size()
         w = self.W
         gap = 16
@@ -2133,7 +2151,7 @@ class PersonaCard:
         name = getattr(subject, "name", "?") or "?"
         occ = self._occupation(subject)
         skills = getattr(subject, "skills", None)
-        med_lines = self._medical_lines(subject)
+        med_lines = self._medical_lines(subject, g)
         h = (pad + self.portrait_size + 8 + 24 + 20 + 10
              + len(med_lines) * med_h
              + (len(self._SKILLS) * row_h if skills is not None else 0)

@@ -160,6 +160,11 @@ def run(g):
         g.dt = min(g.clock.tick(FPS) / 1000.0, 0.05)
         g._PH["f"] += 1
         g.dt = min(g.dt * g.time_scale, 0.5)          # test-mode speed-up
+        try:
+            import player_mind
+            player_mind.tick(g, g.dt)
+        except Exception:
+            pass
         g.vw, g.vh = g.screen.get_size()
         g.mouse_x, g.mouse_y = pygame.mouse.get_pos()          # window space
         g.wmouse_x, g.wmouse_y = g.mouse_x / g.zoom, g.mouse_y / g.zoom  # world space
@@ -970,6 +975,11 @@ def run(g):
                     if g.research_panel is None:
                         g.research_panel = ResearchPanel(g)
                     g.research_open = True
+                    try:
+                        import player_mind as _pm
+                        _pm.observe(g, "intuitive")
+                    except Exception:
+                        pass
                     pygame.mouse.set_visible(True)
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
                   and not (g.inventory_open or g.trade_open or g.board_open

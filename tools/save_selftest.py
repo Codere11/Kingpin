@@ -164,6 +164,7 @@ def _snapshot(g):
         }),
         "player_camps": [getattr(c, "_save_uid", None)
                          for c in (g.player_camps or ())],
+        "player_mind": __import__("player_mind").snapshot(g),
     }
 
 
@@ -209,6 +210,12 @@ def _make(g):
     g.compass_state.mode = "home"
 
     g.now = 12345.5
+    import player_mind as _pm
+    _pm.observe(g, "initiated", amount=12.0)
+    _pm.observe(g, "sensing", amount=7.0)
+    _pm.observe(g, "provoked")
+    g.now = 12347.0
+    _pm.observe(g, "retaliated")
     g.kills = 9
     g.war_alarms = 2
 

@@ -1846,6 +1846,21 @@ def wronged(victim, attacker, amount: float = 20.0, now: float = 0.0,
     """
     if victim is None or attacker is None or victim is attacker:
         return 0.0
+    # PLAYER PERSONALITY: retaliation and mercy toward conquered people.
+    try:
+        def _is_player(who):
+            return (getattr(getattr(who, "skills", None), "is_player", False)
+                    or type(who).__name__ == "Player")
+        _g = (getattr(getattr(victim, "native_camp", None), "g", None)
+              or getattr(getattr(attacker, "native_camp", None), "g", None))
+        if _g is not None:
+            import player_mind as _pm
+            if _is_player(attacker) and getattr(victim, "conquered", False):
+                _pm.observe(_g, "retaliated")
+            elif _is_player(victim) and getattr(attacker, "conquered", False):
+                _pm.observe(_g, "provoked")
+    except Exception:
+        pass
     oid = getattr(attacker, "id", None)
     if oid is None:
         # THE PLAYER HAS NO ID IN THE BOOKS: the villages know him by one name.

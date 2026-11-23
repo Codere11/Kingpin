@@ -796,7 +796,7 @@ def main() -> None:
             return
         try:
             _rect = _panel._layout(*g.screen.get_size())[0]
-            g.persona_card.draw(g.screen, _s, _rect)
+            g.persona_card.draw(g.screen, _s, _rect, g)
         except Exception:
             pass
     # THE MARKET STALL: the player's counter, its prices, and its purse.
@@ -1008,6 +1008,11 @@ def main() -> None:
     def use_axe() -> None:
         _g = _swing_g()
         g.kills = combat_actions.use_axe(_g, g.kills)
+        try:
+            import player_mind as _pm
+            _pm.observe(g, "sensing")
+        except Exception:
+            pass
 
     def resolve_swing() -> None:
         _g = _swing_g()
@@ -1030,6 +1035,11 @@ def main() -> None:
     def use_pickaxe() -> None:
         combat_actions.use_pickaxe(g.player, g.combat, g.ore_field, g.inventory,
                                    pay_share, mark_dirty, toast)
+        try:
+            import player_mind as _pm
+            _pm.observe(g, "sensing")
+        except Exception:
+            pass
 
     g.EAT_RESTORE = 35.0      # any food fills the same belly, as it does for
                             # every villager: one item, one meal.
@@ -1044,6 +1054,12 @@ def main() -> None:
             ship=getattr(g, "ship_npc", None), open_ship=open_market,
             body_open=g.body_open, body_panel=g.body_panel)
         _ok, g.body_open, g.body_panel = combat_actions.click_a_man(_g, at)
+        if _ok:
+            try:
+                import player_mind as _pm
+                _pm.observe(g, "initiated")
+            except Exception:
+                pass
         # TEST MODE: a lab subject or warrior is not a trade partner and was
         # never a candidate in click_a_man.  A click on any native person
         # opens their card; the card itself decides whether the mind is
@@ -1085,6 +1101,7 @@ def main() -> None:
             commit_crime=commit_crime, pay_share=pay_share,
             tile_is_mine=tile_is_mine, near_fireplace=near_fireplace, toast=toast,
             comm=g.comm,
+            root=g,
             confirm_open=g.confirm_open)
         g.confirm_open = combat_actions.on_click(_g)
 
@@ -1165,7 +1182,14 @@ def main() -> None:
             can_place=can_place, demolish_at=demolish_at,
             placement_pos=placement_pos, placement_box=placement_box,
             mark_dirty=mark_dirty, toast=toast)
+        _before_place = g.placing
         g.placing = placement.try_place(_g)
+        if _before_place is not None and g.placing is None:
+            try:
+                import player_mind as _pm
+                _pm.observe(g, "sensing")
+            except Exception:
+                pass
 
     def draw_placing() -> None:
         _g = SimpleNamespace(
@@ -1429,6 +1453,11 @@ def main() -> None:
 
     def open_market() -> None:
         """The ship's market: sell manufactured goods out of the hold."""
+        try:
+            import player_mind as _pm
+            _pm.observe(g, "intuitive")
+        except Exception:
+            pass
         g.market_panel = ShipMarketPanel(g, g.inventory, g.ship_hold)
         g.market_open = True
         pygame.mouse.set_visible(True)

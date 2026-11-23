@@ -86,7 +86,7 @@ def draw_panel(screen, font, vw, vh, selected):
         screen.blit(key, (x + 16, ry))
 
 
-def use_comm(target, kind, now):
+def use_comm(target, kind, now, g=None):
     """Apply insult/praise/threaten to one man. Returns (True, left) if it
     landed, (False, 0) if this man has already heard it three times today."""
     if kind not in EFFECT or target is None:
@@ -117,6 +117,16 @@ def use_comm(target, kind, now):
     try:
         import mood as _mood
         _mood.add_thought(target, kind, mood, now, 180.0)
+    except Exception:
+        pass
+    try:
+        if g is None:
+            g = getattr(getattr(target, "native_camp", None), "g", None)
+        g = getattr(g, "root", g)
+        if g is not None:
+            import player_mind as _pm
+            _pm.observe(g, "initiated")
+            _pm.observe(g, "contact", target)
     except Exception:
         pass
     return True, CAP_PER_DAY - rec[1]
@@ -353,6 +363,13 @@ def npc_to_player(npc, now):
     need = need_line(npc)
     if need is not None and rng.random() < 0.80:
         spawn_cloud(npc.x, npc.y, "need", text=need)
+        try:
+            g = getattr(getattr(npc, "native_camp", None), "g", None)
+            if g is not None:
+                import player_mind as _pm
+                _pm.observe(g, "responded")
+        except Exception:
+            pass
         return "need"
     op = float(economy.opinion_of(npc, "player").get("player", 0.0))
     starving = float(getattr(npc, "hunger", 0.0)) >= economy.DOLE_AT
@@ -369,6 +386,15 @@ def npc_to_player(npc, now):
     opd = economy.opinion_of(npc, "player")
     opd["player"] = max(-100.0, min(100.0, op + EFFECT[kind][0]))
     spawn_cloud(npc.x, npc.y, kind)
+    try:
+        g = getattr(getattr(npc, "native_camp", None), "g", None)
+        if g is not None:
+            import player_mind as _pm
+            _pm.observe(g, "responded")
+            if kind in ("insult", "threaten") and getattr(npc, "conquered", False):
+                _pm.observe(g, "provoked")
+    except Exception:
+        pass
     return kind
 
 

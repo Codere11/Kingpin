@@ -650,7 +650,7 @@ def on_click(g):
                     _found, _bd = _n, _d
             if _found is not None:
                 import comm as _comm
-                _ok, _left = _comm.use_comm(_found, g.comm, g.now)
+                _ok, _left = _comm.use_comm(_found, g.comm, g.now, g)
                 g.player.swing_cd = g.player.skill_axe_cd   # the same wait as a fist
                 _name = getattr(_found, "name", "him")
                 _verb = {"praise": "praised", "insult": "insulted",

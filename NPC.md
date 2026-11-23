@@ -888,6 +888,13 @@ heals fully, and permanently unlocks the mind panel.
 
 ## Phase 7 — Player personality
 
+> **Status: first pass implemented.**  A rolled prior seeds four decaying
+> counters; real actions update them.  The player card always shows the four
+> axes, current letters, starting type and a plain-language line.  E/I comes
+> from initiated vs. answered speech, S/N from hands-on vs. systemic actions,
+> F/T from contacts with Feeling/Thinking NPCs, and J/P from retaliation vs.
+> mercy toward conquered people.  Saved in `systems`.
+
 Build:
 
 - decayed counters for E/I, S/N, F/T, J/P and a rolled `start_type` prior;

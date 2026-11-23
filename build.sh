@@ -55,6 +55,7 @@ echo "Checking the save round-trip..."
 # multipliers or the mood arithmetic drift, fail before spending a build.
 echo "Checking persona and mood..."
 "$VENV/bin/python" tools/persona_selftest.py > /tmp/kingpin-persona.log 2>&1 || { echo "  PERSONA SELFTEST FAILED"; tail -20 /tmp/kingpin-persona.log; exit 1; }
+"$VENV/bin/python" tools/player_selftest.py > /tmp/kingpin-player.log 2>&1 || { echo "  PLAYER MIND SELFTEST FAILED"; tail -20 /tmp/kingpin-player.log; exit 1; }
 "$VENV/bin/python" tools/card_selftest.py > /tmp/kingpin-card.log 2>&1 || { echo "  CARD SELFTEST FAILED"; tail -20 /tmp/kingpin-card.log; exit 1; }
 "$VENV/bin/python" tools/doctor_selftest.py > /tmp/kingpin-doctor.log 2>&1 || { echo "  DOCTOR SELFTEST FAILED"; tail -20 /tmp/kingpin-doctor.log; exit 1; }
 "$VENV/bin/python" tools/major_break_selftest.py > /tmp/kingpin-major-break.log 2>&1 || { echo "  MAJOR BREAK SELFTEST FAILED"; tail -20 /tmp/kingpin-major-break.log; exit 1; }

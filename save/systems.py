@@ -12,6 +12,7 @@ from . import context as _context
 
 
 def snapshot(g) -> dict:
+    import player_mind
     cards = getattr(g, "research_cards", None)
     market = getattr(g, "market", None)
     compass = getattr(g, "compass_state", None)
@@ -32,6 +33,7 @@ def snapshot(g) -> dict:
                          for c in (getattr(g, "player_camps", ()) or ())],
         "player_camp": codec.idref(getattr(g, "player_camp", None), "camp"),
         "riding": codec.idref(getattr(g, "riding", None), "animal"),
+        "player_mind": player_mind.snapshot(g),
     }
 
 
@@ -77,6 +79,9 @@ def apply(g, data, ctx: "_context.Context") -> None:
     ride = ctx.animals.get(data.get("riding") or "")
     if ride is not None:
         ctx.later(lambda: _ride(g, ride))
+
+    import player_mind
+    player_mind.restore(g, data.get("player_mind"))
 
 
 def _ride(g, horse) -> None:
