@@ -67,6 +67,7 @@ def cycle(npc):
     got = next_step(getattr(npc, "mood", DEFAULT_MOOD))
     npc.mood = got
     npc.mood_target = got
+    npc._mood_hold_t = 10.0
     return got
 
 
@@ -80,6 +81,99 @@ def target_from_thoughts(npc, base=DEFAULT_TARGET):
         except Exception:
             continue
     return clamp(total)
+
+
+def add_thought(npc, tid: str, delta: float, now: float,
+                seconds: float = 180.0, stacks: int = 1) -> None:
+    """Add or refresh a reason.  Same id stacks, so two insults hurt more."""
+    ensure(npc)
+    thoughts = npc.mood_thoughts
+    old = thoughts.get(tid)
+    old_stacks = int(old.get("stacks", 1)) if isinstance(old, dict) else 0
+    thoughts[tid] = {
+        "delta": float(delta),
+        "expires_at": float(now) + float(seconds),
+        "stacks": max(1, min(3, old_stacks + int(stacks))),
+    }
+
+
+def ensure_thought(npc, tid: str, delta: float, now: float,
+                   seconds: float = 120.0) -> None:
+    """Keep an environmental thought fresh without stacking every scan."""
+    ensure(npc)
+    thoughts = npc.mood_thoughts
+    old = thoughts.get(tid)
+    if (isinstance(old, dict)
+            and float(old.get("expires_at", 0.0)) > float(now) + 2.0):
+        old["delta"] = float(delta)
+        return
+    thoughts[tid] = {"delta": float(delta),
+                     "expires_at": float(now) + float(seconds),
+                     "stacks": 1}
+
+
+def tick(npc, now: float, dt: float, interval: float = 2.0) -> None:
+    """Cheap periodic mood step: once every two seconds, never per frame.
+
+    Environmental thoughts (hunger, injury, exhaustion) are refreshed here;
+    event thoughts (insult, praise, wronged, treated) are added by the systems
+    that caused them and expire on their own.
+    """
+    ensure(npc)
+    hold = float(getattr(npc, "_mood_hold_t", 0.0) or 0.0)
+    if hold > 0.0:
+        npc._mood_hold_t = max(0.0, hold - dt)
+        return
+    wait = float(getattr(npc, "_mood_t", 0.0) or 0.0) - dt
+    if wait > 0.0:
+        npc._mood_t = wait
+        return
+    npc._mood_t = interval
+    thoughts = npc.mood_thoughts
+    for tid, thought in list(thoughts.items()):
+        try:
+            if float(thought.get("expires_at", 0.0)) <= float(now):
+                thoughts.pop(tid, None)
+        except Exception:
+            thoughts.pop(tid, None)
+
+    hunger = float(getattr(npc, "hunger", 0.0) or 0.0)
+    if hunger >= 85.0:
+        ensure_thought(npc, "starving", -12.0, now)
+        thoughts.pop("hungry", None)
+    elif hunger >= 50.0:
+        ensure_thought(npc, "hungry", -5.0, now)
+        thoughts.pop("starving", None)
+    else:
+        thoughts.pop("hungry", None)
+        thoughts.pop("starving", None)
+
+    health = float(getattr(npc, "health", 0.0) or 0.0)
+    top = float(getattr(npc, "max_health", 1.0) or 1.0)
+    ratio = health / top if top > 0.0 else 1.0
+    if ratio < 0.35:
+        ensure_thought(npc, "badly_hurt", -12.0, now)
+        thoughts.pop("hurt", None)
+    elif ratio < 0.75:
+        ensure_thought(npc, "hurt", -6.0, now)
+        thoughts.pop("badly_hurt", None)
+    else:
+        thoughts.pop("hurt", None)
+        thoughts.pop("badly_hurt", None)
+
+    stamina = float(getattr(npc, "stamina", 100.0) or 0.0)
+    stamina_top = float(getattr(npc, "max_stamina", 100.0) or 100.0)
+    if stamina_top > 0.0 and stamina / stamina_top < 0.20:
+        ensure_thought(npc, "exhausted", -4.0, now)
+    else:
+        thoughts.pop("exhausted", None)
+
+    npc.mood_target = target_from_thoughts(npc)
+    cur = float(getattr(npc, "mood", 50.0))
+    nxt = cur + (npc.mood_target - cur) * 0.25
+    if abs(nxt - npc.mood_target) < 0.5:
+        nxt = npc.mood_target
+    npc.mood = clamp(nxt)
 
 
 def thought_summary(npc, limit=4):

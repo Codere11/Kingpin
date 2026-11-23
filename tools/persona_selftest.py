@@ -144,6 +144,22 @@ def check_mood():
     p.mood_thoughts = {"hungry": {"delta": -8.0, "stacks": 2}}
     assert mood.target_from_thoughts(p, base=50.0) == 34.0
     assert "hungry" in mood.thought_summary(p)
+
+    q = P()
+    q.hunger = 90.0
+    q.health = 40.0
+    q.max_health = 100.0
+    q.stamina = 10.0
+    q.max_stamina = 100.0
+    mood.tick(q, 10.0, 2.0)
+    assert "starving" in q.mood_thoughts
+    assert "hurt" in q.mood_thoughts
+    assert "exhausted" in q.mood_thoughts
+    assert q.mood_target == 28.0
+    assert q.mood == 44.5
+    mood.add_thought(q, "insult", -10.0, 10.0, seconds=1.0)
+    mood.tick(q, 20.0, 2.0)
+    assert "insult" not in q.mood_thoughts
     return True
 
 

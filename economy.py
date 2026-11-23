@@ -1872,6 +1872,11 @@ def wronged(victim, attacker, amount: float = 20.0, now: float = 0.0,
     op = opinion_of(victim, oid)
     cur = float(op.get(oid, 0.0))
     op[oid] = max(-100.0, cur - abs(amount))
+    try:
+        import mood as _mood
+        _mood.add_thought(victim, "wronged", -8.0, now, 180.0)
+    except Exception:
+        pass
     # AND HIS FRIENDS WHO SAW IT LIKE THE ATTACKER TEN LESS. A man is not
     # beaten in an empty street: whoever is standing there and thinks well of
     # him takes it personally.

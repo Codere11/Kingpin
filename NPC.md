@@ -766,6 +766,13 @@ Pass condition: every trait does exactly what its row says, and the gates hold.
 
 ## Phase 3 — Mood thoughts and thresholds
 
+> **Status: first pass implemented.**  Environmental thoughts (hungry,
+> starving, hurt, badly hurt, exhausted) are refreshed once every two seconds
+> per person.  Event thoughts (insult, praise, threaten, wronged, treated,
+> luxury) are added by the system that caused them and expire on their own.
+> Mood moves toward the summed target.  The card shows the active reasons only
+> after the medical record is unlocked.  Thresholds/breaks are still Phase 4–5.
+
 Build:
 
 - thought registry and mood target;

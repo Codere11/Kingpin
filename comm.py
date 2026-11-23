@@ -114,6 +114,11 @@ def use_comm(target, kind, now):
         _mind.apply_mood(target, mood, reason=kind)
     except Exception:
         pass
+    try:
+        import mood as _mood
+        _mood.add_thought(target, kind, mood, now, 180.0)
+    except Exception:
+        pass
     return True, CAP_PER_DAY - rec[1]
 
 

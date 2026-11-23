@@ -93,7 +93,7 @@ The two most important render/input facts:
 | Ship | `main.py` `ship_pos()` / `open_market()` | spawn coast +56 offshore; click opens market; gold HUD edge-arrow points to it |
 | Saves | `save/` (manifest + gzip chunks), `persist.py` (dirs/crash log) | `saves/slot_N/save.json` + `chunks/`; contract in `SAVE.md` |
 | NPC mind | `NPC.md` | MBTI, traits, mood, breaks, doctor, player personality; phase-gated |
-| NPC foundation | `persona.py`, `mood.py`, `doctor.py` | deterministic types, born/learned traits, mood data, medicine recipe; farmer S/N hook live; card gated by medicine |
+| NPC foundation | `persona.py`, `mood.py`, `doctor.py` | deterministic types, born/learned traits, thought-based mood, medicine recipe; farmer S/N hook live; card gated by medicine |
 | NPC lab | `npclab.py` | test-mode fixture: eight ordinarily named subjects incl. S/N farmers; F5–F8, F10 medicine; mind hidden until record |
 | Doctor | `doctor.py`, `village._work_doctor`, `industry` Medicine Hut | make medicine from tobacco + dried mushroom + alcohol, deliver, heal and unlock the record |
 | Sound | `sound.py` | one-shot, on-screen gated |

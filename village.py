@@ -15,6 +15,7 @@ import stats
 import effects
 import persona
 import doctor
+import mood
 
 import colorsys
 import functools
@@ -917,6 +918,12 @@ class NPC:
         if not economy.needs(self, dt, now):
             self.die()               # starved
             return False
+        # MOOD, ONCE EVERY TWO SECONDS.  The timer is per man, so hundreds of
+        # people do not become hundreds of per-frame thought updates.
+        try:
+            mood.tick(self, now, dt)
+        except Exception:
+            pass
         home = self.village
         if home is not None:
             # THE GRANARY IS THE LAST RESORT, NOT THE FIRST. A man with the
@@ -1839,11 +1846,8 @@ class NPC:
                 target.medicines_received = int(getattr(target, "medicines_received", 0) or 0) + 1
                 target.mental_known = True
                 try:
-                    if getattr(target, "mood_thoughts", None) is None:
-                        target.mood_thoughts = {}
-                    target.mood_thoughts["medicine"] = {
-                        "delta": 4.0, "expires_at": float(g.now) + 120.0,
-                        "stacks": 1}
+                    mood.add_thought(target, "treated", 4.0, float(g.now),
+                                     120.0)
                 except Exception:
                     pass
                 self._doc_target = None

@@ -42,6 +42,11 @@ def consume(npc, item, now):
     npc._consume_mood_off = float(getattr(npc, "_consume_mood_off", 0.0)) + (new - old)
     npc._break_off = float(getattr(npc, "_break_off", 0.0)) + 10.0
     npc._break_off_until = now + CONSUME_BREAK_SECONDS
+    try:
+        import mood as _mood
+        _mood.add_thought(npc, "luxury", 6.0, now, CONSUME_BREAK_SECONDS)
+    except Exception:
+        pass
 
 
 def _consume_expire(npc, now):
