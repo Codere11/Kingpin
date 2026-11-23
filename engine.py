@@ -11,6 +11,41 @@ import corpse as corpse_mod
 import creatures
 
 
+def _repair_broken(g, wx: float, wy: float) -> bool:
+    """Repair the nearest broken chest/sign/food box/workplace."""
+    best, bd = None, 44.0 ** 2
+    for seq_name in ("built_chests", "built_signs", "built_foodboxes",
+                     "placed_work"):
+        for obj in (getattr(g, seq_name, ()) or ()):
+            if not getattr(obj, "broken", False):
+                continue
+            ox = float(getattr(obj, "x", 0.0))
+            oy = float(getattr(obj, "y", 0.0))
+            d = (ox - wx) ** 2 + (oy - wy) ** 2
+            if d < bd:
+                best, bd = obj, d
+    if best is None:
+        return False
+    is_work = hasattr(best, "kind") and hasattr(best, "worker")
+    cost = {"wood": 10, "iron": 10} if is_work else {"wood": 10}
+    if not getattr(g, "test_mode", False):
+        for item, need in cost.items():
+            if g.inventory.count_of(item) < need:
+                g.toast("Repair needs %d %s" % (need, item))
+                return True
+        for item, need in cost.items():
+            g.inventory.consume(item, need)
+    best.condition = float(getattr(best, "max_condition", 100.0))
+    best.broken = False
+    try:
+        import plog
+        plog.log("REPAIRED", type(best).__name__, getattr(best, "kind", ""))
+    except Exception:
+        pass
+    g.toast("Repaired")
+    return True
+
+
 def _bench_products(g, wp):
     """(leaf item, product) pairs an artisan's bench in this biome can make.
     Only the leaf that actually grows here is offered -- tobacco becomes
@@ -1104,6 +1139,17 @@ def run(g):
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     g._held = g.inventory.selected_stack()
                     g._held_id = g._held.defn.id if g._held else None
+                    # REPAIR A BROKEN OBJECT. This is deliberately before
+                    # the weapon/ship/men branches: a broken thing is not an
+                    # attack target.
+                    try:
+                        _wx = g.cam_x + event.pos[0] / g.zoom
+                        _wy = g.cam_y + event.pos[1] / g.zoom
+                        if _repair_broken(g, _wx, _wy):
+                            g.consumed = True
+                            break
+                    except Exception:
+                        pass
                     # THE SHIP: click it and the market opens, whatever is in
                     # hand -- it must NOT be gated behind the weapon check.
                     try:

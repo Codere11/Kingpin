@@ -40,6 +40,8 @@ def main():
             pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F7),
             pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F8),
             pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F9),
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F9),
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F9),
             pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F10),
             pygame.event.Event(pygame.QUIT),
         ]
@@ -69,8 +71,8 @@ def main():
         assert n.mood == 35.0, "F8 did not change mood: %r" % n.mood
         assert n.mental_known and n.medicines_received == 1, \
             "F10 did not unlock the medical record"
-        assert n.break_state in ("sad", "annoyed"), \
-            "F9 did not force a minor break: %r" % n.break_state
+        assert n.break_state == "berserk", \
+            "F9 cycle did not reach a major break: %r" % n.break_state
         # The card is the only place the mind is shown, and only after that.
         _unknown = g.persona_card._medical_lines(subjects[0])
         _utext = " ".join(line for line, _c in _unknown)

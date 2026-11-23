@@ -134,6 +134,9 @@ def set_break(npc, state: str, now: float, seconds: float = MINOR_SECONDS,
     npc.break_state = state
     npc.break_until = float(now) + float(seconds)
     npc.break_cooldown = 0.0
+    npc._spree_broken = 0
+    npc._break_scan_t = 0.0
+    npc._break_action_t = 0.0
     if forced:
         npc._break_hold_t = 60.0
         # A forced lab break is visible even if the subject was content.
@@ -164,6 +167,21 @@ def force_minor(npc, now: float, state=None) -> str:
         clear_break(npc, now)
     else:
         set_break(npc, state, now, seconds=MINOR_SECONDS, forced=True)
+    return npc.break_state
+
+
+def force_break(npc, now: float) -> str:
+    """Test/lab entry point: cycle normal → sad → annoyed → berserk → spree."""
+    ensure(npc)
+    current = getattr(npc, "break_state", "normal")
+    state = {"normal": "sad", "sad": "annoyed",
+             "annoyed": "berserk", "berserk": "breaking_spree",
+             "breaking_spree": "normal"}.get(current, "sad")
+    if state == "normal":
+        clear_break(npc, now)
+    else:
+        seconds = 240.0 if state in ("sad", "annoyed") else 180.0
+        set_break(npc, state, now, seconds=seconds, forced=True)
     return npc.break_state
 
 
@@ -254,6 +272,13 @@ def break_tick(npc, now: float, dt: float) -> None:
     rng = getattr(npc, "rng", None)
     if rng is None:
         return
+    if mood_now <= major_threshold(npc):
+        major_chance = (0.15 if persona.is_feeling(npc)
+                        else (0.35 if persona.is_thinking(npc) else 0.25))
+        if rng.random() < major_chance:
+            state = "berserk" if rng.random() < 0.5 else "breaking_spree"
+            set_break(npc, state, now, seconds=180.0)
+            return
     if persona.is_feeling(npc):
         chance = 0.60
     elif persona.is_thinking(npc):

@@ -94,7 +94,7 @@ The two most important render/input facts:
 | Saves | `save/` (manifest + gzip chunks), `persist.py` (dirs/crash log) | `saves/slot_N/save.json` + `chunks/`; contract in `SAVE.md` |
 | NPC mind | `NPC.md` | MBTI, traits, mood, breaks, doctor, player personality; phase-gated |
 | NPC foundation | `persona.py`, `mood.py`, `doctor.py` | deterministic types, born/learned traits, thought-based mood, medicine recipe; farmer S/N hook live; card gated by medicine |
-| NPC lab | `npclab.py` | test-mode fixture: eight ordinarily named subjects incl. S/N farmers; F5–F10 break/mood/medicine; mind hidden until record |
+| NPC lab | `npclab.py` | test-mode fixture: eight ordinarily named subjects incl. S/N farmers and a breakable chest; F5–F10 break/mood/medicine |
 | Doctor | `doctor.py`, `village._work_doctor`, `industry` Medicine Hut | make medicine from tobacco + dried mushroom + alcohol, deliver, heal and unlock the record |
 | Sound | `sound.py` | one-shot, on-screen gated |
 | Guns | `guns.py` | musket/double/rifle + ammo |

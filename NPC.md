@@ -800,8 +800,8 @@ specified, and expires when it should.
 > thresholds, natural 20-second break rolls, recovery/cooldown, and their
 > movement/work multipliers are live.  Annoyed people insult nearby
 > low-opinion neighbours.  F9 in the lab cycles the selected/clicked subject
-> through sad → annoyed → normal so the states can be inspected immediately.
-> Major breaks are still Phase 5.
+> through normal → sad → annoyed → berserk → breaking spree → normal, so both
+> minor and major states can be inspected immediately.
 
 Build:
 
@@ -823,6 +823,14 @@ Build:
 Pass condition: minor breaks are visible, readable, and temporary.
 
 ## Phase 5 — Major breaks and breakable objects
+
+> **Status: first pass implemented.**  Berserk finds the least-liked person
+> within 300 px and fights; breaking spree finds the nearest breakable object
+> within 400 px and damages it.  Chests, signs, food boxes and workplaces have
+> condition/broken state, save it, and can be repaired by clicking them (10
+> wood, or 10 wood + 10 iron for a workplace; free in test mode).  Broken
+> workplaces stop their worker.  The lab adds one breakable chest near the
+> subject ring.  Contents are never deleted.
 
 Build:
 

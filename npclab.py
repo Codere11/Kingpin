@@ -20,6 +20,7 @@ import crop as crop_mod
 import mood
 import native
 import persona
+import placement
 import village
 import world as world_mod
 
@@ -197,6 +198,21 @@ def _discard(g, camp):
     g._npc_sel = 0
 
 
+def _ensure_breakables(g, camp):
+    """One breakable chest west of the fire, so F9's spree has a target."""
+    if getattr(camp, "_lab_breakables", False):
+        return
+    try:
+        chest = placement.Chest(float(camp.x) + block.TILE * 4.0,
+                                float(camp.y) + block.TILE * 2.0)
+        if getattr(g, "built_chests", None) is None:
+            g.built_chests = []
+        g.built_chests.append(chest)
+        camp._lab_breakables = True
+    except Exception:
+        pass
+
+
 def _ensure_farm_plots(g, camp):
     """Two isolated one-tile plots west of the lab, owned by the pair."""
     done = getattr(camp, "_lab_farm_plots", None)
@@ -299,6 +315,7 @@ def reset(g):
         camp = _build_camp(g)
         if camp is None:
             return None
+    _ensure_breakables(g, camp)
     subjects = _subjects_from(camp)
     if subjects:
         _reset_subjects(subjects)
@@ -339,6 +356,7 @@ def _build_camp(g):
     if reg is None:
         reg = g.native_settlements = {}
     reg[LAB_KEY] = camp
+    _ensure_breakables(g, camp)
     subjects = _spawn_subjects(g, camp)
     camp.unemployed = list(subjects)
     _attach(g, camp, subjects)
@@ -358,6 +376,7 @@ def ensure(g):
         camp = _build_camp(g)
         if camp is None:
             return None
+    _ensure_breakables(g, camp)
     subjects = _subjects_from(camp)
     if not subjects:
         subjects = _spawn_subjects(g, camp)
@@ -407,7 +426,7 @@ def force_break(g):
         if not subjects:
             return
         n = subjects[int(getattr(g, "_npc_sel", 0)) % len(subjects)]
-    state = mood.force_minor(n, float(getattr(g, "now", 0.0)))
+    state = mood.force_break(n, float(getattr(g, "now", 0.0)))
     _toast(g, "%s: %s" % (getattr(n, "name", "?"), state))
 
 

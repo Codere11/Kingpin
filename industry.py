@@ -488,6 +488,10 @@ def produce(npc, dt: float, now: float) -> None:
 class Workplace:
     """A mine or a smithy standing inside the village fence."""
 
+    max_condition = 100.0
+    condition = 100.0
+    broken = False
+
     def __init__(self, kind: str, x: float, y: float, seed: int) -> None:
         self.kind = kind
         self.x = float(x)

@@ -67,6 +67,9 @@ def snapshot(g) -> dict:
                 "artisan": codec.idref(getattr(wp, "artisan", None), "person"),
                 "leaf": getattr(wp, "leaf", None),
                 "product": getattr(wp, "product", None),
+                "condition": float(getattr(wp, "condition", 100.0)),
+                "max_condition": float(getattr(wp, "max_condition", 100.0)),
+                "broken": bool(getattr(wp, "broken", False)),
             })
         except Exception:
             continue
@@ -78,6 +81,9 @@ def snapshot(g) -> dict:
             "tx": int(ch.tx), "ty": int(ch.ty),
             "filter": getattr(ch, "filter", None),
             "inventory": codec.inventory_to_data(getattr(ch, "inventory", None)),
+            "condition": float(getattr(ch, "condition", 100.0)),
+            "max_condition": float(getattr(ch, "max_condition", 100.0)),
+            "broken": bool(getattr(ch, "broken", False)),
         })
 
     signs = []
@@ -91,6 +97,9 @@ def snapshot(g) -> dict:
             "researchers": int(getattr(sg, "researchers", 0)),
             "miners": int(getattr(sg, "miners", 0)),
             "smiths": int(getattr(sg, "smiths", 0)),
+            "condition": float(getattr(sg, "condition", 100.0)),
+            "max_condition": float(getattr(sg, "max_condition", 100.0)),
+            "broken": bool(getattr(sg, "broken", False)),
         })
 
     foodboxes = []
@@ -99,6 +108,9 @@ def snapshot(g) -> dict:
             "uid": codec.uid(fb, "foodbox"),
             "x": float(fb.x), "y": float(fb.y),
             "inventory": codec.inventory_to_data(getattr(fb, "inventory", None)),
+            "condition": float(getattr(fb, "condition", 100.0)),
+            "max_condition": float(getattr(fb, "max_condition", 100.0)),
+            "broken": bool(getattr(fb, "broken", False)),
         })
 
     designs = []
@@ -210,6 +222,9 @@ def restore(g, data, ctx: "_context.Context") -> None:
                 wp.leaf = rec["leaf"]
             if rec.get("product") is not None:
                 wp.product = rec["product"]
+            wp.condition = float(rec.get("condition", 100.0))
+            wp.max_condition = float(rec.get("max_condition", 100.0))
+            wp.broken = bool(rec.get("broken", False))
             g.placed_work.append(wp)
             g.player.workplaces.append(wp)
             if rec.get("uid"):
@@ -228,6 +243,9 @@ def restore(g, data, ctx: "_context.Context") -> None:
         try:
             ch = placement.Chest(float(rec["tx"]) * 32 + 16.0,
                                  float(rec["ty"]) * 32 + 16.0)
+            ch.condition = float(rec.get("condition", 100.0))
+            ch.max_condition = float(rec.get("max_condition", 100.0))
+            ch.broken = bool(rec.get("broken", False))
             codec.set_uid(ch, rec.get("uid"))
             ch.filter = rec.get("filter")
             codec.inventory_restore(ch.inventory, rec.get("inventory"))
@@ -241,6 +259,9 @@ def restore(g, data, ctx: "_context.Context") -> None:
     for rec in data.get("signs", ()) or ():
         try:
             sg = placement.SignPost(float(rec["x"]), float(rec["y"]))
+            sg.condition = float(rec.get("condition", 100.0))
+            sg.max_condition = float(rec.get("max_condition", 100.0))
+            sg.broken = bool(rec.get("broken", False))
             codec.set_uid(sg, rec.get("uid"))
             for key in ("farmers", "loggers", "artisans", "researchers",
                         "miners", "smiths"):
@@ -255,6 +276,9 @@ def restore(g, data, ctx: "_context.Context") -> None:
     for rec in data.get("foodboxes", ()) or ():
         try:
             fb = placement.FoodBox(float(rec["x"]), float(rec["y"]))
+            fb.condition = float(rec.get("condition", 100.0))
+            fb.max_condition = float(rec.get("max_condition", 100.0))
+            fb.broken = bool(rec.get("broken", False))
             codec.set_uid(fb, rec.get("uid"))
             codec.inventory_restore(fb.inventory, rec.get("inventory"))
             fb.owner = g.player

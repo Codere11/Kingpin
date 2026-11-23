@@ -924,6 +924,10 @@ class NPC:
             mood.tick(self, now, dt)
         except Exception:
             pass
+        try:
+            self._break_action(dt, combat, now)
+        except Exception:
+            pass
         home = self.village
         if home is not None:
             # THE GRANARY IS THE LAST RESORT, NOT THE FIRST. A man with the
@@ -1587,7 +1591,7 @@ class NPC:
                             bench.artisan = self
                             self.artisan_bench = bench
                             break
-            if bench is None:
+            if bench is None or getattr(bench, "broken", False):
                 self._native_idle(dt)      # no bench at all: stay by the fire
                 return
 
@@ -1811,7 +1815,7 @@ class NPC:
             self._native_idle(dt)
             return
         hut = self._nearest_workplace(g, "medicine_hut")
-        if hut is None:
+        if hut is None or getattr(hut, "broken", False):
             self._native_idle(dt)
             return
 
@@ -1938,7 +1942,7 @@ class NPC:
         out_item = product["id"]
         recipe = product["recipe"]
         forge = self._nearest_workplace(g, "smith")
-        if forge is None:
+        if forge is None or getattr(forge, "broken", False):
             self._native_idle(dt)
             return
         # deliver finished pieces first
@@ -4155,6 +4159,103 @@ class NPC:
                   or getattr(target, "attacked_flash", 0.0) > 0.0  # a man
                   or getattr(target, "lunging", 0.0) > 0.0)        # a lunge
         return bool(coming)
+
+    def _nearest_breakable(self, g, reach=400.0):
+        best, bd = None, reach * reach
+        for seq_name in ("built_chests", "built_signs", "built_foodboxes",
+                         "placed_work"):
+            for obj in (getattr(g, seq_name, ()) or ()):
+                if getattr(obj, "broken", False):
+                    continue
+                ox = float(getattr(obj, "x", 0.0))
+                oy = float(getattr(obj, "y", 0.0))
+                d = (ox - self.x) ** 2 + (oy - self.y) ** 2
+                if d < bd:
+                    best, bd = obj, d
+        return best
+
+    def _berserk_target(self, g):
+        best, score = None, 1e18
+        people = list(self._camp_people())
+        try:
+            player = getattr(g, "player", None)
+            if player is not None and math.hypot(player.x - self.x,
+                                                  player.y - self.y) <= 300.0:
+                people.append(player)
+        except Exception:
+            pass
+        for other in people:
+            if other is self or not getattr(other, "alive", True):
+                continue
+            if math.hypot(other.x - self.x, other.y - self.y) > 300.0:
+                continue
+            oid = getattr(other, "id", "player") or "player"
+            try:
+                import economy
+                op = float(economy.opinion_of(self, oid).get(oid, 0.0))
+            except Exception:
+                op = 0.0
+            if op < score:
+                best, score = other, op
+        return best
+
+    def _break_action(self, dt: float, combat, now: float) -> None:
+        """The dangerous break states: berserk and breaking spree."""
+        state = getattr(self, "break_state", "normal")
+        if state not in ("berserk", "breaking_spree"):
+            return
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        if g is None:
+            return
+        if state == "berserk":
+            target = getattr(self, "_break_target", None)
+            if target is None or not getattr(target, "alive", True):
+                self._break_scan_t = getattr(self, "_break_scan_t", 0.0) - dt
+                if self._break_scan_t <= 0.0:
+                    self._break_scan_t = 2.0
+                    target = self._berserk_target(g)
+                    self._break_target = target
+            if target is not None and getattr(target, "alive", True):
+                self._fight(dt, target, combat)
+                return
+            if now >= float(getattr(self, "break_until", 0.0)):
+                mood.clear_break(self, now)
+                self._break_target = None
+            return
+
+        # BREAKING SPREE: attack the nearest breakable until three are broken
+        # or the break timer runs out.
+        if int(getattr(self, "_spree_broken", 0) or 0) >= 3:
+            mood.clear_break(self, now)
+            return
+        target = getattr(self, "_break_target", None)
+        if target is None or getattr(target, "broken", False):
+            self._break_target = target = self._nearest_breakable(g)
+        if target is None or now >= float(getattr(self, "break_until", 0.0)):
+            mood.clear_break(self, now)
+            return
+        if math.hypot(target.x - self.x, target.y - self.y) > 46.0:
+            self._step_toward(target.x, target.y, dt)
+            return
+        self._break_action_t = getattr(self, "_break_action_t", 0.0) - dt
+        if self._break_action_t > 0.0:
+            return
+        self._break_action_t = 1.0
+        self._did_attack()
+        armed = bool(self.arm())
+        damage = 35.0 if armed else 12.0
+        target.condition = max(0.0, float(getattr(target, "condition", 100.0)) - damage)
+        if target.condition <= 0.0:
+            target.broken = True
+            self._spree_broken = int(getattr(self, "_spree_broken", 0) or 0) + 1
+            self._break_target = None
+            try:
+                import plog
+                plog.log("BROKEN", type(target).__name__, "by",
+                         getattr(self, "name", "?"))
+            except Exception:
+                pass
 
     def _fight(self, dt: float, target, combat) -> None:
         dx, dy = target.x - self.x, target.y - self.y

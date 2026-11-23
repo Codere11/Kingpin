@@ -22,6 +22,10 @@ from world import TILE
 class Chest:
     """A 1x1 chest on the mesh: 64 slots, double the player's 32."""
 
+    max_condition = 100.0
+    condition = 100.0
+    broken = False
+
     def __init__(self, x: float, y: float) -> None:
         # A CHEST FILLS ONE SQUARE OF THE MESH, like a plank: the top-left
         # corner lands on the snapped mesh corner and the whole 32x32 cell is
@@ -58,6 +62,10 @@ class Chest:
 class SignPost:
     """A 1x1 sign-post: set how many conquered people work each job."""
 
+    max_condition = 100.0
+    condition = 100.0
+    broken = False
+
     def __init__(self, x: float, y: float) -> None:
         self.x = float(x)
         self.y = float(y)
@@ -86,6 +94,10 @@ class SignPost:
 
 class FoodBox:
     """A 1x1 feed box: the animal handler stocks it, the livestock eat from it."""
+
+    max_condition = 100.0
+    condition = 100.0
+    broken = False
 
     def __init__(self, x: float, y: float) -> None:
         self.x = float(x)
