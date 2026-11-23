@@ -108,6 +108,66 @@ def _artisan_rects(g):
     return pygame.Rect(x0, y0, w, h), left, right
 
 
+def _special_npc_click(g, pos) -> bool:
+    """Open the card of a lab/conquered person.  Returns True if consumed.
+
+    This is deliberately above every panel and mouse branch: the physical
+    window must not need the right modal state to click a test subject.
+    """
+    try:
+        _wx = g.cam_x + pos[0] / g.zoom
+        _wy = g.cam_y + pos[1] / g.zoom
+        _pool = list(getattr(g, "_native_people", ()) or ())
+        _pool += [x for x in (getattr(g, "_observe_npcs", ()) or ())
+                  if x not in _pool]
+        for _camp in (getattr(g, "native_settlements", {}) or {}).values():
+            if not (getattr(_camp, "lab", False)
+                    or getattr(_camp, "conquered", False)):
+                continue
+            for _attr in ("farmers", "warriors", "handlers", "workers",
+                          "loggers", "artisans", "researchers", "doctors",
+                          "miners", "smiths", "weavers", "spicemen",
+                          "gunsmiths", "unemployed", "people"):
+                _seq = getattr(_camp, _attr, None)
+                if isinstance(_seq, list):
+                    _pool += [x for x in _seq if x not in _pool]
+        _best, _bd = None, 80.0
+        for _n in _pool:
+            if not getattr(_n, "alive", True):
+                continue
+            _camp = getattr(_n, "native_camp", None)
+            _lab = (getattr(_camp, "lab", False)
+                    or str(getattr(_n, "id", "")).startswith("lab_"))
+            if not (_lab or getattr(_n, "conquered", False)):
+                continue
+            _d = math.hypot(_n.x - _wx, _n.y - _wy)
+            if _d < _bd:
+                _best, _bd = _n, _d
+        if _best is None:
+            return False
+        g.persona = _best
+        g.npc_card_open = True
+        pygame.mouse.set_visible(True)
+        try:
+            import player_mind as _pm
+            _pm.observe(g, "initiated")
+        except Exception:
+            pass
+        try:
+            g.toast("Card: %s" % getattr(_best, "name", "?"))
+        except Exception:
+            pass
+        try:
+            import plog
+            plog.log("CARD-CLICK", getattr(_best, "name", "?"),
+                     "at", int(_wx), int(_wy))
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
+
+
 def run(g):
     import main as _main_module
     _g = globals()
@@ -228,6 +288,9 @@ def run(g):
             if event.type == pygame.QUIT:
                 g.save_now()
                 g.running = False
+            elif (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                  and _special_npc_click(g, event.pos)):
+                g.consumed = True
             elif g.observer_.handle(event, g.player):
                 # THE INSPECTOR ANSWERS FIRST, ABOVE EVERY MENU.
                 #
@@ -1114,51 +1177,6 @@ def run(g):
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     g._held = g.inventory.selected_stack()
                     g._held_id = g._held.defn.id if g._held else None
-                    # LAB / CONQUERED CARD CLICK -- FIRST, BEFORE EVERYTHING.
-                    # Nothing (bedroll, buildable, body, weapon, ship) gets a
-                    # chance to eat this click.
-                    try:
-                        _wx = g.cam_x + event.pos[0] / g.zoom
-                        _wy = g.cam_y + event.pos[1] / g.zoom
-                        _pool = list(getattr(g, "_native_people", ()) or ())
-                        _pool += [x for x in (getattr(g, "_observe_npcs", ()) or ())
-                                  if x not in _pool]
-                        for _camp in (getattr(g, "native_settlements", {}) or {}).values():
-                            if (getattr(_camp, "lab", False)
-                                    or getattr(_camp, "conquered", False)):
-                                for _attr in ("farmers", "warriors", "handlers",
-                                              "workers", "loggers", "artisans",
-                                              "researchers", "doctors", "miners",
-                                              "smiths", "weavers", "spicemen",
-                                              "gunsmiths", "unemployed", "people"):
-                                    _seq = getattr(_camp, _attr, None)
-                                    if isinstance(_seq, list):
-                                        _pool += [x for x in _seq if x not in _pool]
-                        _best, _bd = None, 80.0
-                        for _n in _pool:
-                            if not getattr(_n, "alive", True):
-                                continue
-                            _camp = getattr(_n, "native_camp", None)
-                            _lab = (getattr(_camp, "lab", False)
-                                    or str(getattr(_n, "id", "")).startswith("lab_"))
-                            if not (_lab or getattr(_n, "conquered", False)):
-                                continue
-                            _d = math.hypot(_n.x - _wx, _n.y - _wy)
-                            if _d < _bd:
-                                _best, _bd = _n, _d
-                        if _best is not None:
-                            g.persona = _best
-                            g.npc_card_open = True
-                            pygame.mouse.set_visible(True)
-                            try:
-                                import player_mind as _pm
-                                _pm.observe(g, "initiated")
-                            except Exception:
-                                pass
-                            g.consumed = True
-                            break
-                    except Exception:
-                        pass
                     # THE SHIP: click it and the market opens, whatever is in
                     # hand -- it must NOT be gated behind the weapon check.
                     try:
