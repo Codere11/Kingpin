@@ -320,6 +320,8 @@ def run(g):
                 g.save_now()
                 g.running = False
             elif (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                  and not (getattr(g, "worker_panel_open", False)
+                           or getattr(g, "npc_card_open", False))
                   and _special_npc_click(g, event.pos)):
                 g.consumed = True
             elif g.observer_.handle(event, g.player):
@@ -580,6 +582,7 @@ def run(g):
                                                                   pygame.K_ESCAPE):
                     g.worker_panel.close()
                     g.worker_panel_open = False
+                    g.npc_card_open = False
                     g.persona = None
                     pygame.mouse.set_visible(False)
                 else:
@@ -1397,6 +1400,7 @@ def run(g):
         # the log has a BLOCKED line, the line names what did it.
         if (g.inventory_open or g.trade_open or g.build_menu_open or g.chest_open
                 or g.workshop_open or g.confirm_open or g.pause_open or g.map_open
+                or g.worker_panel_open or getattr(g, "npc_card_open", False)
                 or g.horse_panel_open
                 or g.placing is not None or g.inside_house is not None
                 or g.inside_mine is not None or g.board_open or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.market_open or g.research_open):
@@ -1411,7 +1415,8 @@ def run(g):
             g._stuck = 0.0 if g._had_event else g._stuck + g.dt
             if g._stuck >= 20.0:
                 g._stuck = 0.0
-                if not g.pause_open:
+                if not (g.pause_open or g.worker_panel_open
+                        or getattr(g, "npc_card_open", False)):
                     g.close_modals("Closed: that menu had stopped responding")
             if g._blk >= 1.0:
                 g._blk = 0.0
