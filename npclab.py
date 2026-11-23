@@ -426,6 +426,14 @@ def force_break(g):
         # from before the chest existed would otherwise have no breakable
         # target and the spree would look aimless.
         _ensure_breakables(g, camp)
+        # A spree needs something to hit.  After the first test the chest is
+        # broken; reset the fixture's breakables so F9 is repeatable.  This
+        # touch is only for the lab, never for a real settlement.
+        if getattr(camp, "lab", False):
+            for _c in (getattr(g, "built_chests", ()) or ()):
+                if getattr(_c, "broken", False):
+                    _c.broken = False
+                    _c.condition = float(getattr(_c, "max_condition", 100.0))
     subjects = list(getattr(g, "_npc_subjects", ()) or ())
     n = getattr(g, "persona", None)
     if n is None or not getattr(n, "native", False):

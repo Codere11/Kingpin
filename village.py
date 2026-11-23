@@ -4177,6 +4177,10 @@ class NPC:
             for obj in (getattr(g, seq_name, ()) or ()):
                 if getattr(obj, "broken", False):
                     continue
+                # The campfire is not a thing to smash; it is the place
+                # people stand.  Sprees go for the chest/bench/sign instead.
+                if getattr(obj, "kind", None) == "fireplace":
+                    continue
                 ox = float(getattr(obj, "x", 0.0))
                 oy = float(getattr(obj, "y", 0.0))
                 d = (ox - self.x) ** 2 + (oy - self.y) ** 2
@@ -4241,7 +4245,11 @@ class NPC:
             return
         target = getattr(self, "_break_target", None)
         if target is None or getattr(target, "broken", False):
-            self._break_target = target = self._nearest_breakable(g)
+            # In the test lab, a selected person can be anywhere in the
+            # fixture; still let the spree find its target.  Real settlements
+            # keep the 400 px rule.
+            _reach = 1200.0 if getattr(camp, "lab", False) else 400.0
+            self._break_target = target = self._nearest_breakable(g, _reach)
         if target is None or now >= float(getattr(self, "break_until", 0.0)):
             mood.clear_break(self, now)
             return
