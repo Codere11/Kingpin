@@ -386,6 +386,11 @@ def tick(npc, now: float, dt: float, interval: float = 2.0) -> None:
     else:
         thoughts.pop("exhausted", None)
 
+    try:
+        import needs as _needs
+        _needs.update(npc, now)
+    except Exception:
+        pass
     npc.mood_target = target_from_thoughts(npc)
     cur = float(getattr(npc, "mood", 50.0))
     nxt = cur + (npc.mood_target - cur) * 0.25

@@ -2012,6 +2012,27 @@ class PauseMenu:
         screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 22))
 
 
+def draw_mood_bar(screen, x, y, w, h, value, target=None) -> None:
+    """A readable mood bar: red -> amber -> green, with the target tick."""
+    value = max(0.0, min(100.0, float(value)))
+    pygame.draw.rect(screen, (20, 18, 16), (x, y, w, h), border_radius=4)
+    pygame.draw.rect(screen, (74, 66, 54), (x, y, w, h), 1, border_radius=4)
+    if value < 34.0:
+        col = (196, 74, 62)
+    elif value < 67.0:
+        col = (204, 156, 58)
+    else:
+        col = (104, 170, 96)
+    fill = int((w - 2) * value / 100.0)
+    if fill > 0:
+        pygame.draw.rect(screen, col, (x + 1, y + 1, fill, h - 2),
+                         border_radius=3)
+    if target is not None:
+        tx = x + 1 + int((w - 2) * max(0.0, min(100.0, float(target))) / 100.0)
+        pygame.draw.line(screen, (242, 232, 200), (tx, y - 2),
+                         (tx, y + h + 2), 2)
+
+
 class PersonaCard:
     """An RPG-style card beside the inventory/chest: a big portrait, name and
     occupation, and every skill as segmented level bars that are ALWAYS drawn."""
@@ -2172,8 +2193,11 @@ class PersonaCard:
         occ = self._occupation(subject)
         skills = getattr(subject, "skills", None)
         med_lines = self._medical_lines(subject, g)
+        _is_player = (getattr(subject, "is_player", False)
+                      or getattr(getattr(subject, "skills", None), "is_player", False))
+        _bar_h = 0 if _is_player else 18
         h = (pad + self.portrait_size + 8 + 24 + 20 + 10
-             + len(med_lines) * med_h
+             + len(med_lines) * med_h + _bar_h
              + (len(self._SKILLS) * row_h if skills is not None else 0)
              + pad)
         # Aligned with the inventory panel: to its left, vertically centred.
@@ -2196,6 +2220,18 @@ class PersonaCard:
             img = self.font_skill.render(text, True, color)
             board.blit(img, (pad, yy))
             yy += med_h
+        if not _is_player:
+            try:
+                import mood as _mood
+                import persona as _persona
+                _known = _persona.mental_known(subject)
+                _val = (float(getattr(subject, "mood", 50.0)) if _known
+                        else _mood.observed_mood(subject))
+                _tgt = float(getattr(subject, "mood_target", 50.0)) if _known else None
+                draw_mood_bar(board, pad, yy + 2, w - pad * 2, 12, _val, _tgt)
+            except Exception:
+                pass
+            yy += 18
         if skills is not None:
             for label, attr, lo, hi, bands in self._SKILLS:
                 val = float(getattr(skills, attr, 0.0) or 0.0)
@@ -2235,6 +2271,17 @@ class MindPanel:
             img = self.font.render(text, True, color)
             screen.blit(img, (panel_rect.left + 14, y))
             y += 19
+        try:
+            import mood as _mood
+            import persona as _persona
+            _known = _persona.mental_known(subject)
+            _val = (float(getattr(subject, "mood", 50.0)) if _known
+                    else _mood.observed_mood(subject))
+            _tgt = float(getattr(subject, "mood_target", 50.0)) if _known else None
+            draw_mood_bar(screen, panel_rect.left + 14, y + 4,
+                          panel_rect.width - 28, 14, _val, _tgt)
+        except Exception:
+            pass
 
 
 class MarketPanel(ChestPanel):

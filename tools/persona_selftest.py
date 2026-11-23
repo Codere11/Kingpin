@@ -150,6 +150,31 @@ def check_minor_breaks():
     return True
 
 
+def check_needs():
+    class W:
+        def temperature(self, x, y):
+            return 0.05
+    class G:
+        world = W()
+        placed_work = []
+        war_alarms = 0
+    class C:
+        g = G()
+        fireplace = None
+        conflict = False
+    n = P()
+    n.native_camp = C()
+    n.asleep = False
+    n.bed = None
+    n.yearning = 0.0
+    n.bond_partner = None
+    n._camp_people = lambda: [n]
+    mood.tick(n, 10.0, 2.0)
+    assert "freezing" in n.mood_thoughts
+    assert "safe" in n.mood_thoughts
+    return True
+
+
 def check_mood():
     p = P()
     mood.ensure(p)
@@ -191,6 +216,7 @@ def main():
     check_traits()
     check_green_thumb_learning()
     check_minor_breaks()
+    check_needs()
     check_mood()
     print("PERSONA SELFTEST: PASS")
 
