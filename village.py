@@ -1053,7 +1053,9 @@ class NPC:
         # its farmers join the player's workforce.
         if getattr(self, "native_role", "") == "warrior":
             camp = getattr(self, "native_camp", None)
-            if camp is not None and not getattr(camp, "conquered", False):
+            if (camp is not None
+                    and not getattr(camp, "conquered", False)
+                    and not getattr(camp, "lab", False)):
                 warriors = getattr(camp, "warriors", None) or ()
                 if warriors and all(not getattr(w, "alive", True) for w in warriors):
                     try:
@@ -1201,7 +1203,8 @@ class NPC:
             return
         self._native_share()
         # HOSTILE TO AN INTRUDER: an unconquered camp defends itself.
-        if not getattr(camp, "conquered", False):
+        if (not getattr(camp, "conquered", False)
+                and not getattr(camp, "lab", False)):
             g = getattr(camp, "g", None)
             if g is not None:
                 _spot = 320.0 if getattr(self, "weapon", None) == "bow" else 260.0
