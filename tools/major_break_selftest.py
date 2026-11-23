@@ -33,6 +33,7 @@ def main():
                         player=SimpleNamespace(x=500.0, y=500.0, alive=True,
                                                id="player"),
                         inventory=None, test_mode=True, now=0.0,
+                        cam_x=-1000.0, cam_y=-1000.0, vw=1280, vh=720,
                         toast=lambda _m: None)
     camp.g = g
     n = village.NPC(80.0, 100.0, 7, name="Anpao", npc_id="break_test",

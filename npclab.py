@@ -205,6 +205,10 @@ def _ensure_breakables(g, camp):
     try:
         chest = placement.Chest(float(camp.x) + block.TILE * 4.0,
                                 float(camp.y) + block.TILE * 2.0)
+        # The lab fixture is deliberately fragile: four unarmed spree hits
+        # break it, so the behaviour can be seen without waiting ten seconds.
+        chest.max_condition = 40.0
+        chest.condition = 40.0
         if getattr(g, "built_chests", None) is None:
             g.built_chests = []
         g.built_chests.append(chest)
@@ -431,9 +435,10 @@ def force_break(g):
         # touch is only for the lab, never for a real settlement.
         if getattr(camp, "lab", False):
             for _c in (getattr(g, "built_chests", ()) or ()):
-                if getattr(_c, "broken", False):
+                if getattr(_c, "broken", False) or getattr(_c, "max_condition", 100.0) != 40.0:
+                    _c.max_condition = 40.0
                     _c.broken = False
-                    _c.condition = float(getattr(_c, "max_condition", 100.0))
+                    _c.condition = 40.0
     subjects = list(getattr(g, "_npc_subjects", ()) or ())
     n = getattr(g, "persona", None)
     if n is None or not getattr(n, "native", False):
@@ -511,8 +516,14 @@ def draw(g):
                                  getattr(n, "break_state", "normal")), PANEL_TEXT))
                 if getattr(n, "break_state", "normal") in ("berserk", "breaking_spree"):
                     _t = getattr(n, "_break_target", None)
-                    lines.append(("target: %s" % (type(_t).__name__ if _t is not None else "none"),
-                                  PANEL_DIM))
+                    if _t is not None and hasattr(_t, "condition"):
+                        _tline = ("target: %s  condition %.0f/%.0f"
+                                  % (type(_t).__name__, float(_t.condition),
+                                     float(getattr(_t, "max_condition", 100.0))))
+                    else:
+                        _tline = "target: %s" % (type(_t).__name__
+                                                 if _t is not None else "none")
+                    lines.append((_tline, PANEL_DIM))
                 lines.append(("traits: %s"
                               % (", ".join(getattr(n, "traits", ()) or ()) or "none"),
                               PANEL_DIM))

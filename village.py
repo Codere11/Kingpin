@@ -4266,6 +4266,10 @@ class NPC:
             return
         self._break_action_t = 1.0
         self._did_attack()
+        # Make the hit visible, not a man standing still beside a chest.
+        self._melee_swing(combat, math.atan2(target.y - self.y,
+                                             target.x - self.x))
+        self._snd("npc_attack", min_gap=1.0)
         armed = bool(self.arm())
         damage = 35.0 if armed else 12.0
         target.condition = max(0.0, float(getattr(target, "condition", 100.0)) - damage)
@@ -4273,6 +4277,10 @@ class NPC:
             target.broken = True
             self._spree_broken = int(getattr(self, "_spree_broken", 0) or 0) + 1
             self._break_target = None
+            try:
+                g.toast("%s broken" % type(target).__name__)
+            except Exception:
+                pass
             try:
                 import plog
                 plog.log("BROKEN", type(target).__name__, "by",
