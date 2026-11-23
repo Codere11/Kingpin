@@ -38,6 +38,17 @@ def ensure(npc):
             npc.mood_thoughts = {}
         except Exception:
             pass
+    if getattr(npc, "_mood_t", None) is None:
+        # STAGGER THE FIRST SCAN.  A batch of people all starting at zero
+        # would update on the same frame every two seconds; a small random
+        # offset spreads the work and the behaviour across the interval.
+        try:
+            npc._mood_t = float(npc.rng.uniform(0.0, 2.0))
+        except Exception:
+            try:
+                npc._mood_t = 0.0
+            except Exception:
+                pass
     if not getattr(npc, "break_state", ""):
         try:
             npc.break_state = "normal"
