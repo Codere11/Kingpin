@@ -147,7 +147,8 @@ def set_break(npc, state: str, now: float, seconds: float = MINOR_SECONDS,
 
 def clear_break(npc, now: float) -> None:
     ensure(npc)
-    if getattr(npc, "break_state", "normal") in ("sad", "annoyed"):
+    if getattr(npc, "break_state", "normal") in ("sad", "annoyed",
+                                                   "berserk", "breaking_spree"):
         try:
             add_thought(npc, "catharsis", 20.0, now, 300.0)
         except Exception:
@@ -182,7 +183,7 @@ def force_break(npc, now: float) -> str:
     if state == "normal":
         clear_break(npc, now)
     else:
-        seconds = 240.0 if state in ("sad", "annoyed") else 180.0
+        seconds = 240.0 if state in ("sad", "annoyed") else 60.0
         set_break(npc, state, now, seconds=seconds, forced=True)
     return npc.break_state
 
@@ -279,7 +280,7 @@ def break_tick(npc, now: float, dt: float) -> None:
                         else (0.35 if persona.is_thinking(npc) else 0.25))
         if rng.random() < major_chance:
             state = "berserk" if rng.random() < 0.5 else "breaking_spree"
-            set_break(npc, state, now, seconds=180.0)
+            set_break(npc, state, now, seconds=60.0)
             return
     if persona.is_feeling(npc):
         chance = 0.60

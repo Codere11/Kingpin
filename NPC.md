@@ -825,8 +825,10 @@ Pass condition: minor breaks are visible, readable, and temporary.
 > within 400 px and damages it.  Chests, signs, food boxes and workplaces have
 > condition.  When condition reaches zero the object is **destroyed**: it is
 > removed from the world and everything it held is gone with it.  There is no
-> repair and no ghost inventory.  The lab adds a fragile 40-condition chest so
-> the destruction can be seen in a few hits.
+> repair and no ghost inventory.  Major breaks last about **60 seconds**, then
+> end with a **catharsis** thought; minor breaks keep their own duration.  The
+> lab adds twelve fragile 40-condition chests so a spree has about a minute of
+> work.
 
 Build:
 

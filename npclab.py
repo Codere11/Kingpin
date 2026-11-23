@@ -202,20 +202,26 @@ def _ensure_breakables(g, camp):
     """One breakable chest west of the fire, so F9's spree has a target."""
     # A destroyed chest is gone from built_chests; make a fresh fixture one
     # when the next test needs it.  An existing nearby chest counts.
+    existing = 0
     for _c in (getattr(g, "built_chests", ()) or ()):
         if math.hypot(float(getattr(_c, "x", 0.0)) - float(camp.x),
                       float(getattr(_c, "y", 0.0)) - float(camp.y)) < 400.0:
-            return
+            existing += 1
+    if existing >= 12:
+        return
     try:
-        chest = placement.Chest(float(camp.x) + block.TILE * 4.0,
-                                float(camp.y) + block.TILE * 2.0)
-        # The lab fixture is deliberately fragile: four unarmed spree hits
-        # break it, so the behaviour can be seen without waiting ten seconds.
-        chest.max_condition = 40.0
-        chest.condition = 40.0
         if getattr(g, "built_chests", None) is None:
             g.built_chests = []
-        g.built_chests.append(chest)
+        # A spree should run about a minute, not end after one chest.  Twelve
+        # fragile chests around the fire give it enough work to do.
+        for _i in range(existing, 12):
+            _ang = (2.0 * math.pi * _i / 12.0) + 0.15
+            _r = block.TILE * (4.0 + (_i % 3) * 1.3)
+            chest = placement.Chest(float(camp.x) + math.cos(_ang) * _r,
+                                    float(camp.y) + math.sin(_ang) * _r)
+            chest.max_condition = 40.0
+            chest.condition = 40.0
+            g.built_chests.append(chest)
         camp._lab_breakables = True
     except Exception:
         pass

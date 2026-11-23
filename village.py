@@ -4222,6 +4222,12 @@ class NPC:
         g = getattr(camp, "g", None) if camp is not None else None
         if g is None:
             return
+        if now >= float(getattr(self, "break_until", 0.0)):
+            # A major break ends on its clock even if the victim is still
+            # standing; the end is catharsis, not a permanent rampage.
+            mood.clear_break(self, now)
+            self._break_target = None
+            return
         if state == "berserk":
             target = getattr(self, "_break_target", None)
             if target is None or not getattr(target, "alive", True):
@@ -4238,11 +4244,7 @@ class NPC:
                 self._break_target = None
             return
 
-        # BREAKING SPREE: attack the nearest breakable until three are broken
-        # or the break timer runs out.
-        if int(getattr(self, "_spree_broken", 0) or 0) >= 3:
-            mood.clear_break(self, now)
-            return
+        # BREAKING SPREE: attack breakables until the timer runs out.
         target = getattr(self, "_break_target", None)
         # A SPREE TARGET MUST BE A BREAKABLE, NOT A PERSON.  Berserk leaves
         # a person in _break_target; without this guard the next spree would
@@ -4255,7 +4257,13 @@ class NPC:
             # keep the 400 px rule.
             _reach = 1200.0 if getattr(camp, "lab", False) else 400.0
             self._break_target = target = self._nearest_breakable(g, _reach)
-        if target is None or now >= float(getattr(self, "break_until", 0.0)):
+        if target is None:
+            # No breakable left in reach: keep the state until its timer ends,
+            # then catharsis.  Do not silently end a major break early.
+            if now >= float(getattr(self, "break_until", 0.0)):
+                mood.clear_break(self, now)
+            return
+        if now >= float(getattr(self, "break_until", 0.0)):
             mood.clear_break(self, now)
             return
         if math.hypot(target.x - self.x, target.y - self.y) > 46.0:
