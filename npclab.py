@@ -420,6 +420,12 @@ def force_break(g):
     removed the old camp's people while their chat clouds were still on screen,
     which looked like every skin vanishing.
     """
+    camp = _find_camp(g)
+    if camp is not None:
+        # Add the fixture chest without rebuilding the people.  An old lab
+        # from before the chest existed would otherwise have no breakable
+        # target and the spree would look aimless.
+        _ensure_breakables(g, camp)
     subjects = list(getattr(g, "_npc_subjects", ()) or ())
     n = getattr(g, "persona", None)
     if n is None or not getattr(n, "native", False):
@@ -495,6 +501,10 @@ def draw(g):
                               % (float(getattr(n, "mood", 50.0)),
                                  float(getattr(n, "mood_target", 50.0)),
                                  getattr(n, "break_state", "normal")), PANEL_TEXT))
+                if getattr(n, "break_state", "normal") in ("berserk", "breaking_spree"):
+                    _t = getattr(n, "_break_target", None)
+                    lines.append(("target: %s" % (type(_t).__name__ if _t is not None else "none"),
+                                  PANEL_DIM))
                 lines.append(("traits: %s"
                               % (", ".join(getattr(n, "traits", ()) or ()) or "none"),
                               PANEL_DIM))
