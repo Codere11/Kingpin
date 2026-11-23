@@ -394,13 +394,18 @@ def cycle_mood(g):
 
 
 def force_break(g):
-    """F9: cycle the selected or clicked person through sad/annoyed/normal."""
-    ensure(g)
-    subjects = getattr(g, "_npc_subjects", [])
-    if not subjects and getattr(g, "persona", None) is None:
-        return
+    """F9: cycle the selected or clicked person through sad/annoyed/normal.
+
+    DELIBERATELY DOES NOT CALL ensure().  F6 may rebuild the fixture; F9 must
+    only change the person already in front of the player.  Rebuilding here
+    removed the old camp's people while their chat clouds were still on screen,
+    which looked like every skin vanishing.
+    """
+    subjects = list(getattr(g, "_npc_subjects", ()) or ())
     n = getattr(g, "persona", None)
     if n is None or not getattr(n, "native", False):
+        if not subjects:
+            return
         n = subjects[int(getattr(g, "_npc_sel", 0)) % len(subjects)]
     state = mood.force_minor(n, float(getattr(g, "now", 0.0)))
     _toast(g, "%s: %s" % (getattr(n, "name", "?"), state))
