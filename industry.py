@@ -959,6 +959,18 @@ class Workplace:
                                max(1, int(3 + 7 * (1.0 - k))), 1)
             pygame.draw.circle(screen, (242, 226, 150), (int(cx), int(cy)),
                                max(1, int(1 + 3 * k)))
+        if getattr(self, "broken", False):
+            r = pygame.Rect(int(sx - self.w / 2), int(sy - self.h / 2),
+                            int(self.w), int(self.h))
+            shade = pygame.Surface((r.w, r.h), pygame.SRCALPHA)
+            shade.fill((18, 14, 12, 130))
+            screen.blit(shade, r.topleft)
+            pygame.draw.line(screen, (210, 62, 54), (r.left + 3, r.top + 3),
+                             (r.right - 3, r.bottom - 3), 3)
+            pygame.draw.line(screen, (210, 62, 54), (r.right - 3, r.top + 3),
+                             (r.left + 3, r.bottom - 3), 3)
+            pygame.draw.line(screen, (64, 34, 26), (r.left + 4, r.centery),
+                             (r.right - 4, r.centery + 6), 2)
         if self.kind == "fireplace":
             # THE FIRE FLICKERS: a few tongue-flames dance over the embers.
             _t = pygame.time.get_ticks() / 1000.0

@@ -19,6 +19,22 @@ import stall as stall_mod
 from world import TILE
 
 
+def _broken_mark(screen, x: float, y: float, w: float, h: float) -> None:
+    """A dark, cracked overlay with a red X: broken, not gone."""
+    r = pygame.Rect(int(x - w / 2), int(y - h / 2), int(w), int(h))
+    shade = pygame.Surface((max(1, r.w), max(1, r.h)), pygame.SRCALPHA)
+    shade.fill((18, 14, 12, 125))
+    screen.blit(shade, r.topleft)
+    pygame.draw.line(screen, (64, 34, 26), (r.left + 3, r.top + 5),
+                     (r.right - 4, r.bottom - 3), 2)
+    pygame.draw.line(screen, (64, 34, 26), (r.right - 5, r.top + 4),
+                     (r.left + 4, r.bottom - 4), 2)
+    pygame.draw.line(screen, (210, 62, 54), (r.left + 2, r.top + 2),
+                     (r.right - 2, r.bottom - 2), 2)
+    pygame.draw.line(screen, (210, 62, 54), (r.right - 2, r.top + 2),
+                     (r.left + 2, r.bottom - 2), 2)
+
+
 class Chest:
     """A 1x1 chest on the mesh: 64 slots, double the player's 32."""
 
@@ -57,6 +73,8 @@ class Chest:
                          (r.left + 6, r.top + 6, r.w - 12, r.h // 2 - 6),
                          border_radius=3)
         pygame.draw.circle(screen, (60, 42, 26), (sx, r.centery), 3)
+        if getattr(self, "broken", False):
+            _broken_mark(screen, self.x, self.y, self.w, self.h)
 
 
 class SignPost:
@@ -90,6 +108,8 @@ class SignPost:
                          border_radius=2)
         pygame.draw.rect(screen, (90, 66, 42), (sx - 8, sy - 15, 16, 8), 1,
                          border_radius=2)
+        if getattr(self, "broken", False):
+            _broken_mark(screen, self.x, self.y, self.w, self.h)
 
 
 class FoodBox:
@@ -122,6 +142,8 @@ class FoodBox:
         pygame.draw.rect(screen, (150, 110, 66), (r.left + 2, r.top + 2, r.w - 4, r.h - 4), border_radius=2)
         for dx in (-3, 0, 3):
             pygame.draw.line(screen, (188, 168, 96), (sx + dx, sy - 4), (sx + dx, sy + 4), 1)
+        if getattr(self, "broken", False):
+            _broken_mark(screen, self.x, self.y, self.w, self.h)
 
 
 def placement_pos(player, inside_house, inside_mine, cam_x, cam_y,
