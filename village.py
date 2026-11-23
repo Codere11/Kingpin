@@ -1130,7 +1130,7 @@ class NPC:
     def _walk_toward(self, tx: float, ty: float, speed: float, dt: float) -> None:
         dx, dy = tx - self.x, ty - self.y
         d = math.hypot(dx, dy) or 1.0
-        step = min(d, speed * dt)
+        step = min(d, speed * dt * mood.move_mult(self))
         self.x += dx / d * step
         self.y += dy / d * step
         if d > 0.5:
@@ -1622,7 +1622,7 @@ class NPC:
         if self.carry.get(leaf, 0) >= 10:
             if self._wp_go(bench, dt, 22.0):
                 return
-            self.produce_acc += dt
+            self.produce_acc += dt * mood.work_mult(self)
             if self.produce_acc >= ARTISAN_BATCH_SECONDS:
                 self.produce_acc = 0.0
                 self._snd("bench", min_gap=0.8)
@@ -1886,7 +1886,8 @@ class NPC:
         # 3. Work the bench.
         if self._wp_go(hut, dt, 24.0):
             return
-        self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
+        self.produce_acc = (getattr(self, "produce_acc", 0.0)
+                            + dt * mood.work_mult(self))
         if self.produce_acc >= doctor.MEDICINE_SECONDS:
             self.produce_acc = 0.0
             for item, need in doctor.RECIPE.items():
@@ -1962,7 +1963,8 @@ class NPC:
         # walk to the forge and work
         if self._wp_go(forge, dt, 24.0):
             return
-        self.produce_acc = getattr(self, "produce_acc", 0.0) + dt
+        self.produce_acc = (getattr(self, "produce_acc", 0.0)
+                            + dt * mood.work_mult(self))
         if self.produce_acc >= product["seconds"]:
             self.produce_acc = 0.0
             self._snd("bench", min_gap=0.8)
@@ -2835,10 +2837,11 @@ class NPC:
                      speed_scale: float = 1.0) -> None:
         ux, uy = steering.steer(self, tx, ty, getattr(self, "_rects", ()),
                                 getattr(self, "_fences", ()))
-        self.x += ux * self.speed * speed_scale * dt
-        self.y += uy * self.speed * speed_scale * dt
+        _scale = speed_scale * mood.move_mult(self)
+        self.x += ux * self.speed * _scale * dt
+        self.y += uy * self.speed * _scale * dt
         self.facing = (ux, uy)
-        self.skills.gain_movement(self.speed * speed_scale * dt)
+        self.skills.gain_movement(self.speed * _scale * dt)
 
     def _step_toward_excl(self, tx: float, ty: float, dt: float,
                           excl=None, speed_scale: float = 1.0) -> None:
@@ -2853,8 +2856,9 @@ class NPC:
             rects = [r for r in rects
                      if not any(r.colliderect(e) for e in excl if e is not None)]
         ux, uy = steering.steer(self, tx, ty, rects, getattr(self, "_fences", ()))
-        self.x += ux * self.speed * speed_scale * dt
-        self.y += uy * self.speed * speed_scale * dt
+        _scale = speed_scale * mood.move_mult(self)
+        self.x += ux * self.speed * _scale * dt
+        self.y += uy * self.speed * _scale * dt
         self.facing = (ux, uy)
         self.skills.gain_movement(self.speed * speed_scale * dt)
 
@@ -3182,7 +3186,7 @@ class NPC:
         # field and learns the work faster than an intuitive one.  It is a
         # multiplier, not a new rule, and an untyped/legacy farmer is neutral.
         try:
-            _work_mult = persona.work_mult(self, "farmer")
+            _work_mult = persona.work_mult(self, "farmer") * mood.work_mult(self)
             _gain_mult = persona.gain_mult_for_job(self, "farmer", "farming")
         except Exception:
             _work_mult = _gain_mult = 1.0

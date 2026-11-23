@@ -393,6 +393,19 @@ def cycle_mood(g):
     _toast(g, "%s mood %.0f" % (getattr(n, "name", "?"), got))
 
 
+def force_break(g):
+    """F9: cycle the selected or clicked person through sad/annoyed/normal."""
+    ensure(g)
+    subjects = getattr(g, "_npc_subjects", [])
+    if not subjects and getattr(g, "persona", None) is None:
+        return
+    n = getattr(g, "persona", None)
+    if n is None or not getattr(n, "native", False):
+        n = subjects[int(getattr(g, "_npc_sel", 0)) % len(subjects)]
+    state = mood.force_minor(n, float(getattr(g, "now", 0.0)))
+    _toast(g, "%s: %s" % (getattr(n, "name", "?"), state))
+
+
 def give_medicine(g):
     """Test-only administration: the first medicine unlocks the record."""
     ensure(g)
@@ -436,7 +449,7 @@ def draw(g):
         n = subjects[sel % len(subjects)] if subjects else None
         lines = [
             ("NPC LAB  TEST ONLY", PANEL_HOT),
-            ("F5 hide  F6 reset  F7 next  F8 mood  F10 medicine", PANEL_DIM),
+            ("F5 hide  F6 reset  F7 next  F8 mood  F9 break  F10 medicine", PANEL_DIM),
         ]
         if n is None:
             lines.append(("no lab: press F6", PANEL_TEXT))

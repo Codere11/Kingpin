@@ -676,7 +676,7 @@ Do not start the next phase before that.
 
 > **Status: implemented as Phase 0-lite.**  The lab currently has eight subjects
 > (ordinary names; their types are private), plus a sensing and an intuitive
-> farmer.  F5 hide, F6 reset, F7 next, F8 mood, F10 give one medicine.  The overlay
+> farmer.  F5 hide, F6 reset, F7 next, F8 mood, F9 break, F10 medicine.  The overlay
 > hides MBTI/traits/mood until the selected (or clicked) person has a medical
 > record; F9, the Medicine Hut, breakables and the full 16-subject set stay for
 > the later phases.  `npclab.py`, `persona.py`, `mood.py` and `doctor.py` exist;
@@ -795,6 +795,13 @@ Pass condition: every requested mood source is visible, stackable where
 specified, and expires when it should.
 
 ## Phase 4 — Minor breaks
+
+> **Status: implemented (first pass).**  Sad and annoyed states, type-adjusted
+> thresholds, natural 20-second break rolls, recovery/cooldown, and their
+> movement/work multipliers are live.  Annoyed people insult nearby
+> low-opinion neighbours.  F9 in the lab cycles the selected/clicked subject
+> through sad → annoyed → normal so the states can be inspected immediately.
+> Major breaks are still Phase 5.
 
 Build:
 

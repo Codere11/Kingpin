@@ -235,7 +235,8 @@ def run(g):
                 pass
             elif (g.test_mode and event.type == pygame.KEYDOWN
                   and event.key in (pygame.K_F5, pygame.K_F6,
-                                    pygame.K_F7, pygame.K_F8, pygame.K_F10)):
+                                    pygame.K_F7, pygame.K_F8, pygame.K_F9,
+                                    pygame.K_F10)):
                 # THE NPC LAB (NPC.md Phase 0).  Test mode only; the normal
                 # game never imports or builds it.
                 try:
@@ -248,6 +249,8 @@ def run(g):
                         _npclab.next_subject(g)
                     elif event.key == pygame.K_F8:
                         _npclab.cycle_mood(g)
+                    elif event.key == pygame.K_F9:
+                        _npclab.force_break(g)
                     elif event.key == pygame.K_F10:
                         _npclab.give_medicine(g)
                 except Exception as _lab_exc:

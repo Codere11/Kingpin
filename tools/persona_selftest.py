@@ -134,6 +134,22 @@ def check_green_thumb_learning():
     return True
 
 
+def check_minor_breaks():
+    p = P("INTJ")
+    mood.set_break(p, "sad", 100.0, forced=True)
+    assert mood.move_mult(p) == 0.65
+    assert mood.work_mult(p) == 0.50
+    assert mood.force_minor(p, 110.0) == "annoyed"
+    assert mood.move_mult(p) == 1.0
+    assert mood.work_mult(p) == 0.75
+    assert mood.force_minor(p, 120.0) == "normal"
+    assert mood.move_mult(p) == 1.0 and mood.work_mult(p) == 1.0
+    f = P("INFJ")
+    t = P("INTJ")
+    assert mood.minor_threshold(f) > mood.minor_threshold(t)
+    return True
+
+
 def check_mood():
     p = P()
     mood.ensure(p)
@@ -170,6 +186,7 @@ def main():
     check_green_thumb()
     check_traits()
     check_green_thumb_learning()
+    check_minor_breaks()
     check_mood()
     print("PERSONA SELFTEST: PASS")
 
