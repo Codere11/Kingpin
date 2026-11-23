@@ -44,6 +44,26 @@ def main():
     camp.people = [n]
     camp.farmers = [n]
 
+    # Simulate the real F9 cycle with time between presses: berserk picks the
+    # player as its target, then the next press switches to spree.  The old
+    # code kept that player target and the spree followed the player.  The
+    # state change must clear it.
+    import mood
+    g.player.x, g.player.y = 300.0, 100.0
+    g.player.max_health = 100
+    g.player.health = 100
+    g.player.radius = 10
+    g.player.take_damage = lambda *a, **k: None
+    n.break_state = "berserk"
+    n.break_until = 1000.0
+    n._break_target = None
+    n._break_action(0.2, None, 0.0)
+    assert getattr(n, "_break_target", None) is g.player
+    mood.set_break(n, "breaking_spree", 1.0, seconds=1000.0)
+    assert getattr(n, "_break_target", None) is None
+    n._break_action(0.2, None, 1.2)
+    assert hasattr(getattr(n, "_break_target", None), "condition"), \
+        "spree kept a person target instead of a breakable"
     n.break_state = "breaking_spree"
     n.break_until = 1000.0
     n._spree_broken = 0

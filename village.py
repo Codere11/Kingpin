@@ -4244,6 +4244,11 @@ class NPC:
             mood.clear_break(self, now)
             return
         target = getattr(self, "_break_target", None)
+        # A SPREE TARGET MUST BE A BREAKABLE, NOT A PERSON.  Berserk leaves
+        # a person in _break_target; without this guard the next spree would
+        # keep chasing that person (usually the player) instead of the chest.
+        if target is not None and not hasattr(target, "condition"):
+            target = None
         if target is None or getattr(target, "broken", False):
             # In the test lab, a selected person can be anywhere in the
             # fixture; still let the spree find its target.  Real settlements

@@ -135,6 +135,7 @@ def set_break(npc, state: str, now: float, seconds: float = MINOR_SECONDS,
     npc.break_until = float(now) + float(seconds)
     npc.break_cooldown = 0.0
     npc._spree_broken = 0
+    npc._break_target = None
     npc._break_scan_t = 0.0
     npc._break_action_t = 0.0
     if forced:
@@ -154,6 +155,7 @@ def clear_break(npc, now: float) -> None:
     npc.break_state = "normal"
     npc.break_until = 0.0
     npc.break_cooldown = float(now) + BREAK_COOLDOWN
+    npc._break_target = None
 
 
 def force_minor(npc, now: float, state=None) -> str:
