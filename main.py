@@ -1061,9 +1061,36 @@ def main() -> None:
             ship=getattr(g, "ship_npc", None), open_ship=open_market,
             body_open=g.body_open, body_panel=g.body_panel)
         _ok, g.body_open, g.body_panel = combat_actions.click_a_man(_g, at)
-        # E is a CONVERSATION started by the player -- not every click on a
-        # trader, a corpse or a chest.  A dialogue panel is the distinction.
-        if _ok and getattr(g.dialogue_panel, "open_", False):
+        # THE NPC CARD IS THE CONVERSATION SURFACE.  A click on a person
+        # opens their card; that is what counts as starting the conversation.
+        _card_target = None
+        if _ok:
+            if at is not None:
+                _mx, _my = at
+            else:
+                _mx, _my = pygame.mouse.get_pos()
+            _wx = g.cam_x + _mx / ZOOM
+            _wy = g.cam_y + _my / ZOOM
+            _bd = 48.0
+            _pool = list(getattr(g, "_native_people", ()) or ())
+            try:
+                _pool += list(village_mod.TRAVELLERS)
+            except Exception:
+                pass
+            try:
+                if g._TRUTH[0] is not None:
+                    _pool.append(g._TRUTH[0])
+            except Exception:
+                pass
+            for _n in _pool:
+                if not getattr(_n, "alive", True):
+                    continue
+                _d = math.hypot(_n.x - _wx, _n.y - _wy)
+                if _d < _bd:
+                    _card_target, _bd = _n, _d
+        if _card_target is not None:
+            g.persona = _card_target
+            g.npc_card_open = True
             try:
                 import player_mind as _pm
                 _pm.observe(g, "initiated")
@@ -1091,6 +1118,11 @@ def main() -> None:
                 g.persona = _best
                 g.npc_card_open = True
                 pygame.mouse.set_visible(True)
+                try:
+                    import player_mind as _pm
+                    _pm.observe(g, "initiated")
+                except Exception:
+                    pass
                 _ok = True
         return _ok
 
