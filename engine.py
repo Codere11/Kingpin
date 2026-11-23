@@ -1114,6 +1114,51 @@ def run(g):
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     g._held = g.inventory.selected_stack()
                     g._held_id = g._held.defn.id if g._held else None
+                    # LAB / CONQUERED CARD CLICK -- FIRST, BEFORE EVERYTHING.
+                    # Nothing (bedroll, buildable, body, weapon, ship) gets a
+                    # chance to eat this click.
+                    try:
+                        _wx = g.cam_x + event.pos[0] / g.zoom
+                        _wy = g.cam_y + event.pos[1] / g.zoom
+                        _pool = list(getattr(g, "_native_people", ()) or ())
+                        _pool += [x for x in (getattr(g, "_observe_npcs", ()) or ())
+                                  if x not in _pool]
+                        for _camp in (getattr(g, "native_settlements", {}) or {}).values():
+                            if (getattr(_camp, "lab", False)
+                                    or getattr(_camp, "conquered", False)):
+                                for _attr in ("farmers", "warriors", "handlers",
+                                              "workers", "loggers", "artisans",
+                                              "researchers", "doctors", "miners",
+                                              "smiths", "weavers", "spicemen",
+                                              "gunsmiths", "unemployed", "people"):
+                                    _seq = getattr(_camp, _attr, None)
+                                    if isinstance(_seq, list):
+                                        _pool += [x for x in _seq if x not in _pool]
+                        _best, _bd = None, 80.0
+                        for _n in _pool:
+                            if not getattr(_n, "alive", True):
+                                continue
+                            _camp = getattr(_n, "native_camp", None)
+                            _lab = (getattr(_camp, "lab", False)
+                                    or str(getattr(_n, "id", "")).startswith("lab_"))
+                            if not (_lab or getattr(_n, "conquered", False)):
+                                continue
+                            _d = math.hypot(_n.x - _wx, _n.y - _wy)
+                            if _d < _bd:
+                                _best, _bd = _n, _d
+                        if _best is not None:
+                            g.persona = _best
+                            g.npc_card_open = True
+                            pygame.mouse.set_visible(True)
+                            try:
+                                import player_mind as _pm
+                                _pm.observe(g, "initiated")
+                            except Exception:
+                                pass
+                            g.consumed = True
+                            break
+                    except Exception:
+                        pass
                     # THE SHIP: click it and the market opens, whatever is in
                     # hand -- it must NOT be gated behind the weapon check.
                     try:
@@ -1190,40 +1235,6 @@ def run(g):
                                     break
                     except Exception:
                         pass
-                    # CLICKABLE PEOPLE: the test lab and conquered people.
-                    # A wild, unconquered native is NOT clickable here.  This
-                    # runs before the weapon branch, so a conquered worker can
-                    # be inspected even with an axe in hand.
-                    if g.test_mode or any(
-                            getattr(_n, "conquered", False)
-                            for _n in getattr(g, "_native_people", ())):
-                        try:
-                            _wx = g.cam_x + event.pos[0] / g.zoom
-                            _wy = g.cam_y + event.pos[1] / g.zoom
-                            _best, _bd = None, 64.0
-                            _pool = list(getattr(g, "_native_people", ()) or ())
-                            _pool += [x for x in (getattr(g, "_observe_npcs", ()) or ())
-                                      if x not in _pool]
-                            for _n in _pool:
-                                if not getattr(_n, "alive", True):
-                                    continue
-                                _camp = getattr(_n, "native_camp", None)
-                                if not (g.test_mode
-                                        or getattr(_n, "conquered", False)
-                                        or getattr(_camp, "lab", False)):
-                                    continue
-                                _d = math.hypot(_n.x - _wx, _n.y - _wy)
-                                if _d < _bd:
-                                    _best, _bd = _n, _d
-                            if _best is not None:
-                                g.persona = _best
-                                g.npc_card_open = True
-                                pygame.mouse.set_visible(True)
-                                import player_mind as _pm
-                                _pm.observe(g, "initiated")
-                                break
-                        except Exception:
-                            pass
                     # A BEDROLL: click it and sleep through the night.
                     try:
                         import block as _blockb
