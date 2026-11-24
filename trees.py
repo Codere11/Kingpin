@@ -452,7 +452,21 @@ class Tree:
             image, sx, sy = self._atlas.get(self.species, self.size_class,
                                             self.variant, self.flip, self.snowy,
                                             self.canopy_r)
-        screen.blit(image, (self.x - cam_x - sx, self.y - cam_y - sy))
+        bx = self.x - cam_x
+        by = self.y - cam_y
+        angle = wind.tree_angle(self.x, self.y)
+        if abs(angle) > 0.05:
+            rot = pygame.transform.rotate(image, angle)
+            cx, cy = image.get_width() / 2.0, image.get_height() / 2.0
+            vx, vy = sx - cx, sy - cy
+            rad = math.radians(angle)
+            rx = vx * math.cos(rad) - vy * math.sin(rad)
+            ry = vx * math.sin(rad) + vy * math.cos(rad)
+            ax = rot.get_width() / 2.0 + rx
+            ay = rot.get_height() / 2.0 + ry
+            screen.blit(rot, (bx - ax, by - ay))
+        else:
+            screen.blit(image, (bx - sx, by - sy))
         if not self.felled:
             wind.draw_leaves(screen, self.x, self.y, cam_x, cam_y,
                              self.canopy_r)

@@ -62,22 +62,35 @@ def sway(x, y, height=1.0):
             + math.sin(_DIR + math.pi / 2.0) * side * amount * 0.2)
 
 
+def tree_angle(x, y):
+    """Small canopy lean, in pygame degrees, around the trunk base."""
+    s = local_strength(x, y)
+    if s <= 0.0:
+        return 0.0
+    phase = _TIME * 2.2 + x * 0.012 + y * 0.009
+    lean = (math.sin(phase) + 0.35 * math.sin(phase * 2.1)) * (1.5 * s * _STRENGTH)
+    return math.degrees(_DIR) * 0.10 + lean
+
+
 def draw_leaves(screen, x, y, cam_x, cam_y, radius=40.0):
-    """A few drifting leaf flecks over a tree canopy."""
+    """Falling leaf flecks below a swaying canopy."""
     s = local_strength(x, y)
     if s <= 0.0:
         return
     sx, sy = x - cam_x, y - cam_y
-    phase = _TIME * 2.1 + x * 0.01 + y * 0.013
     dx, dy = sway(x, y, 1.0)
-    for i in range(5):
-        a = phase + i * 1.7
-        off = math.sin(a) * radius * 0.35
-        bx = sx + math.cos(_DIR + math.pi / 2.0) * off + dx * 1.5
-        by = sy - radius * (0.55 + 0.25 * math.sin(a * 1.3)) + dy * 0.7
-        col = (104, 154, 82) if i % 2 else (82, 136, 70)
-        pygame.draw.ellipse(screen, col,
-                            (int(bx - 3), int(by - 2), 6, 4))
+    for i in range(7):
+        phase = _TIME * 0.9 + i * 0.73 + x * 0.004 + y * 0.003
+        fall = (phase * 0.55 + i * 0.17) % 1.0
+        side = math.sin(phase * 1.7 + i) * radius * 0.48
+        bx = (sx + side + dx * 1.8
+              + math.cos(_DIR) * fall * (18.0 + i * 2.0))
+        by = (sy - radius * 0.72 + fall * radius * 1.35
+              + dy * 0.5 + math.sin(phase) * 4.0)
+        col = (110, 164, 88) if i % 3 else (80, 136, 68)
+        pygame.draw.ellipse(screen, col, (int(bx - 3), int(by - 2), 6, 4))
+        pygame.draw.line(screen, (62, 106, 54),
+                         (int(bx - 3), int(by)), (int(bx + 3), int(by + 1)), 1)
 
 
 def draw(g, screen):
