@@ -78,6 +78,23 @@ def _trunk_factor(variant: int) -> float:
     return 3.0 + float((int(variant) * 7) % 9) / 4.0
 
 
+def _trunk_shape(cx, ay, top_y, base_w, top_w, rng, radius):
+    """A slightly leaning, gently wavy trunk instead of a straight plank."""
+    n = 7
+    bend = rng.uniform(-0.055, 0.055) * radius
+    wiggle = rng.uniform(0.0, 0.014) * radius
+    phase = rng.uniform(0.0, 2.0 * math.pi)
+    left, right = [], []
+    for i in range(n + 1):
+        t = i / float(n)
+        y = ay + (top_y - ay) * t
+        w = base_w * (1.0 - t) + top_w * t
+        off = bend * math.sin(math.pi * t) + wiggle * math.sin(math.pi * 3.0 * t + phase)
+        left.append((cx + off - w / 2.0, y))
+        right.append((cx + off + w / 2.0, y))
+    return left + list(reversed(right))
+
+
 def _hash(cx, cy, seed):
     h = (cx * 73856093) ^ (cy * 19349663) ^ (seed * 2654435761)
     h &= 0xFFFFFFFF
@@ -355,8 +372,8 @@ class TreeSprites:
         pygame.draw.ellipse(surf, (12, 24, 12, 70),
                             (cx - shadow_w / 2, ay - shadow_h / 2 + 5, shadow_w, shadow_h))
 
-        trunk = [(cx - base_w / 2, ay + 3), (cx + base_w / 2, ay + 3),
-                 (cx + trunk_w * 0.45, cy + 4), (cx - trunk_w * 0.45, cy + 4)]
+        trunk = _trunk_shape(cx, ay + 3, cy + 4, base_w, trunk_w * 0.90,
+                             rng, radius)
         pygame.draw.polygon(surf, (82, 58, 40), trunk)
         pygame.draw.polygon(surf, (46, 30, 18), trunk, 2)
         pygame.draw.polygon(surf, (72, 50, 32),
@@ -404,9 +421,8 @@ class TreeSprites:
         base = CONIFER[variant % len(CONIFER)]
         trunk_w = max(2, int(radius * 0.22 / _trunk_factor(variant)))
         pygame.draw.polygon(surf, (78, 54, 38),
-                            [(cx - trunk_w / 2, ay + 3), (cx + trunk_w / 2, ay + 3),
-                             (cx + trunk_w * 0.32, ay - trunk_h * 0.6),
-                             (cx - trunk_w * 0.32, ay - trunk_h * 0.6)])
+                            _trunk_shape(cx, ay + 3, ay - trunk_h * 0.6,
+                                         trunk_w, trunk_w * 0.64, rng, radius))
         canopy = pygame.Surface((w, h), pygame.SRCALPHA)
         for i in range(4):                      # stacked needle skirts
             f = i / 3.0
@@ -456,8 +472,8 @@ class TreeSprites:
                             (cx - radius * 0.5 / thin, ay - radius * 0.16 / thin,
                              radius / thin, radius * 0.34 / thin))
         tw = max(2, int(radius * 0.18 / thin))
-        trunk = [(cx - tw * 1.4, ay + 3), (cx + tw * 1.4, ay + 3),
-                 (cx + tw * 0.55, ay - trunk_h), (cx - tw * 0.55, ay - trunk_h)]
+        trunk = _trunk_shape(cx, ay + 3, ay - trunk_h,
+                             tw * 2.8, tw * 1.10, rng, radius)
         pygame.draw.polygon(surf, base, trunk)
         pygame.draw.polygon(surf, _darken(base, 34), trunk, 2)
         for _ in range(rng.randint(5, 8)):      # skeletal branches
@@ -491,8 +507,8 @@ class TreeSprites:
         wood = (92, 68, 46)
         tw = max(2, int(radius * 0.17 / thin))
         pygame.draw.polygon(surf, wood,
-                            [(cx - tw * 1.3, ay + 3), (cx + tw * 1.3, ay + 3),
-                             (cx + tw * 0.5, ay - trunk_h), (cx - tw * 0.5, ay - trunk_h)])
+                            _trunk_shape(cx, ay + 3, ay - trunk_h,
+                                         tw * 2.6, tw * 1.0, rng, radius))
         cy0 = ay - trunk_h
         for side in (-1.0, 1.0):                # two spreading limbs
             pygame.draw.line(surf, wood, (cx, cy0 + radius * 0.18),
