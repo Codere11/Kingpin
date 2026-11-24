@@ -1382,6 +1382,13 @@ class NPC:
         if self.carry.get(food_item, 0) <= 0:
             self.carry.pop(food_item, None)
         fed.add(id(p))
+        try:
+            import relationships as _rel
+            _rel.observe(p, self, "shared_food",
+                         float(getattr(camp.g, "now", 0.0)), camp.g,
+                         detail="shared %s" % food_item)
+        except Exception:
+            pass
         self._did_work()
         return True
 

@@ -103,6 +103,7 @@ done
     --hidden-import incidents \
     --hidden-import relationships \
     --hidden-import playlog \
+    --hidden-import social_life \
     "${DATA_ARGS[@]}" \
     main.py 2>&1 | tail -1
 
