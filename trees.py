@@ -406,14 +406,23 @@ class TreeSprites:
                              (cx + trunk_w * 0.32, ay - trunk_h * 0.6),
                              (cx - trunk_w * 0.32, ay - trunk_h * 0.6)])
         canopy = pygame.Surface((w, h), pygame.SRCALPHA)
-        for i in range(4):                      # stacked skirts
+        for i in range(4):                      # stacked needle skirts
             f = i / 3.0
             lw = radius * (1.0 - 0.60 * f)
             ly = ay - trunk_h * (0.16 + 0.72 * f)
             lh = radius * (0.85 - 0.26 * f)
-            pts = [(cx - lw, ly), (cx + lw, ly), (cx, ly - lh)]
-            pygame.draw.polygon(canopy, _shade(base, 0.30 - 0.62 * f), pts)
-            pygame.draw.polygon(canopy, _darken(base, 34), pts, 2)
+            # A sparse row of needle clusters follows each skirt instead of a
+            # filled triangle; the silhouette stays conical but reads as leaves.
+            n = max(12, int(28 * radius / 72.0 * (1.0 - f * 0.35)))
+            for j in range(n):
+                u = (j + rng.uniform(-0.35, 0.35)) / max(1, n)
+                bx = cx + (u * 2.0 - 1.0) * lw
+                by = ly - (1.0 - abs(u * 2.0 - 1.0)) * lh + rng.uniform(-3.0, 3.0)
+                TreeSprites._leaf_cluster(canopy, bx, by,
+                                           radius * rng.uniform(0.035, 0.060),
+                                           rng, base, 0.25 - f * 0.45)
+            pygame.draw.line(canopy, _darken(base, 34),
+                             (cx - lw, ly), (cx + lw, ly), 1)
         pygame.draw.circle(canopy, _lighten(base, 26), (int(cx), int(ay - trunk_h)), 3)
         if snowy:                               # snow settled on each skirt
             for i in range(4):
@@ -486,16 +495,21 @@ class TreeSprites:
         canopy = pygame.Surface((w, h), pygame.SRCALPHA)
         cw, ch = radius * 1.9, radius * 0.72
         top = cy0 - radius * 0.5
-        pygame.draw.ellipse(canopy, _rgba(_darken(base, 20), CANOPY_ALPHA),
-                            (cx - cw / 2, top, cw, ch))
-        for _ in range(rng.randint(12, 18)):
-            bx = cx + rng.uniform(-cw / 2, cw / 2) * 0.9
-            by = top + ch / 2 + rng.uniform(-ch / 2, ch / 2) * 0.8
-            r = rng.uniform(radius * 0.22, radius * 0.36)
-            pygame.draw.circle(canopy, _rgba(_shade(base, rng.uniform(-0.3, 0.5)),
-                                             CANOPY_ALPHA), (int(bx), int(by)), int(r))
-        pygame.draw.ellipse(canopy, _rgba(_darken(base, 40), min(255, CANOPY_ALPHA + 20)),
-                            (cx - cw / 2, top, cw, ch), 2)
+        # Savannah/acacia crowns are a flat umbrella of small leaf clusters --
+        # not one solid green ellipse.  A few bare outer twigs break the edge.
+        for _ in range(int(55 + radius * 0.75)):
+            bx = cx + rng.uniform(-cw / 2, cw / 2) * rng.uniform(0.75, 1.0)
+            by = top + ch / 2 + rng.uniform(-ch / 2, ch / 2) * rng.uniform(0.6, 1.0)
+            size = radius * rng.uniform(0.035, 0.075)
+            light = 0.35 - (bx - cx) / (2.8 * radius) - (by - top) / (3.0 * ch)
+            TreeSprites._leaf_cluster(canopy, bx, by, size, rng, base, light)
+        for _ in range(5 + variant % 4):
+            ang = rng.uniform(math.pi * 1.02, math.pi * 1.98)
+            bx = cx + math.cos(ang) * cw * 0.48
+            by = top + ch / 2 + math.sin(ang) * ch * 0.42
+            ex = bx + math.cos(ang) * radius * rng.uniform(0.12, 0.28)
+            ey = by + math.sin(ang) * radius * rng.uniform(0.08, 0.20)
+            pygame.draw.line(canopy, (72, 54, 32), (bx, by), (ex, ey), 2)
         combined = surf.copy()
         combined.blit(canopy, (0, 0))
         return combined, surf, canopy, ax, ay
