@@ -73,6 +73,11 @@ def _rgba(color, alpha):
     return (color[0], color[1], color[2], alpha)
 
 
+def _trunk_factor(variant: int) -> float:
+    """Deterministic 3x-5x thinning, varied by tree variant."""
+    return 3.0 + float((int(variant) * 7) % 9) / 4.0
+
+
 def _hash(cx, cy, seed):
     h = (cx * 73856093) ^ (cy * 19349663) ^ (seed * 2654435761)
     h &= 0xFFFFFFFF
@@ -335,8 +340,9 @@ class TreeSprites:
     def _broadleaf(self, radius, rng, variant, palette, height, snowy=False,
                    species="broadleaf"):
         trunk_h = radius * 1.5 * height
-        trunk_w = max(13, int(radius * 0.26))
-        base_w = trunk_w * 1.7
+        thin = _trunk_factor(variant)
+        trunk_w = max(3, int(radius * 0.26 / thin))
+        base_w = max(4, int(trunk_w * 1.45))
         pad = 10
         w = radius * 2 + pad * 2
         h = int(trunk_h + radius) + pad * 2
@@ -345,7 +351,7 @@ class TreeSprites:
         cx, cy = ax, ay - trunk_h
 
         surf = pygame.Surface((w, h), pygame.SRCALPHA)
-        shadow_w, shadow_h = radius * 1.4, radius * 0.52
+        shadow_w, shadow_h = radius * 1.4 / thin, radius * 0.52 / thin
         pygame.draw.ellipse(surf, (12, 24, 12, 70),
                             (cx - shadow_w / 2, ay - shadow_h / 2 + 5, shadow_w, shadow_h))
 
@@ -391,10 +397,12 @@ class TreeSprites:
         ay = h - pad
         cx = ax
         surf = pygame.Surface((w, h), pygame.SRCALPHA)
+        thin = _trunk_factor(variant)
         pygame.draw.ellipse(surf, (12, 24, 12, 70),
-                            (cx - radius * 0.6, ay - radius * 0.2, radius * 1.2, radius * 0.4))
+                            (cx - radius * 0.6 / thin, ay - radius * 0.2 / thin,
+                             radius * 1.2 / thin, radius * 0.4 / thin))
         base = CONIFER[variant % len(CONIFER)]
-        trunk_w = max(9, int(radius * 0.22))
+        trunk_w = max(2, int(radius * 0.22 / _trunk_factor(variant)))
         pygame.draw.polygon(surf, (78, 54, 38),
                             [(cx - trunk_w / 2, ay + 3), (cx + trunk_w / 2, ay + 3),
                              (cx + trunk_w * 0.32, ay - trunk_h * 0.6),
@@ -443,9 +451,11 @@ class TreeSprites:
         cx = ax
         surf = pygame.Surface((w, h), pygame.SRCALPHA)
         base = BARE[variant % len(BARE)]
+        thin = _trunk_factor(variant)
         pygame.draw.ellipse(surf, (12, 24, 12, 70),
-                            (cx - radius * 0.5, ay - radius * 0.16, radius, radius * 0.34))
-        tw = max(7, int(radius * 0.18))
+                            (cx - radius * 0.5 / thin, ay - radius * 0.16 / thin,
+                             radius / thin, radius * 0.34 / thin))
+        tw = max(2, int(radius * 0.18 / thin))
         trunk = [(cx - tw * 1.4, ay + 3), (cx + tw * 1.4, ay + 3),
                  (cx + tw * 0.55, ay - trunk_h), (cx - tw * 0.55, ay - trunk_h)]
         pygame.draw.polygon(surf, base, trunk)
@@ -474,10 +484,12 @@ class TreeSprites:
         cx = ax
         surf = pygame.Surface((w, h), pygame.SRCALPHA)
         base = ACACIA[variant % len(ACACIA)]
+        thin = _trunk_factor(variant)
         pygame.draw.ellipse(surf, (12, 24, 12, 70),
-                            (cx - radius * 0.8, ay - radius * 0.18, radius * 1.6, radius * 0.36))
+                            (cx - radius * 0.8 / thin, ay - radius * 0.18 / thin,
+                             radius * 1.6 / thin, radius * 0.36 / thin))
         wood = (92, 68, 46)
-        tw = max(7, int(radius * 0.17))
+        tw = max(2, int(radius * 0.17 / thin))
         pygame.draw.polygon(surf, wood,
                             [(cx - tw * 1.3, ay + 3), (cx + tw * 1.3, ay + 3),
                              (cx + tw * 0.5, ay - trunk_h), (cx - tw * 0.5, ay - trunk_h)])
@@ -555,7 +567,7 @@ class Tree:
         self.felled_at = 0.0
         self.hit_until = 0.0
 
-        trunk_w = max(10, int(radius * 0.24))
+        trunk_w = max(3, int(radius * 0.24 / _trunk_factor(variant)))
         # Only the base of the trunk is solid, so you can walk under the leaves.
         self.trunk_rect = pygame.Rect(x - trunk_w / 2, y - trunk_w * 0.6,
                                       trunk_w, trunk_w * 1.5)
