@@ -106,6 +106,7 @@ class Plot:
     kind: str                       # "dirt" | "fertile" | "plant"
     planted_at: float | None = None
     grow: float | None = None       # seconds to ripen, set by the planter's skill
+    blight: bool = False         # this plant is diseased and will yield nothing
 
 
 class World:

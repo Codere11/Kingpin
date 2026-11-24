@@ -102,6 +102,16 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
     if _elapsed < _grow:
         toast("Not ready yet")
         return False
+    if getattr(plot, "blight", False):
+        plot.kind = "grass"
+        plot.planted_at = None
+        plot.blight = False
+        if tx is not None and ty is not None:
+            ground = getattr(world, "ground", None)
+            if ground is not None:
+                ground.invalidate_tile(tx, ty)
+        toast("Blighted crop — nothing worth harvesting")
+        return False
     kind = plot.kind
     seed = crop.CROP_SEED.get(kind)
     _scale = crop.yield_scale(skill)

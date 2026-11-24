@@ -35,12 +35,12 @@ def draw_exterior(g, cx, cy, show_names=False, target=None):
         if not view.collidepoint(_c.x, _c.y):
             continue
         items.append((_c.y, lambda c=_c: c.draw(target, cx, cy, g.now)))
-    for (x, y, planted_at, kind, biome) in g.crop.visible_plants(g.world, cx, cy,
-                                                               g.vw, g.vh):
+    for (x, y, planted_at, kind, biome, blight) in g.crop.visible_plants(
+            g.world, cx, cy, g.vw, g.vh):
         if not view.collidepoint(x, y):
             continue
-        items.append((y, lambda x=x, y=y, p=planted_at, k=kind, b=biome:
-                      g.crop.draw_crop(target, x, y, k, g.now - p, cx, cy, b)))
+        items.append((y, lambda x=x, y=y, p=planted_at, k=kind, b=biome, bl=blight:
+                      g.crop.draw_crop(target, x, y, k, g.now - p, cx, cy, b, bl)))
     _stump = g.trees.stump()
     for (x, y, kind, stage) in g.wildcrop.visible(g.world, world_villages,
                                                 cx, cy, g.vw, g.vh):

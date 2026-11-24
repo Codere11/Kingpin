@@ -173,15 +173,27 @@ def visible_plants(world: World, cam_x: float, cam_y: float,
                 import biomes
                 biome = biomes.biome_name(
                     float(world.temperature(x, y)), float(world.humidity(x, y)))
-            plants.append((x, y, plot.planted_at, plot.kind, biome))
+            plants.append((x, y, plot.planted_at, plot.kind, biome,
+                           bool(getattr(plot, "blight", False))))
     return plants
 
 
 def draw_crop(screen: pygame.Surface, x: float, y: float, kind: str,
-              elapsed: float, cam_x: float, cam_y: float, biome=None) -> None:
+              elapsed: float, cam_x: float, cam_y: float, biome=None,
+              blight: bool = False) -> None:
     fn = _DRAWERS.get(kind)
     if fn is not None:
         fn(screen, x, y, elapsed, cam_x, cam_y, biome)
+    if blight:
+        sx, sy = x - cam_x, y - cam_y
+        layer = pygame.Surface((32, 48), pygame.SRCALPHA)
+        for dx, dy, r in ((-6, -8, 5), (5, -15, 4), (-2, -23, 6),
+                          (8, -28, 3), (-7, -18, 3)):
+            pygame.draw.circle(layer, (150, 116, 38, 165),
+                               (16 + dx, 34 + dy), r)
+            pygame.draw.circle(layer, (92, 70, 30, 120),
+                               (16 + dx + 1, 34 + dy + 1), max(1, r - 2))
+        screen.blit(layer, (int(sx - 16), int(sy - 42)))
 
 
 # ---------------------------------------------------------------- drawing

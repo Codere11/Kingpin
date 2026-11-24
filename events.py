@@ -17,6 +17,7 @@ import random
 import pygame
 
 import creatures
+import village
 
 
 PACK_SIZE = 3
@@ -237,12 +238,22 @@ class RogueRaider:
         ang = rng.uniform(0.0, 2.0 * math.pi)
         x = float(camp.x) + math.cos(ang) * 850.0
         y = float(camp.y) + math.sin(ang) * 850.0
-        w = creatures.Soldier(x, y, "rogue", melee=True, color=(128, 62, 52))
-        w.name = "rogue warrior"
+        # A NATIVE WARRIOR, not a Soldier: same body, axe, reach and melee
+        # dance as the men who defend a settlement.  No rifle, no pennant.
+        w = village.NPC(x, y, rng.randint(1, 2 ** 31 - 1),
+                        name="rogue warrior", npc_id="rogue_event",
+                        role="Warrior")
+        w.native = True
+        w.native_role = "warrior"
+        w.job = "warrior"
+        w.weapon = "axe"
+        w.team = ("rogue", None)
+        w.native_camp = camp
+        w.home = (x, y)
+        w.speed = 72.0
+        w.base_speed = 72.0
         w.event_ai = True
         w.hostile = True
-        w.no_flag = True
-        w.team = ("rogue", None)
         w.aware = True
         w.aware_timer = 600.0
         w.view_range = 900.0
@@ -386,45 +397,73 @@ class RainEvent:
 
 
 class BlightEvent:
-    """A patch of crop disease with a visible sick patch for a minute."""
+    """Blight lives on the plants themselves and spreads to nearby crops."""
 
     def __init__(self, g, camp):
         self.g = g
         self.camp = camp
         self.age = 0.0
+        self.spread_t = 0.0
         self.done = False
-        self.mark = None
-        plots = list((getattr(camp, "farm_tiles", {}) or {}).values())
-        tiles = [t for group in plots for t in (group or ())]
+        self.tiles = []
+        groups = list((getattr(camp, "farm_tiles", {}) or {}).values())
+        tiles = [t for group in groups for t in (group or ())]
         if not tiles:
             self.done = True
             return
         tx, ty, _kind = random.choice(tiles)
-        self.mark = {"x": tx * 32.0 + 16.0, "y": ty * 32.0 + 16.0,
-                     "until": float(getattr(g, "now", 0.0)) + 75.0}
-        marks = getattr(g, "_blight_marks", None)
-        if marks is None:
-            marks = g._blight_marks = []
-        marks.append(self.mark)
-        try:
-            g.world.set_plot(int(tx), int(ty), "grass", None)
-            g.ground.invalidate_tile(int(tx), int(ty), immediate=True)
-        except Exception:
-            pass
+        self._infect(int(tx), int(ty))
         _record(g, "blight", camp=getattr(camp, "name", "camp"),
                 tx=int(tx), ty=int(ty))
-        _toast(g, "Blight has taken a crop in %s" % getattr(camp, "name", "the camp"))
+        _toast(g, "Blight has started in %s" % getattr(camp, "name", "the camp"))
+
+    def _infect(self, tx, ty):
+        try:
+            plot = self.g.world.plot_at(tx, ty)
+            if plot is None or getattr(plot, "planted_at", None) is None:
+                return False
+            if getattr(plot, "blight", False):
+                return False
+            plot.blight = True
+            self.tiles.append((tx, ty))
+            try:
+                self.g.ground.invalidate_tile(tx, ty, immediate=True)
+            except Exception:
+                pass
+            return True
+        except Exception:
+            return False
 
     def tick(self, dt):
         if self.done:
             return
         self.age += dt
-        if self.mark is not None:
-            marks = getattr(self.g, "_blight_marks", [])
-            if self.age >= 75.0 and self.mark in marks:
-                marks.remove(self.mark)
-            if self.age >= 75.0:
-                self.done = True
+        self.spread_t -= dt
+        if self.spread_t > 0.0:
+            return
+        self.spread_t = 12.0
+        # Find an uninfected crop within two tiles of an infected tile.
+        groups = list((getattr(self.camp, "farm_tiles", {}) or {}).values())
+        candidates = []
+        for group in groups:
+            for t in (group or ()):
+                try:
+                    tx, ty = int(t[0]), int(t[1])
+                except Exception:
+                    continue
+                if any(abs(tx - x) <= 2 and abs(ty - y) <= 2
+                       for x, y in self.tiles):
+                    plot = self.g.world.plot_at(tx, ty)
+                    if (plot is not None and getattr(plot, "planted_at", None) is not None
+                            and not getattr(plot, "blight", False)):
+                        candidates.append((tx, ty))
+        if candidates:
+            tx, ty = random.choice(candidates)
+            if self._infect(tx, ty):
+                _record(self.g, "blight_spread", camp=getattr(self.camp, "name", "camp"),
+                        tx=tx, ty=ty)
+        if self.age >= 150.0:
+            self.done = True
 
 
 class Director:
@@ -589,14 +628,6 @@ def cycle_test(g):
 
 def draw(g, screen):
     """Light rain streaks while a RainEvent is active."""
-    marks = list(getattr(g, "_blight_marks", ()) or ())
-    if marks:
-        for mark in marks:
-            sx = mark["x"] - g.cam_x
-            sy = mark["y"] - g.cam_y
-            pygame.draw.circle(screen, (116, 104, 44), (int(sx), int(sy)), 13)
-            pygame.draw.circle(screen, (176, 156, 54), (int(sx), int(sy)), 9)
-            pygame.draw.circle(screen, (216, 196, 64), (int(sx - 3), int(sy - 3)), 4)
     if float(getattr(g, "_rain_t", 0.0)) <= 0.0:
         return
     w, h = screen.get_size()
@@ -605,5 +636,5 @@ def draw(g, screen):
     for i in range(160):
         x = int((i * 97 + ticks * (0.8 + (i % 5) * 0.12)) % (w + 80)) - 40
         y = int((i * 61 + ticks * 2.2) % (h + 80)) - 40
-        pygame.draw.line(layer, (105, 165, 235, 155), (x, y), (x - 6, y + 24), 2)
+        pygame.draw.line(layer, (105, 165, 235, 155), (x, y), (x, y + 24), 2)
     screen.blit(layer, (0, 0))

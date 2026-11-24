@@ -3514,6 +3514,13 @@ class NPC:
         elif action == "harvest":
             plot = world.plot_at(ttx, tty)
             if plot is not None:
+                if getattr(plot, "blight", False):
+                    # Diseased plants yield nothing; the farmer clears the tile.
+                    world.set_plot(ttx, tty, "grass", None)
+                    self._field_task = None
+                    self._did_work()
+                    self._snd("harvest", min_gap=0.3)
+                    return True
                 if getattr(village, "is_hub", False):
                     _note("FIELD   %s harvests %s at %d,%d"
                           % (getattr(self, "name", "?"), plot.kind, ttx, tty))
