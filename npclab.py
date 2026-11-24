@@ -427,14 +427,22 @@ def cycle_mood(g):
     _toast(g, "%s mood %.0f" % (getattr(n, "name", "?"), got))
 
 
-def social_incident(g, kind="insult"):
-    """F12: selected or clicked person starts a social emergency."""
+def _selected_actor(g):
+    """F7 selection when no non-subject was explicitly clicked."""
     subjects = list(getattr(g, "_npc_subjects", ()) or ())
     n = getattr(g, "persona", None)
-    if n is None or not getattr(n, "native", False):
-        if not subjects:
-            return
+    if not subjects:
+        return n if getattr(n, "native", False) else None
+    if n is None or n in subjects:
         n = subjects[int(getattr(g, "_npc_sel", 0)) % len(subjects)]
+    return n
+
+
+def social_incident(g, kind="insult"):
+    """F12: selected or clicked person starts a social emergency."""
+    n = _selected_actor(g)
+    if n is None or not getattr(n, "native", False):
+        return
     target = incidents.nearest(g, n)
     if target is None:
         _toast(g, "Nobody close enough to %s" % kind)
@@ -471,12 +479,9 @@ def force_break(g):
                     except ValueError:
                         pass
             _ensure_breakables(g, camp)
-    subjects = list(getattr(g, "_npc_subjects", ()) or ())
-    n = getattr(g, "persona", None)
+    n = _selected_actor(g)
     if n is None or not getattr(n, "native", False):
-        if not subjects:
-            return
-        n = subjects[int(getattr(g, "_npc_sel", 0)) % len(subjects)]
+        return
     state = mood.force_break(n, float(getattr(g, "now", 0.0)))
     _toast(g, "%s: %s" % (getattr(n, "name", "?"), state))
 
@@ -484,14 +489,9 @@ def force_break(g):
 def give_medicine(g):
     """Test-only administration: the first medicine unlocks the record."""
     ensure(g)
-    subjects = getattr(g, "_npc_subjects", [])
-    if not subjects:
-        return
-    # If a card is open on a clicked native (a warrior, for example), treat
-    # that person; otherwise treat the F7 selection.
-    n = getattr(g, "persona", None)
+    n = _selected_actor(g)
     if n is None or not getattr(n, "native", False):
-        n = subjects[int(getattr(g, "_npc_sel", 0)) % len(subjects)]
+        return
     n.medicines_received = int(getattr(n, "medicines_received", 0) or 0) + 1
     n.mental_known = True
     try:

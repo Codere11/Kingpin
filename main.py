@@ -1178,6 +1178,12 @@ def main() -> None:
                     _best, _bd = _n, _d
             if _best is not None:
                 g.persona = _best
+                try:
+                    _subs = list(getattr(g, "_npc_subjects", ()) or ())
+                    if _best in _subs:
+                        g._npc_sel = _subs.index(_best)
+                except Exception:
+                    pass
                 g.npc_card_open = True
                 pygame.mouse.set_visible(True)
                 try:
