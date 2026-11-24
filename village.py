@@ -1907,6 +1907,21 @@ class NPC:
             else:
                 carry[item] = qty - take
 
+    def _trader_show_coin(self) -> None:
+        """Put the return coin in his real pack so the card shows it."""
+        inv = self._trader_pack()
+        if inv is None:
+            return
+        coins = int(round(float(getattr(self, "trader_coin", 0.0))))
+        if coins <= 0:
+            return
+        have = int(inv.count_of("coin"))
+        if have < coins:
+            try:
+                inv.add("coin", coins - have)
+            except Exception:
+                pass
+
     def _work_trader(self, dt: float) -> None:
         """Gather at least 50 sellable goods, run them to the ship, bring the
         coin back, and hand it to the player when he is nearby.
@@ -1922,6 +1937,7 @@ class NPC:
         self._trader_migrate_carry()
         load = self._trader_load()
         inv = self._trader_pack()
+        self._trader_show_coin()
         state = getattr(self, "trader_state", "idle")
         if state == "sailing":
             self.trader_t = float(getattr(self, "trader_t", 0.0)) - dt
@@ -1950,6 +1966,9 @@ class NPC:
                     load.pop(item, None)
                 self.trader_load = {}
                 self.trader_coin = float(getattr(self, "trader_coin", 0.0)) + coin
+                # THE COIN IS REAL TOO: it goes into his pack now, so clicking
+                # the trader shows what he brought back before he reaches you.
+                self._trader_show_coin()
                 self.trader_state = "paying"
                 try:
                     g.toast("%s returns from the ship with %d coin"
@@ -1968,15 +1987,37 @@ class NPC:
                 self._step_toward(player.x, player.y, dt)
                 return
             coins = int(round(float(getattr(self, "trader_coin", 0.0))))
+            # If the player already took the coin out of his pack, do not pay
+            # it a second time.
+            if inv is not None and coins > 0:
+                coins = min(coins, int(inv.count_of("coin")))
             if coins > 0:
+                before = int(g.inventory.count_of("coin"))
                 try:
                     g.inventory.add("coin", coins)
-                    g.toast("%s gives you %d coin from the ship"
-                            % (getattr(self, "name", "The trader"), coins))
                 except Exception:
                     pass
-            self.trader_coin = 0.0
-            self.trader_state = "idle"
+                got = max(0, int(g.inventory.count_of("coin")) - before)
+                if got > 0:
+                    if inv is not None:
+                        inv.consume("coin", got)
+                    self.trader_coin = max(0.0, float(self.trader_coin) - got)
+                    try:
+                        g.toast("%s gives you %d coin from the ship"
+                                % (getattr(self, "name", "The trader"), got))
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        g.toast("No room for %d coin" % coins)
+                    except Exception:
+                        pass
+                    return
+            else:
+                self.trader_coin = 0.0
+            if float(getattr(self, "trader_coin", 0.0)) <= 0.0:
+                self.trader_coin = 0.0
+                self.trader_state = "idle"
             return
 
         # GATHERING: only sellable goods in chests count.
