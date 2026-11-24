@@ -78,12 +78,16 @@ def _trunk_factor(variant: int) -> float:
     return 3.0 + float((int(variant) * 7) % 9) / 4.0
 
 
-def _trunk_shape(cx, ay, top_y, base_w, top_w, rng, radius):
+def _trunk_shape(cx, ay, top_y, base_w, top_w, rng, radius,
+                 bend=None, wiggle=None, phase=None):
     """A slightly leaning, gently wavy trunk instead of a straight plank."""
     n = 7
-    bend = rng.uniform(-0.055, 0.055) * radius
-    wiggle = rng.uniform(0.0, 0.014) * radius
-    phase = rng.uniform(0.0, 2.0 * math.pi)
+    if bend is None:
+        bend = rng.uniform(-0.055, 0.055) * radius
+    if wiggle is None:
+        wiggle = rng.uniform(0.0, 0.014) * radius
+    if phase is None:
+        phase = rng.uniform(0.0, 2.0 * math.pi)
     left, right = [], []
     for i in range(n + 1):
         t = i / float(n)
@@ -280,10 +284,15 @@ class TreeSprites:
             pygame.draw.ellipse(layer, _rgba(_darken(col, 25), 180), rect, 1)
 
     def _make_branch_geo(self, cx, cy, ay, trunk_w, radius, rng, variant, color,
-                         species):
+                         species, bend=0.0, wiggle=0.0, phase=0.0):
         """Build vector branches and leaf particles attached to them."""
         segs = []
         leaves = []
+        top_y = cy + 4
+        def trunk_off(y):
+            t = max(0.0, min(1.0, (ay - y) / max(1.0, ay - top_y)))
+            return (bend * math.sin(math.pi * t)
+                    + wiggle * math.sin(math.pi * 3.0 * t + phase))
         def rec(x0, y0, ang, length, width, depth, ax, ay0):
             width = max(1, int(width))
             ex = x0 + math.cos(ang) * length
@@ -331,21 +340,12 @@ class TreeSprites:
         for i in range(count):
             t = rng.uniform(0.18, 0.94)
             y0 = ay + (cy + 4 - ay) * t
-            x0 = cx + rng.uniform(-trunk_w * 0.42, trunk_w * 0.42)
+            x0 = cx + trunk_off(y0) + rng.uniform(-trunk_w * 0.20, trunk_w * 0.20)
             ang = (rng.uniform(-2.95, -1.65) if i % 2 == 0
                    else rng.uniform(-1.50, -0.18))
             rec(x0, y0, ang, radius * rng.uniform(0.36, 0.72),
                 max(2, int(radius * rng.uniform(0.040, 0.062))),
                 2 + (variant % 2), x0, y0)
-        # A few bare sticks at the crown edge; they are segments too.
-        for i in range(4 + variant % 4):
-            ang = rng.uniform(-2.95, -0.18)
-            x0 = cx + math.cos(ang) * radius * rng.uniform(0.35, 0.62)
-            y0 = cy + math.sin(ang) * radius * rng.uniform(0.10, 0.58)
-            ln = radius * rng.uniform(0.22, 0.48)
-            ex = x0 + math.cos(ang) * ln
-            ey = y0 + math.sin(ang) * ln * 0.7
-            segs.append((x0, y0, ex, ey, 2, 0.0, 0.0))
         key = (str(species), round(float(radius), 2), int(variant))
         self._branch_geo[key] = (segs, leaves, radius * 2.0 + 20.0)
         return segs
@@ -372,8 +372,11 @@ class TreeSprites:
         pygame.draw.ellipse(surf, (12, 24, 12, 70),
                             (cx - shadow_w / 2, ay - shadow_h / 2 + 5, shadow_w, shadow_h))
 
+        bend = rng.uniform(-0.055, 0.055) * radius
+        wiggle = rng.uniform(0.0, 0.014) * radius
+        phase = rng.uniform(0.0, 2.0 * math.pi)
         trunk = _trunk_shape(cx, ay + 3, cy + 4, base_w, trunk_w * 0.90,
-                             rng, radius)
+                             rng, radius, bend, wiggle, phase)
         pygame.draw.polygon(surf, (82, 58, 40), trunk)
         pygame.draw.polygon(surf, (46, 30, 18), trunk, 2)
         pygame.draw.polygon(surf, (72, 50, 32),
@@ -391,7 +394,7 @@ class TreeSprites:
         canopy = pygame.Surface((w, h), pygame.SRCALPHA)
         base = palette[variant % len(palette)]
         self._make_branch_geo(cx, cy, ay, trunk_w, radius, rng, variant, base,
-                              species)
+                              species, bend, wiggle, phase)
         if snowy:                               # a dusting on the upper canopy
             for _ in range(rng.randint(10, 16)):
                 a = rng.uniform(math.pi * 1.02, math.pi * 1.98)
@@ -506,9 +509,13 @@ class TreeSprites:
                              radius * 1.6 / thin, radius * 0.36 / thin))
         wood = (92, 68, 46)
         tw = max(2, int(radius * 0.17 / thin))
+        bend = rng.uniform(-0.055, 0.055) * radius
+        wiggle = rng.uniform(0.0, 0.014) * radius
+        phase = rng.uniform(0.0, 2.0 * math.pi)
         pygame.draw.polygon(surf, wood,
                             _trunk_shape(cx, ay + 3, ay - trunk_h,
-                                         tw * 2.6, tw * 1.0, rng, radius))
+                                         tw * 2.6, tw * 1.0, rng, radius,
+                                         bend, wiggle, phase))
         cy0 = ay - trunk_h
         for side in (-1.0, 1.0):                # two spreading limbs
             pygame.draw.line(surf, wood, (cx, cy0 + radius * 0.18),
@@ -516,7 +523,8 @@ class TreeSprites:
                              max(3, int(radius * 0.09)))
         canopy = pygame.Surface((w, h), pygame.SRCALPHA)
         # Acacia leaves are particles on the limbs too, not a painted umbrella.
-        self._make_branch_geo(cx, cy0, ay, tw, radius, rng, variant, base, "acacia")
+        self._make_branch_geo(cx, cy0, ay, tw, radius, rng, variant, base,
+                              "acacia", bend, wiggle, phase)
         combined = surf.copy()
         combined.blit(canopy, (0, 0))
         return combined, surf, canopy, ax, ay
