@@ -14,6 +14,8 @@ from __future__ import annotations
 import math
 import random
 
+import pygame
+
 import creatures
 
 
@@ -132,6 +134,28 @@ class WolfPack:
             w.event_target = target
             used.add(id(target))
 
+    def _separate(self, w):
+        """Keep the wolf bodily out of a man instead of standing inside him."""
+        actors = list(self.targets)
+        actors += list(getattr(self.g, "_native_people", ()) or ())
+        player = getattr(self.g, "player", None)
+        if player is not None:
+            actors.append(player)
+        actors += self.wolves
+        for other in actors:
+            if other is w or not getattr(other, "alive", True):
+                continue
+            dx = w.x - other.x
+            dy = w.y - other.y
+            d = math.hypot(dx, dy)
+            if d < 0.01:
+                dx, dy, d = 1.0, 0.0, 1.0
+            gap = float(getattr(w, "radius", 11)) + float(getattr(other, "radius", 12)) + 5.0
+            if d < gap:
+                push = (gap - d)
+                w.x += dx / d * push
+                w.y += dy / d * push
+
     def tick(self, dt):
         if self.done:
             return
@@ -172,9 +196,12 @@ class WolfPack:
                 w.facing = (dx / d, dy / d)
                 w._rects = getattr(self.g, "colliders", ()) or ()
                 w._fences = getattr(self.g, "visible_villages", ()) or ()
+                # Event wolves run at a deliberate lope, not the wild-wolf
+                # sprint; the camp should read as a scene, not a fast-forward.
                 w.update(dt, target, getattr(self.g, "combat", None),
-                         occluders=None, speed_scale=1.0, view_scale=1.0,
+                         occluders=None, speed_scale=0.62, view_scale=1.0,
                          visible=True, colliders=w._rects)
+                self._separate(w)
             else:
                 w.update(dt, None, getattr(self.g, "combat", None),
                          visible=False, colliders=getattr(self.g, "colliders", ()) or ())
@@ -198,32 +225,269 @@ class WolfPack:
             _toast(self.g, "The wolves have had enough and withdraw")
 
 
-class Director:
-    def __init__(self, g):
+class RogueRaider:
+    """ONE armed stranger, not from any settlement, coming for the camp."""
+
+    def __init__(self, g, camp, rng=None):
         self.g = g
-        self.packs = []
-        self.timers = {}
+        self.camp = camp
+        self.age = 0.0
+        self.done = False
+        rng = rng or random.Random(int(getattr(g, "now", 0.0) * 991) ^ id(camp))
+        ang = rng.uniform(0.0, 2.0 * math.pi)
+        x = float(camp.x) + math.cos(ang) * 850.0
+        y = float(camp.y) + math.sin(ang) * 850.0
+        w = creatures.Soldier(x, y, "rogue", melee=True, color=(128, 62, 52))
+        w.name = "rogue warrior"
+        w.event_ai = True
+        w.hostile = True
+        w.team = ("rogue", None)
+        w.aware = True
+        w.aware_timer = 600.0
+        w.view_range = 900.0
+        w.facing = (-math.cos(ang), -math.sin(ang))
+        g.enemies.append(w)
+        self.raider = w
+        self.targets = _people(camp)
+        _record(g, "rogue_arrive", camp=getattr(camp, "name", "camp"),
+                x=round(x, 1), y=round(y, 1))
+        _toast(g, "A rogue warrior is coming toward %s" % getattr(camp, "name", "the camp"))
 
     def tick(self, dt):
-        for pack in list(self.packs):
-            pack.tick(dt)
-            if pack.done:
-                self.packs.remove(pack)
+        if self.done:
+            return
+        self.age += dt
+        w = self.raider
+        if not getattr(w, "alive", True):
+            self.done = True
+            _record(self.g, "rogue_end", camp=getattr(self.camp, "name", "camp"),
+                    outcome="killed")
+            _toast(self.g, "The rogue warrior is dead")
+            return
+        live = [p for p in self.targets if getattr(p, "alive", True)]
+        player = getattr(self.g, "player", None)
+        if player is not None and getattr(player, "alive", True):
+            live = live + [player]
+        target = min(live, key=lambda p: (p.x - w.x) ** 2 + (p.y - w.y) ** 2) if live else None
+        if target is None:
+            self.done = True
+            return
+        dx, dy = target.x - w.x, target.y - w.y
+        d = math.hypot(dx, dy) or 1.0
+        w.facing = (dx / d, dy / d)
+        w._rects = getattr(self.g, "colliders", ()) or ()
+        w.update(dt, target, getattr(self.g, "combat", None),
+                 speed_scale=1.0, view_scale=1.0, visible=True,
+                 colliders=w._rects)
+        if self.age > 90.0:
+            self.done = True
+            _record(self.g, "rogue_end", camp=getattr(self.camp, "name", "camp"),
+                    outcome="withdrawn")
+
+
+class BuffaloHerd:
+    """A herd crossing the settlement's fields."""
+
+    def __init__(self, g, camp, rng=None):
+        self.g = g
+        self.camp = camp
+        self.age = 0.0
+        self.done = False
+        self.animals = []
+        rng = rng or random.Random(int(getattr(g, "now", 0.0) * 977) ^ id(camp))
+        ang = rng.uniform(0.0, 2.0 * math.pi)
+        for i in range(4):
+            x = float(camp.x) + math.cos(ang) * (700.0 + i * 40.0)
+            y = float(camp.y) + math.sin(ang) * (700.0 + i * 40.0)
+            b = creatures.Bison(x, y)
+            b.name = "buffalo"
+            b.event_ai = True
+            b.home = (float(camp.x) + rng.uniform(-260.0, 260.0),
+                      float(camp.y) + rng.uniform(-260.0, 260.0))
+            g.enemies.append(b)
+            self.animals.append(b)
+        _record(g, "buffalo_arrive", camp=getattr(camp, "name", "camp"),
+                count=len(self.animals))
+        _toast(g, "A buffalo herd is grazing toward %s" % getattr(camp, "name", "the camp"))
+
+    def tick(self, dt):
+        if self.done:
+            return
+        self.age += dt
+        alive = 0
+        for b in self.animals:
+            if not getattr(b, "alive", True):
+                continue
+            alive += 1
+            b.update(dt, None, getattr(self.g, "combat", None),
+                     colliders=getattr(self.g, "colliders", ()) or ())
+        if alive == 0 or self.age > 90.0:
+            self.done = True
+            _record(self.g, "buffalo_end", camp=getattr(self.camp, "name", "camp"),
+                    outcome=("killed" if alive == 0 else "moved_on"))
+
+
+class HorseVisit:
+    """A few horses choose the settlement and stay."""
+
+    def __init__(self, g, camp, rng=None):
+        self.g = g
+        self.camp = camp
+        self.done = True
+        rng = rng or random.Random(int(getattr(g, "now", 0.0) * 953) ^ id(camp))
+        ang = rng.uniform(0.0, 2.0 * math.pi)
+        for i in range(2):
+            x = float(camp.x) + math.cos(ang) * (220.0 + i * 45.0)
+            y = float(camp.y) + math.sin(ang) * (220.0 + i * 45.0)
+            h = creatures.Horse(x, y, rng.choice(("brown", "black", "white", "palomino")))
+            h.tamed = True
+            h.conquered = True
+            h.g = g
+            h.home = (x, y)
+            g.horses.append(h)
+        _record(g, "horses_join", camp=getattr(camp, "name", "camp"), count=2)
+        _toast(g, "Horses have joined %s" % getattr(camp, "name", "the camp"))
+
+    def tick(self, dt):
+        pass
+
+
+class RainEvent:
+    """A short rain; the crops get the water and people get wet."""
+
+    def __init__(self, g, camp, seconds=90.0):
+        self.g = g
+        self.camp = camp
+        self.seconds = float(seconds)
+        self.age = 0.0
+        self.done = False
+        g._rain_t = max(float(getattr(g, "_rain_t", 0.0)), self.seconds)
+        _record(g, "rain_start", camp=getattr(camp, "name", "camp"), seconds=int(seconds))
+        _toast(g, "Rain is falling over %s" % getattr(camp, "name", "the camp"))
+
+    def tick(self, dt):
+        if self.done:
+            return
+        self.age += dt
+        if self.age >= self.seconds:
+            self.done = True
+            _record(self.g, "rain_end", camp=getattr(self.camp, "name", "camp"))
+
+
+class BlightEvent:
+    """A patch of crop disease: the first infected tile is visibly lost."""
+
+    def __init__(self, g, camp):
+        self.g = g
+        self.camp = camp
+        self.done = True
+        plots = list((getattr(camp, "farm_tiles", {}) or {}).values())
+        tiles = [t for group in plots for t in (group or ())]
+        if not tiles:
+            return
+        tx, ty, _kind = random.choice(tiles)
+        try:
+            g.world.set_plot(int(tx), int(ty), "grass", None)
+            g.ground.invalidate_tile(int(tx), int(ty), immediate=True)
+        except Exception:
+            pass
+        _record(g, "blight", camp=getattr(camp, "name", "camp"),
+                tx=int(tx), ty=int(ty))
+        _toast(g, "Blight has taken a crop in %s" % getattr(camp, "name", "the camp"))
+
+    def tick(self, dt):
+        pass
+
+
+class Director:
+    """Condition-driven outside events.
+
+    There is no fixed spawn clock. Every few seconds the director looks at
+    what a camp actually has -- people, crops, animals, open ground, weather
+    and recent history -- and only starts an event when its conditions are
+    present. The cooldown is a guard against spam, not a schedule.
+    """
+
+    def __init__(self, g):
+        self.g = g
+        self.events = []
+        self.eval_t = 4.0
+        self.last = {}
+        self.rng = random.Random(int(getattr(g, "now", 0.0) * 41) ^ id(g))
+
+    def _available(self, kind, cooldown=90.0):
+        return self.g.now - float(self.last.get(kind, -1e9)) >= cooldown
+
+    def _active(self, camp):
+        return any(getattr(e, "camp", None) is camp for e in self.events)
+
+    def _spawn_best(self, camp):
+        people = _people(camp)
+        if not people:
+            return
+        farmers = len(getattr(camp, "farmers", ()) or ())
+        animals = len([a for a in (getattr(camp, "animals", ()) or ())
+                       if getattr(a, "alive", True)])
+        plots = len(getattr(camp, "farm_plots", ()) or ())
+        score = {}
+        if self._available("wolves"):
+            # More likely when the camp has people and some wilderness left.
+            score["wolves"] = 2.0 + min(3.0, len(people) / 4.0)
+        if self._available("rogue"):
+            score["rogue"] = 1.5 + min(2.0, len(people) / 6.0)
+        if plots and self._available("blight"):
+            score["blight"] = 2.0 + min(2.0, plots / 4.0)
+        if plots and self._available("buffalo"):
+            score["buffalo"] = 1.5 + min(2.0, plots / 4.0)
+        if self._available("horses", 150.0):
+            score["horses"] = 1.0 + (0.8 if animals else 0.0)
+        if self._available("rain", 180.0):
+            score["rain"] = 1.5 + (1.0 if plots else 0.0)
+        if not score:
+            return
+        # A little chance, so a rich camp does not get the same event every
+        # time; conditions still set the weights.
+        total = sum(score.values())
+        roll = self.rng.uniform(0.0, total)
+        choice = None
+        for kind, weight in score.items():
+            roll -= weight
+            if roll <= 0.0:
+                choice = kind
+                break
+        choice = choice or max(score, key=score.get)
+        if choice == "wolves":
+            self.events.append(WolfPack(self.g, camp, self.rng))
+        elif choice == "rogue":
+            self.events.append(RogueRaider(self.g, camp, self.rng))
+        elif choice == "buffalo":
+            self.events.append(BuffaloHerd(self.g, camp, self.rng))
+        elif choice == "blight":
+            self.events.append(BlightEvent(self.g, camp))
+        elif choice == "horses":
+            self.events.append(HorseVisit(self.g, camp, self.rng))
+        elif choice == "rain":
+            self.events.append(RainEvent(self.g, camp, self.rng.uniform(60.0, 120.0)))
+        self.last[choice] = float(self.g.now)
+
+    def tick(self, dt):
+        for event in list(self.events):
+            try:
+                event.tick(dt)
+            except Exception:
+                event.done = True
+            if getattr(event, "done", False):
+                self.events.remove(event)
+        self.g._rain_t = max(0.0, float(getattr(self.g, "_rain_t", 0.0)) - dt)
         if getattr(self.g, "test_mode", False):
             return
-        camps = list(getattr(self.g, "player_camps", ()) or ())
-        for camp in camps:
-            key = id(camp)
-            if key not in self.timers:
-                self.timers[key] = random.uniform(*PACK_FIRST_DELAY)
-            self.timers[key] -= dt
-            if self.timers[key] > 0.0:
-                continue
-            if any(p.camp is camp for p in self.packs):
-                self.timers[key] = 15.0
-                continue
-            self.packs.append(WolfPack(self.g, camp))
-            self.timers[key] = random.uniform(*PACK_COOLDOWN)
+        self.eval_t -= dt
+        if self.eval_t > 0.0:
+            return
+        self.eval_t = 8.0
+        for camp in list(getattr(self.g, "player_camps", ()) or ()):
+            if not self._active(camp):
+                self._spawn_best(camp)
 
     def spawn_test(self):
         camp = getattr(self.g, "_npc_lab", None)
@@ -234,10 +498,9 @@ class Director:
         if camp is None:
             _toast(self.g, "No settlement for the wolf test")
             return None
-        pack = WolfPack(self.g, camp)
-        self.packs.append(pack)
+        pack = WolfPack(self.g, camp, self.rng)
+        self.events.append(pack)
         return pack
-
 
 def ensure(g):
     d = getattr(g, "_event_director", None)
@@ -253,3 +516,58 @@ def tick(g, dt):
 
 def spawn_test(g):
     return ensure(g).spawn_test()
+
+
+_TEST_KINDS = ("wolves", "rogue", "buffalo", "blight", "horses", "rain")
+
+
+def spawn_test_kind(g, kind):
+    """F3 test hook: start one named event in the lab, without waiting."""
+    d = ensure(g)
+    camp = getattr(g, "_npc_lab", None)
+    if camp is None:
+        camps = list(getattr(g, "native_settlements", {}).values())
+        camp = min(camps, key=lambda c: (c.x - g.player.x) ** 2
+                   + (c.y - g.player.y) ** 2) if camps else None
+    if camp is None:
+        _toast(g, "No settlement for event test")
+        return None
+    if kind == "wolves":
+        event = WolfPack(g, camp, d.rng)
+    elif kind == "rogue":
+        event = RogueRaider(g, camp, d.rng)
+    elif kind == "buffalo":
+        event = BuffaloHerd(g, camp, d.rng)
+    elif kind == "blight":
+        event = BlightEvent(g, camp)
+    elif kind == "horses":
+        event = HorseVisit(g, camp, d.rng)
+    elif kind == "rain":
+        event = RainEvent(g, camp, 75.0)
+    else:
+        return None
+    d.events.append(event)
+    return event
+
+
+def cycle_test(g):
+    d = ensure(g)
+    idx = int(getattr(g, "_event_test_idx", -1)) + 1
+    g._event_test_idx = idx
+    kind = _TEST_KINDS[idx % len(_TEST_KINDS)]
+    _toast(g, "Event test: %s" % kind)
+    return spawn_test_kind(g, kind)
+
+
+def draw(g, screen):
+    """Light rain streaks while a RainEvent is active."""
+    if float(getattr(g, "_rain_t", 0.0)) <= 0.0:
+        return
+    w, h = screen.get_size()
+    ticks = pygame.time.get_ticks() * 0.35
+    layer = pygame.Surface((w, h), pygame.SRCALPHA)
+    for i in range(160):
+        x = int((i * 97 + ticks * (0.8 + (i % 5) * 0.12)) % (w + 80)) - 40
+        y = int((i * 61 + ticks * 2.2) % (h + 80)) - 40
+        pygame.draw.line(layer, (180, 196, 220, 110), (x, y), (x - 4, y + 18), 1)
+    screen.blit(layer, (0, 0))

@@ -388,14 +388,17 @@ def run(g):
                 # the world does not stop for a menu.
                 pass
             elif (g.test_mode and event.type == pygame.KEYDOWN
-                  and event.key in (pygame.K_F4, pygame.K_F5, pygame.K_F6,
-                                    pygame.K_F7, pygame.K_F8, pygame.K_F9,
-                                    pygame.K_F10, pygame.K_F12)):
+                  and event.key in (pygame.K_F3, pygame.K_F4, pygame.K_F5,
+                                    pygame.K_F6, pygame.K_F7, pygame.K_F8,
+                                    pygame.K_F9, pygame.K_F10, pygame.K_F12)):
                 # THE NPC LAB (NPC.md Phase 0).  Test mode only; the normal
                 # game never imports or builds it.
                 try:
                     import npclab as _npclab
-                    if event.key == pygame.K_F4:
+                    if event.key == pygame.K_F3:
+                        import events as _events
+                        _events.cycle_test(g)
+                    elif event.key == pygame.K_F4:
                         import events as _events
                         _events.spawn_test(g)
                     elif event.key == pygame.K_F5:
@@ -3661,6 +3664,11 @@ def run(g):
             # CHAT CLOUDS GO LAST: over buildings, fireplaces, benches and
             # chests -- never hidden underneath a placed thing.
             comm.draw_clouds(g.screen, g.cam_x, g.cam_y)
+            try:
+                import events as _events_draw
+                _events_draw.draw(g, g.screen)
+            except Exception:
+                pass
         g.draw_villages = g.villages.visible(g.cam_x, g.cam_y, g.vw, g.vh,
                                          extra=g.hub_world.hubs)
         # THE BAR UNDER THE GUARD, for the man HE is searching -- ten seconds
