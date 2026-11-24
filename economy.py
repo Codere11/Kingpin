@@ -2199,7 +2199,7 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
         if health < top:
             health = health + HEAL_RATE * dt
             npc.health = top if health > top else health
-    if hunger >= EAT_AT:
+    if hunger >= EAT_AT and getattr(npc, "break_state", "normal") != "depression":
         _ate = False
         for item in FOOD:
             if stock.get(item, 0) > 0:

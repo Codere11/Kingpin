@@ -97,6 +97,8 @@ done
     --hidden-import mood \
     --hidden-import doctor \
     --hidden-import npclab \
+    --hidden-import needs \
+    --hidden-import incidents \
     "${DATA_ARGS[@]}" \
     main.py 2>&1 | tail -1
 

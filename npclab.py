@@ -17,6 +17,7 @@ import pygame
 
 import block
 import crop as crop_mod
+import incidents
 import mood
 import native
 import persona
@@ -426,6 +427,23 @@ def cycle_mood(g):
     _toast(g, "%s mood %.0f" % (getattr(n, "name", "?"), got))
 
 
+def social_incident(g, kind="insult"):
+    """F12: selected or clicked person starts a social emergency."""
+    subjects = list(getattr(g, "_npc_subjects", ()) or ())
+    n = getattr(g, "persona", None)
+    if n is None or not getattr(n, "native", False):
+        if not subjects:
+            return
+        n = subjects[int(getattr(g, "_npc_sel", 0)) % len(subjects)]
+    target = incidents.nearest(g, n)
+    if target is None:
+        _toast(g, "Nobody close enough to %s" % kind)
+        return
+    incidents.insult(n, target, kind, g, float(getattr(g, "now", 0.0)))
+    _toast(g, "%s -> %s: %s"
+           % (getattr(n, "name", "?"), getattr(target, "name", "you"), kind))
+
+
 def force_break(g):
     """F9: cycle the selected or clicked person through sad/annoyed/normal.
 
@@ -506,7 +524,7 @@ def draw(g):
         n = subjects[sel % len(subjects)] if subjects else None
         lines = [
             ("NPC LAB  TEST ONLY", PANEL_HOT),
-            ("F5 hide  F6 reset  F7 next  F8 mood  F9 break  F10 medicine", PANEL_DIM),
+            ("F5 hide F6 reset F7 next F8 mood F9 break F10 medicine F12 insult", PANEL_DIM),
         ]
         if n is None:
             lines.append(("no lab: press F6", PANEL_TEXT))

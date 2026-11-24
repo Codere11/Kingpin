@@ -2536,9 +2536,12 @@ class NPC:
         # A MAJOR BREAK OWNS THE BODY.  Without this, the normal work/idle
         # update ran after _break_action and walked the man back toward the
         # campfire (or his job) -- so a "breaking spree" looked like he was
-        # following whoever happened to be near the fire.  Berserk and spree
-        # are driven entirely by _break_action until the state ends.
-        if getattr(self, "break_state", "normal") in ("berserk", "breaking_spree"):
+        # following whoever happened to be near the fire.  Berserk, spree and
+        # depression are driven entirely by _break_action until they end.
+        if getattr(self, "break_state", "normal") in ("berserk", "breaking_spree",
+                                                      "depression"):
+            return
+        if getattr(self, "_brawl_target", None) is not None:
             return
         # THE PLAYER'S OWN PEOPLE: babies grow, breeders face each other, and
         # at night they sleep on their bedrolls.
@@ -4215,7 +4218,20 @@ class NPC:
 
     def _break_action(self, dt: float, combat, now: float) -> None:
         """The dangerous break states: berserk and breaking spree."""
+        # A SHORT BRAWL FROM AN INSULT.  It is not a major break; it runs for
+        # a few seconds and stops when the target yields or the timer ends.
+        _brawl = getattr(self, "_brawl_target", None)
+        if _brawl is not None:
+            if (getattr(_brawl, "alive", True)
+                    and now < float(getattr(self, "_brawl_until", 0.0))):
+                self._fight(dt, _brawl, combat)
+                return
+            self._brawl_target = None
         state = getattr(self, "break_state", "normal")
+        if state == "depression":
+            if now >= float(getattr(self, "break_until", 0.0)):
+                mood.clear_break(self, now)
+            return
         if state not in ("berserk", "breaking_spree"):
             return
         camp = getattr(self, "native_camp", None)
@@ -4549,6 +4565,8 @@ class NPC:
         mood = face.mood_of(self.hurt_flash, self.attack_flash,
                             self.work_flash, self.sly_flash,
                             self.hunger >= face.STARVED_HUNGER)
+        if getattr(self, "break_state", "normal") == "depression":
+            mood = "sad"
         # ASLEEP: closed eyes, and a breeding pair has hearts for eyes.
         if getattr(self, "asleep", False) or getattr(self, "sleep_t", 0.0) > 0.0:
             mood = "sleep"

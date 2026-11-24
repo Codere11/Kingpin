@@ -16,7 +16,8 @@ MOOD_MAX = 100.0
 # The lab's F8 cycle: calm -> strained -> breaking.
 MOOD_STEPS = (70.0, 50.0, 35.0, 25.0, 15.0, 5.0)
 
-BREAK_STATES = ("normal", "sad", "annoyed", "berserk", "breaking_spree")
+BREAK_STATES = ("normal", "sad", "annoyed", "berserk", "breaking_spree",
+                "depression")
 MINOR_THRESHOLD = 32.0
 MAJOR_THRESHOLD = 16.0
 MINOR_SECONDS = 240.0
@@ -148,7 +149,8 @@ def set_break(npc, state: str, now: float, seconds: float = MINOR_SECONDS,
 def clear_break(npc, now: float) -> None:
     ensure(npc)
     if getattr(npc, "break_state", "normal") in ("sad", "annoyed",
-                                                   "berserk", "breaking_spree"):
+                                                   "berserk", "breaking_spree",
+                                                   "depression"):
         try:
             add_thought(npc, "catharsis", 20.0, now, 300.0)
         except Exception:
@@ -179,11 +181,13 @@ def force_break(npc, now: float) -> str:
     current = getattr(npc, "break_state", "normal")
     state = {"normal": "sad", "sad": "annoyed",
              "annoyed": "berserk", "berserk": "breaking_spree",
-             "breaking_spree": "normal"}.get(current, "sad")
+             "breaking_spree": "depression",
+             "depression": "normal"}.get(current, "sad")
     if state == "normal":
         clear_break(npc, now)
     else:
-        seconds = 240.0 if state in ("sad", "annoyed") else 60.0
+        seconds = (180.0 if state == "depression"
+                   else (240.0 if state in ("sad", "annoyed") else 60.0))
         set_break(npc, state, now, seconds=seconds, forced=True)
     return npc.break_state
 
@@ -279,8 +283,12 @@ def break_tick(npc, now: float, dt: float) -> None:
         major_chance = (0.15 if persona.is_feeling(npc)
                         else (0.35 if persona.is_thinking(npc) else 0.25))
         if rng.random() < major_chance:
-            state = "berserk" if rng.random() < 0.5 else "breaking_spree"
-            set_break(npc, state, now, seconds=60.0)
+            _roll = rng.random()
+            if persona.is_feeling(npc) and _roll < 0.45:
+                set_break(npc, "depression", now, seconds=180.0)
+            else:
+                state = "berserk" if _roll < 0.72 else "breaking_spree"
+                set_break(npc, state, now, seconds=60.0)
             return
     if persona.is_feeling(npc):
         chance = 0.60

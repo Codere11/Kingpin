@@ -301,6 +301,33 @@ def _render(screen, hx: float, hy: float, r: int, fx: float, fy: float,
         pygame.draw.line(screen, MOUTH, (ix, m_y), (ix + hw, m_y + 1), 1)
         return
 
+    if mood == "sad":
+        # A DOWNCAST, TEARFUL FACE: the same eyes, brows hanging outward,
+        # a small frown, and two tears.  It must read at radius eight.
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            pygame.draw.circle(screen, WHITE, (cx, iy), wr)
+            pygame.draw.circle(screen, EYE,
+                               (cx + int(round(fx * wr * 0.45)),
+                                iy + int(round(fy * wr * 0.45))), pr)
+        by = int(round(iy - wr - r * 0.18))
+        bw = max(1, int(round(r * 0.20)))
+        tw = max(1, r // 6)
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            pygame.draw.line(screen, BROW, (cx + sgn * bw, by + tw),
+                             (cx - sgn * bw, by - tw), tw)
+        m_y = int(round(hy + r * MOUTH_DOWN))
+        hw = max(1, int(round(r * 0.30)))
+        pygame.draw.line(screen, MOUTH, (ix - hw, m_y + 1), (ix, m_y), 1)
+        pygame.draw.line(screen, MOUTH, (ix, m_y), (ix + hw, m_y + 1), 1)
+        # tears, one under each eye
+        for sgn in (-1, 1):
+            cx = ix + sgn * sep
+            pygame.draw.line(screen, (150, 190, 220),
+                             (cx, iy + wr + 1), (cx, iy + wr + max(2, r // 3)), 1)
+        return
+
     war = angry or hurt
 
     # THE EYES, AND HOW FAR THE LID COMES DOWN.
@@ -621,7 +648,7 @@ def mood_of(hurt_flash: float, attack_flash: float,
 
 def warm(radii=(8, 9), dirs=DIRS,
          moods=("normal", "focus", "angry", "hurt", "sly",
-                  "starved")) -> int:
+                  "starved", "sad")) -> int:
     """Build every face the game can ask for BEFORE the first frame.
 
     A cache miss in the middle of a frame is twelve draw calls where the frame
