@@ -626,15 +626,34 @@ def cycle_test(g):
     return spawn_test_kind(g, kind)
 
 
+_RAIN_TILE = None
+
+
+def _rain_tile():
+    """One reusable rain tile; no full-screen alpha surface per frame."""
+    global _RAIN_TILE
+    if _RAIN_TILE is None:
+        t = pygame.Surface((192, 192), pygame.SRCALPHA)
+        for i in range(28):
+            x = (i * 37 + 11) % 192
+            y = (i * 61 + 7) % 192
+            pygame.draw.line(t, (105, 165, 235, 155), (x, y), (x, y + 24), 2)
+        _RAIN_TILE = t
+    return _RAIN_TILE
+
+
 def draw(g, screen):
     """Light rain streaks while a RainEvent is active."""
     if float(getattr(g, "_rain_t", 0.0)) <= 0.0:
         return
     w, h = screen.get_size()
-    ticks = pygame.time.get_ticks() * 0.35
-    layer = pygame.Surface((w, h), pygame.SRCALPHA)
-    for i in range(160):
-        x = int((i * 97 + ticks * (0.8 + (i % 5) * 0.12)) % (w + 80)) - 40
-        y = int((i * 61 + ticks * 2.2) % (h + 80)) - 40
-        pygame.draw.line(layer, (105, 165, 235, 155), (x, y), (x, y + 24), 2)
-    screen.blit(layer, (0, 0))
+    tile = _rain_tile()
+    tw = th = 192
+    off = int((pygame.time.get_ticks() * 0.12) % th)
+    x = -tw
+    while x < w + tw:
+        y = -th + off
+        while y < h + th:
+            screen.blit(tile, (x, y))
+            y += th
+        x += tw
