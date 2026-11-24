@@ -1,8 +1,8 @@
 """social_life.py -- the quiet life of a conquered camp.
 
-One small social/economic pulse per camp every 30-60 seconds: a farmer shares
-food, a worker buys a meal or a drink from the camp store, or two people talk.
-It runs on camp timers, never per NPC per frame.
+One small social pulse per camp every 35-60 seconds.  People exchange real
+goods with each other, share food, or talk.  There is no camp store, no hidden
+ledger market and no internal coin economy.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def _people(camp):
     return out
 
 
-def _near(g, a, b, reach=260.0):
+def _near(a, b, reach=260.0):
     try:
         return math.hypot(a.x - b.x, a.y - b.y) <= reach
     except Exception:
@@ -50,55 +50,25 @@ def _bubble(who, kind, text=None):
         pass
 
 
-def _camp_store(g, camp):
-    """The visible camp-store chest, or the nearest chest as a fallback."""
-    chests = list(getattr(g, "built_chests", ()) or ())
-    if not chests:
-        return None
-    mine = [c for c in chests if getattr(c, "camp_store", False)]
-    if mine:
-        return min(mine, key=lambda c: (c.x - camp.x) ** 2 + (c.y - camp.y) ** 2)
-    return min(chests, key=lambda c: (c.x - camp.x) ** 2 + (c.y - camp.y) ** 2)
-
-
-def _pay(buyer, seller, item, price, camp, g, now, kind="gift"):
-    """Move one item and its price between two people / the camp store."""
-    if buyer is None or item is None:
+def _exchange(buyer, seller, item, camp, g, now, kind="gift"):
+    """Move one real item between two people.  No coin changes hands."""
+    if buyer is None or seller is None or item is None:
         return False
-    if price > 0 and float(getattr(buyer, "coins", 0.0)) < price:
+    stock = getattr(seller, "stock", None)
+    if not isinstance(stock, dict) or int(stock.get(item, 0)) <= 0:
         return False
-    have = int((getattr(seller, "stock", {}) or {}).get(item, 0)) if seller else 0
-    if seller is not None and have <= 0:
-        return False
-    store_chest = None
-    if seller is None:
-        store_chest = _camp_store(g, camp)
-        inv = getattr(store_chest, "inventory", None) if store_chest else None
-        if inv is None or inv.count_of(item) <= 0:
-            return False
-        inv.consume(item, 1)
-    else:
-        seller.stock[item] = have - 1
+    stock[item] = int(stock[item]) - 1
     buyer.stock[item] = int((getattr(buyer, "stock", {}) or {}).get(item, 0)) + 1
-    if price > 0 and float(getattr(buyer, "coins", 0)) >= price:
-        buyer.coins = float(buyer.coins) - price
-        if seller is not None:
-            seller.coins = float(getattr(seller, "coins", 0.0)) + price
-        else:
-            inv = getattr(store_chest, "inventory", None) if store_chest else None
-            if inv is not None:
-                inv.add("coin", int(round(price)))
-    if seller is not None:
-        relationships.observe(buyer, seller, kind, now, g,
-                              detail="%s %s" % (kind, item))
+    relationships.observe(buyer, seller, kind, now, g,
+                          detail="%s %s" % (kind, item))
     mood.add_thought(buyer, "fed" if item in economy.FOOD else "luxury",
                      3.0 if item in economy.FOOD else 5.0, now, 300.0)
-    _bubble(seller or buyer, "need" if item in economy.FOOD else "praise",
+    _bubble(seller, "need" if item in economy.FOOD else "praise",
             text=item.replace("_", " "))
     try:
         import playlog
         playlog.record(g, "social", action=kind,
-                       actor=getattr(seller, "name", "camp"),
+                       actor=getattr(seller, "name", "?"),
                        target=getattr(buyer, "name", "?"), item=item)
     except Exception:
         pass
@@ -112,21 +82,12 @@ def _pulse(g, camp, now):
     rng = getattr(g, "_social_rng", None)
     if rng is None:
         import random
-        rng = g._social_rng = random.Random(int(getattr(getattr(g, "world", None), "seed", 1)) ^ 0x50C1A1)
+        rng = g._social_rng = random.Random(
+            int(getattr(getattr(g, "world", None), "seed", 1)) ^ 0x50C1A1)
     rng.shuffle(people)
+
     hungry = [p for p in people if float(getattr(p, "hunger", 0.0)) >= economy.EAT_AT]
-    # 1. A hungry person with coin buys food from the camp store.
-    for p in hungry:
-        if float(getattr(p, "coins", 0.0)) < 1.0:
-            continue
-        store = _camp_store(g, camp)
-        inv = getattr(store, "inventory", None) if store is not None else None
-        if inv is not None:
-            for item in economy.FOOD:
-                if inv.count_of(item) > 0:
-                    if _pay(p, None, item, 1.0, camp, g, now, "shared_food"):
-                        return
-    # 2. A hungry person is fed by someone who has food.
+    # 1. A hungry person is fed by someone who has food.
     for p in hungry:
         for q in people:
             if q is p:
@@ -134,30 +95,29 @@ def _pulse(g, camp, now):
             stock = getattr(q, "stock", {}) or {}
             for item in economy.FOOD:
                 if int(stock.get(item, 0)) > 0:
-                    if _pay(p, q, item, 0.0, camp, g, now, "shared_food"):
+                    if _exchange(p, q, item, camp, g, now, "shared_food"):
                         return
-    # 3. Buy a drink / smoke from someone who has one.
-    lux = ("beer", "liqueur", "mezcal", "cigar", "dried_mushroom")
-    for buyer in people:
-        if float(getattr(buyer, "coins", 0.0)) < 1.0:
-            continue
-        for seller in people:
-            if seller is buyer:
+    # 2. Random barter: one person has a spare luxury/tool, another gets it.
+    barter = ("beer", "liqueur", "mezcal", "cigar", "dried_mushroom",
+              "bread", "berries", "cactus_fruit", "axe", "shovel")
+    for seller in people:
+        stock = getattr(seller, "stock", {}) or {}
+        for item in barter:
+            if int(stock.get(item, 0)) <= 0:
                 continue
-            stock = getattr(seller, "stock", {}) or {}
-            for item in lux:
-                if int(stock.get(item, 0)) > 0 and float(getattr(seller, "coins", 0.0)) >= 0:
-                    if _pay(buyer, seller, item, 1.0, camp, g, now, "shared_drink"):
-                        return
-    # 4. Otherwise, two nearby people simply talk.
+            for buyer in people:
+                if buyer is seller:
+                    continue
+                if _exchange(buyer, seller, item, camp, g, now, "shared_drink"):
+                    return
+    # 3. Otherwise, two nearby people talk.
     for a in people:
         for b in people:
-            if a is b or not _near(g, a, b):
+            if a is b or not _near(a, b):
                 continue
             try:
                 import comm
-                got = comm.npc_try_chat(a, [b], now)
-                if got is not None:
+                if comm.npc_try_chat(a, [b], now) is not None:
                     try:
                         import playlog
                         playlog.record(g, "social", action="chat",
@@ -174,7 +134,8 @@ def tick(g, dt):
     rng = getattr(g, "_social_rng", None)
     if rng is None:
         import random
-        rng = g._social_rng = random.Random(int(getattr(getattr(g, "world", None), "seed", 1)) ^ 0x50C1A1)
+        rng = g._social_rng = random.Random(
+            int(getattr(getattr(g, "world", None), "seed", 1)) ^ 0x50C1A1)
     now = float(getattr(g, "now", 0.0))
     for camp in (getattr(g, "native_settlements", {}) or {}).values():
         if not getattr(camp, "conquered", False):

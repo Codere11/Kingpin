@@ -84,7 +84,6 @@ def snapshot(g) -> dict:
             "condition": float(getattr(ch, "condition", 100.0)),
             "max_condition": float(getattr(ch, "max_condition", 100.0)),
             "broken": bool(getattr(ch, "broken", False)),
-            "camp_store": bool(getattr(ch, "camp_store", False)),
         })
 
     signs = []
@@ -247,7 +246,6 @@ def restore(g, data, ctx: "_context.Context") -> None:
             ch.condition = float(rec.get("condition", 100.0))
             ch.max_condition = float(rec.get("max_condition", 100.0))
             ch.broken = bool(rec.get("broken", False))
-            ch.camp_store = bool(rec.get("camp_store", False))
             codec.set_uid(ch, rec.get("uid"))
             ch.filter = rec.get("filter")
             codec.inventory_restore(ch.inventory, rec.get("inventory"))
