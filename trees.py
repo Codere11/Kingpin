@@ -517,10 +517,9 @@ class TreeSprites:
                                          tw * 2.6, tw * 1.0, rng, radius,
                                          bend, wiggle, phase))
         cy0 = ay - trunk_h
-        for side in (-1.0, 1.0):                # two spreading limbs
-            pygame.draw.line(surf, wood, (cx, cy0 + radius * 0.18),
-                             (cx + side * radius * 0.75, cy0 - radius * 0.22),
-                             max(3, int(radius * 0.09)))
+        # The old pair of static spreading limbs lived on the trunk layer and
+        # looked like two frozen top branches.  All acacia limbs now come from
+        # the dynamic branch geometry below.
         canopy = pygame.Surface((w, h), pygame.SRCALPHA)
         # Acacia leaves are particles on the limbs too, not a painted umbrella.
         self._make_branch_geo(cx, cy0, ay, tw, radius, rng, variant, base,
