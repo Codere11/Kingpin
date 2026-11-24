@@ -101,7 +101,8 @@ from trees import Trees
 from ui import (BarracksPanel, ChestPanel, ConfirmMenu, FolderPanel, GunsmithPanel,
                 HorsePanel, Hotbar, InventoryPanel, MarketPanel, MindPanel,
                 PauseMenu, PersonaCard,
-                ResearchPanel, RoutePanel, ShipMarketPanel, SignPanel, SmithPanel)
+                RelationsPanel, ResearchPanel, RoutePanel, ShipMarketPanel,
+                SignPanel, SmithPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
                      nation_name, village_center)
@@ -760,6 +761,7 @@ def main() -> None:
     g.npc_tab = "inventory"
     g.persona_card = PersonaCard()
     g.mind_panel = MindPanel()
+    g.relations_panel = RelationsPanel()
 
     def draw_persona() -> None:
         """Shift the side panels right for the persona card; remember the
@@ -815,8 +817,9 @@ def main() -> None:
             return []
         panel = g.worker_panel._layout(*g.screen.get_size())[0]
         y = max(4, panel.top - 34)
-        return [(pygame.Rect(panel.left + 8, y, 124, 28), "inventory"),
-                (pygame.Rect(panel.left + 140, y, 124, 28), "mind")]
+        return [(pygame.Rect(panel.left + 6, y, 108, 28), "inventory"),
+                (pygame.Rect(panel.left + 118, y, 108, 28), "mind"),
+                (pygame.Rect(panel.left + 230, y, 108, 28), "relations")]
 
     def npc_tab_click(event) -> bool:
         if (event.type != pygame.MOUSEBUTTONDOWN or event.button != 1
@@ -838,7 +841,8 @@ def main() -> None:
                              rect, border_radius=6)
             pygame.draw.rect(g.screen, (222, 176, 88) if active else (110, 100, 86),
                              rect, 2, border_radius=6)
-            label = "INVENTORY" if tab == "inventory" else "MIND"
+            label = {"inventory": "INVENTORY", "mind": "MIND",
+                     "relations": "RELATIONS"}[tab]
             img = g.font.render(label, True,
                                 (242, 226, 172) if active else (170, 164, 152))
             g.screen.blit(img, (rect.centerx - img.get_width() // 2,
@@ -849,6 +853,13 @@ def main() -> None:
             return
         panel = g.worker_panel._layout(*g.screen.get_size())[0]
         g.mind_panel.draw(g.screen, g.persona, panel, g, g.persona_card)
+        draw_npc_tabs()
+
+    def draw_relations_panel() -> None:
+        if not g.worker_panel_open or g.worker_panel is None or g.persona is None:
+            return
+        panel = g.worker_panel._layout(*g.screen.get_size())[0]
+        g.relations_panel.draw(g.screen, g.persona, panel, g)
         draw_npc_tabs()
 
     # THE MARKET STALL: the player's counter, its prices, and its purse.
@@ -2127,6 +2138,7 @@ def main() -> None:
     g.npc_tab_click = npc_tab_click
     g.draw_npc_tabs = draw_npc_tabs
     g.draw_mind_panel = draw_mind_panel
+    g.draw_relations_panel = draw_relations_panel
     g.close_modals = close_modals
     g.commit_crime = commit_crime
     g.craft_at_table = craft_at_table

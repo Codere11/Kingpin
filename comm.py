@@ -127,6 +127,8 @@ def use_comm(target, kind, now, g=None):
             import player_mind as _pm
             _pm.observe(g, "initiated")
             _pm.observe(g, "contact", target)
+            import relationships as _rel
+            _rel.observe(target, g.player, kind, now, g)
     except Exception:
         pass
     return True, CAP_PER_DAY - rec[1]
@@ -263,7 +265,7 @@ def npc_chances(op, starving=False):
             max(0.0, min(100.0, threaten)))
 
 
-def _apply(speaker, target, kind):
+def _apply(speaker, target, kind, now=0.0, g=None):
     op, mood = EFFECT[kind]
     sid = getattr(speaker, "id", None)
     if sid is not None:
@@ -273,6 +275,13 @@ def _apply(speaker, target, kind):
     try:
         import mind as _mind
         _mind.apply_mood(target, mood, reason=kind)
+    except Exception:
+        pass
+    try:
+        if g is None:
+            g = getattr(getattr(speaker, "native_camp", None), "g", None)
+        import relationships as _rel
+        _rel.observe(target, speaker, kind, now, g)
     except Exception:
         pass
 
@@ -304,7 +313,7 @@ def npc_try_chat(speaker, others, now):
     o, oid = cands[rng.randrange(len(cands))]
     if spree:
         # NO LIMIT, NO COOLDOWN, ONE WORD: the spree insults everyone he meets.
-        _apply(speaker, o, "insult")
+        _apply(speaker, o, "insult", now)
         return (o, "insult")
     if now < float(getattr(speaker, "_chat_all_until", 0.0)):
         return None
@@ -326,7 +335,7 @@ def npc_try_chat(speaker, others, now):
     if n >= 10:
         speaker._chat_all_until = now + CHAT_ALL_CD
         speaker._chat_n = 0
-    _apply(speaker, o, kind)
+    _apply(speaker, o, kind, now)
     return (o, kind)
 
 

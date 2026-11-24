@@ -109,6 +109,11 @@ def restore(n, rec: dict, ctx: "_context.Context") -> object:
         persona.ensure(n)
     except Exception:
         pass
+    try:
+        import relationships
+        relationships.ensure(n)
+    except Exception:
+        pass
     refs = rec.get("refs") or {}
     ctx.later(lambda: _resolve(n, refs, ctx))
     return n

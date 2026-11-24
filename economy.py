@@ -1892,6 +1892,13 @@ def wronged(victim, attacker, amount: float = 20.0, now: float = 0.0,
         _mood.add_thought(victim, "wronged", -8.0, now, 180.0)
     except Exception:
         pass
+    try:
+        _rg = (getattr(getattr(victim, "native_camp", None), "g", None)
+               or getattr(getattr(attacker, "native_camp", None), "g", None))
+        import relationships as _rel
+        _rel.observe(victim, attacker, "wronged", now, _rg)
+    except Exception:
+        pass
     # AND HIS FRIENDS WHO SAW IT LIKE THE ATTACKER TEN LESS. A man is not
     # beaten in an empty street: whoever is standing there and thinks well of
     # him takes it personally.

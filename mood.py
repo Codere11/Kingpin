@@ -422,6 +422,11 @@ def tick(npc, now: float, dt: float, interval: float = 30.0) -> None:
         _needs.tick(npc, now, interval)
     except Exception:
         pass
+    try:
+        import relationships as _rel
+        _rel.tick(npc, now, interval)
+    except Exception:
+        pass
     npc.drunk_level = max(0.0, float(getattr(npc, "drunk_level", 0.0) or 0.0) - 0.5)
     npc.high_level = max(0.0, float(getattr(npc, "high_level", 0.0) or 0.0) - 0.5)
     if getattr(npc, "break_state", "normal") == "normal":

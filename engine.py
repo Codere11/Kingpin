@@ -3419,8 +3419,11 @@ def run(g):
             if g.stall_open:
                 g.stall_panel.draw(g.screen)
             if g.worker_panel_open:
-                if getattr(g, "npc_tab", "inventory") == "mind":
+                _tab = getattr(g, "npc_tab", "inventory")
+                if _tab == "mind":
                     g.draw_mind_panel()
+                elif _tab == "relations":
+                    g.draw_relations_panel()
                 else:
                     g.worker_panel.draw(g.screen)
                     g.draw_npc_tabs()
@@ -3985,8 +3988,11 @@ def run(g):
         if g.workshop_open:
             g.workshop_menu.draw(g.screen)
         if g.worker_panel_open:
-            if getattr(g, "npc_tab", "inventory") == "mind":
+            _tab = getattr(g, "npc_tab", "inventory")
+            if _tab == "mind":
                 g.draw_mind_panel()
+            elif _tab == "relations":
+                g.draw_relations_panel()
             else:
                 g.worker_panel.draw(g.screen)
                 g.draw_npc_tabs()

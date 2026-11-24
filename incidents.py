@@ -127,6 +127,8 @@ def insult(actor, target, kind, g, now, react_back=True):
             mind.apply_mood(target, delta, reason=kind)
             mood.add_thought(target, "threatened" if kind == "threaten" else "insulted",
                              delta, now, 300.0)
+            import relationships as _rel
+            _rel.observe(target, actor, kind, now, g)
         except Exception:
             pass
         if react_back:

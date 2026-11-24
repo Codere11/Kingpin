@@ -2284,6 +2284,62 @@ class MindPanel:
             pass
 
 
+class RelationsPanel:
+    """The third tab: who this person remembers, and how they feel."""
+
+    def __init__(self):
+        self.font_title = pygame.font.SysFont("dejavusans", 18, bold=True)
+        self.font = pygame.font.SysFont("dejavusans", 13)
+
+    def draw(self, screen, subject, panel_rect, g) -> None:
+        sw, sh = screen.get_size()
+        shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 120))
+        screen.blit(shade, (0, 0))
+        board = pygame.Surface(panel_rect.size, pygame.SRCALPHA)
+        pygame.draw.rect(board, (22, 20, 18, 244), board.get_rect(),
+                         border_radius=12)
+        pygame.draw.rect(board, (150, 118, 78), board.get_rect(), 2,
+                         border_radius=12)
+        screen.blit(board, panel_rect.topleft)
+        screen.blit(self.font_title.render(
+            "RELATIONS — %s" % getattr(subject, "name", "?"),
+            True, (238, 224, 190)), (panel_rect.left + 14, panel_rect.top + 12))
+        try:
+            import relationships as _rel
+            rows = _rel.summary(subject, limit=8)
+        except Exception:
+            rows = []
+        y = panel_rect.top + 42
+        if not rows:
+            screen.blit(self.font.render("No social history yet.", True,
+                                         (160, 156, 148)),
+                        (panel_rect.left + 14, y))
+            return
+        for row in rows:
+            label = row["label"]
+            if label in ("Hated", "Disliked", "Feared"):
+                col = (208, 112, 104)
+            elif label in ("Trusted", "Liked"):
+                col = (126, 184, 132)
+            else:
+                col = (206, 198, 178)
+            text = ("%s — %s   like %+.0f  fear %.0f  respect %+.0f"
+                    % (row["name"], label, row["affinity"], row["fear"],
+                       row["respect"]))
+            screen.blit(self.font.render(text, True, col),
+                        (panel_rect.left + 14, y))
+            y += 18
+            if row.get("last_event"):
+                ev = row["last_event"]
+                if len(ev) > 54:
+                    ev = ev[:51] + "..."
+                screen.blit(self.font.render(
+                    "   %s" % ev, True, (150, 146, 138)),
+                    (panel_rect.left + 24, y))
+                y += 16
+
+
 class MarketPanel(ChestPanel):
     """THE MARKET STALL, OPENED LIKE A CHEST.
 

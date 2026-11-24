@@ -505,6 +505,9 @@ class NPC:
     # of them lower the threshold and eventually become their own state.
     drunk_level: Any = 0.0
     high_level: Any = 0.0
+    # WHO HE REMEMBERS: the player and up to nine other people.  None is the
+    # lazy empty state; relationships.ensure() creates the dict on first use.
+    social_memory: Any = None
     break_state: Any = "normal"
     break_until: Any = 0.0
     break_cooldown: Any = 0.0
@@ -1859,6 +1862,11 @@ class NPC:
                 try:
                     mood.add_thought(target, "treated", 4.0, float(g.now),
                                      120.0)
+                except Exception:
+                    pass
+                try:
+                    import relationships as _rel
+                    _rel.observe(target, self, "heal", float(g.now), g)
                 except Exception:
                     pass
                 self._doc_target = None
