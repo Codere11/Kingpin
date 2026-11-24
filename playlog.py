@@ -53,6 +53,14 @@ def _people(camp):
     return out
 
 
+def _relations(npc, limit=5):
+    try:
+        import relationships
+        return relationships.summary(npc, limit=limit)
+    except Exception:
+        return []
+
+
 def _thoughts(npc, limit=4):
     try:
         import mood
@@ -126,6 +134,7 @@ def _camp_snapshot(camp, g):
             "target": round(float(getattr(p, "mood_target", 50.0)), 1),
             "break": getattr(p, "break_state", "normal"),
             "drivers": _thoughts(p),
+            "relations": _relations(p),
         })
     avg = sum(moods) / len(moods) if moods else 50.0
     return {
