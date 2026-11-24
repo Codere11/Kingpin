@@ -303,6 +303,11 @@ def run(g):
             social_life.tick(g, g.dt)
         except Exception:
             pass
+        try:
+            import events as _events
+            _events.tick(g, g.dt)
+        except Exception:
+            pass
         g.vw, g.vh = g.screen.get_size()
         g.mouse_x, g.mouse_y = pygame.mouse.get_pos()          # window space
         g.wmouse_x, g.wmouse_y = g.mouse_x / g.zoom, g.mouse_y / g.zoom  # world space
@@ -383,14 +388,17 @@ def run(g):
                 # the world does not stop for a menu.
                 pass
             elif (g.test_mode and event.type == pygame.KEYDOWN
-                  and event.key in (pygame.K_F5, pygame.K_F6,
+                  and event.key in (pygame.K_F4, pygame.K_F5, pygame.K_F6,
                                     pygame.K_F7, pygame.K_F8, pygame.K_F9,
                                     pygame.K_F10, pygame.K_F12)):
                 # THE NPC LAB (NPC.md Phase 0).  Test mode only; the normal
                 # game never imports or builds it.
                 try:
                     import npclab as _npclab
-                    if event.key == pygame.K_F5:
+                    if event.key == pygame.K_F4:
+                        import events as _events
+                        _events.spawn_test(g)
+                    elif event.key == pygame.K_F5:
                         _npclab.toggle(g)
                     elif event.key == pygame.K_F6:
                         _npclab.reset(g)
@@ -2093,6 +2101,11 @@ def run(g):
                         g.enemies.append(_s)
             for enemy in g.enemies:
                 if enemy.alive:
+                    # Event-owned wolves are moved by events.py, which knows
+                    # the native camp they came for. Do not let the generic
+                    # town targeter take them back over.
+                    if getattr(enemy, "event_ai", False):
+                        continue
                     # A marching column out in the open is walked by war.march
                     # and needs nothing else this frame. Only a column in
                     # contact -- at a wall, or meeting another -- costs the

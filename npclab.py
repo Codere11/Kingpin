@@ -633,7 +633,7 @@ def draw(g):
         n = subjects[sel % len(subjects)] if subjects else None
         lines = [
             ("NPC LAB  TEST ONLY", PANEL_HOT),
-            ("F5 hide F6 reset F7 next F8 mood F9 break F10 medicine", PANEL_DIM),
+            ("F4 wolves F5 hide F6 reset F7 next F8 mood F9 break F10 medicine", PANEL_DIM),
             ("F12 insult  Shift threat  Ctrl crops  Alt drink", PANEL_DIM),
         ]
         if n is None:
