@@ -239,8 +239,10 @@ class TreeSprites:
         if species == "cactus":
             return self._cactus(radius, rng, variant)
         if species == "jungle":
-            return self._broadleaf(radius, rng, variant, JUNGLE_PALETTE, 1.45, snowy)
-        return self._broadleaf(radius, rng, variant, PALETTE, 1.0, snowy)
+            return self._broadleaf(radius, rng, variant, JUNGLE_PALETTE, 1.45,
+                                   snowy, "jungle")
+        return self._broadleaf(radius, rng, variant, PALETTE, 1.0, snowy,
+                               "broadleaf")
 
     @staticmethod
     def _leaf_cluster(layer, x, y, size, rng, base, light=0.0):
@@ -255,9 +257,11 @@ class TreeSprites:
             pygame.draw.ellipse(layer, _rgba(col, CANOPY_ALPHA), rect)
             pygame.draw.ellipse(layer, _rgba(_darken(col, 25), 180), rect, 1)
 
-    def _make_branch_geo(self, cx, cy, ay, trunk_w, radius, rng, variant):
-        """Build vector branch segments: fixed at trunk, bending at the tips."""
+    def _make_branch_geo(self, cx, cy, ay, trunk_w, radius, rng, variant, color,
+                         species):
+        """Build vector branches and leaf particles attached to them."""
         segs = []
+        leaves = []
         def rec(x0, y0, ang, length, width, depth, ax, ay0):
             width = max(1, int(width))
             ex = x0 + math.cos(ang) * length
@@ -268,6 +272,14 @@ class TreeSprites:
             w0 = min(1.0, d0 / span)
             w1 = min(1.0, d1 / span)
             segs.append((x0, y0, ex, ey, width, w0, w1))
+            # Leaves grow from the branch itself, not a painted canopy.
+            if rng.random() < 0.42:
+                t = rng.uniform(0.48, 0.98)
+                lx = x0 + (ex - x0) * t
+                ly = y0 + (ey - y0) * t
+                leaves.append((lx, ly, radius * rng.uniform(0.028, 0.050),
+                               w0 + (w1 - w0) * t,
+                               _shade(color, rng.uniform(-0.30, 0.28))))
             if depth <= 0:
                 if rng.random() < 0.25:
                     # bare twig fork
@@ -278,6 +290,14 @@ class TreeSprites:
                                  min(1.0, math.hypot(ex - ax, ey - ay0) / span),
                                  min(1.0, math.hypot(tx - ax, ty - ay0) / span)))
                 return
+            for j in range(2 + (variant % 2)):
+                ang2 = rng.uniform(0.0, 2.0 * math.pi)
+                rr = length * rng.uniform(0.08, 0.22)
+                leaves.append((ex + math.cos(ang2) * rr,
+                               ey + math.sin(ang2) * rr,
+                               radius * rng.uniform(0.030, 0.055),
+                               w1,
+                               _shade(color, rng.uniform(-0.32, 0.30))))
             forks = 2 + (1 if rng.random() < 0.25 else 0)
             for k in range(forks):
                 spread = (k - (forks - 1) / 2.0) * rng.uniform(0.42, 0.72)
@@ -304,14 +324,16 @@ class TreeSprites:
             ex = x0 + math.cos(ang) * ln
             ey = y0 + math.sin(ang) * ln * 0.7
             segs.append((x0, y0, ex, ey, 2, 0.0, 0.0))
-        key = (round(float(radius), 2), int(variant))
-        self._branch_geo[key] = (segs, radius * 2.0 + 20.0)
+        key = (str(species), round(float(radius), 2), int(variant))
+        self._branch_geo[key] = (segs, leaves, radius * 2.0 + 20.0)
         return segs
 
-    def branch_geo(self, radius, variant):
-        return self._branch_geo.get((round(float(radius), 2), int(variant)))
+    def branch_geo(self, radius, variant, species):
+        return self._branch_geo.get((str(species), round(float(radius), 2),
+                                     int(variant)))
 
-    def _broadleaf(self, radius, rng, variant, palette, height, snowy=False):
+    def _broadleaf(self, radius, rng, variant, palette, height, snowy=False,
+                   species="broadleaf"):
         trunk_h = radius * 1.5 * height
         trunk_w = max(13, int(radius * 0.26))
         base_w = trunk_w * 1.7
@@ -345,36 +367,8 @@ class TreeSprites:
 
         canopy = pygame.Surface((w, h), pygame.SRCALPHA)
         base = palette[variant % len(palette)]
-        self._make_branch_geo(cx, cy, ay, trunk_w, radius, rng, variant)
-        # Hundreds of small leaf clusters instead of one green ball.  The
-        # irregular, overlapping particles leave sky and branches visible.
-        leaf_count = int(70 + radius * 1.35)
-        for i in range(leaf_count):
-            angle = rng.uniform(0.0, 2.0 * math.pi)
-            dist = radius * (rng.random() ** 0.55) * rng.uniform(0.55, 0.98)
-            lx = cx + math.cos(angle) * dist
-            ly = cy + math.sin(angle) * dist * 0.78
-            size = radius * rng.uniform(0.055, 0.105)
-            light = 0.42 - (lx - cx) / (2.8 * radius) - (ly - cy) / (3.2 * radius)
-            TreeSprites._leaf_cluster(canopy, lx, ly, size, rng, base, light)
-        # A sparse, darker underside gives depth without filling a disc.
-        for i in range(max(10, int(radius * 0.22))):
-            angle = rng.uniform(math.pi * 0.70, math.pi * 1.30)
-            dist = radius * rng.uniform(0.15, 0.72)
-            TreeSprites._leaf_cluster(canopy,
-                                      cx + math.cos(angle) * dist,
-                                      cy + math.sin(angle) * dist * 0.72,
-                                      radius * rng.uniform(0.04, 0.075),
-                                      rng, base, -0.45)
-        # Keep a few leaf clusters outside the main mass for a natural edge.
-        for i in range(max(5, int(radius * 0.07))):
-            angle = rng.uniform(0.0, 2.0 * math.pi)
-            dist = radius * rng.uniform(0.92, 1.12)
-            TreeSprites._leaf_cluster(canopy,
-                                      cx + math.cos(angle) * dist,
-                                      cy + math.sin(angle) * dist * 0.78,
-                                      radius * rng.uniform(0.035, 0.06),
-                                      rng, base, 0.2)
+        self._make_branch_geo(cx, cy, ay, trunk_w, radius, rng, variant, base,
+                              species)
         if snowy:                               # a dusting on the upper canopy
             for _ in range(rng.randint(10, 16)):
                 a = rng.uniform(math.pi * 1.02, math.pi * 1.98)
@@ -493,23 +487,8 @@ class TreeSprites:
                              (cx + side * radius * 0.75, cy0 - radius * 0.22),
                              max(3, int(radius * 0.09)))
         canopy = pygame.Surface((w, h), pygame.SRCALPHA)
-        cw, ch = radius * 1.9, radius * 0.72
-        top = cy0 - radius * 0.5
-        # Savannah/acacia crowns are a flat umbrella of small leaf clusters --
-        # not one solid green ellipse.  A few bare outer twigs break the edge.
-        for _ in range(int(55 + radius * 0.75)):
-            bx = cx + rng.uniform(-cw / 2, cw / 2) * rng.uniform(0.75, 1.0)
-            by = top + ch / 2 + rng.uniform(-ch / 2, ch / 2) * rng.uniform(0.6, 1.0)
-            size = radius * rng.uniform(0.035, 0.075)
-            light = 0.35 - (bx - cx) / (2.8 * radius) - (by - top) / (3.0 * ch)
-            TreeSprites._leaf_cluster(canopy, bx, by, size, rng, base, light)
-        for _ in range(5 + variant % 4):
-            ang = rng.uniform(math.pi * 1.02, math.pi * 1.98)
-            bx = cx + math.cos(ang) * cw * 0.48
-            by = top + ch / 2 + math.sin(ang) * ch * 0.42
-            ex = bx + math.cos(ang) * radius * rng.uniform(0.12, 0.28)
-            ey = by + math.sin(ang) * radius * rng.uniform(0.08, 0.20)
-            pygame.draw.line(canopy, (72, 54, 32), (bx, by), (ex, ey), 2)
+        # Acacia leaves are particles on the limbs too, not a painted umbrella.
+        self._make_branch_geo(cx, cy0, ay, tw, radius, rng, variant, base, "acacia")
         combined = surf.copy()
         combined.blit(canopy, (0, 0))
         return combined, surf, canopy, ax, ay
@@ -632,9 +611,9 @@ class Tree:
             screen.blit(canopy, (bx - sx + wx, by - sy + wy))
         # BRANCHES ARE VECTORS, NOT TWO RIGID PIECES.  Their first vertex is
         # pinned to the trunk; each later vertex bends more with distance.
-        geo = self._atlas.branch_geo(SIZES[self.size_class], self.variant)
+        geo = self._atlas.branch_geo(SIZES[self.size_class], self.variant, self.species)
         if geo is not None and self.species not in ("bare", "cactus", "conifer"):
-            segs, gw = geo
+            segs, leaves, gw = geo
             scale = self.canopy_r / float(SIZES[self.size_class])
             ox, oy = bx - sx, by - sy
             for x0, y0, x1, y1, width, w0, w1 in segs:
@@ -647,6 +626,14 @@ class Tree:
                 if width >= 3:
                     pygame.draw.line(screen, (100, 72, 46), p0, p1,
                                      max(1, int(width * scale) - 1))
+            for lx, ly, size, lw, col in leaves:
+                if self.flip:
+                    lx = gw - lx
+                px = ox + lx * scale + wx * lw
+                py = oy + ly * scale + wy * lw
+                r = max(1, int(size * scale))
+                pygame.draw.ellipse(screen, col, (int(px - r), int(py - r * 0.65),
+                                                   max(2, r * 2), max(2, int(r * 1.3))))
         wind.draw_leaves(screen, self.x, self.y, cam_x, cam_y,
                          self.canopy_r)
 
