@@ -143,6 +143,7 @@ class TreeSprites:
         self._splits: dict[tuple, tuple] = {}     # static base, moving green canopy
         self._exact: dict[tuple, tuple] = {}      # rendered trunk and canopy, unscaled
         self._branch_geo: dict[tuple, tuple] = {}
+        self._static_branch: dict[tuple, object] = {}
         self._stump = None
 
     def stump(self):
@@ -365,6 +366,39 @@ class TreeSprites:
     def branch_geo(self, radius, variant, species):
         return self._branch_geo.get((str(species), round(float(radius), 2),
                                      int(variant)))
+
+    def static_branch(self, species, size_class, variant, flip, radius, image):
+        """Cache the unbent branch/leaf layer for trees outside the wind."""
+        key = (str(species), int(size_class), int(variant), bool(flip),
+               round(float(radius), 1))
+        got = self._static_branch.get(key)
+        if got is not None:
+            return got
+        surf = pygame.Surface(image.get_size(), pygame.SRCALPHA)
+        geo = self._branch_geo.get((str(species), round(float(SIZES[size_class]), 2),
+                                    int(variant)))
+        if geo is not None:
+            segs, leaves, gw = geo
+            scale = float(radius) / float(SIZES[size_class])
+            for x0, y0, x1, y1, width, _w0, _w1 in segs:
+                if flip:
+                    x0, x1 = gw - x0, gw - x1
+                pygame.draw.line(surf, (48, 32, 20),
+                                 (x0 * scale, y0 * scale), (x1 * scale, y1 * scale),
+                                 max(1, int(width * scale) + 1))
+                if width >= 3:
+                    pygame.draw.line(surf, (100, 72, 46),
+                                     (x0 * scale, y0 * scale), (x1 * scale, y1 * scale),
+                                     max(1, int(width * scale) - 1))
+            for lx, ly, size, _lw, col in leaves:
+                if flip:
+                    lx = gw - lx
+                r = max(1, int(size * scale))
+                pygame.draw.ellipse(surf, col,
+                                    (int(lx * scale - r), int(ly * scale - r * 0.65),
+                                     max(2, r * 2), max(2, int(r * 1.3))))
+        self._static_branch[key] = surf
+        return surf
 
     def _broadleaf(self, radius, rng, variant, palette, height, snowy=False,
                    species="broadleaf"):
@@ -656,31 +690,40 @@ class Tree:
         screen.blit(base, (bx - sx, by - sy))
         if canopy is not None:
             screen.blit(canopy, (bx - sx + wx, by - sy + wy))
-        # BRANCHES ARE VECTORS, NOT TWO RIGID PIECES.  Their first vertex is
-        # pinned to the trunk; each later vertex bends more with distance.
-        geo = self._atlas.branch_geo(SIZES[self.size_class], self.variant, self.species)
-        if geo is not None and self.species not in ("bare", "cactus", "conifer"):
-            segs, leaves, gw = geo
-            scale = self.canopy_r / float(SIZES[self.size_class])
-            ox, oy = bx - sx, by - sy
-            for x0, y0, x1, y1, width, w0, w1 in segs:
-                if self.flip:
-                    x0, x1 = gw - x0, gw - x1
-                p0 = (ox + x0 * scale + wx * w0, oy + y0 * scale + wy * w0)
-                p1 = (ox + x1 * scale + wx * w1, oy + y1 * scale + wy * w1)
-                pygame.draw.line(screen, (48, 32, 20), p0, p1,
-                                 max(1, int(width * scale) + 1))
-                if width >= 3:
-                    pygame.draw.line(screen, (100, 72, 46), p0, p1,
-                                     max(1, int(width * scale) - 1))
-            for lx, ly, size, lw, col in leaves:
-                if self.flip:
-                    lx = gw - lx
-                px = ox + lx * scale + wx * lw
-                py = oy + ly * scale + wy * lw
-                r = max(1, int(size * scale))
-                pygame.draw.ellipse(screen, col, (int(px - r), int(py - r * 0.65),
-                                                   max(2, r * 2), max(2, int(r * 1.3))))
+        # Dynamic branches/leaves only inside the local wind field; every
+        # tree outside it uses one cached static branch layer.  This prevents
+        # the whole visible forest paying for animation it cannot show.
+        ox, oy = bx - sx, by - sy
+        if wind.local_strength(self.x, self.y) > 0.0:
+            geo = self._atlas.branch_geo(SIZES[self.size_class], self.variant,
+                                          self.species)
+            if geo is not None and self.species not in ("bare", "cactus", "conifer"):
+                segs, leaves, gw = geo
+                scale = self.canopy_r / float(SIZES[self.size_class])
+                for x0, y0, x1, y1, width, w0, w1 in segs:
+                    if self.flip:
+                        x0, x1 = gw - x0, gw - x1
+                    p0 = (ox + x0 * scale + wx * w0, oy + y0 * scale + wy * w0)
+                    p1 = (ox + x1 * scale + wx * w1, oy + y1 * scale + wy * w1)
+                    pygame.draw.line(screen, (48, 32, 20), p0, p1,
+                                     max(1, int(width * scale) + 1))
+                    if width >= 3:
+                        pygame.draw.line(screen, (100, 72, 46), p0, p1,
+                                         max(1, int(width * scale) - 1))
+                for lx, ly, size, lw, col in leaves:
+                    if self.flip:
+                        lx = gw - lx
+                    px = ox + lx * scale + wx * lw
+                    py = oy + ly * scale + wy * lw
+                    r = max(1, int(size * scale))
+                    pygame.draw.ellipse(screen, col,
+                                        (int(px - r), int(py - r * 0.65),
+                                         max(2, r * 2), max(2, int(r * 1.3))))
+        else:
+            static = self._atlas.static_branch(self.species, self.size_class,
+                                                self.variant, self.flip,
+                                                self.canopy_r, image)
+            screen.blit(static, (ox, oy))
         wind.draw_leaves(screen, self.x, self.y, cam_x, cam_y,
                          self.canopy_r)
 
