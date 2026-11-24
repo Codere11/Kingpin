@@ -123,9 +123,19 @@ def _environment(npc, now: float) -> None:
     else:
         _set(npc, "crowded", None, now)
 
-    # SAFETY.
-    conflict = (bool(getattr(camp, "conflict", False))
-                or int(getattr(g, "war_alarms", 0)) > 0)
+    # SAFETY.  A war alarm somewhere else is not a personal threat.  Only a
+    # live camp conflict or an enemy physically near this camp matters.
+    conflict = bool(getattr(camp, "conflict", False))
+    if not conflict:
+        for enemy in (getattr(g, "enemies", ()) or ()):
+            try:
+                if (getattr(enemy, "alive", True)
+                        and (enemy.x - npc.x) ** 2 + (enemy.y - npc.y) ** 2
+                        <= 320.0 ** 2):
+                    conflict = True
+                    break
+            except Exception:
+                pass
     if conflict:
         _set(npc, "threatened", -6.0, now)
         _set(npc, "safe", None, now)

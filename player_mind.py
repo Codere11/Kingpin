@@ -15,9 +15,10 @@ DECAY_INTERVAL = 2.0       # never per frame
 CONTACT_COOLDOWN = 60.0    # one F/T contact per NPC per minute
 MERCY_WINDOW = 20.0
 
-FIELDS = ("initiated", "responded", "sensing", "intuitive",
-          "f_contacts", "t_contacts", "conquered_provoked",
-          "conquered_retaliated", "conquered_merciful")
+FIELDS = ("initiated", "responded", "company", "solitude",
+          "sensing", "intuitive", "f_contacts", "t_contacts",
+          "conquered_provoked", "conquered_retaliated",
+          "conquered_merciful")
 
 
 def _seed(g) -> int:
@@ -33,7 +34,7 @@ def ensure(g) -> dict:
         for key in FIELDS:
             st[key] = 0.0
         # The rolled type is a prior, not a permanent label.
-        st["initiated" if start[0] == "E" else "responded"] = PRIOR
+        st["initiated" if start[0] == "E" else "solitude"] = PRIOR
         st["sensing" if start[1] == "S" else "intuitive"] = PRIOR
         st["f_contacts" if start[2] == "F" else "t_contacts"] = PRIOR
         st["conquered_retaliated" if start[3] == "J" else "conquered_merciful"] = PRIOR
@@ -41,6 +42,8 @@ def ensure(g) -> dict:
         return st
     for key in FIELDS:
         st.setdefault(key, 0.0)
+    st.setdefault("company", 0.0)
+    st.setdefault("solitude", 0.0)
     st.setdefault("start_type", persona.assign_from_key("player:%s" % _seed(g)))
     st.setdefault("_decay_t", 0.0)
     st.setdefault("_provoked_at", 0.0)
@@ -95,8 +98,39 @@ def observe(g, kind: str, subject=None, amount: float = 1.0) -> None:
         st["_retaliated"] = False
 
 
+def _sample_company(g, st) -> None:
+    """30-second company sample: being among people feeds E, being alone I."""
+    try:
+        people = list(getattr(g, "_native_people", ()) or ())
+        try:
+            import village as _v
+            people += list(getattr(_v, "TRAVELLERS", ()) or ())
+        except Exception:
+            pass
+        px, py = float(g.player.x), float(g.player.y)
+        near = 0
+        for p in people:
+            if not getattr(p, "alive", True):
+                continue
+            try:
+                if (p.x - px) ** 2 + (p.y - py) ** 2 <= 260.0 ** 2:
+                    near += 1
+            except Exception:
+                pass
+        if near >= 1:
+            st["company"] = float(st.get("company", 0.0)) + 1.0
+        else:
+            st["solitude"] = float(st.get("solitude", 0.0)) + 1.0
+    except Exception:
+        pass
+
+
 def tick(g, dt: float) -> None:
     st = ensure(g)
+    st["_social_t"] = float(st.get("_social_t", 0.0)) - max(0.0, dt)
+    if st["_social_t"] <= 0.0:
+        st["_social_t"] = 30.0
+        _sample_company(g, st)
     st["_decay_t"] = float(st.get("_decay_t", 0.0)) + max(0.0, dt)
     if st["_decay_t"] < DECAY_INTERVAL:
         return
@@ -127,7 +161,8 @@ def _pair(a: float, b: float, positive: str, negative: str):
 
 def summary(g) -> dict:
     st = ensure(g)
-    ie = _pair(st["initiated"], st["responded"], "E", "I")
+    ie = _pair(float(st.get("initiated", 0.0)) + float(st.get("company", 0.0)),
+               float(st.get("solitude", 0.0)), "E", "I")
     sn = _pair(st["sensing"], st["intuitive"], "S", "N")
     ft = _pair(st["f_contacts"], st["t_contacts"], "F", "T")
     jp_events = float(st["conquered_retaliated"]) + float(st["conquered_merciful"])
@@ -138,9 +173,10 @@ def summary(g) -> dict:
     letters = "".join(pair[2][0] for pair in axes)
     line = ""
     if ie[2] >= 5.0:
-        line = ("You start conversations more than you answer them."
-                if st["initiated"] > st["responded"]
-                else "You usually let other people speak first.")
+        line = ("You seek out company and conversation."
+                if (st["initiated"] + st.get("company", 0.0))
+                > st.get("solitude", 0.0)
+                else "You keep your own company more often than not.")
     elif sn[2] >= 5.0:
         line = ("You prefer work you can do with your hands."
                 if st["sensing"] > st["intuitive"]
