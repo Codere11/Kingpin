@@ -454,22 +454,29 @@ class Tree:
                                             self.canopy_r)
         bx = self.x - cam_x
         by = self.y - cam_y
-        angle = wind.tree_angle(self.x, self.y)
-        if abs(angle) > 0.05:
-            rot = pygame.transform.rotate(image, angle)
-            cx, cy = image.get_width() / 2.0, image.get_height() / 2.0
-            vx, vy = sx - cx, sy - cy
-            rad = math.radians(angle)
-            rx = vx * math.cos(rad) - vy * math.sin(rad)
-            ry = vx * math.sin(rad) + vy * math.cos(rad)
-            ax = rot.get_width() / 2.0 + rx
-            ay = rot.get_height() / 2.0 + ry
-            screen.blit(rot, (bx - ax, by - ay))
-        else:
+        if self.felled:
             screen.blit(image, (bx - sx, by - sy))
-        if not self.felled:
-            wind.draw_leaves(screen, self.x, self.y, cam_x, cam_y,
-                             self.canopy_r)
+            return
+        # ONLY THE CANOPY MOVES.  Split the baked sprite at the crown/trunk
+        # boundary: draw the trunk and lower crown where they belong, then
+        # draw the upper crown shifted in the wind.  Rotating the whole tree
+        # made the trunk dance too, which is exactly what a tree does not do.
+        wx, wy = wind.sway(self.x, self.y, 1.0)
+        wx *= 2.8
+        wy *= 1.8
+        h = image.get_height()
+        # Atlas anchor `sy` is the tree's base; `canopy_r` is its crown size.
+        cut = int(sy - h + 2.0 * self.canopy_r + 20.0)
+        cut = max(8, min(h - 8, cut))
+        if abs(wx) < 0.05 and abs(wy) < 0.05:
+            screen.blit(image, (bx - sx, by - sy))
+        else:
+            lower = image.subsurface((0, cut, image.get_width(), h - cut))
+            upper = image.subsurface((0, 0, image.get_width(), cut))
+            screen.blit(lower, (bx - sx, by - sy + cut))
+            screen.blit(upper, (bx - sx + wx, by - sy + wy))
+        wind.draw_leaves(screen, self.x, self.y, cam_x, cam_y,
+                         self.canopy_r)
 
 
 class Trees:
