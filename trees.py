@@ -346,6 +346,18 @@ class TreeSprites:
             rec(x0, y0, ang, radius * rng.uniform(0.36, 0.72),
                 max(2, int(radius * rng.uniform(0.040, 0.062))),
                 2 + (variant % 2), x0, y0)
+        # THE APEX ALWAYS GROWS: a central leader and two short top sprays,
+        # so the trunk never ends as a bare stick with leaves floating above.
+        top_y0 = cy + 4
+        top_x0 = cx + trunk_off(top_y0)
+        top_angles = (-math.pi / 2.0 - 0.42, -math.pi / 2.0 + 0.42,
+                      -math.pi / 2.0)
+        for i, ang in enumerate(top_angles):
+            if i == 2 and variant % 3 == 0:
+                continue
+            rec(top_x0, top_y0, ang + rng.uniform(-0.08, 0.08),
+                radius * rng.uniform(0.28, 0.46),
+                max(2, int(radius * 0.045)), 1, top_x0, top_y0)
         key = (str(species), round(float(radius), 2), int(variant))
         self._branch_geo[key] = (segs, leaves, radius * 2.0 + 20.0)
         return segs
