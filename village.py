@@ -1847,14 +1847,81 @@ class NPC:
                 best, bd, best_items = ch, d, tuple(items)
         return best, best_items
 
+    def _trader_pack(self):
+        """The trader carries goods in his REAL pack, so they appear in his card."""
+        try:
+            import work as _work
+            return _work.bag(self)
+        except Exception:
+            return getattr(self, "pack", None)
+
+    def _trader_load(self):
+        load = getattr(self, "trader_load", None)
+        if not isinstance(load, dict):
+            load = self.trader_load = {}
+        return load
+
+    def _trader_migrate_carry(self) -> None:
+        """Old traders kept goods in the hidden job `carry` dict. Move them into
+        the real pack once, so an existing trip is not invisible."""
+        carry = getattr(self, "carry", None)
+        if not isinstance(carry, dict) or not carry:
+            return
+        inv = self._trader_pack()
+        load = self._trader_load()
+        try:
+            import items as _items
+            import market as _market
+            sellable = set(_market.sellable(getattr(getattr(self, "native_camp", None), "g", None)))
+        except Exception:
+            sellable = set()
+        grades = getattr(self, "carry_grade", {}) or {}
+        for item, qty in list(carry.items()):
+            qty = int(qty or 0)
+            if qty <= 0:
+                carry.pop(item, None)
+                continue
+            if inv is None:
+                continue
+            take = qty
+            try:
+                import work as _work
+                take = min(qty, _work.can_hold(inv, item, qty))
+            except Exception:
+                pass
+            if take <= 0:
+                continue
+            grade = int(grades.get(item, 4) or 4)
+            if getattr(_items.get(item), "quality", False):
+                inv.add(item, take, quality=grade)
+            else:
+                inv.add(item, take)
+            load[item] = int(load.get(item, 0)) + take
+            try:
+                self.carry_grade[item] = int(grade)
+            except Exception:
+                pass
+            if take >= qty:
+                carry.pop(item, None)
+                grades.pop(item, None)
+            else:
+                carry[item] = qty - take
+
     def _work_trader(self, dt: float) -> None:
         """Gather at least 50 sellable goods, run them to the ship, bring the
-        coin back, and hand it to the player when he is nearby."""
+        coin back, and hand it to the player when he is nearby.
+
+        The goods live in his actual pack, not a hidden carry dict: click the
+        trader and you can see exactly what he has taken.
+        """
         camp = getattr(self, "native_camp", None)
         g = getattr(camp, "g", None) if camp is not None else None
         if g is None:
             self._native_idle(dt)
             return
+        self._trader_migrate_carry()
+        load = self._trader_load()
+        inv = self._trader_pack()
         state = getattr(self, "trader_state", "idle")
         if state == "sailing":
             self.trader_t = float(getattr(self, "trader_t", 0.0)) - dt
@@ -1863,15 +1930,25 @@ class NPC:
             try:
                 import market
                 coin = 0.0
-                for item in list(getattr(self, "carry", {}) or {}):
-                    qty = int(self.carry.get(item, 0) or 0)
+                for item, qty in list(load.items()):
+                    qty = int(qty or 0)
                     if qty <= 0 or item not in market.sellable(g):
+                        load.pop(item, None)
                         continue
-                    grade = int(self.carry_grade.get(item, 4) or 4)
+                    # Never sell what is no longer in the pack (the player may
+                    # have taken it out while the trader was at sea).
+                    have = int(inv.count_of(item)) if inv is not None else 0
+                    qty = min(qty, have)
+                    if qty <= 0:
+                        load.pop(item, None)
+                        continue
+                    grade = int((getattr(self, "carry_grade", {}) or {}).get(item, 4) or 4)
                     # The trader gets 80% of what the player/horse would get.
                     coin += market.sell_value(g, item, qty, grade) * 0.80
-                    self.carry.pop(item, None)
-                    self.carry_grade.pop(item, None)
+                    if inv is not None:
+                        inv.consume(item, qty)
+                    load.pop(item, None)
+                self.trader_load = {}
                 self.trader_coin = float(getattr(self, "trader_coin", 0.0)) + coin
                 self.trader_state = "paying"
                 try:
@@ -1903,12 +1980,7 @@ class NPC:
             return
 
         # GATHERING: only sellable goods in chests count.
-        total = 0
-        for item, qty in (getattr(self, "carry", {}) or {}).items():
-            try:
-                total += int(qty)
-            except Exception:
-                pass
+        total = sum(int(q or 0) for q in load.values())
         if total >= 50:
             self.trader_state = "sailing"
             self.trader_t = 45.0
@@ -1925,15 +1997,35 @@ class NPC:
         if math.hypot(chest.x - self.x, chest.y - self.y) > 22.0:
             self._step_toward(chest.x, chest.y, dt)
             return
-        # Take what is here, up to the 50-piece target.
+        # Take what is here, up to the 50-piece target, into the REAL pack.
         need = 50 - total
+        try:
+            import work as _work
+        except Exception:
+            _work = None
         for item in items:
             if need <= 0:
                 break
-            take, grade = self._take_from_chest(chest, item, need)
+            want = need
+            if _work is not None and inv is not None:
+                want = min(need, _work.can_hold(inv, item, need))
+            if want <= 0:
+                continue
+            take, grade = self._take_from_chest(chest, item, want)
             if take > 0:
-                self.carry[item] = int(self.carry.get(item, 0) or 0) + take
-                self.carry_grade[item] = grade
+                try:
+                    import items as _items
+                    if getattr(_items.get(item), "quality", False):
+                        inv.add(item, take, quality=int(grade))
+                    else:
+                        inv.add(item, take)
+                except Exception:
+                    pass
+                load[item] = int(load.get(item, 0) or 0) + take
+                try:
+                    self.carry_grade[item] = int(grade)
+                except Exception:
+                    pass
                 need -= take
 
     def _work_doctor(self, dt: float) -> None:
