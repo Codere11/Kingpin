@@ -262,6 +262,11 @@ def run(g):
             player_mind.tick(g, g.dt)
         except Exception:
             pass
+        try:
+            import playlog
+            playlog.tick(g, g.dt)
+        except Exception:
+            pass
         g.vw, g.vh = g.screen.get_size()
         g.mouse_x, g.mouse_y = pygame.mouse.get_pos()          # window space
         g.wmouse_x, g.wmouse_y = g.mouse_x / g.zoom, g.mouse_y / g.zoom  # world space

@@ -129,6 +129,13 @@ def insult(actor, target, kind, g, now, react_back=True):
                              delta, now, 300.0)
             import relationships as _rel
             _rel.observe(target, actor, kind, now, g)
+            try:
+                import playlog as _pl
+                _pl.record(g, "social", action=kind,
+                           actor=getattr(actor, "name", "?"),
+                           target=getattr(target, "name", "you"))
+            except Exception:
+                pass
         except Exception:
             pass
         if react_back:

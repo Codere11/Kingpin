@@ -1897,6 +1897,14 @@ def wronged(victim, attacker, amount: float = 20.0, now: float = 0.0,
                or getattr(getattr(attacker, "native_camp", None), "g", None))
         import relationships as _rel
         _rel.observe(victim, attacker, "wronged", now, _rg)
+        try:
+            import playlog as _pl
+            _pl.record(_rg, "combat", action="wronged",
+                       attacker=getattr(attacker, "name", "you"),
+                       victim=getattr(victim, "name", "?"),
+                       amount=amount)
+        except Exception:
+            pass
     except Exception:
         pass
     # AND HIS FRIENDS WHO SAW IT LIKE THE ATTACKER TEN LESS. A man is not

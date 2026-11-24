@@ -129,6 +129,9 @@ def use_comm(target, kind, now, g=None):
             _pm.observe(g, "contact", target)
             import relationships as _rel
             _rel.observe(target, g.player, kind, now, g)
+            import playlog as _pl
+            _pl.record(g, "interaction", action=kind,
+                       target=getattr(target, "name", "?"))
     except Exception:
         pass
     return True, CAP_PER_DAY - rec[1]

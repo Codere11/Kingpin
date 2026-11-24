@@ -1040,6 +1040,11 @@ def main() -> None:
         g.dialogue_panel.open(npc, g.player, _main_capital()[0])
         pygame.mouse.set_visible(True)
         plog.log("TALK", "opened with", getattr(npc, "name", "?"))
+        try:
+            import playlog as _pl
+            _pl.record(g, "interaction", action="talk", target=getattr(npc, "name", "?"))
+        except Exception:
+            pass
 
     def open_trade_menu(npc) -> None:
         make_tradeable(npc)
@@ -1047,6 +1052,11 @@ def main() -> None:
         g.trade_open = True
         pygame.mouse.set_visible(True)
         plog.log("TRADE", "opened with", getattr(npc, "name", "?"))
+        try:
+            import playlog as _pl
+            _pl.record(g, "interaction", action="trade", target=getattr(npc, "name", "?"))
+        except Exception:
+            pass
 
     def nearest_hostile(npc):
         return None
@@ -1071,6 +1081,11 @@ def main() -> None:
     def fire() -> None:
         combat_actions.fire(g.player, g.inventory, g.skills, g.combat, g.cam_x, g.cam_y,
                             ZOOM, toast)
+        try:
+            import playlog as _pl
+            _pl.record(g, "combat", action="fire")
+        except Exception:
+            pass
 
     def use_first_aid() -> None:
         playerutil.use_first_aid(g.player, g.inventory, toast)
@@ -1108,6 +1123,8 @@ def main() -> None:
         try:
             import player_mind as _pm
             _pm.observe(g, "sensing")
+            import playlog as _pl
+            _pl.record(g, "action", action="axe", item="axe")
         except Exception:
             pass
 
@@ -1217,11 +1234,11 @@ def main() -> None:
             truth=g._TRUTH, main_capital=_main_capital, village_plots=g.village_plots,
             fire=fire, use_axe=use_axe, use_pickaxe=use_pickaxe,
             use_first_aid=use_first_aid, try_sleep=try_sleep,
+            root=g,
             guard_search=guard_search, open_trade=open_trade,
             commit_crime=commit_crime, pay_share=pay_share,
             tile_is_mine=tile_is_mine, near_fireplace=near_fireplace, toast=toast,
             comm=g.comm,
-            root=g,
             confirm_open=g.confirm_open)
         g.confirm_open = combat_actions.on_click(_g)
 
@@ -1286,6 +1303,13 @@ def main() -> None:
                                         toast, hubs, g.villages, g.hub_world,
                                         g.player, g.built_plots, mark_dirty,
                                         plog)
+        try:
+            import playlog as _pl
+            _pl.record(g, "action", action="designate",
+                       design=("orchard" if g.field_mode == "orchard" else "field"),
+                       plots=len(g.built_plots), fields=len(g.field_designations))
+        except Exception:
+            pass
 
     def try_place() -> None:
         
@@ -1308,6 +1332,8 @@ def main() -> None:
             try:
                 import player_mind as _pm
                 _pm.observe(g, "sensing")
+                import playlog as _pl
+                _pl.record(g, "action", action="build", building=str(_before_place))
             except Exception:
                 pass
 
@@ -1607,6 +1633,11 @@ def main() -> None:
 
     def craft_at_table() -> None:
         houseuse.craft_at_table(g.player, g.inventory, g.skills, toast)
+        try:
+            import playlog as _pl
+            _pl.record(g, "action", action="craft", station="lab")
+        except Exception:
+            pass
 
     def near_workshop() -> bool:
         return houseuse.near_workshop(g.player, g.inside_house)
@@ -1620,6 +1651,13 @@ def main() -> None:
         g.work_cd, _msg = houseuse.work_action(key, g.smith_shop, g.player, g.now,
                                              economy, g.inventory, g.skills, random,
                                              pay_share, quality, ironworking=_iw)
+        try:
+            import playlog as _pl
+            _pl.record(g, "action", action="work",
+                       station=getattr(getattr(g, "smith_shop", None), "kind", ""),
+                       result=_msg)
+        except Exception:
+            pass
         return _msg
 
     def near_fireplace() -> bool:

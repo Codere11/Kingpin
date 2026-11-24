@@ -888,6 +888,12 @@ def on_click(g):
         if farm.harvest(g.world, g.inventory, plot, g.now, g.toast, grade,
                         skill=g.skills.farming,
                         tx=tx, ty=ty, share=g.pay_share):
+            try:
+                import playlog as _pl
+                _pl.record(getattr(g, "root", None), "action",
+                           action="harvest", crop=plot.kind)
+            except Exception:
+                pass
             # The same rate the farmers get. At the old default (0.12) the
             # g.player reached skill 8 in ~67 harvests -- SSS tobacco by day
             # two, against three weeks for the men who do it for a living.
@@ -899,6 +905,12 @@ def on_click(g):
         if farm.harvest(g.world, g.inventory, plot, g.now, g.toast, tx=tx, ty=ty,
                         skill=g.skills.farming,
                         share=g.pay_share):
+            try:
+                import playlog as _pl
+                _pl.record(getattr(g, "root", None), "action",
+                           action="harvest", crop=plot.kind)
+            except Exception:
+                pass
             if (tx, ty) in g.village_plots and not g.tile_is_mine(tx, ty):
                 g.commit_crime()
         return
@@ -906,6 +918,12 @@ def on_click(g):
         if farm.harvest(g.world, g.inventory, plot, g.now, g.toast,
                         tx=tx, ty=ty, skill=g.skills.farming,
                         share=g.pay_share):
+            try:
+                import playlog as _pl
+                _pl.record(getattr(g, "root", None), "action",
+                           action="harvest", crop=plot.kind)
+            except Exception:
+                pass
             g.skills.gain_farming(0.02)
             if (tx, ty) in g.village_plots and not g.tile_is_mine(tx, ty):
                 g.commit_crime()
@@ -925,6 +943,13 @@ def on_click(g):
     elif item_id in crop.SEED_CROP:
         _sown = farm.plant(g.world, g.ground, g.inventory, tx, ty, g.now, g.toast,
                            item_id, g.skills.farming)
+        if _sown:
+            try:
+                import playlog as _pl
+                _pl.record(getattr(g, "root", None), "action",
+                           action="plant", seed=item_id)
+            except Exception:
+                pass
         if _sown and g.tile_is_mine(tx, ty):
             # A PLOT OF HIS OWN, and what a hired farmer can be put to.
             if not isinstance(getattr(g.player, "plots", None), set):

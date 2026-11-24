@@ -101,6 +101,7 @@ done
     --hidden-import needs \
     --hidden-import incidents \
     --hidden-import relationships \
+    --hidden-import playlog \
     "${DATA_ARGS[@]}" \
     main.py 2>&1 | tail -1
 
