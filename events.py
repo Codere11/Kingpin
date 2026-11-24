@@ -241,6 +241,7 @@ class RogueRaider:
         w.name = "rogue warrior"
         w.event_ai = True
         w.hostile = True
+        w.no_flag = True
         w.team = ("rogue", None)
         w.aware = True
         w.aware_timer = 600.0
@@ -249,6 +250,7 @@ class RogueRaider:
         g.enemies.append(w)
         self.raider = w
         self.targets = _people(camp)
+        self.target = None
         _record(g, "rogue_arrive", camp=getattr(camp, "name", "camp"),
                 x=round(x, 1), y=round(y, 1))
         _toast(g, "A rogue warrior is coming toward %s" % getattr(camp, "name", "the camp"))
@@ -264,21 +266,23 @@ class RogueRaider:
                     outcome="killed")
             _toast(self.g, "The rogue warrior is dead")
             return
-        live = [p for p in self.targets if getattr(p, "alive", True)]
-        player = getattr(self.g, "player", None)
-        if player is not None and getattr(player, "alive", True):
-            live = live + [player]
-        target = min(live, key=lambda p: (p.x - w.x) ** 2 + (p.y - w.y) ** 2) if live else None
+        target = getattr(self, "target", None)
+        if target is None or not getattr(target, "alive", True):
+            live = [p for p in self.targets if getattr(p, "alive", True)]
+            player = getattr(self.g, "player", None)
+            if player is not None and getattr(player, "alive", True):
+                live = live + [player]
+            target = (min(live, key=lambda p: (p.x - w.x) ** 2
+                          + (p.y - w.y) ** 2) if live else None)
+            self.target = target
         if target is None:
             self.done = True
             return
-        dx, dy = target.x - w.x, target.y - w.y
-        d = math.hypot(dx, dy) or 1.0
-        w.facing = (dx / d, dy / d)
+        # MELEE LIKE A MAN, NOT THE SOLDIER'S FULL TARGETING LOOP.  The old
+        # update re-decided the nearest target every tick, so he flipped
+        # between two people and looked like he was vibrating.
         w._rects = getattr(self.g, "colliders", ()) or ()
-        w.update(dt, target, getattr(self.g, "combat", None),
-                 speed_scale=1.0, view_scale=1.0, visible=True,
-                 colliders=w._rects)
+        w._fight(dt, target, getattr(self.g, "combat", None), 0.72, True)
         if self.age > 90.0:
             self.done = True
             _record(self.g, "rogue_end", camp=getattr(self.camp, "name", "camp"),
@@ -335,15 +339,22 @@ class HorseVisit:
         self.camp = camp
         self.done = True
         rng = rng or random.Random(int(getattr(g, "now", 0.0) * 953) ^ id(camp))
-        ang = rng.uniform(0.0, 2.0 * math.pi)
+        player = getattr(g, "player", None)
+        dx = float(camp.x) - float(getattr(player, "x", camp.x))
+        dy = float(camp.y) - float(getattr(player, "y", camp.y))
+        base = math.atan2(dy, dx) if (abs(dx) + abs(dy) > 1.0) else rng.uniform(0.0, 2.0 * math.pi)
         for i in range(2):
-            x = float(camp.x) + math.cos(ang) * (220.0 + i * 45.0)
-            y = float(camp.y) + math.sin(ang) * (220.0 + i * 45.0)
+            # Start well away from the player and walk in toward the camp.
+            ang = base + (i - 0.5) * 0.22
+            x = float(camp.x) + math.cos(ang) * 900.0
+            y = float(camp.y) + math.sin(ang) * 900.0
             h = creatures.Horse(x, y, rng.choice(("brown", "black", "white", "palomino")))
             h.tamed = True
             h.conquered = True
             h.g = g
-            h.home = (x, y)
+            h.home = (float(camp.x) + (i - 0.5) * 45.0,
+                      float(camp.y) + 35.0)
+            h.target = h.home
             g.horses.append(h)
         _record(g, "horses_join", camp=getattr(camp, "name", "camp"), count=2)
         _toast(g, "Horses have joined %s" % getattr(camp, "name", "the camp"))
@@ -375,17 +386,26 @@ class RainEvent:
 
 
 class BlightEvent:
-    """A patch of crop disease: the first infected tile is visibly lost."""
+    """A patch of crop disease with a visible sick patch for a minute."""
 
     def __init__(self, g, camp):
         self.g = g
         self.camp = camp
-        self.done = True
+        self.age = 0.0
+        self.done = False
+        self.mark = None
         plots = list((getattr(camp, "farm_tiles", {}) or {}).values())
         tiles = [t for group in plots for t in (group or ())]
         if not tiles:
+            self.done = True
             return
         tx, ty, _kind = random.choice(tiles)
+        self.mark = {"x": tx * 32.0 + 16.0, "y": ty * 32.0 + 16.0,
+                     "until": float(getattr(g, "now", 0.0)) + 75.0}
+        marks = getattr(g, "_blight_marks", None)
+        if marks is None:
+            marks = g._blight_marks = []
+        marks.append(self.mark)
         try:
             g.world.set_plot(int(tx), int(ty), "grass", None)
             g.ground.invalidate_tile(int(tx), int(ty), immediate=True)
@@ -396,7 +416,15 @@ class BlightEvent:
         _toast(g, "Blight has taken a crop in %s" % getattr(camp, "name", "the camp"))
 
     def tick(self, dt):
-        pass
+        if self.done:
+            return
+        self.age += dt
+        if self.mark is not None:
+            marks = getattr(self.g, "_blight_marks", [])
+            if self.age >= 75.0 and self.mark in marks:
+                marks.remove(self.mark)
+            if self.age >= 75.0:
+                self.done = True
 
 
 class Director:
@@ -561,6 +589,14 @@ def cycle_test(g):
 
 def draw(g, screen):
     """Light rain streaks while a RainEvent is active."""
+    marks = list(getattr(g, "_blight_marks", ()) or ())
+    if marks:
+        for mark in marks:
+            sx = mark["x"] - g.cam_x
+            sy = mark["y"] - g.cam_y
+            pygame.draw.circle(screen, (116, 104, 44), (int(sx), int(sy)), 13)
+            pygame.draw.circle(screen, (176, 156, 54), (int(sx), int(sy)), 9)
+            pygame.draw.circle(screen, (216, 196, 64), (int(sx - 3), int(sy - 3)), 4)
     if float(getattr(g, "_rain_t", 0.0)) <= 0.0:
         return
     w, h = screen.get_size()
@@ -569,5 +605,5 @@ def draw(g, screen):
     for i in range(160):
         x = int((i * 97 + ticks * (0.8 + (i % 5) * 0.12)) % (w + 80)) - 40
         y = int((i * 61 + ticks * 2.2) % (h + 80)) - 40
-        pygame.draw.line(layer, (180, 196, 220, 110), (x, y), (x - 4, y + 18), 1)
+        pygame.draw.line(layer, (105, 165, 235, 155), (x, y), (x - 6, y + 24), 2)
     screen.blit(layer, (0, 0))

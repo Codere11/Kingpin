@@ -516,11 +516,13 @@ class Soldier(Enemy):
             except Exception:
                 pass
         # Nation pennant, so the armies are never mistaken for each other.
-        pygame.draw.line(screen, (44, 38, 30), (sx + 7, sy - 6), (sx + 7, sy - 30), 2)
-        pygame.draw.polygon(screen, self.color,
-                            [(sx + 7, sy - 30), (sx + 21, sy - 26), (sx + 7, sy - 22)])
-        pygame.draw.polygon(screen, (26, 22, 18),
-                            [(sx + 7, sy - 30), (sx + 21, sy - 26), (sx + 7, sy - 22)], 1)
+        # A rogue belongs to no nation and carries no flag.
+        if not getattr(self, "no_flag", False):
+            pygame.draw.line(screen, (44, 38, 30), (sx + 7, sy - 6), (sx + 7, sy - 30), 2)
+            pygame.draw.polygon(screen, self.color,
+                                [(sx + 7, sy - 30), (sx + 21, sy - 26), (sx + 7, sy - 22)])
+            pygame.draw.polygon(screen, (26, 22, 18),
+                                [(sx + 7, sy - 30), (sx + 21, sy - 26), (sx + 7, sy - 22)], 1)
         if getattr(self, "friendly", False):       # your nation: teal ring
             pygame.draw.circle(screen, (110, 226, 226), (int(sx), int(sy)), 15, 2)
         if getattr(self, "follow", False):        # your squad: gold chevron
