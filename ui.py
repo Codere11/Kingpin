@@ -1949,31 +1949,93 @@ class ResearchPanel:
                 screen.blit(s, (btn.centerx - s.get_width() // 2,
                                 btn.centery - s.get_height() // 2))
 class PauseMenu:
-    """Escape menu: Respawn or Exit game (Esc resumes)."""
+    """Escape menu: resume, options, respawn, or exit.
 
-    def __init__(self) -> None:
+    The options page is the same master-sound and fullscreen controls as the
+    main menu, but applies them to the running game immediately.
+    """
+
+    def __init__(self, fullscreen: bool = False, set_fullscreen=None) -> None:
+        self.page = "main"
         self.hover = None
+        self.fullscreen = bool(fullscreen)
+        self.set_fullscreen = set_fullscreen
+        self.volume = sound.get_volume()
+        self.drag = False
         self.font_title = pygame.font.SysFont("dejavusans", 26, bold=True)
         self.font_btn = pygame.font.SysFont("dejavusans", 16, bold=True)
         self.font_small = pygame.font.SysFont("dejavusans", 12, bold=True)
 
     def _rects(self, sw: int, sh: int):
-        w, h = 320, 196
+        if self.page == "options":
+            w, h = 360, 246
+            x0, y0 = (sw - w) // 2, (sh - h) // 2
+            panel = pygame.Rect(x0, y0, w, h)
+            volume = pygame.Rect(x0 + 36, y0 + 68, w - 72, 40)
+            full = pygame.Rect(x0 + 36, y0 + 116, w - 72, 40)
+            back = pygame.Rect(x0 + 36, y0 + 174, w - 72, 40)
+            return panel, (volume, full, back)
+        w, h = 320, 292
         x0, y0 = (sw - w) // 2, (sh - h) // 2
         panel = pygame.Rect(x0, y0, w, h)
-        respawn = pygame.Rect(x0 + 40, y0 + 70, w - 80, 44)
-        exit_r = pygame.Rect(x0 + 40, y0 + 124, w - 80, 44)
-        return panel, respawn, exit_r
+        resume = pygame.Rect(x0 + 40, y0 + 62, w - 80, 40)
+        options = pygame.Rect(x0 + 40, y0 + 110, w - 80, 40)
+        respawn = pygame.Rect(x0 + 40, y0 + 158, w - 80, 40)
+        exit_r = pygame.Rect(x0 + 40, y0 + 206, w - 80, 40)
+        return panel, (resume, options, respawn, exit_r)
+
+    def _set_volume(self, x: float, rect: pygame.Rect) -> None:
+        self.volume = max(0.0, min(1.0, (x - rect.left) / max(1, rect.width)))
+        try:
+            sound.set_volume(self.volume)
+        except Exception:
+            pass
 
     def handle_event(self, event):
         surface = pygame.display.get_surface()
         if surface is None:
             return None
-        _panel, respawn, exit_r = self._rects(*surface.get_size())
+        sw, sh = surface.get_size()
+        _panel, rects = self._rects(sw, sh)
+        if self.page == "options":
+            volume, full, back = rects
+            if event.type == pygame.MOUSEMOTION:
+                self.hover = ("volume" if volume.collidepoint(event.pos)
+                              else "fullscreen" if full.collidepoint(event.pos)
+                              else "back" if back.collidepoint(event.pos) else None)
+                if self.drag:
+                    self._set_volume(event.pos[0], volume)
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                self.drag = False
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if volume.collidepoint(event.pos):
+                    self.drag = True
+                    self._set_volume(event.pos[0], volume)
+                elif full.collidepoint(event.pos):
+                    self.fullscreen = not self.fullscreen
+                    try:
+                        if self.set_fullscreen is not None:
+                            self.set_fullscreen(self.fullscreen)
+                    except Exception:
+                        pass
+                elif back.collidepoint(event.pos):
+                    return "back"
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return "back"
+            return None
+
+        resume, options, respawn, exit_r = rects
         if event.type == pygame.MOUSEMOTION:
-            self.hover = ("respawn" if respawn.collidepoint(event.pos)
+            self.hover = ("resume" if resume.collidepoint(event.pos)
+                          else "options" if options.collidepoint(event.pos)
+                          else "respawn" if respawn.collidepoint(event.pos)
                           else "exit" if exit_r.collidepoint(event.pos) else None)
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if resume.collidepoint(event.pos):
+                return "close"
+            if options.collidepoint(event.pos):
+                return "options"
             if respawn.collidepoint(event.pos):
                 return "respawn"
             if exit_r.collidepoint(event.pos):
@@ -1981,6 +2043,8 @@ class PauseMenu:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 return "close"
+            if event.key == pygame.K_o:
+                return "options"
             if event.key == pygame.K_r:
                 return "respawn"
             if event.key == pygame.K_q:
@@ -1989,7 +2053,7 @@ class PauseMenu:
 
     def draw(self, screen: pygame.Surface) -> None:
         sw, sh = screen.get_size()
-        panel, respawn, exit_r = self._rects(sw, sh)
+        panel, rects = self._rects(sw, sh)
         shade = pygame.Surface((sw, sh), pygame.SRCALPHA)
         shade.fill((0, 0, 0, 175))
         screen.blit(shade, (0, 0))
@@ -1997,10 +2061,45 @@ class PauseMenu:
         pygame.draw.rect(board, (20, 20, 24, 246), board.get_rect(), border_radius=12)
         pygame.draw.rect(board, BORDER, board.get_rect(), width=2, border_radius=12)
         screen.blit(board, panel.topleft)
-        title = self.font_title.render("PAUSED", True, TEXT)
-        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 16))
-        for rect, name, key, col in ((respawn, "Respawn", "respawn", (58, 104, 62)),
-                                     (exit_r, "Exit game", "exit", (124, 58, 58))):
+        title_text = "OPTIONS" if self.page == "options" else "PAUSED"
+        title = self.font_title.render(title_text, True, TEXT)
+        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 14))
+        if self.page == "options":
+            volume, full, back = rects
+            # master sound: dark track, filled to the current level
+            pygame.draw.rect(screen, (46, 46, 52), volume, border_radius=8)
+            fill = volume.copy()
+            fill.width = max(0, int(volume.width * self.volume))
+            pygame.draw.rect(screen, (86, 138, 74), fill, border_radius=8)
+            pygame.draw.rect(screen, ACCENT if self.hover == "volume" else BORDER,
+                             volume, width=2, border_radius=8)
+            t = self.font_btn.render("MASTER SOUND: %d%%" % int(round(self.volume * 100)),
+                                     True, TEXT)
+            screen.blit(t, (volume.centerx - t.get_width() // 2,
+                            volume.centery - t.get_height() // 2))
+            pygame.draw.rect(screen, (46, 46, 52), full, border_radius=8)
+            pygame.draw.rect(screen, ACCENT if self.hover == "fullscreen" else BORDER,
+                             full, width=2, border_radius=8)
+            t = self.font_btn.render("FULLSCREEN: %s" % ("YES" if self.fullscreen else "NO"),
+                                     True, TEXT)
+            screen.blit(t, (full.centerx - t.get_width() // 2,
+                            full.centery - t.get_height() // 2))
+            pygame.draw.rect(screen, (58, 54, 48), back, border_radius=8)
+            pygame.draw.rect(screen, ACCENT if self.hover == "back" else BORDER,
+                             back, width=2, border_radius=8)
+            t = self.font_btn.render("BACK", True, TEXT)
+            screen.blit(t, (back.centerx - t.get_width() // 2,
+                            back.centery - t.get_height() // 2))
+            hint = self.font_small.render("Changes apply immediately", True, DIM)
+            screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 22))
+            return
+
+        resume, options, respawn, exit_r = rects
+        for rect, name, key, col in (
+                (resume, "Resume", "resume", (58, 104, 62)),
+                (options, "Options", "options", (58, 74, 104)),
+                (respawn, "Respawn", "respawn", (96, 76, 48)),
+                (exit_r, "Exit game", "exit", (124, 58, 58))):
             hovered = (self.hover == key)
             pygame.draw.rect(screen, tuple(min(255, c + 26) for c in col) if hovered
                              else col, rect, border_radius=8)
@@ -2011,7 +2110,6 @@ class PauseMenu:
                             rect.centery - t.get_height() // 2))
         hint = self.font_small.render("Esc to resume", True, DIM)
         screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 22))
-
 
 def draw_mood_bar(screen, x, y, w, h, value, target=None) -> None:
     """A readable mood bar: red -> amber -> green, with the target tick."""

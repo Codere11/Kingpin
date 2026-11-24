@@ -623,7 +623,7 @@ def main() -> None:
     g.comm_mode = False      # G toggles the hotbar between items and words
     g.build_menu.free = g.test_mode
     g.workshop_menu.free = g.test_mode
-    g.pause_menu = PauseMenu()
+    g.pause_menu = PauseMenu(fullscreen=g.fullscreen, set_fullscreen=set_fullscreen)
     g.skills = Skills(is_player=True)   # the player's own road, see skills.py
     g.player.skills = g.skills          # so the persona card reads his skills too
 
@@ -1132,7 +1132,26 @@ def main() -> None:
                             # every villager: one item, one meal.
 
     def click_a_man(at=None) -> bool:
-        
+        # A CARD IS ONLY A NORMAL-PLAY CLICK.  A click in the pause menu,
+        # build menu, crafting bench, inventory, trade or any other panel must
+        # not fall through to the person underneath it.
+        if getattr(g, "pause_open", False) or getattr(g, "build_menu_open", False):
+            return False
+        if getattr(g, "placing", None) is not None or getattr(g, "field_design", False):
+            return False
+        for _flag in (
+                "workshop_open", "smith_open", "artisan_open", "trade_open",
+                "inventory_open", "chest_open", "worker_panel_open",
+                "npc_card_open", "stall_open", "body_open", "folder_open",
+                "naming_open", "route_open", "market_open", "research_open",
+                "confirm_open", "map_open"):
+            if getattr(g, _flag, False):
+                return False
+        try:
+            if getattr(getattr(g, "dialogue_panel", None), "open_", False):
+                return False
+        except Exception:
+            pass
         _g = SimpleNamespace(
             player=g.player, inventory=g.inventory, cam_x=g.cam_x, cam_y=g.cam_y,
             zoom=ZOOM, truth=g._TRUTH, villages=g.villages,

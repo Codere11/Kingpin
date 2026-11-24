@@ -5,6 +5,7 @@ import time
 import threading
 import comm
 import save as savemod
+import sound
 import village as village_mod
 import work
 import corpse as corpse_mod
@@ -106,6 +107,36 @@ def _artisan_rects(g):
     left = pygame.Rect(cx - 70, y0 + 68, 26, 26)
     right = pygame.Rect(cx + 44, y0 + 68, 26, 26)
     return pygame.Rect(x0, y0, w, h), left, right
+
+
+def _world_click_allowed(g) -> bool:
+    """A world click only means a person during normal play.
+
+    Build, pause, crafting, trade, inventory and other panels own the mouse.
+    A click in one of them must never fall through to the NPC card.
+    """
+    if getattr(g, "pause_open", False):
+        return False
+    if getattr(g, "build_menu_open", False):
+        return False
+    if getattr(g, "placing", None) is not None:
+        return False
+    if getattr(g, "field_design", False):
+        return False
+    for _flag in (
+            "workshop_open", "smith_open", "artisan_open", "trade_open",
+            "inventory_open", "chest_open", "worker_panel_open",
+            "npc_card_open", "stall_open", "body_open", "folder_open",
+            "naming_open", "route_open", "market_open", "research_open",
+            "confirm_open", "map_open"):
+        if getattr(g, _flag, False):
+            return False
+    try:
+        if getattr(getattr(g, "dialogue_panel", None), "open_", False):
+            return False
+    except Exception:
+        pass
+    return True
 
 
 def _special_npc_click(g, pos) -> bool:
@@ -336,6 +367,7 @@ def run(g):
                 g.save_now()
                 g.running = False
             elif (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                  and _world_click_allowed(g)
                   and not (getattr(g, "worker_panel_open", False)
                            or getattr(g, "npc_card_open", False))
                   and _special_npc_click(g, event.pos)):
@@ -770,6 +802,10 @@ def run(g):
                 if g.action == "close":
                     g.pause_open = False
                     pygame.mouse.set_visible(False)
+                elif g.action == "options":
+                    g.pause_menu.page = "options"
+                elif g.action == "back":
+                    g.pause_menu.page = "main"
                 elif g.action == "respawn":
                     g.pause_open = False
                     g.respawn()
@@ -1191,6 +1227,12 @@ def run(g):
                     g.pause_open = False
                     pygame.mouse.set_visible(False)
                 else:
+                    try:
+                        g.pause_menu.page = "main"
+                        g.pause_menu.fullscreen = bool(g.fullscreen)
+                        g.pause_menu.volume = sound.get_volume()
+                    except Exception:
+                        pass
                     g.pause_open = True
                     pygame.mouse.set_visible(True)
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_TAB):
