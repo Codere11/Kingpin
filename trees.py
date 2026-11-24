@@ -113,6 +113,7 @@ class TreeSprites:
     def __init__(self) -> None:
         self._cache: dict[tuple[int, int, bool], tuple] = {}
         self._scaled: dict[tuple, tuple] = {}     # rescaled, shared
+        self._splits: dict[tuple, tuple] = {}     # static base, moving green canopy
         self._stump = None
 
     def stump(self):
@@ -159,6 +160,39 @@ class TreeSprites:
                    ax * step, ay * step)
             self._scaled[skey] = got
         return got
+
+    def split(self, species: str, size_class: int, variant: int, flip: bool,
+              snowy: bool, radius: float, image):
+        """Separate the green leaves from trunk/branches/shadow.
+
+        The whole tree must never move: only pixels that actually look green
+        are cut onto the canopy layer.  Cached per sprite, so this happens
+        once, not every frame.
+        """
+        if species in ("bare", "cactus"):
+            return image, None
+        key = (species, size_class, variant, flip, snowy, round(float(radius), 1))
+        got = self._splits.get(key)
+        if got is not None:
+            return got
+        w, h = image.get_size()
+        rgb = pygame.surfarray.array3d(image)
+        alpha = pygame.surfarray.array_alpha(image)
+        r = rgb[:, :, 0].astype(np.int16)
+        g = rgb[:, :, 1].astype(np.int16)
+        b = rgb[:, :, 2].astype(np.int16)
+        green = ((alpha > 0) & (g >= 42) & (g > r + 12) & (g > b + 10))
+        def _surface(keep):
+            surf = pygame.Surface((w, h), pygame.SRCALPHA)
+            pygame.surfarray.blit_array(surf, rgb)
+            pa = pygame.surfarray.pixels_alpha(surf)
+            pa[:] = np.where(keep, alpha, 0)
+            del pa
+            return surf
+        base = _surface(~green)
+        canopy = _surface(green)
+        self._splits[key] = (base, canopy)
+        return base, canopy
 
     def _render(self, species: str, size_class: int, variant: int,
                 snowy: bool = False):
@@ -457,24 +491,20 @@ class Tree:
         if self.felled:
             screen.blit(image, (bx - sx, by - sy))
             return
-        # ONLY THE CANOPY MOVES.  Split the baked sprite at the crown/trunk
-        # boundary: draw the trunk and lower crown where they belong, then
-        # draw the upper crown shifted in the wind.  Rotating the whole tree
-        # made the trunk dance too, which is exactly what a tree does not do.
+        # MOVE ONLY THE GREEN PIXELS.  The trunk, branches, outline and
+        # ground shadow stay exactly where they are; the leaf layer alone
+        # drifts in the wind.  There is no horizontal cut across the tree.
         wx, wy = wind.sway(self.x, self.y, 1.0)
-        wx *= 2.8
-        wy *= 1.8
-        h = image.get_height()
-        # Atlas anchor `sy` is the tree's base; `canopy_r` is its crown size.
-        cut = int(sy - h + 2.0 * self.canopy_r + 20.0)
-        cut = max(8, min(h - 8, cut))
-        if abs(wx) < 0.05 and abs(wy) < 0.05:
-            screen.blit(image, (bx - sx, by - sy))
-        else:
-            lower = image.subsurface((0, cut, image.get_width(), h - cut))
-            upper = image.subsurface((0, 0, image.get_width(), cut))
-            screen.blit(lower, (bx - sx, by - sy + cut))
-            screen.blit(upper, (bx - sx + wx, by - sy + wy))
+        wx *= 3.2
+        wy *= 1.5
+        base, canopy = self._atlas.split(
+            self.species, self.size_class, self.variant, self.flip,
+            self.snowy, self.canopy_r, image)
+        screen.blit(base, (bx - sx, by - sy))
+        if canopy is not None and (abs(wx) > 0.03 or abs(wy) > 0.03):
+            screen.blit(canopy, (bx - sx + wx, by - sy + wy))
+        elif canopy is not None:
+            screen.blit(canopy, (bx - sx, by - sy))
         wind.draw_leaves(screen, self.x, self.y, cam_x, cam_y,
                          self.canopy_r)
 
