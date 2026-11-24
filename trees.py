@@ -285,11 +285,12 @@ class TreeSprites:
             pygame.draw.ellipse(layer, _rgba(_darken(col, 25), 180), rect, 1)
 
     def _make_branch_geo(self, cx, cy, ay, trunk_w, radius, rng, variant, color,
-                         species, bend=0.0, wiggle=0.0, phase=0.0):
+                         species, bend=0.0, wiggle=0.0, phase=0.0, top_y=None):
         """Build vector branches and leaf particles attached to them."""
         segs = []
         leaves = []
-        top_y = cy + 4
+        if top_y is None:
+            top_y = cy + 4
         def trunk_off(y):
             t = max(0.0, min(1.0, (ay - y) / max(1.0, ay - top_y)))
             return (bend * math.sin(math.pi * t)
@@ -340,7 +341,7 @@ class TreeSprites:
         count = 8 + (variant % 4)
         for i in range(count):
             t = rng.uniform(0.18, 0.94)
-            y0 = ay + (cy + 4 - ay) * t
+            y0 = ay + (top_y - ay) * t
             x0 = cx + trunk_off(y0) + rng.uniform(-trunk_w * 0.20, trunk_w * 0.20)
             ang = (rng.uniform(-2.95, -1.65) if i % 2 == 0
                    else rng.uniform(-1.50, -0.18))
@@ -349,7 +350,7 @@ class TreeSprites:
                 2 + (variant % 2), x0, y0)
         # THE APEX ALWAYS GROWS: a central leader and two short top sprays,
         # so the trunk never ends as a bare stick with leaves floating above.
-        top_y0 = cy + 4
+        top_y0 = top_y
         top_x0 = cx + trunk_off(top_y0)
         top_angles = (-math.pi / 2.0 - 0.42, -math.pi / 2.0 + 0.42,
                       -math.pi / 2.0)
@@ -569,7 +570,7 @@ class TreeSprites:
         canopy = pygame.Surface((w, h), pygame.SRCALPHA)
         # Acacia leaves are particles on the limbs too, not a painted umbrella.
         self._make_branch_geo(cx, cy0, ay, tw, radius, rng, variant, base,
-                              "acacia", bend, wiggle, phase)
+                              "acacia", bend, wiggle, phase, cy0)
         combined = surf.copy()
         combined.blit(canopy, (0, 0))
         return combined, surf, canopy, ax, ay
