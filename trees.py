@@ -114,6 +114,7 @@ class TreeSprites:
         self._cache: dict[tuple[int, int, bool], tuple] = {}
         self._scaled: dict[tuple, tuple] = {}     # rescaled, shared
         self._splits: dict[tuple, tuple] = {}     # static base, moving green canopy
+        self._exact: dict[tuple, tuple] = {}      # rendered trunk and canopy, unscaled
         self._stump = None
 
     def stump(self):
@@ -136,15 +137,29 @@ class TreeSprites:
         key = (species, size_class, variant, flip, snowy)
         sprite = self._cache.get(key)
         if sprite is None:
-            sprite = self._render(species, size_class, variant, snowy)
-            if flip:
-                surface, ax, ay = sprite
-                sprite = (pygame.transform.flip(surface, True, False), ax, ay)
+            raw = self._render(species, size_class, variant, snowy)
+            if len(raw) == 5:
+                combined, base, canopy, ax, ay = raw
+                if flip:
+                    combined = pygame.transform.flip(combined, True, False)
+                    base = pygame.transform.flip(base, True, False)
+                    canopy = pygame.transform.flip(canopy, True, False)
+                self._exact[key] = (base, canopy)
+                sprite = (combined, ax, ay)
+            else:
+                sprite = raw
+                if flip:
+                    surface, ax, ay = sprite
+                    sprite = (pygame.transform.flip(surface, True, False), ax, ay)
             self._cache[key] = sprite
         if radius is None:
             return sprite
         scale = radius / SIZES[size_class]
+        rkey = (species, size_class, variant, flip, snowy, round(float(radius), 1))
         if abs(scale - 1.0) <= 0.02:
+            exact = self._exact.get(key)
+            if exact is not None and rkey not in self._splits:
+                self._splits[rkey] = exact
             return sprite
         # Every tree used to rescale a sprite of its own for its exact radius:
         # seventeen thousand near-identical surfaces, and the better part of a
@@ -159,6 +174,15 @@ class TreeSprites:
             got = (pygame.transform.smoothscale(surface, (w, h)),
                    ax * step, ay * step)
             self._scaled[skey] = got
+            exact = self._exact.get(key)
+        exact = self._exact.get(key)
+        if exact is not None and rkey not in self._splits:
+            base, canopy = exact
+            bw = max(1, int(base.get_width() * step))
+            bh = max(1, int(base.get_height() * step))
+            self._splits[rkey] = (
+                pygame.transform.smoothscale(base, (bw, bh)),
+                pygame.transform.smoothscale(canopy, (bw, bh)))
         return got
 
     def split(self, species: str, size_class: int, variant: int, flip: bool,
@@ -175,6 +199,11 @@ class TreeSprites:
         got = self._splits.get(key)
         if got is not None:
             return got
+        base_key = (species, size_class, variant, flip, snowy)
+        exact = self._exact.get(base_key)
+        if exact is not None:
+            self._splits[key] = exact
+            return exact
         w, h = image.get_size()
         rgb = pygame.surfarray.array3d(image)
         alpha = pygame.surfarray.array_alpha(image)
@@ -273,16 +302,17 @@ class TreeSprites:
                                 (gx - 5, gy - 3, 10, 6))
         pygame.draw.circle(canopy, _rgba(_darken(base, 46), min(255, alpha + 20)),
                            (int(cx), int(cy)), radius, 3)
-        surf.blit(canopy, (0, 0))
         if snowy:                               # a dusting on the upper canopy
             for _ in range(rng.randint(10, 16)):
                 a = rng.uniform(math.pi * 1.02, math.pi * 1.98)
                 d = rng.uniform(0.0, radius * 0.74)
                 bx = cx + math.cos(a) * d
                 by = cy + math.sin(a) * d
-                pygame.draw.circle(surf, (236, 243, 252), (int(bx), int(by)),
+                pygame.draw.circle(canopy, (236, 243, 252), (int(bx), int(by)),
                                    rng.randint(5, 10))
-        return surf, ax, ay
+        combined = surf.copy()
+        combined.blit(canopy, (0, 0))
+        return combined, surf, canopy, ax, ay
 
     # -- other species ------------------------------------------------------
     def _conifer(self, radius, rng, variant, snowy=False):
@@ -302,15 +332,16 @@ class TreeSprites:
                             [(cx - trunk_w / 2, ay + 3), (cx + trunk_w / 2, ay + 3),
                              (cx + trunk_w * 0.32, ay - trunk_h * 0.6),
                              (cx - trunk_w * 0.32, ay - trunk_h * 0.6)])
+        canopy = pygame.Surface((w, h), pygame.SRCALPHA)
         for i in range(4):                      # stacked skirts
             f = i / 3.0
             lw = radius * (1.0 - 0.60 * f)
             ly = ay - trunk_h * (0.16 + 0.72 * f)
             lh = radius * (0.85 - 0.26 * f)
             pts = [(cx - lw, ly), (cx + lw, ly), (cx, ly - lh)]
-            pygame.draw.polygon(surf, _shade(base, 0.30 - 0.62 * f), pts)
-            pygame.draw.polygon(surf, _darken(base, 34), pts, 2)
-        pygame.draw.circle(surf, _lighten(base, 26), (int(cx), int(ay - trunk_h)), 3)
+            pygame.draw.polygon(canopy, _shade(base, 0.30 - 0.62 * f), pts)
+            pygame.draw.polygon(canopy, _darken(base, 34), pts, 2)
+        pygame.draw.circle(canopy, _lighten(base, 26), (int(cx), int(ay - trunk_h)), 3)
         if snowy:                               # snow settled on each skirt
             for i in range(4):
                 f = i / 3.0
@@ -321,8 +352,10 @@ class TreeSprites:
                        (cx + lw * 0.86, ly - 1),
                        (cx + lw * 0.40, ly - lh * 0.44),
                        (cx - lw * 0.40, ly - lh * 0.44)]
-                pygame.draw.polygon(surf, (235, 242, 251), cap)
-        return surf, ax, ay
+                pygame.draw.polygon(canopy, (235, 242, 251), cap)
+        combined = surf.copy()
+        combined.blit(canopy, (0, 0))
+        return combined, surf, canopy, ax, ay
 
     def _bare(self, radius, rng, variant, snowy=False):
         trunk_h = radius * 1.6
@@ -390,8 +423,9 @@ class TreeSprites:
                                              CANOPY_ALPHA), (int(bx), int(by)), int(r))
         pygame.draw.ellipse(canopy, _rgba(_darken(base, 40), min(255, CANOPY_ALPHA + 20)),
                             (cx - cw / 2, top, cw, ch), 2)
-        surf.blit(canopy, (0, 0))
-        return surf, ax, ay
+        combined = surf.copy()
+        combined.blit(canopy, (0, 0))
+        return combined, surf, canopy, ax, ay
 
     def _cactus(self, radius, rng, variant):
         pad = 10
