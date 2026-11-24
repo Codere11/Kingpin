@@ -505,6 +505,10 @@ class NPC:
     # of them lower the threshold and eventually become their own state.
     drunk_level: Any = 0.0
     high_level: Any = 0.0
+    # The trader's own errand: idle -> collecting -> sailing -> paying.
+    trader_state: Any = "idle"
+    trader_coin: Any = 0.0
+    trader_t: Any = 0.0
     # WHO HE REMEMBERS: the player and up to nine other people.  None is the
     # lazy empty state; relationships.ensure() creates the dict on first use.
     social_memory: Any = None
@@ -1109,7 +1113,8 @@ class NPC:
                 if g is not None and job:
                     _attr = {"farmer": "farmers", "logger": "loggers",
                              "artisan": "artisans", "researcher": "researchers",
-                             "doctor": "doctors", "miner": "miners", "smith": "smiths",
+                             "doctor": "doctors", "trader": "traders",
+                             "miner": "miners", "smith": "smiths",
                              "weaver": "weavers", "spiceman": "spicemen",
                              "gunsmith": "gunsmiths"}.get(job)
                     if _attr:
@@ -1119,8 +1124,9 @@ class NPC:
                                 setattr(_s, _attr, _n - 1)
                                 break
                 for _bucket in ("workers", "loggers", "artisans", "researchers",
-                                "doctors", "miners", "smiths", "weavers",
-                                "spicemen", "gunsmiths", "unemployed", "people"):
+                                "doctors", "traders", "miners", "smiths",
+                                "weavers", "spicemen", "gunsmiths",
+                                "unemployed", "people"):
                     _lst = getattr(camp, _bucket, None) if camp is not None else None
                     if _lst and self in _lst:
                         try:
@@ -1318,9 +1324,9 @@ class NPC:
         out = []
         seen = set()
         for attr in ("farmers", "warriors", "handlers", "workers", "loggers",
-                     "artisans", "researchers", "doctors", "miners",
-                     "smiths", "weavers", "spicemen", "gunsmiths",
-                     "unemployed"):
+                     "artisans", "researchers", "doctors", "traders",
+                     "miners", "smiths", "weavers", "spicemen",
+                     "gunsmiths", "unemployed"):
             for p in (getattr(camp, attr, ()) or ()):
                 if getattr(p, "alive", True) and id(p) not in seen:
                     seen.add(id(p))
@@ -1811,6 +1817,117 @@ class NPC:
             if d < bd:
                 best, bd = p, d
         return best
+
+    def _trader_sellable_chest(self, g):
+        try:
+            import market
+            sellable = set(market.sellable(g))
+        except Exception:
+            return None, ()
+        best, bd, best_items = None, 1e18, ()
+        for ch in (getattr(g, "built_chests", ()) or ()):
+            inv = getattr(ch, "inventory", None)
+            if inv is None:
+                continue
+            items = []
+            for stack in inv.slots:
+                if stack is not None and stack.defn.id in sellable and stack.count > 0:
+                    items.append(stack.defn.id)
+            if not items:
+                continue
+            d = (ch.x - self.x) ** 2 + (ch.y - self.y) ** 2
+            if d < bd:
+                best, bd, best_items = ch, d, tuple(items)
+        return best, best_items
+
+    def _work_trader(self, dt: float) -> None:
+        """Gather at least 50 sellable goods, run them to the ship, bring the
+        coin back, and hand it to the player when he is nearby."""
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        if g is None:
+            self._native_idle(dt)
+            return
+        state = getattr(self, "trader_state", "idle")
+        if state == "sailing":
+            self.trader_t = float(getattr(self, "trader_t", 0.0)) - dt
+            if self.trader_t > 0.0:
+                return
+            try:
+                import market
+                coin = 0.0
+                for item in list(getattr(self, "carry", {}) or {}):
+                    qty = int(self.carry.get(item, 0) or 0)
+                    if qty <= 0 or item not in market.sellable(g):
+                        continue
+                    grade = int(self.carry_grade.get(item, 4) or 4)
+                    # The trader gets 80% of what the player/horse would get.
+                    coin += market.sell_value(g, item, qty, grade) * 0.80
+                    self.carry.pop(item, None)
+                    self.carry_grade.pop(item, None)
+                self.trader_coin = float(getattr(self, "trader_coin", 0.0)) + coin
+                self.trader_state = "paying"
+                try:
+                    g.toast("%s returns from the ship with %d coin"
+                            % (getattr(self, "name", "The trader"), int(coin)))
+                except Exception:
+                    pass
+            except Exception:
+                self.trader_state = "idle"
+            return
+        if state == "paying":
+            player = getattr(g, "player", None)
+            if player is None:
+                return
+            d = math.hypot(player.x - self.x, player.y - self.y)
+            if d > 26.0:
+                self._step_toward(player.x, player.y, dt)
+                return
+            coins = int(round(float(getattr(self, "trader_coin", 0.0))))
+            if coins > 0:
+                try:
+                    g.inventory.add("coin", coins)
+                    g.toast("%s gives you %d coin from the ship"
+                            % (getattr(self, "name", "The trader"), coins))
+                except Exception:
+                    pass
+            self.trader_coin = 0.0
+            self.trader_state = "idle"
+            return
+
+        # GATHERING: only sellable goods in chests count.
+        total = 0
+        for item, qty in (getattr(self, "carry", {}) or {}).items():
+            try:
+                total += int(qty)
+            except Exception:
+                pass
+        if total >= 50:
+            self.trader_state = "sailing"
+            self.trader_t = 45.0
+            try:
+                g.toast("%s sets out for the ship with %d goods"
+                        % (getattr(self, "name", "The trader"), total))
+            except Exception:
+                pass
+            return
+        chest, items = self._trader_sellable_chest(g)
+        if chest is None or not items:
+            self._wait_at_post(self._nearest_workplace(g, "fireplace"), dt)
+            return
+        if math.hypot(chest.x - self.x, chest.y - self.y) > 22.0:
+            self._step_toward(chest.x, chest.y, dt)
+            return
+        # Take what is here, up to the 50-piece target.
+        need = 50 - total
+        for item in items:
+            if need <= 0:
+                break
+            take, grade = self._take_from_chest(chest, item, need)
+            if take > 0:
+                self.carry[item] = int(self.carry.get(item, 0) or 0) + take
+                self.carry_grade[item] = grade
+                need -= take
 
     def _work_doctor(self, dt: float) -> None:
         """Make medicine, then carry it to the hurt and the unexamined.
@@ -2591,6 +2708,9 @@ class NPC:
             return
         if _nat and getattr(self, "native_role", "") == "doctor":
             self._work_doctor(dt)
+            return
+        if _nat and getattr(self, "native_role", "") == "trader":
+            self._work_trader(dt)
             return
         if _nat and getattr(self, "native_role", "") == "miner":
             self._work_mine(dt)

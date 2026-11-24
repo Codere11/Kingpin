@@ -64,6 +64,7 @@ def make_camp(g) -> object:
         "artisans": [],            # the conquered ARTISANS (on benches)
         "researchers": [],         # the conquered RESEARCHERS (at the bench)
         "doctors": [],             # the conquered DOCTORS (at the Medicine Hut)
+        "traders": [],             # conquered TRADERS (chests -> ship)
         "miners": [],              # the conquered MINERS (iron in the snow)
         "smiths": [],              # the conquered SMITHS (iron bars at the forge)
         "weavers": [],             # the conquered WEAVERS (cotton to cloth at the loom)
@@ -122,6 +123,8 @@ def _campify(s, g) -> None:
         s._last_people_breed_day = -1
     if getattr(s, "doctors", None) is None:
         s.doctors = []
+    if getattr(s, "traders", None) is None:
+        s.traders = []
     # the camp's pool is its living farmers (the native `people` was a count)
     s.people = [n for n in getattr(s, "farmers", ()) or ()
                 if getattr(n, "alive", True)]
@@ -468,6 +471,7 @@ def _assign_jobs(g, camp, sign) -> None:
         ("artisan", count("artisans")),
         ("researcher", count("researchers")),
         ("doctor", count("doctors")),
+        ("trader", count("traders")),
         ("miner", count("miners")),
         ("smith", count("smiths")),
         ("weaver", count("weavers")),
@@ -475,13 +479,14 @@ def _assign_jobs(g, camp, sign) -> None:
         ("gunsmith", count("gunsmiths")),
     ]
     for attr in ("workers", "loggers", "artisans", "researchers", "doctors",
-                 "miners", "smiths", "weavers", "spicemen", "gunsmiths",
-                 "unemployed"):
+                 "traders", "miners", "smiths", "weavers", "spicemen",
+                 "gunsmiths", "unemployed"):
         setattr(camp, attr, [])
     roster = {
         "farmer": "workers", "logger": "loggers", "artisan": "artisans",
         "researcher": "researchers", "doctor": "doctors",
-        "miner": "miners", "smith": "smiths", "weaver": "weavers",
+        "trader": "traders", "miner": "miners", "smith": "smiths",
+        "weaver": "weavers",
         "spiceman": "spicemen", "gunsmith": "gunsmiths",
     }
     i = 0

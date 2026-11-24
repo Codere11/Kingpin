@@ -31,7 +31,7 @@ JOB_AXIS = {
     "farmer": "S", "logger": "S", "soldier": "S", "miner": "S",
     "weaver": "S", "spiceman": "S", "animal_handler": "S",
     "smith": "S", "gunsmith": "S",
-    "artisan": "N", "researcher": "N", "doctor": "N",
+    "artisan": "N", "researcher": "N", "doctor": "N", "trader": "N",
 }
 
 MATCH_WORK = 1.15

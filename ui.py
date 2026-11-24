@@ -797,7 +797,8 @@ class SignPanel:
     def _jobs(self):
         jobs = [("Farmers", "farmers"), ("Loggers", "loggers"),
                 ("Artisans", "artisans"), ("Researchers", "researchers"),
-                ("Doctors", "doctors"), ("Miners", "miners")]
+                ("Doctors", "doctors"), ("Traders", "traders"),
+                ("Miners", "miners")]
         if self.show_smiths is not None and self.show_smiths():
             jobs.append(("Smiths", "smiths"))
         if self.show_weavers is not None and self.show_weavers():
@@ -2049,7 +2050,8 @@ class PersonaCard:
              "artisan": "Artisan", "researcher": "Researcher",
              "miner": "Miner", "smith": "Smith", "weaver": "Weaver",
              "spiceman": "Spiceman", "gunsmith": "Gunsmith",
-             "doctor": "Doctor", "soldier": "Soldier",
+             "doctor": "Doctor", "trader": "Trader",
+             "soldier": "Soldier",
              "unemployed": "Unemployed"}
 
     def __init__(self):
