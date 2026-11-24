@@ -361,9 +361,14 @@ def run(g):
                     elif event.key == pygame.K_F10:
                         _npclab.give_medicine(g)
                     elif event.key == pygame.K_F12:
-                        _shift = bool(pygame.key.get_mods() & pygame.KMOD_SHIFT)
-                        _npclab.social_incident(
-                            g, "threaten" if _shift else "insult")
+                        _mods = pygame.key.get_mods()
+                        if _mods & pygame.KMOD_CTRL:
+                            _npclab.destroy_crops(g)
+                        elif _mods & pygame.KMOD_ALT:
+                            _npclab.drink(g)
+                        else:
+                            _npclab.social_incident(
+                                g, "threaten" if _mods & pygame.KMOD_SHIFT else "insult")
                 except Exception as _lab_exc:
                     g.toast("NPC lab: %s" % _lab_exc)
                     try:

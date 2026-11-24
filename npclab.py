@@ -452,6 +452,64 @@ def social_incident(g, kind="insult"):
            % (getattr(n, "name", "?"), getattr(target, "name", "you"), kind))
 
 
+def destroy_crops(g):
+    """Ctrl+F12: the selected person tramples nearby field tiles."""
+    n = _selected_actor(g)
+    if n is None or not getattr(n, "native", False):
+        return
+    camp = getattr(n, "native_camp", None)
+    g0 = getattr(camp, "g", None) if camp is not None else None
+    if g0 is None:
+        _toast(g, "No camp field to destroy")
+        return
+    tiles = []
+    for _key, _lst in (getattr(camp, "farm_tiles", {}) or {}).items():
+        for _t in (_lst or ()):
+            try:
+                tiles.append((int(_t[0]), int(_t[1])))
+            except Exception:
+                pass
+    if not tiles:
+        _toast(g, "No crops here")
+        return
+    tiles.sort(key=lambda t: (t[0] * 32.0 - n.x) ** 2 + (t[1] * 32.0 - n.y) ** 2)
+    made = 0
+    for tx, ty in tiles[:3]:
+        try:
+            if g0.world.plot_at(tx, ty) is None:
+                continue
+            g0.world.set_plot(tx, ty, "grass", None)
+            try:
+                g0.ground.invalidate_tile(tx, ty, immediate=True)
+            except Exception:
+                pass
+            made += 1
+        except Exception:
+            pass
+    if made:
+        _toast(g, "%s destroyed %d crop tiles"
+               % (getattr(n, "name", "?"), made))
+    else:
+        _toast(g, "No standing crops to destroy")
+
+
+def drink(g):
+    """Alt+F12: make the selected person visibly drink or smoke."""
+    n = _selected_actor(g)
+    if n is None or not getattr(n, "native", False):
+        return
+    try:
+        import economy
+        import mind
+        item = (getattr(n, "wants_product", None)
+                or getattr(n, "wants_drink", None) or "beer")
+        n.use_fx = (item, economy.USE_FX_SECONDS)
+        mind.consume(n, item, float(getattr(g, "now", 0.0)))
+        _toast(g, "%s enjoys %s" % (getattr(n, "name", "?"), item))
+    except Exception as exc:
+        _toast(g, "drink: %s" % exc)
+
+
 def force_break(g):
     """F9: cycle the selected or clicked person through sad/annoyed/normal.
 
@@ -524,7 +582,8 @@ def draw(g):
         n = subjects[sel % len(subjects)] if subjects else None
         lines = [
             ("NPC LAB  TEST ONLY", PANEL_HOT),
-            ("F5 hide F6 reset F7 next F8 mood F9 break F10 medicine F12 insult", PANEL_DIM),
+            ("F5 hide F6 reset F7 next F8 mood F9 break F10 medicine", PANEL_DIM),
+            ("F12 insult  Shift threat  Ctrl crops  Alt drink", PANEL_DIM),
         ]
         if n is None:
             lines.append(("no lab: press F6", PANEL_TEXT))
