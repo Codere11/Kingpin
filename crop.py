@@ -252,13 +252,21 @@ def draw_mushroom(screen, x, y, elapsed, cam_x, cam_y, biome=None):
     pygame.draw.ellipse(screen, (38, 58, 30), (sx - 9, sy - 3, 18, 7))
     stem_h = 6.0 + 16.0 * p
     stem_w = max(4.0, 3.0 + 4.0 * p)
-    pygame.draw.rect(screen, (232, 226, 210),
-                     (sx - stem_w / 2, sy - stem_h, stem_w, stem_h), border_radius=2)
-    pygame.draw.rect(screen, (186, 178, 160),
-                     (sx - stem_w / 2, sy - stem_h, stem_w, stem_h), 1, border_radius=2)
+    mwx, mwy = wind.sway(x, y, 0.8)
+    pygame.draw.polygon(screen, (232, 226, 210),
+                        [(sx - stem_w / 2, sy),
+                         (sx - stem_w / 2 + mwx * 0.45, sy - stem_h + mwy * 0.45),
+                         (sx + stem_w / 2 + mwx * 0.45, sy - stem_h + mwy * 0.45),
+                         (sx + stem_w / 2, sy)])
+    pygame.draw.polygon(screen, (186, 178, 160),
+                        [(sx - stem_w / 2, sy),
+                         (sx - stem_w / 2 + mwx * 0.45, sy - stem_h + mwy * 0.45),
+                         (sx + stem_w / 2 + mwx * 0.45, sy - stem_h + mwy * 0.45),
+                         (sx + stem_w / 2, sy)], 1)
     cap_w = 8.0 + 20.0 * p
     cap_h = cap_w * 0.66
-    cap = pygame.Rect(sx - cap_w / 2, sy - stem_h - cap_h * 0.75, cap_w, cap_h)
+    cap = pygame.Rect(sx + mwx - cap_w / 2, sy - stem_h + mwy - cap_h * 0.75,
+                      cap_w, cap_h)
     pygame.draw.ellipse(screen, (206, 58, 52), cap)
     pygame.draw.ellipse(screen, (146, 34, 32), cap, 2)
     if st >= 2:
@@ -275,20 +283,24 @@ def draw_agave(screen, x, y, elapsed, cam_x, cam_y, biome=None):
     st = stage(elapsed)
     pygame.draw.ellipse(screen, (38, 58, 30), (sx - 10, sy - 3, 20, 7))
     size = 10.0 + 26.0 * p
+    awx, awy = wind.sway(x, y, 0.85)
     leaf, dark = (108, 156, 140), (66, 110, 100)
     for ang in (-2.92, -2.25, -1.57, -0.9, -0.22):
         c, s = math.cos(ang), math.sin(ang)
-        tx, ty = sx + c * size, sy + s * size * 0.95
+        tx, ty = sx + c * size + awx * 0.9, sy + s * size * 0.95 + awy * 0.9
         perp = size * 0.20
-        pts = [(sx, sy), (sx + c * size * 0.45 - s * perp, sy + s * size * 0.45 + c * perp),
+        pts = [(sx, sy), (sx + c * size * 0.45 - s * perp + awx * 0.4,
+                          sy + s * size * 0.45 + c * perp + awy * 0.4),
                (tx, ty),
-               (sx + c * size * 0.45 + s * perp, sy + s * size * 0.45 - c * perp)]
+               (sx + c * size * 0.45 + s * perp + awx * 0.4,
+                sy + s * size * 0.45 - c * perp + awy * 0.4)]
         pygame.draw.polygon(screen, leaf, pts)
         pygame.draw.line(screen, dark, (sx, sy), (tx, ty), 1)
     if st >= 3:
-        pygame.draw.line(screen, dark, (sx, sy - 2), (sx, sy - size * 1.35), 3)
+        pygame.draw.line(screen, dark, (sx, sy - 2),
+                         (sx + awx, sy - size * 1.35 + awy), 3)
         pygame.draw.ellipse(screen, (216, 196, 120),
-                            (sx - 4, sy - size * 1.35 - 8, 8, 10))
+                            (sx + awx - 4, sy - size * 1.35 + awy - 8, 8, 10))
 
 
 def draw_wheat(screen: pygame.Surface, x: float, y: float, elapsed: float,
@@ -304,16 +316,17 @@ def draw_wheat(screen: pygame.Surface, x: float, y: float, elapsed: float,
         off = (i - 1) * 5
         pygame.draw.line(screen, (152, 130, 62), (sx + off, sy),
                          (sx + off + wx, sy - height + wy), 2)
+        hx = sx + off + wx
+        hy = sy - height + wy
         if st >= 3:
             head = 10.0 * p + 5.0
             pygame.draw.ellipse(screen, (216, 184, 94),
-                                (sx + off - 3, sy - height - head * 0.5, 6, head))
+                                (hx - 3, hy - head * 0.5, 6, head))
             pygame.draw.line(screen, (170, 138, 60),
-                             (sx + off, sy - height + 2),
-                             (sx + off, sy - height + head - 2), 1)
+                             (hx, hy + 2), (hx, hy + head - 2), 1)
         else:
-            pygame.draw.line(screen, (120, 150, 80), (sx + off, sy - height),
-                             (sx + off, sy - height + 4), 2)
+            pygame.draw.line(screen, (120, 150, 80), (hx, hy),
+                             (hx, hy + 4), 2)
 
 
 def draw_berries(screen, x, y, elapsed, cam_x, cam_y, biome=None):
@@ -349,7 +362,8 @@ def draw_cactus(screen, x, y, elapsed, cam_x, cam_y, biome=None):
         pygame.draw.line(screen, (52, 100, 52),
                          (sx + dx * w, sy - h * 0.75), (sx + dx * w, sy - 3), 1)
     if st >= 3:
-        fx, fy = int(sx), int(sy - h - 3)
+        cwx, cwy = wind.sway(x, y, 1.0)
+        fx, fy = int(sx + cwx), int(sy - h - 3 + cwy)
         pygame.draw.circle(screen, (212, 74, 84), (fx, fy), 4)
         pygame.draw.circle(screen, (150, 44, 54), (fx, fy), 4, 1)
         pygame.draw.circle(screen, (248, 176, 180), (fx - 1, fy - 1), 1)
