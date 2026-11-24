@@ -116,6 +116,7 @@ class TreeSprites:
         self._scaled: dict[tuple, tuple] = {}     # rescaled, shared
         self._splits: dict[tuple, tuple] = {}     # static base, moving green canopy
         self._exact: dict[tuple, tuple] = {}      # rendered trunk and canopy, unscaled
+        self._branch_geo: dict[tuple, tuple] = {}
         self._stump = None
 
     def stump(self):
@@ -254,73 +255,61 @@ class TreeSprites:
             pygame.draw.ellipse(layer, _rgba(col, CANOPY_ALPHA), rect)
             pygame.draw.ellipse(layer, _rgba(_darken(col, 25), 180), rect, 1)
 
-    @staticmethod
-    def _branch(base_layer, canopy_layer, x, y, angle, length, width, depth,
-                rng, color, variant):
-        """Draw a limb; the first part is fixed to the trunk, the rest sways."""
-        width = max(1, int(width))
-        ex = x + math.cos(angle) * length
-        ey = y + math.sin(angle) * length * 0.78
-        # The inner third is the branch socket: draw it on the static layer.
-        split = 0.34
-        bx = x + (ex - x) * split
-        by = y + (ey - y) * split
-        dark = (43, 29, 18)
-        hi = (108, 78, 50)
-        pygame.draw.line(base_layer, dark, (x, y), (bx, by), max(1, width + 1))
-        pygame.draw.line(base_layer, hi, (x, y), (bx, by), max(1, width - 1))
-        # Everything beyond the socket belongs to the moving crown layer.
-        pygame.draw.line(canopy_layer, dark, (bx, by), (ex, ey), max(1, width + 1))
-        pygame.draw.line(canopy_layer, hi, (bx, by), (ex, ey), max(1, width - 1))
-        if depth <= 0:
-            if rng.random() < 0.74:
-                TreeSprites._leaf_cluster(canopy_layer, ex, ey, length * 0.30,
-                                           rng, color, 0.15)
-            else:
-                # a bare twig, deliberately left without leaves
-                tx = ex + math.cos(angle + rng.uniform(-0.7, 0.7)) * length * 0.45
-                ty = ey + math.sin(angle + rng.uniform(-0.7, 0.7)) * length * 0.35
-                pygame.draw.line(canopy_layer, (78, 55, 36), (ex, ey), (tx, ty),
-                                 max(1, width - 1))
-            return
-        forks = 2 + (1 if rng.random() < 0.28 else 0)
-        for k in range(forks):
-            spread = (k - (forks - 1) / 2.0) * rng.uniform(0.42, 0.72)
-            TreeSprites._branch(base_layer, canopy_layer, ex, ey,
-                                angle + spread + rng.uniform(-0.12, 0.12),
-                                length * rng.uniform(0.48, 0.68),
-                                max(1, int(width * 0.58)), depth - 1,
-                                rng, color, variant)
-
-    @staticmethod
-    def _branches(base_layer, canopy_layer, cx, cy, radius, rng, variant, color,
-                  trunk_top, trunk_base, trunk_w):
-        """Branches leave the trunk at many heights and from all around it."""
+    def _make_branch_geo(self, cx, cy, ay, trunk_w, radius, rng, variant):
+        """Build vector branch segments: fixed at trunk, bending at the tips."""
+        segs = []
+        def rec(x0, y0, ang, length, width, depth, ax, ay0):
+            width = max(1, int(width))
+            ex = x0 + math.cos(ang) * length
+            ey = y0 + math.sin(ang) * length * 0.78
+            d0 = math.hypot(x0 - ax, y0 - ay0)
+            d1 = math.hypot(ex - ax, ey - ay0)
+            span = max(1.0, radius * 0.95)
+            w0 = min(1.0, d0 / span)
+            w1 = min(1.0, d1 / span)
+            segs.append((x0, y0, ex, ey, width, w0, w1))
+            if depth <= 0:
+                if rng.random() < 0.25:
+                    # bare twig fork
+                    a = ang + rng.uniform(-0.7, 0.7)
+                    tx = ex + math.cos(a) * length * 0.42
+                    ty = ey + math.sin(a) * length * 0.35
+                    segs.append((ex, ey, tx, ty, 1,
+                                 min(1.0, math.hypot(ex - ax, ey - ay0) / span),
+                                 min(1.0, math.hypot(tx - ax, ty - ay0) / span)))
+                return
+            forks = 2 + (1 if rng.random() < 0.25 else 0)
+            for k in range(forks):
+                spread = (k - (forks - 1) / 2.0) * rng.uniform(0.42, 0.72)
+                rec(ex, ey, ang + spread + rng.uniform(-0.12, 0.12),
+                    length * rng.uniform(0.48, 0.66),
+                    max(1, int(width * 0.58)), depth - 1, ax, ay0)
+        # Eight to eleven limbs leave the trunk at different heights.
         count = 8 + (variant % 4)
         for i in range(count):
-            # Anchor up and down the visible trunk, not just at the crown.
             t = rng.uniform(0.18, 0.94)
-            y0 = trunk_base + (trunk_top - trunk_base) * t
+            y0 = ay + (cy + 4 - ay) * t
             x0 = cx + rng.uniform(-trunk_w * 0.42, trunk_w * 0.42)
-            # Alternate sides and cover the whole upper circle of the crown.
-            if i % 2 == 0:
-                ang = rng.uniform(-2.95, -1.65)
-            else:
-                ang = rng.uniform(-1.50, -0.18)
-            length = radius * rng.uniform(0.38, 0.82)
-            width = max(2, int(radius * rng.uniform(0.040, 0.068)))
-            TreeSprites._branch(base_layer, canopy_layer, x0, y0, ang, length,
-                                width, 2 + (variant % 2), rng, color, variant)
-        # A few bare sticks poke out cleanly from the crown edge.
+            ang = (rng.uniform(-2.95, -1.65) if i % 2 == 0
+                   else rng.uniform(-1.50, -0.18))
+            rec(x0, y0, ang, radius * rng.uniform(0.36, 0.72),
+                max(2, int(radius * rng.uniform(0.040, 0.062))),
+                2 + (variant % 2), x0, y0)
+        # A few bare sticks at the crown edge; they are segments too.
         for i in range(4 + variant % 4):
             ang = rng.uniform(-2.95, -0.18)
             x0 = cx + math.cos(ang) * radius * rng.uniform(0.35, 0.62)
-            y0 = cy + math.sin(ang) * radius * rng.uniform(0.12, 0.65)
-            ln = radius * rng.uniform(0.22, 0.50)
+            y0 = cy + math.sin(ang) * radius * rng.uniform(0.10, 0.58)
+            ln = radius * rng.uniform(0.22, 0.48)
             ex = x0 + math.cos(ang) * ln
             ey = y0 + math.sin(ang) * ln * 0.7
-            pygame.draw.line(canopy_layer, (48, 32, 20), (x0, y0), (ex, ey), 2)
-            pygame.draw.line(canopy_layer, (100, 72, 46), (x0, y0), (ex, ey), 1)
+            segs.append((x0, y0, ex, ey, 2, 0.0, 0.0))
+        key = (round(float(radius), 2), int(variant))
+        self._branch_geo[key] = (segs, radius * 2.0 + 20.0)
+        return segs
+
+    def branch_geo(self, radius, variant):
+        return self._branch_geo.get((round(float(radius), 2), int(variant)))
 
     def _broadleaf(self, radius, rng, variant, palette, height, snowy=False):
         trunk_h = radius * 1.5 * height
@@ -356,8 +345,7 @@ class TreeSprites:
 
         canopy = pygame.Surface((w, h), pygame.SRCALPHA)
         base = palette[variant % len(palette)]
-        TreeSprites._branches(surf, canopy, cx, cy, radius, rng, variant, base,
-                              cy + 4, ay, trunk_w)
+        self._make_branch_geo(cx, cy, ay, trunk_w, radius, rng, variant)
         # Hundreds of small leaf clusters instead of one green ball.  The
         # irregular, overlapping particles leave sky and branches visible.
         leaf_count = int(70 + radius * 1.35)
@@ -626,10 +614,25 @@ class Tree:
             self.species, self.size_class, self.variant, self.flip,
             self.snowy, self.canopy_r, image)
         screen.blit(base, (bx - sx, by - sy))
-        if canopy is not None and (abs(wx) > 0.03 or abs(wy) > 0.03):
+        if canopy is not None:
             screen.blit(canopy, (bx - sx + wx, by - sy + wy))
-        elif canopy is not None:
-            screen.blit(canopy, (bx - sx, by - sy))
+        # BRANCHES ARE VECTORS, NOT TWO RIGID PIECES.  Their first vertex is
+        # pinned to the trunk; each later vertex bends more with distance.
+        geo = self._atlas.branch_geo(SIZES[self.size_class], self.variant)
+        if geo is not None and self.species not in ("bare", "cactus", "conifer"):
+            segs, gw = geo
+            scale = self.canopy_r / float(SIZES[self.size_class])
+            ox, oy = bx - sx, by - sy
+            for x0, y0, x1, y1, width, w0, w1 in segs:
+                if self.flip:
+                    x0, x1 = gw - x0, gw - x1
+                p0 = (ox + x0 * scale + wx * w0, oy + y0 * scale + wy * w0)
+                p1 = (ox + x1 * scale + wx * w1, oy + y1 * scale + wy * w1)
+                pygame.draw.line(screen, (48, 32, 20), p0, p1,
+                                 max(1, int(width * scale) + 1))
+                if width >= 3:
+                    pygame.draw.line(screen, (100, 72, 46), p0, p1,
+                                     max(1, int(width * scale) - 1))
         wind.draw_leaves(screen, self.x, self.y, cam_x, cam_y,
                          self.canopy_r)
 
