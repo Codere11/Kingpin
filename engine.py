@@ -402,7 +402,10 @@ def run(g):
                     import npclab as _npclab
                     if event.key == pygame.K_F3:
                         import events as _events
-                        _events.cycle_test(g)
+                        import wind as _wind
+                        _events.spawn_test_kind(g, "rain")
+                        _wind.boost(20.0)
+                        g.toast("Rain + wind test")
                     elif event.key == pygame.K_F4:
                         import events as _events
                         _events.spawn_test(g)

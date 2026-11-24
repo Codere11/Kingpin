@@ -17,14 +17,23 @@ _TIME = 0.0
 _DIR = 0.25
 _STRENGTH = 0.6
 _PLAYER = (0.0, 0.0)
+_BOOST = 0.0
+
+
+def boost(seconds=15.0):
+    global _BOOST
+    _BOOST = max(float(_BOOST), float(seconds))
 
 
 def tick(g, dt):
-    global _TIME, _DIR, _STRENGTH, _PLAYER
+    global _TIME, _DIR, _STRENGTH, _PLAYER, _BOOST
     _TIME += float(dt)
+    _BOOST = max(0.0, _BOOST - float(dt))
     # A slow shifting gust: not a constant conveyor belt.
     _DIR = 0.35 + 0.55 * math.sin(_TIME * 0.13) + 0.22 * math.sin(_TIME * 0.47)
-    _STRENGTH = 0.42 + 0.24 * math.sin(_TIME * 0.61) + 0.14 * math.sin(_TIME * 1.73)
+    _STRENGTH = (0.42 + 0.24 * math.sin(_TIME * 0.61)
+                 + 0.14 * math.sin(_TIME * 1.73)
+                 + (0.45 if _BOOST > 0.0 else 0.0))
     p = getattr(g, "player", None)
     if p is not None:
         _PLAYER = (float(getattr(p, "x", 0.0)), float(getattr(p, "y", 0.0)))
