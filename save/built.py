@@ -240,6 +240,10 @@ def restore(g, data, ctx: "_context.Context") -> None:
             continue
 
     for rec in data.get("chests", ()) or ():
+        # Older builds briefly wrote an unauthorized "camp store" chest.
+        # Do not recreate it.
+        if rec.get("camp_store"):
+            continue
         try:
             ch = placement.Chest(float(rec["tx"]) * 32 + 16.0,
                                  float(rec["ty"]) * 32 + 16.0)
