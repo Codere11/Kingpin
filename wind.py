@@ -102,14 +102,18 @@ def draw(g, screen):
     if s <= 0.0:
         return
     sx, sy = p.x - g.cam_x, p.y - g.cam_y
-    layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    # Only a small surface around the player: a full-screen alpha allocation
+    # every frame is exactly the kind of hidden cost that kills FPS.
+    size = 300
+    cx = cy = size // 2
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
     for i in range(9):
         phase = _TIME * 1.6 + i * 0.9
         r = 32 + i * 13
-        bx = sx + math.cos(_DIR + phase * 0.2) * r
-        by = sy + math.sin(_DIR + phase * 0.2) * r * 0.55 - 8
+        bx = cx + math.cos(_DIR + phase * 0.2) * r
+        by = cy + math.sin(_DIR + phase * 0.2) * r * 0.55 - 8
         ex = bx + math.cos(_DIR) * (18 + 8 * math.sin(phase))
         ey = by + math.sin(_DIR) * (5 + 3 * math.sin(phase))
         pygame.draw.line(layer, (210, 226, 244, int(35 * s)),
                          (bx, by), (ex, ey), 1)
-    screen.blit(layer, (0, 0))
+    screen.blit(layer, (int(sx - cx), int(sy - cy)))
