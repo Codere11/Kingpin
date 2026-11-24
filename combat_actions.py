@@ -350,6 +350,7 @@ def resolve_swing(g, kills) -> int:
             struck = tree
     if struck is not None:
         struck.strikes += 1
+        struck.hit_until = float(getattr(g, "now", 0.0)) + 0.5
         sound.play("hit_tree")
         g.combat.spawn_impact(struck.x, struck.y, (120, 90, 50))
         if struck.strikes >= _m.AXE_STRIKES:

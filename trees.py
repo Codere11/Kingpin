@@ -34,6 +34,7 @@ SPAWN = 1.0                          # global density multiplier
 R_MIN = 34.0
 R_MAX = 120.0
 CANOPY_ALPHA = 205                   # leaves are semi-transparent
+_NOW = 0.0
 VILLAGE_RADIUS = 430.0 * VILLAGE_SCALE           # a village's own ground
 VILLAGE_CLEAR = 520.0 * VILLAGE_SCALE + 320.0    # no trees inside a village (+margin)
 VILLAGE_FADE = VILLAGE_CLEAR + 900.0
@@ -240,6 +241,39 @@ class TreeSprites:
             return self._broadleaf(radius, rng, variant, JUNGLE_PALETTE, 1.45, snowy)
         return self._broadleaf(radius, rng, variant, PALETTE, 1.0, snowy)
 
+    @staticmethod
+    def _branches(layer, cx, cy, radius, rng, variant):
+        """Branches and twig ends: some carry leaves, some are bare sticks."""
+        wood = (78, 55, 36)
+        wood_hi = (112, 82, 54)
+        wood_dark = (48, 32, 20)
+        count = 4 + (variant % 3)
+        for i in range(count):
+            ang = -2.85 + (i + 0.32) * (5.7 / max(1, count))
+            ang += rng.uniform(-0.12, 0.12)
+            reach = radius * rng.uniform(0.78, 1.16)
+            sx0 = cx + math.cos(ang) * radius * 0.10
+            sy0 = cy + math.sin(ang) * radius * 0.10
+            ex = cx + math.cos(ang) * reach
+            ey = cy + math.sin(ang) * reach * 0.82
+            width = max(2, int(radius * rng.uniform(0.035, 0.065)))
+            pygame.draw.line(layer, wood_dark, (sx0, sy0), (ex, ey), width + 1)
+            pygame.draw.line(layer, wood_hi, (sx0, sy0), (ex, ey), max(1, width - 1))
+            if (i + variant) % 4 == 0:
+                # a bare twig: no leaf cluster, just a fork
+                tx = ex + math.cos(ang - 0.75) * radius * 0.14
+                ty = ey + math.sin(ang - 0.75) * radius * 0.14
+                pygame.draw.line(layer, wood, (ex, ey), (tx, ty), max(1, width - 1))
+            else:
+                # leaf tuft at the end of the branch
+                count_leaves = 2 + ((i + variant) % 3)
+                for j in range(count_leaves):
+                    ox = rng.uniform(-radius * 0.12, radius * 0.12)
+                    oy = rng.uniform(-radius * 0.10, radius * 0.10)
+                    pygame.draw.circle(layer, (58, 108, 54),
+                                       (int(ex + ox), int(ey + oy)),
+                                       max(2, int(radius * 0.055)))
+
     def _broadleaf(self, radius, rng, variant, palette, height, snowy=False):
         trunk_h = radius * 1.5 * height
         trunk_w = max(13, int(radius * 0.26))
@@ -300,6 +334,7 @@ class TreeSprites:
             gy = cy + math.sin(angle) * dist
             pygame.draw.ellipse(canopy, _rgba(_darken(base, 34), alpha),
                                 (gx - 5, gy - 3, 10, 6))
+        TreeSprites._branches(canopy, cx, cy, radius, rng, variant)
         pygame.draw.circle(canopy, _rgba(_darken(base, 46), min(255, alpha + 20)),
                            (int(cx), int(cy)), radius, 3)
         if snowy:                               # a dusting on the upper canopy
@@ -476,7 +511,8 @@ class Tree:
     # thousand sprites between them.
     __slots__ = ("x", "y", "canopy_r", "trunk_rect", "sx", "sy",
                  "strikes", "felled", "felled_at", "species", "size_class",
-                 "variant", "flip", "snowy", "_atlas", "_save_uid")
+                 "variant", "flip", "snowy", "_atlas", "_save_uid",
+                 "hit_until")
 
     def __init__(self, x, y, radius, variant, flip, atlas, species="broadleaf",
                  snowy=False):
@@ -486,6 +522,7 @@ class Tree:
         self.strikes = 0
         self.felled = False
         self.felled_at = 0.0
+        self.hit_until = 0.0
 
         trunk_w = max(10, int(radius * 0.24))
         # Only the base of the trunk is solid, so you can walk under the leaves.
@@ -531,6 +568,10 @@ class Tree:
         wx, wy = wind.sway(self.x, self.y, 1.0)
         wx *= 3.2
         wy *= 1.5
+        if self.hit_until > _NOW:
+            left = max(0.0, (self.hit_until - _NOW) / 0.5)
+            wx += math.sin(_NOW * 72.0) * 9.0 * left
+            wy += math.sin(_NOW * 91.0) * 2.5 * left
         base, canopy = self._atlas.split(
             self.species, self.size_class, self.variant, self.flip,
             self.snowy, self.canopy_r, image)
@@ -572,6 +613,8 @@ class Trees:
 
     def update(self, now: float) -> None:
         """Put the woods back: any stump older than REGROW_SECONDS sprouts."""
+        global _NOW
+        _NOW = float(now)
         if not self._stumps:
             return
         still = []
