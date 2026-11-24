@@ -426,6 +426,21 @@ def conquer_camp(g, native_camp) -> None:
         camps.append(native_camp)
     if getattr(g, "player_camp", None) is None:
         g.player_camp = native_camp
+    # A REAL CAMP STORE, not the hidden ledger.  It is a chest the player can
+    # see and click; the internal market uses it from now on.
+    try:
+        import placement
+        _store = placement.Chest(float(native_camp.x) + 96.0,
+                                 float(native_camp.y) + 32.0)
+        _store.camp_store = True
+        for _item, _qty in ({"bread": 20, "coin": 20}).items():
+            _store.inventory.add(_item, _qty)
+        if not isinstance(getattr(g, "built_chests", None), list):
+            g.built_chests = []
+        g.built_chests.append(_store)
+        native_camp.store = _store
+    except Exception:
+        pass
     try:
         sync_jobs(g)
     except Exception:

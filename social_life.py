@@ -50,6 +50,17 @@ def _bubble(who, kind, text=None):
         pass
 
 
+def _camp_store(g, camp):
+    """The visible camp-store chest, or the nearest chest as a fallback."""
+    chests = list(getattr(g, "built_chests", ()) or ())
+    if not chests:
+        return None
+    mine = [c for c in chests if getattr(c, "camp_store", False)]
+    if mine:
+        return min(mine, key=lambda c: (c.x - camp.x) ** 2 + (c.y - camp.y) ** 2)
+    return min(chests, key=lambda c: (c.x - camp.x) ** 2 + (c.y - camp.y) ** 2)
+
+
 def _pay(buyer, seller, item, price, camp, g, now, kind="gift"):
     """Move one item and its price between two people / the camp store."""
     if buyer is None or item is None:
@@ -59,11 +70,13 @@ def _pay(buyer, seller, item, price, camp, g, now, kind="gift"):
     have = int((getattr(seller, "stock", {}) or {}).get(item, 0)) if seller else 0
     if seller is not None and have <= 0:
         return False
+    store_chest = None
     if seller is None:
-        store = getattr(camp, "ledger_goods", None)
-        if not isinstance(store, dict) or int(store.get(item, 0)) <= 0:
+        store_chest = _camp_store(g, camp)
+        inv = getattr(store_chest, "inventory", None) if store_chest else None
+        if inv is None or inv.count_of(item) <= 0:
             return False
-        store[item] = int(store[item]) - 1
+        inv.consume(item, 1)
     else:
         seller.stock[item] = have - 1
     buyer.stock[item] = int((getattr(buyer, "stock", {}) or {}).get(item, 0)) + 1
@@ -72,7 +85,9 @@ def _pay(buyer, seller, item, price, camp, g, now, kind="gift"):
         if seller is not None:
             seller.coins = float(getattr(seller, "coins", 0.0)) + price
         else:
-            camp.ledger_coins = float(getattr(camp, "ledger_coins", 0.0)) + price
+            inv = getattr(store_chest, "inventory", None) if store_chest else None
+            if inv is not None:
+                inv.add("coin", int(round(price)))
     if seller is not None:
         relationships.observe(buyer, seller, kind, now, g,
                               detail="%s %s" % (kind, item))
@@ -104,10 +119,11 @@ def _pulse(g, camp, now):
     for p in hungry:
         if float(getattr(p, "coins", 0.0)) < 1.0:
             continue
-        store = getattr(camp, "ledger_goods", None)
-        if isinstance(store, dict):
+        store = _camp_store(g, camp)
+        inv = getattr(store, "inventory", None) if store is not None else None
+        if inv is not None:
             for item in economy.FOOD:
-                if int(store.get(item, 0)) > 0:
+                if inv.count_of(item) > 0:
                     if _pay(p, None, item, 1.0, camp, g, now, "shared_food"):
                         return
     # 2. A hungry person is fed by someone who has food.
