@@ -147,6 +147,15 @@ def check_minor_breaks():
     f = P("INFJ")
     t = P("INTJ")
     assert mood.minor_threshold(f) > mood.minor_threshold(t)
+    # Major catharsis is bigger than minor catharsis.
+    m = P("ISTJ")
+    mood.set_break(m, "sad", 10.0)
+    mood.clear_break(m, 20.0)
+    minor = m.mood_thoughts["catharsis"]["delta"]
+    mood.set_break(m, "depression", 30.0)
+    mood.clear_break(m, 200.0)
+    major = m.mood_thoughts["catharsis"]["delta"]
+    assert major > minor, (major, minor)
     return True
 
 

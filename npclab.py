@@ -514,7 +514,13 @@ def drink(g):
         if item and item not in choices and _npc_has(n, item):
             choices.append(item)
     if not choices:
-        _toast(g, "%s has no cigar, drink or mushroom"
+        # Alt+F12 is the general "consume something" key: if the beer is
+        # gone but cigars/mushrooms remain, use those rather than claiming
+        # there is nothing at all.
+        if _npc_has(n, "cigar") or _npc_has(n, "dried_mushroom"):
+            consume_other(g)
+            return
+        _toast(g, "%s has no drink, cigar or mushroom"
                % getattr(n, "name", "?"))
         return
     i = int(getattr(n, "_demo_item_i", 0) or 0)

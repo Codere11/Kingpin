@@ -152,12 +152,18 @@ def set_break(npc, state: str, now: float, seconds: float = MINOR_SECONDS,
 
 def clear_break(npc, now: float) -> None:
     ensure(npc)
-    if getattr(npc, "break_state", "normal") in ("sad", "annoyed",
-                                                   "berserk", "breaking_spree",
-                                                   "crop_spree", "drunk",
-                                                   "tripping", "depression"):
+    state = getattr(npc, "break_state", "normal")
+    if state in ("sad", "annoyed"):
+        _catharsis = 20.0          # a minor break vents, but does not heal
+    elif state in ("berserk", "breaking_spree", "crop_spree", "depression"):
+        _catharsis = 40.0          # a major break is a real release
+    elif state in ("drunk", "tripping"):
+        _catharsis = 30.0          # coming down is relief, not a major break
+    else:
+        _catharsis = 0.0
+    if _catharsis > 0.0:
         try:
-            add_thought(npc, "catharsis", 20.0, now, 300.0)
+            add_thought(npc, "catharsis", _catharsis, now, 300.0)
         except Exception:
             pass
     npc.break_state = "normal"
