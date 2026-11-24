@@ -1377,18 +1377,26 @@ class NPC:
         if math.hypot(p.x - self.x, p.y - self.y) > 20.0:
             self._step_toward(p.x, p.y, dt)
             return True
+        # THE RECEIVER'S EXISTING OPINION MATTERS.  At neutral it is exactly
+        # 50/50; a friend is more likely to thank him, an enemy to complain or
+        # refuse.  A starving man still takes the food.
+        _accepted = True
+        try:
+            import relationships as _rel
+            _accepted = _rel.share_reaction(
+                p, self, "shared_food", float(getattr(camp.g, "now", 0.0)),
+                camp.g, item=food_item)
+        except Exception:
+            pass
+        if not _accepted:
+            fed.add(id(p))
+            self._did_work()
+            return True
         p.stock[food_item] = int(getattr(p, "stock", {}).get(food_item, 0)) + 4
         self.carry[food_item] = int(self.carry.get(food_item, 0)) - 4
         if self.carry.get(food_item, 0) <= 0:
             self.carry.pop(food_item, None)
         fed.add(id(p))
-        try:
-            import relationships as _rel
-            _rel.observe(p, self, "shared_food",
-                         float(getattr(camp.g, "now", 0.0)), camp.g,
-                         detail="shared %s" % food_item)
-        except Exception:
-            pass
         self._did_work()
         return True
 

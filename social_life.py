@@ -57,10 +57,15 @@ def _exchange(buyer, seller, item, camp, g, now, kind="gift"):
     stock = getattr(seller, "stock", None)
     if not isinstance(stock, dict) or int(stock.get(item, 0)) <= 0:
         return False
+    try:
+        accepted = relationships.share_reaction(
+            buyer, seller, kind, now, g, item=item)
+    except Exception:
+        accepted = True
+    if not accepted:
+        return True
     stock[item] = int(stock[item]) - 1
     buyer.stock[item] = int((getattr(buyer, "stock", {}) or {}).get(item, 0)) + 1
-    relationships.observe(buyer, seller, kind, now, g,
-                          detail="%s %s" % (kind, item))
     mood.add_thought(buyer, "fed" if item in economy.FOOD else "luxury",
                      3.0 if item in economy.FOOD else 5.0, now, 300.0)
     _bubble(seller, "need" if item in economy.FOOD else "praise",
@@ -108,7 +113,8 @@ def _pulse(g, camp, now):
             for buyer in people:
                 if buyer is seller:
                     continue
-                if _exchange(buyer, seller, item, camp, g, now, "shared_drink"):
+                _kind = "shared_food" if item in economy.FOOD else "shared_drink"
+                if _exchange(buyer, seller, item, camp, g, now, _kind):
                     return
     # 3. Otherwise, two nearby people talk.
     for a in people:

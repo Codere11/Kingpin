@@ -8,6 +8,7 @@ NPC's own 30-second timer.  No per-frame scan, no unbounded history.
 from __future__ import annotations
 
 import math
+import random
 
 PLAYER_KEY = "player"
 KEEP = 10
@@ -92,6 +93,10 @@ def observe(target, actor, kind: str, now: float, g=None, detail: str = "") -> N
         "gift": (8.0, 0.0, 1.0),
         "shared_food": (4.0, 0.0, 0.0),
         "shared_drink": (5.0, 0.0, 0.0),
+        "grateful": (6.0, 0.0, 1.0),
+        "ingrate": (-4.0, 0.0, -1.0),
+        "complaint": (-3.0, 0.0, 0.0),
+        "refused": (-5.0, 0.0, 0.0),
         "worked": (2.0, 0.0, 1.0),
         "forgave": (8.0, 0.0, 3.0),
         "witnessed_death": (-3.0, 4.0, 0.0),
@@ -128,6 +133,142 @@ def _trim(mem) -> None:
         keep[PLAYER_KEY] = player
     mem.clear()
     mem.update(keep)
+
+
+def reaction_chance(who, other) -> float:
+    """Chance `who` reacts positively to something `other` did.
+
+    At zero affinity this is exactly 50/50. A pre-existing positive relation
+    moves it up; a negative one moves it down. Each side uses its OWN memory
+    of the other, so the two rolls are independent.
+    """
+    if who is None or other is None:
+        return 0.5
+    rec = ensure(who).get(_key(other))
+    aff = float(rec.get("affinity", 0.0)) if isinstance(rec, dict) else 0.0
+    return max(0.05, min(0.95, 0.5 + aff / 200.0))
+
+
+def reaction(who, other) -> bool:
+    """True = positive reaction, False = negative reaction."""
+    rng = getattr(who, "rng", None)
+    try:
+        roll = float(rng.random()) if rng is not None else random.random()
+    except Exception:
+        roll = random.random()
+    return roll < reaction_chance(who, other)
+
+
+def seed_camp(camp) -> None:
+    """Give a new camp a small, pre-existing social history.
+
+    Each person starts knowing two to four others -- not the whole camp --
+    with a seeded opinion based on MBTI compatibility and a little chance.
+    Existing memories are never overwritten, so loading a save preserves the
+    relations the player has already seen.
+    """
+    people = []
+    seen = set()
+    for attr in ("farmers", "warriors", "handlers", "workers", "loggers",
+                 "artisans", "researchers", "doctors", "traders", "miners",
+                 "smiths", "weavers", "spicemen", "gunsmiths",
+                 "unemployed"):
+        for p in (getattr(camp, attr, ()) or ()):
+            if id(p) in seen or not getattr(p, "alive", True):
+                continue
+            seen.add(id(p))
+            people.append(p)
+    if len(people) < 2:
+        return
+    try:
+        import persona
+    except Exception:
+        persona = None
+    for a in people:
+        mem = ensure(a)
+        if mem:
+            continue
+        rng = getattr(a, "rng", None)
+        if rng is None:
+            continue
+        others = [b for b in people if b is not a]
+        rng.shuffle(others)
+        count = rng.randint(2, min(4, len(others)))
+        for b in others[:count]:
+            aff = rng.uniform(-12.0, 15.0)
+            if persona is not None:
+                try:
+                    if persona.axis(a, "SN") == persona.axis(b, "SN"):
+                        aff += 6.0
+                    if persona.axis(a, "FT") == persona.axis(b, "FT"):
+                        aff += 3.0
+                    if persona.has_trait(a, "traumatized"):
+                        aff -= 5.0
+                except Exception:
+                    pass
+            rec = _record(mem, _key(b), getattr(b, "name", "someone"))
+            rec["affinity"] = max(-100.0, min(100.0, aff))
+            rec["contacts"] = rng.randint(1, 3)
+            rec["last_event"] = "old history"
+            if aff <= -20.0:
+                _add_tag(rec, "grudge")
+            elif aff >= 25.0:
+                _add_tag(rec, "trusted")
+        _trim(mem)
+
+
+def share_reaction(receiver, giver, kind: str, now: float, g=None,
+                   item: str = "") -> bool:
+    """Roll how BOTH people feel about a share, using their old opinion.
+
+    At neutral opinion each side is exactly 50/50.  A positive existing
+    relation makes a positive reaction more likely; a negative one makes a
+    complaint, insult or refusal more likely.  The receiver still accepts food
+    when starving, but may resent it.
+
+    Returns True if the receiver accepts the item.
+    """
+    if receiver is None or giver is None:
+        return False
+    receiver_positive = reaction(receiver, giver)
+    giver_positive = reaction(giver, receiver)
+    try:
+        starving = float(getattr(receiver, "hunger", 0.0)) >= 85.0
+    except Exception:
+        starving = False
+    accepted = bool(receiver_positive or starving)
+    try:
+        if accepted:
+            observe(receiver, giver,
+                    kind if receiver_positive else "complaint",
+                    now, g, detail="%s %s" % (kind, item))
+            if giver_positive:
+                observe(giver, receiver, "grateful", now, g,
+                        detail="grateful for sharing")
+            else:
+                observe(giver, receiver, "ingrate", now, g,
+                        detail="ungrateful for food")
+        else:
+            # The giver offered; the receiver refused and spoke harshly.
+            observe(giver, receiver, "insult", now, g,
+                    detail="refused %s" % item)
+            observe(receiver, giver, "refused", now, g,
+                    detail="refused %s" % item)
+        import mood as _mood
+        if receiver_positive:
+            _mood.add_thought(receiver, "grateful", 3.0, now, 300.0)
+        else:
+            _mood.add_thought(receiver, "insulted", -5.0, now, 300.0)
+        if not giver_positive:
+            _mood.add_thought(giver, "ungrateful", -3.0, now, 300.0)
+        import comm as _comm
+        _comm.spawn_cloud(receiver.x, receiver.y,
+                          "praise" if receiver_positive else "insult",
+                          text=("thank you" if receiver_positive else
+                                ("not enough" if accepted else "no")))
+    except Exception:
+        pass
+    return accepted
 
 
 def tick(npc, now: float, dt: float) -> None:

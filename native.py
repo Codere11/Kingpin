@@ -466,6 +466,13 @@ def build(g, cx: float, cy: float, seed: int,
     for _n in farmers + warriors + settlement.handlers:
         if _n not in _np:
             _np.append(_n)
+    # A settlement has history before the player meets it: a few friends,
+    # rivals and old grudges. This is seeded once, at creation, not every tick.
+    try:
+        import relationships as _rel
+        _rel.seed_camp(settlement)
+    except Exception:
+        pass
     return settlement
 
 
