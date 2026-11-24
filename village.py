@@ -501,6 +501,10 @@ class NPC:
     mental_known: Any = False
     mood_thoughts: Any = None
     mood_target: Any = 50.0
+    # CONSUMPTION IS NOT A BREAK.  One drink or smoke is an activity; enough
+    # of them lower the threshold and eventually become their own state.
+    drunk_level: Any = 0.0
+    high_level: Any = 0.0
     break_state: Any = "normal"
     break_until: Any = 0.0
     break_cooldown: Any = 0.0
@@ -2539,7 +2543,7 @@ class NPC:
         # following whoever happened to be near the fire.  Berserk, spree and
         # depression are driven entirely by _break_action until they end.
         if getattr(self, "break_state", "normal") in ("berserk", "breaking_spree",
-                                                      "depression"):
+                                                      "crop_spree", "depression"):
             return
         if getattr(self, "_brawl_target", None) is not None:
             return
@@ -4232,6 +4236,57 @@ class NPC:
             if now >= float(getattr(self, "break_until", 0.0)):
                 mood.clear_break(self, now)
             return
+        if state == "crop_spree":
+            if now >= float(getattr(self, "break_until", 0.0)):
+                mood.clear_break(self, now)
+                return
+            camp = getattr(self, "native_camp", None)
+            g = getattr(camp, "g", None) if camp is not None else None
+            if g is None:
+                return
+            target = getattr(self, "_crop_target", None)
+            if target is None:
+                tiles = []
+                for _key, _lst in (getattr(camp, "farm_tiles", {}) or {}).items():
+                    for _t in (_lst or ()):
+                        try:
+                            tx, ty = int(_t[0]), int(_t[1])
+                            if g.world.plot_at(tx, ty) is not None:
+                                tiles.append((tx, ty))
+                        except Exception:
+                            pass
+                if not tiles:
+                    mood.clear_break(self, now)
+                    return
+                target = min(tiles,
+                             key=lambda t: (t[0] * 32.0 - self.x) ** 2
+                             + (t[1] * 32.0 - self.y) ** 2)
+                self._crop_target = target
+            tx, ty = target
+            cx, cy = tx * 32.0 + 16.0, ty * 32.0 + 16.0
+            if math.hypot(cx - self.x, cy - self.y) > 22.0:
+                self._step_toward(cx, cy, dt)
+                return
+            self._break_action_t = getattr(self, "_break_action_t", 0.0) - dt
+            if self._break_action_t > 0.0:
+                return
+            self._break_action_t = 1.0
+            try:
+                if g.world.plot_at(tx, ty) is not None:
+                    g.world.set_plot(tx, ty, "grass", None)
+                    try:
+                        g.ground.invalidate_tile(tx, ty, immediate=True)
+                    except Exception:
+                        pass
+                    self._did_attack()
+            except Exception:
+                pass
+            self._crop_target = None
+            return
+        if state in ("drunk", "tripping"):
+            if now >= float(getattr(self, "break_until", 0.0)):
+                mood.clear_break(self, now)
+            return
         if state not in ("berserk", "breaking_spree"):
             return
         camp = getattr(self, "native_camp", None)
@@ -4645,9 +4700,11 @@ class NPC:
             return
         item, left = fx
         prog = 1.0 - max(0.0, min(1.0, left / economy.USE_FX_SECONDS))
+        # THE MOUTH, NOT THE FOREHEAD.  hx/hy is the head centre; the old
+        # code used sx/sy and put the cigar at the body centre.
         fxdir = self.facing
-        hx2 = sx + fxdir[0] * 13.0
-        hy2 = sy + fxdir[1] * 13.0 + 2.0
+        hx2 = hx + fxdir[0] * 6.0
+        hy2 = hy + fxdir[1] * 6.0 + 4.0
         pad = 46
         surf = pygame.Surface((pad * 2, pad * 2), pygame.SRCALPHA)
         cx, cy = pad, pad
@@ -4655,8 +4712,8 @@ class NPC:
 
         if item == "cigar":
             pygame.draw.rect(surf, (108, 66, 38, 235),
-                             (cx + dx - 3, cy + dy - 2, 12, 4), border_radius=2)
-            pygame.draw.circle(surf, (240, 150, 60, 235), (cx + dx + 9, cy + dy), 2)
+                             (cx + dx - 2, cy + dy - 2, 12, 4), border_radius=2)
+            pygame.draw.circle(surf, (240, 150, 60, 235), (cx + dx + 10, cy + dy), 2)
             for i in range(6):                      # smoke curling upward
                 p = prog * 1.2 + i * 0.16
                 if p > 1.0:
@@ -4665,7 +4722,7 @@ class NPC:
                 a = int(96 * (1.0 - p))
                 wob = math.sin(p * 7.0) * 5.0
                 pygame.draw.circle(surf, (222, 222, 228, a),
-                                   (int(cx + dx + wob), int(cy + dy - 6 - p * 26)), rad)
+                                   (int(cx + dx + wob), int(cy + dy - 4 - p * 26)), rad)
 
         elif item == "dried_mushroom":
             pygame.draw.circle(surf, (196, 176, 140, 235), (int(cx + dx), int(cy + dy)), 4)
@@ -4689,7 +4746,7 @@ class NPC:
             pygame.draw.rect(bottle, colour + (215,), (1, 7, 12, 14), border_radius=3)
             pygame.draw.rect(bottle, (206, 214, 220, 190), (4, 0, 6, 8))
             pygame.draw.rect(bottle, (210, 210, 216, 150), (1, 7, 12, 14), 1, border_radius=3)
-            surf.blit(bottle, (cx + dx - 7, cy + dy - 15))
+            surf.blit(bottle, (cx + dx - 7, cy + dy - 10))
 
         screen.blit(surf, (sx - pad, sy - pad))
 

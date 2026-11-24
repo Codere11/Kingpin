@@ -17,7 +17,7 @@ MOOD_MAX = 100.0
 MOOD_STEPS = (70.0, 50.0, 35.0, 25.0, 15.0, 5.0)
 
 BREAK_STATES = ("normal", "sad", "annoyed", "berserk", "breaking_spree",
-                "depression")
+                "crop_spree", "drunk", "tripping", "depression")
 MINOR_THRESHOLD = 32.0
 MAJOR_THRESHOLD = 16.0
 MINOR_SECONDS = 240.0
@@ -115,6 +115,8 @@ def minor_threshold(npc) -> float:
         value -= 6.0
     if persona.has_trait(npc, "traumatized"):
         value *= 0.75
+    value -= 3.0 * float(getattr(npc, "drunk_level", 0.0) or 0.0)
+    value -= 4.0 * float(getattr(npc, "high_level", 0.0) or 0.0)
     return clamp(value)
 
 
@@ -126,6 +128,8 @@ def major_threshold(npc) -> float:
         value -= 6.0
     if persona.has_trait(npc, "traumatized"):
         value *= 0.75
+    value -= 3.0 * float(getattr(npc, "drunk_level", 0.0) or 0.0)
+    value -= 4.0 * float(getattr(npc, "high_level", 0.0) or 0.0)
     return clamp(value)
 
 
@@ -150,7 +154,8 @@ def clear_break(npc, now: float) -> None:
     ensure(npc)
     if getattr(npc, "break_state", "normal") in ("sad", "annoyed",
                                                    "berserk", "breaking_spree",
-                                                   "depression"):
+                                                   "crop_spree", "drunk",
+                                                   "tripping", "depression"):
         try:
             add_thought(npc, "catharsis", 20.0, now, 300.0)
         except Exception:
@@ -181,19 +186,27 @@ def force_break(npc, now: float) -> str:
     current = getattr(npc, "break_state", "normal")
     state = {"normal": "sad", "sad": "annoyed",
              "annoyed": "berserk", "berserk": "breaking_spree",
-             "breaking_spree": "depression",
+             "breaking_spree": "crop_spree", "crop_spree": "depression",
              "depression": "normal"}.get(current, "sad")
     if state == "normal":
         clear_break(npc, now)
     else:
-        seconds = (180.0 if state == "depression"
-                   else (240.0 if state in ("sad", "annoyed") else 60.0))
+        seconds = (30.0 if state == "crop_spree"
+                   else (180.0 if state == "depression"
+                         else (240.0 if state in ("sad", "annoyed") else 60.0)))
         set_break(npc, state, now, seconds=seconds, forced=True)
     return npc.break_state
 
 
 def move_mult(npc) -> float:
-    return 0.65 if getattr(npc, "break_state", "normal") == "sad" else 1.0
+    state = getattr(npc, "break_state", "normal")
+    if state == "sad":
+        return 0.65
+    if state == "drunk":
+        return 0.70
+    if state == "tripping":
+        return 0.80
+    return 1.0
 
 
 def work_mult(npc) -> float:
@@ -202,6 +215,10 @@ def work_mult(npc) -> float:
         return 0.50
     if state == "annoyed":
         return 0.75
+    if state == "drunk":
+        return 0.50
+    if state == "tripping":
+        return 0.0
     return 1.0
 
 
@@ -399,6 +416,13 @@ def tick(npc, now: float, dt: float, interval: float = 30.0) -> None:
         _needs.tick(npc, now, interval)
     except Exception:
         pass
+    npc.drunk_level = max(0.0, float(getattr(npc, "drunk_level", 0.0) or 0.0) - 0.5)
+    npc.high_level = max(0.0, float(getattr(npc, "high_level", 0.0) or 0.0) - 0.5)
+    if getattr(npc, "break_state", "normal") == "normal":
+        if float(getattr(npc, "high_level", 0.0) or 0.0) >= 3.0:
+            set_break(npc, "tripping", now, seconds=60.0)
+        elif float(getattr(npc, "drunk_level", 0.0) or 0.0) >= 3.0:
+            set_break(npc, "drunk", now, seconds=60.0)
     npc.mood_target = target_from_thoughts(npc)
     cur = float(getattr(npc, "mood", 50.0))
     nxt = cur + (npc.mood_target - cur) * 0.25

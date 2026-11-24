@@ -364,6 +364,9 @@ def run(g):
                         _mods = pygame.key.get_mods()
                         if _mods & pygame.KMOD_CTRL:
                             _npclab.destroy_crops(g)
+                        elif (_mods & pygame.KMOD_ALT
+                              and _mods & pygame.KMOD_SHIFT):
+                            _npclab.consume_other(g)
                         elif _mods & pygame.KMOD_ALT:
                             _npclab.drink(g)
                         else:

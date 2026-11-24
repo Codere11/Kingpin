@@ -268,6 +268,10 @@ def _spawn_subjects(g, camp):
         n.native_role = role
         n.job = "unemployed" if role == "idle" else role
         n.native_camp = camp
+        # Test only: enough to observe one, two and three consumptions.
+        n.stock["beer"] = 3
+        n.stock["cigar"] = 3
+        n.stock["dried_mushroom"] = 3
         if role == "farmer":
             n.farm_plot = farm_plots[farmer_i % len(farm_plots)]
             farmer_i += 1
@@ -309,6 +313,15 @@ def _reset_subjects(subjects):
                 pass
         n.mood = mood.DEFAULT_MOOD
         n.mood_target = mood.DEFAULT_MOOD
+        n.drunk_level = 0.0
+        n.high_level = 0.0
+        n.use_fx = None
+        try:
+            n.stock["beer"] = 3
+            n.stock["cigar"] = 3
+            n.stock["dried_mushroom"] = 3
+        except Exception:
+            pass
         n.break_state = "normal"
         n.break_until = 0.0
         n.break_cooldown = 0.0
@@ -453,61 +466,93 @@ def social_incident(g, kind="insult"):
 
 
 def destroy_crops(g):
-    """Ctrl+F12: the selected person tramples nearby field tiles."""
+    """Ctrl+F12: start a 30-second crop-destruction break."""
     n = _selected_actor(g)
     if n is None or not getattr(n, "native", False):
         return
-    camp = getattr(n, "native_camp", None)
-    g0 = getattr(camp, "g", None) if camp is not None else None
-    if g0 is None:
-        _toast(g, "No camp field to destroy")
-        return
-    tiles = []
-    for _key, _lst in (getattr(camp, "farm_tiles", {}) or {}).items():
-        for _t in (_lst or ()):
-            try:
-                tiles.append((int(_t[0]), int(_t[1])))
-            except Exception:
-                pass
-    if not tiles:
-        _toast(g, "No crops here")
-        return
-    tiles.sort(key=lambda t: (t[0] * 32.0 - n.x) ** 2 + (t[1] * 32.0 - n.y) ** 2)
-    made = 0
-    for tx, ty in tiles[:3]:
-        try:
-            if g0.world.plot_at(tx, ty) is None:
-                continue
-            g0.world.set_plot(tx, ty, "grass", None)
-            try:
-                g0.ground.invalidate_tile(tx, ty, immediate=True)
-            except Exception:
-                pass
-            made += 1
-        except Exception:
-            pass
-    if made:
-        _toast(g, "%s destroyed %d crop tiles"
-               % (getattr(n, "name", "?"), made))
-    else:
-        _toast(g, "No standing crops to destroy")
+    mood.set_break(n, "crop_spree", float(getattr(g, "now", 0.0)),
+                   seconds=30.0, forced=True)
+    _toast(g, "%s: crop spree" % getattr(n, "name", "?"))
+
+
+def _npc_has(n, item):
+    try:
+        if isinstance(getattr(n, "stock", None), dict) and int(n.stock.get(item, 0)) > 0:
+            return True
+    except Exception:
+        pass
+    try:
+        return getattr(n, "pack", None) is not None and n.pack.count_of(item) > 0
+    except Exception:
+        return False
+
+
+def _npc_take(n, item):
+    try:
+        if isinstance(getattr(n, "stock", None), dict) and int(n.stock.get(item, 0)) > 0:
+            n.stock[item] = int(n.stock[item]) - 1
+            return True
+    except Exception:
+        pass
+    try:
+        if getattr(n, "pack", None) is not None and n.pack.count_of(item) > 0:
+            n.pack.consume(item, 1)
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def drink(g):
-    """Alt+F12: make the selected person visibly drink or smoke."""
+    """Alt+F12: consume one luxury the person actually carries."""
     n = _selected_actor(g)
     if n is None or not getattr(n, "native", False):
         return
+    choices = []
+    for item in (getattr(n, "wants_drink", None),
+                 "beer", "liqueur", "mezcal", "govbeer"):
+        if item and item not in choices and _npc_has(n, item):
+            choices.append(item)
+    if not choices:
+        _toast(g, "%s has no cigar, drink or mushroom"
+               % getattr(n, "name", "?"))
+        return
+    i = int(getattr(n, "_demo_item_i", 0) or 0)
+    item = choices[i % len(choices)]
+    n._demo_item_i = i + 1
     try:
         import economy
         import mind
-        item = (getattr(n, "wants_product", None)
-                or getattr(n, "wants_drink", None) or "beer")
+        if not _npc_take(n, item):
+            _toast(g, "%s has no %s" % (getattr(n, "name", "?"), item))
+            return
         n.use_fx = (item, economy.USE_FX_SECONDS)
         mind.consume(n, item, float(getattr(g, "now", 0.0)))
-        _toast(g, "%s enjoys %s" % (getattr(n, "name", "?"), item))
+        _toast(g, "%s consumes %s" % (getattr(n, "name", "?"), item))
     except Exception as exc:
         _toast(g, "drink: %s" % exc)
+
+
+def consume_other(g):
+    """Alt+Shift+F12: smoke a cigar or eat a mushroom the person carries."""
+    n = _selected_actor(g)
+    if n is None or not getattr(n, "native", False):
+        return
+    choices = [i for i in ("cigar", "dried_mushroom") if _npc_has(n, i)]
+    if not choices:
+        _toast(g, "%s has no cigar or mushroom" % getattr(n, "name", "?"))
+        return
+    item = choices[0]
+    try:
+        import economy
+        import mind
+        if not _npc_take(n, item):
+            return
+        n.use_fx = (item, economy.USE_FX_SECONDS)
+        mind.consume(n, item, float(getattr(g, "now", 0.0)))
+        _toast(g, "%s consumes %s" % (getattr(n, "name", "?"), item))
+    except Exception as exc:
+        _toast(g, "consume: %s" % exc)
 
 
 def force_break(g):

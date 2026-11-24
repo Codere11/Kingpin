@@ -40,11 +40,20 @@ def consume(npc, item, now):
     # remember exactly how much mood the fix actually added, so the expiry
     # removes exactly that (clamping at 100 cannot leak a phantom 10).
     npc._consume_mood_off = float(getattr(npc, "_consume_mood_off", 0.0)) + (new - old)
+    if item in ("beer", "liqueur", "mezcal", "govbeer"):
+        npc.drunk_level = float(getattr(npc, "drunk_level", 0.0) or 0.0) + 1.0
+    elif item == "dried_mushroom":
+        npc.high_level = float(getattr(npc, "high_level", 0.0) or 0.0) + 1.0
     npc._break_off = float(getattr(npc, "_break_off", 0.0)) + 10.0
     npc._break_off_until = now + CONSUME_BREAK_SECONDS
     try:
         import mood as _mood
         _mood.add_thought(npc, "luxury", 6.0, now, CONSUME_BREAK_SECONDS)
+        if getattr(npc, "break_state", "normal") == "normal":
+            if float(getattr(npc, "high_level", 0.0) or 0.0) >= 3.0:
+                _mood.set_break(npc, "tripping", now, seconds=60.0)
+            elif float(getattr(npc, "drunk_level", 0.0) or 0.0) >= 3.0:
+                _mood.set_break(npc, "drunk", now, seconds=60.0)
     except Exception:
         pass
 
