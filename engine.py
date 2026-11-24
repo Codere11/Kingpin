@@ -308,6 +308,11 @@ def run(g):
             _events.tick(g, g.dt)
         except Exception:
             pass
+        try:
+            import wind as _wind
+            _wind.tick(g, g.dt)
+        except Exception:
+            pass
         g.vw, g.vh = g.screen.get_size()
         g.mouse_x, g.mouse_y = pygame.mouse.get_pos()          # window space
         g.wmouse_x, g.wmouse_y = g.mouse_x / g.zoom, g.mouse_y / g.zoom  # world space
@@ -3667,6 +3672,11 @@ def run(g):
             try:
                 import events as _events_draw
                 _events_draw.draw(g, g.screen)
+            except Exception:
+                pass
+            try:
+                import wind as _wind_draw
+                _wind_draw.draw(g, g.screen)
             except Exception:
                 pass
         g.draw_villages = g.villages.visible(g.cam_x, g.cam_y, g.vw, g.vh,

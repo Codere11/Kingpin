@@ -19,6 +19,7 @@ import pygame
 
 import biomes
 import nations
+import wind
 from noise import fbm
 from world import coast_x
 from village import (SPACING, VILLAGE_SCALE, village_center,
@@ -452,6 +453,9 @@ class Tree:
                                             self.variant, self.flip, self.snowy,
                                             self.canopy_r)
         screen.blit(image, (self.x - cam_x - sx, self.y - cam_y - sy))
+        if not self.felled:
+            wind.draw_leaves(screen, self.x, self.y, cam_x, cam_y,
+                             self.canopy_r)
 
 
 class Trees:

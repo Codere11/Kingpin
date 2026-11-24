@@ -105,6 +105,7 @@ done
     --hidden-import playlog \
     --hidden-import social_life \
     --hidden-import events \
+    --hidden-import wind \
     "${DATA_ARGS[@]}" \
     main.py 2>&1 | tail -1
 

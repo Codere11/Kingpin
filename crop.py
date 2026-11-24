@@ -222,21 +222,23 @@ def draw_plant(screen, x, y, elapsed, cam_x, cam_y, biome=None):
     pygame.draw.ellipse(screen, (38, 58, 30), (sx - 9, sy - 3, 18, 7))
 
     height = 9.0 + 36.0 * p
+    wx, wy = wind.sway(x, y, 1.0)
     pygame.draw.line(screen, dark, (sx, sy), (sx, sy - height), 2)
 
     pairs = 1 + st
     for i in range(pairs):
         t = (i + 1) / (pairs + 0.5)
-        ly = sy - height * t
+        ly = sy - height * t + wy * t * 0.45
         size = (6.0 + 13.0 * p) * (1.15 - 0.4 * t)
         col = color if i % 2 == 0 else color2
-        _leaf(screen, sx, ly, size, math.radians(205), size * 0.42, col, dark)
-        _leaf(screen, sx, ly, size, math.radians(-25), size * 0.42, col, dark)
+        bx = sx + wx * t
+        _leaf(screen, bx, ly, size, math.radians(205), size * 0.42, col, dark)
+        _leaf(screen, bx, ly, size, math.radians(-25), size * 0.42, col, dark)
 
     if st >= 3:                            # ripe: flowers
-        top_y = sy - height
+        top_y = sy - height + wy
         for dx, dy in ((-5, 0), (5, 0), (0, -6)):
-            fx, fy = int(sx + dx), int(top_y + dy)
+            fx, fy = int(sx + dx + wx), int(top_y + dy)
             pygame.draw.circle(screen, (224, 126, 166), (fx, fy), 4)
             pygame.draw.circle(screen, (250, 220, 235), (fx, fy), 2)
 
@@ -296,10 +298,11 @@ def draw_wheat(screen: pygame.Surface, x: float, y: float, elapsed: float,
     st = stage(elapsed)
     pygame.draw.ellipse(screen, (38, 58, 30), (sx - 9, sy - 3, 18, 7))
     height = 8.0 + 30.0 * p
+    wx, wy = wind.sway(x, y, 0.7)
     for i in range(3):
         off = (i - 1) * 5
         pygame.draw.line(screen, (152, 130, 62), (sx + off, sy),
-                         (sx + off, sy - height), 2)
+                         (sx + off + wx, sy - height + wy), 2)
         if st >= 3:
             head = 10.0 * p + 5.0
             pygame.draw.ellipse(screen, (216, 184, 94),
@@ -319,14 +322,15 @@ def draw_berries(screen, x, y, elapsed, cam_x, cam_y, biome=None):
     st = stage(elapsed)
     pygame.draw.ellipse(screen, (38, 58, 30), (sx - 10, sy - 3, 20, 7))
     bush = 0.55 + 0.45 * p
+    wx, wy = wind.sway(x, y, 0.75)
     for dx, dy, r, col in ((-6, -1, 8, (74, 126, 62)), (6, 0, 8, (60, 110, 54)),
                            (0, -6, 9, (78, 132, 66)), (0, 3, 7, (56, 102, 50))):
-        pygame.draw.circle(screen, col, (int(sx + dx), int(sy + dy)),
+        pygame.draw.circle(screen, col, (int(sx + dx + wx), int(sy + dy + wy)),
                            max(2, int(r * bush)))
     if st >= 3:
         for dx, dy in ((-6, -3), (5, -1), (0, 4), (-2, -9), (7, -8)):
-            pygame.draw.circle(screen, (198, 54, 58), (int(sx + dx), int(sy + dy)), 3)
-            pygame.draw.circle(screen, (140, 32, 36), (int(sx + dx), int(sy + dy)), 3, 1)
+            pygame.draw.circle(screen, (198, 54, 58), (int(sx + dx + wx), int(sy + dy + wy)), 3)
+            pygame.draw.circle(screen, (140, 32, 36), (int(sx + dx + wx), int(sy + dy + wy)), 3, 1)
 
 
 def draw_cactus(screen, x, y, elapsed, cam_x, cam_y, biome=None):
@@ -358,14 +362,15 @@ def draw_cotton(screen, x, y, elapsed, cam_x, cam_y, biome=None):
     st = stage(elapsed)
     pygame.draw.ellipse(screen, (38, 58, 30), (sx - 10, sy - 3, 20, 7))
     bush = 0.55 + 0.45 * p
+    wx, wy = wind.sway(x, y, 0.75)
     for dx, dy, r, col in ((-6, -1, 8, (74, 126, 62)), (6, 0, 8, (60, 110, 54)),
                            (0, -6, 9, (78, 132, 66)), (0, 3, 7, (56, 102, 50))):
-        pygame.draw.circle(screen, col, (int(sx + dx), int(sy + dy)),
+        pygame.draw.circle(screen, col, (int(sx + dx + wx), int(sy + dy + wy)),
                            max(2, int(r * bush)))
     if st >= 3:
         for dx, dy in ((-6, -3), (5, -1), (0, 4), (-2, -9), (7, -8)):
-            pygame.draw.circle(screen, (248, 250, 252), (int(sx + dx), int(sy + dy)), 4)
-            pygame.draw.circle(screen, (200, 208, 218), (int(sx + dx), int(sy + dy)), 4, 1)
+            pygame.draw.circle(screen, (248, 250, 252), (int(sx + dx + wx), int(sy + dy + wy)), 4)
+            pygame.draw.circle(screen, (200, 208, 218), (int(sx + dx + wx), int(sy + dy + wy)), 4, 1)
 
 
 _CHILI_IMAGES = None
