@@ -1,8 +1,8 @@
 """animals.py -- horses, bison, wolves and rabbits.
 
 Only the live creatures the game actually walks are written.  A horse's saddle
-bags, a conquered horse's route, a camp's livestock and a newborn's age all
-survive; the class-level herds are rebuilt on load instead of being saved.
+bags, a camp's livestock and a newborn's age all survive; the class-level herds
+are rebuilt on load instead of being saved.
 """
 
 from __future__ import annotations
@@ -11,7 +11,8 @@ from . import codec
 from . import context as _context
 
 SKIP = {
-    "g", "pack", "uid", "refs", "save_class", "route", "breed_partner", "escort_soldier",
+    "g", "pack", "uid", "refs", "save_class", "breed_partner",
+    "escort_soldier", "trader_rider",
     "knows", "known_since", "news", "_tier_epoch", "_shadow",
     "hit_flash", "drip_timer", "flee_timer", "graze_timer", "lunge_cd",
     "fire_cd", "hop_timer", "strafe_timer", "phase", "bleed",
@@ -30,19 +31,6 @@ def snapshot(a) -> dict:
         "breed": codec.idref(getattr(a, "breed_partner", None), "animal"),
         "escort": codec.idref(getattr(a, "escort_soldier", None), "animal"),
     }
-    route = getattr(a, "route", None)
-    if isinstance(route, dict):
-        def _route_ref(obj):
-            if isinstance(obj, str):
-                return obj
-            return codec.idref(obj, "camp")
-        data["route"] = {
-            "origin": _route_ref(route.get("origin")),
-            "dest": _route_ref(route.get("dest")),
-            "item_a": route.get("item_a"),
-            "item_b": route.get("item_b"),
-            "amount": route.get("amount"),
-        }
     return data
 
 
@@ -75,28 +63,7 @@ def restore(rec: dict, ctx: "_context.Context"):
     refs = rec.get("refs") or {}
     ctx.animals[rec["uid"]] = obj
     ctx.later(lambda: _resolve(obj, refs, ctx))
-    route = rec.get("route")
-    if route:
-        ctx.later(lambda: _resolve_route(obj, route, ctx))
     return obj
-
-
-def _resolve_route(obj, route: dict, ctx: "_context.Context") -> None:
-    origin = route.get("origin")
-    dest = route.get("dest")
-    if origin != "ship":
-        origin = ctx.camps.get(origin or "")
-    if dest != "ship":
-        dest = ctx.camps.get(dest or "")
-    if origin is None or dest is None:
-        obj.route = None
-        return
-    obj.route = {
-        "origin": origin, "dest": dest,
-        "item_a": route.get("item_a"),
-        "item_b": route.get("item_b"),
-        "amount": route.get("amount"),
-    }
 
 
 def _resolve(obj, refs: dict, ctx: "_context.Context") -> None:

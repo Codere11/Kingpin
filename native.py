@@ -614,7 +614,7 @@ def _cargo_horses(g):
         if (getattr(h, "conquered", False) and getattr(h, "alive", True)
                 and (getattr(h, "delivering", False)
                      or getattr(h, "returning", False)
-                     or getattr(h, "route", None) is not None)):
+                     or getattr(h, "trader_rider", None) is not None)):
             out.append(h)
     return out
 

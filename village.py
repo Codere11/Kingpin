@@ -509,6 +509,8 @@ class NPC:
     trader_state: Any = "idle"
     trader_coin: Any = 0.0
     trader_t: Any = 0.0
+    trader_horse: Any = None      # live reference; not saved
+    trader_home: Any = None
     # WHO HE REMEMBERS: the player and up to nine other people.  None is the
     # lazy empty state; relationships.ensure() creates the dict on first use.
     social_memory: Any = None
@@ -1118,6 +1120,8 @@ class NPC:
             if home is not None:                 # the debt dies with him
                 home.caravans = max(0, home.caravans - 1)
         self.refuge = None
+        if getattr(self, "trader_horse", None) is not None:
+            self._trader_horse_clear()
         if self in TRAVELLERS:
             TRAVELLERS.remove(self)
         if self in PEOPLE:                       # and off the register of the
@@ -1996,6 +2000,145 @@ class NPC:
             except Exception:
                 pass
 
+    def _trader_find_horse(self, g):
+        """The nearest free horse a trader can take to the ship."""
+        best = None
+        bd = 650.0 * 650.0
+        riding = getattr(g, "riding", None)
+        for h in getattr(g, "horses", ()) or ():
+            if h is riding or not getattr(h, "alive", True):
+                continue
+            if getattr(h, "trader_rider", None) is not None:
+                continue
+            if getattr(h, "delivering", False) or getattr(h, "returning", False):
+                continue
+            d = (h.x - self.x) ** 2 + (h.y - self.y) ** 2
+            if d < bd:
+                bd, best = d, h
+        return best
+
+    def _trader_horse_clear(self) -> None:
+        h = getattr(self, "trader_horse", None)
+        if h is not None:
+            try:
+                h.trader_rider = None
+            except Exception:
+                pass
+        self.trader_horse = None
+        self.trader_home = None
+
+    def _trader_sell_at_ship(self, g, load, inv) -> float:
+        """Sell the trader's real pack to the ship at the trader's 80% rate."""
+        coin = 0.0
+        try:
+            import market
+            for item, qty in list(load.items()):
+                qty = int(qty or 0)
+                if qty <= 0 or item not in market.sellable(g):
+                    load.pop(item, None)
+                    continue
+                have = int(inv.count_of(item)) if inv is not None else 0
+                qty = min(qty, have)
+                if qty <= 0:
+                    load.pop(item, None)
+                    continue
+                grade = int((getattr(self, "carry_grade", {}) or {}).get(item, 4) or 4)
+                coin += market.sell_value(g, item, qty, grade) * 0.80
+                if inv is not None:
+                    inv.consume(item, qty)
+                load.pop(item, None)
+        except Exception:
+            pass
+        self.trader_load = {}
+        self.trader_coin = float(getattr(self, "trader_coin", 0.0)) + coin
+        self._trader_show_coin()
+        if coin > 0.0:
+            try:
+                g.toast("%s returns from the ship with %d coin"
+                        % (getattr(self, "name", "The trader"), int(coin)))
+            except Exception:
+                pass
+        return coin
+
+    def _trader_ride_step(self, dt: float, g) -> bool:
+        """Walk to a horse, ride it to the ship, sell, and ride home."""
+        state = getattr(self, "trader_state", "idle")
+        horse = getattr(self, "trader_horse", None)
+        if horse is not None and (not getattr(horse, "alive", True)
+                                  or horse not in (getattr(g, "horses", ()) or ())):
+            self._trader_horse_clear()
+            self.trader_state = "idle"
+            return True
+        if state == "to_horse":
+            if horse is None:
+                self.trader_state = "idle"
+                return True
+            d = math.hypot(horse.x - self.x, horse.y - self.y)
+            if d > 28.0:
+                self._step_toward(horse.x, horse.y, dt, 1.25)
+                return True
+            horse.trader_rider = self
+            horse.tamed = True
+            horse.conquered = True
+            horse.g = g
+            horse.flee_timer = 0.0
+            horse.flee_dir = None
+            self.trader_state = "to_ship"
+            return True
+        if state == "to_ship":
+            if horse is None:
+                self.trader_state = "idle"
+                return True
+            sx, sy = g.ship_pos()
+            d = math.hypot(sx - horse.x, sy - horse.y)
+            if d > 92.0:
+                ux, uy = steering.steer(horse, sx, sy,
+                                        getattr(g, "colliders", ()), ())
+                sp = float(getattr(horse, "speed", 190.0)) * 1.45
+                horse.x += ux * sp * dt
+                horse.y += uy * sp * dt
+                horse.facing = (ux, uy)
+                try:
+                    g.world.keep_on_land(horse, horse.radius + 1.0)
+                except Exception:
+                    pass
+                self.x, self.y = horse.x, horse.y - 12.0
+                return True
+            self._trader_sell_at_ship(g, self._trader_load(),
+                                      self._trader_pack())
+            self.trader_state = "to_home"
+            return True
+        if state == "to_home":
+            if horse is None:
+                self.trader_state = "idle"
+                return True
+            home = getattr(self, "trader_home", None)
+            if home is None:
+                home = getattr(self, "native_camp", None)
+            if home is None:
+                self._trader_horse_clear()
+                self.trader_state = "idle"
+                return True
+            d = math.hypot(home.x - horse.x, home.y - horse.y)
+            if d > 72.0:
+                ux, uy = steering.steer(horse, home.x, home.y,
+                                        getattr(g, "colliders", ()), ())
+                sp = float(getattr(horse, "speed", 190.0)) * 1.35
+                horse.x += ux * sp * dt
+                horse.y += uy * sp * dt
+                horse.facing = (ux, uy)
+                try:
+                    g.world.keep_on_land(horse, horse.radius + 1.0)
+                except Exception:
+                    pass
+                self.x, self.y = horse.x, horse.y - 12.0
+                return True
+            self.x, self.y = horse.x, horse.y
+            self._trader_horse_clear()
+            self.trader_state = "paying"
+            return True
+        return False
+
     def _work_trader(self, dt: float) -> None:
         """Gather at least 50 sellable goods, run them to the ship, bring the
         coin back, and hand it to the player when he is nearby.
@@ -2013,44 +2156,15 @@ class NPC:
         inv = self._trader_pack()
         self._trader_show_coin()
         state = getattr(self, "trader_state", "idle")
+        if state in ("to_horse", "to_ship", "to_home"):
+            if self._trader_ride_step(dt, g):
+                return
         if state == "sailing":
             self.trader_t = float(getattr(self, "trader_t", 0.0)) - dt
             if self.trader_t > 0.0:
                 return
-            try:
-                import market
-                coin = 0.0
-                for item, qty in list(load.items()):
-                    qty = int(qty or 0)
-                    if qty <= 0 or item not in market.sellable(g):
-                        load.pop(item, None)
-                        continue
-                    # Never sell what is no longer in the pack (the player may
-                    # have taken it out while the trader was at sea).
-                    have = int(inv.count_of(item)) if inv is not None else 0
-                    qty = min(qty, have)
-                    if qty <= 0:
-                        load.pop(item, None)
-                        continue
-                    grade = int((getattr(self, "carry_grade", {}) or {}).get(item, 4) or 4)
-                    # The trader gets 80% of what the player/horse would get.
-                    coin += market.sell_value(g, item, qty, grade) * 0.80
-                    if inv is not None:
-                        inv.consume(item, qty)
-                    load.pop(item, None)
-                self.trader_load = {}
-                self.trader_coin = float(getattr(self, "trader_coin", 0.0)) + coin
-                # THE COIN IS REAL TOO: it goes into his pack now, so clicking
-                # the trader shows what he brought back before he reaches you.
-                self._trader_show_coin()
-                self.trader_state = "paying"
-                try:
-                    g.toast("%s returns from the ship with %d coin"
-                            % (getattr(self, "name", "The trader"), int(coin)))
-                except Exception:
-                    pass
-            except Exception:
-                self.trader_state = "idle"
+            self._trader_sell_at_ship(g, load, inv)
+            self.trader_state = "paying"
             return
         if state == "paying":
             player = getattr(g, "player", None)
@@ -2097,13 +2211,25 @@ class NPC:
         # GATHERING: only sellable goods in chests count.
         total = sum(int(q or 0) for q in load.values())
         if total >= 50:
-            self.trader_state = "sailing"
-            self.trader_t = 45.0
-            try:
-                g.toast("%s sets out for the ship with %d goods"
-                        % (getattr(self, "name", "The trader"), total))
-            except Exception:
-                pass
+            horse = self._trader_find_horse(g)
+            if horse is not None:
+                self.trader_horse = horse
+                self.trader_home = camp
+                self.trader_state = "to_horse"
+                try:
+                    g.toast("%s takes a horse to the ship with %d goods"
+                            % (getattr(self, "name", "The trader"), total))
+                except Exception:
+                    pass
+            else:
+                # No horse nearby: the old abstract crossing still works.
+                self.trader_state = "sailing"
+                self.trader_t = 45.0
+                try:
+                    g.toast("%s sets out for the ship with %d goods"
+                            % (getattr(self, "name", "The trader"), total))
+                except Exception:
+                    pass
             return
         chest, items = self._trader_sellable_chest(g)
         if chest is None or not items:

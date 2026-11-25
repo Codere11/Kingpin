@@ -101,7 +101,7 @@ from trees import Trees
 from ui import (BarracksPanel, ChestPanel, ConfirmMenu, FolderPanel, GunsmithPanel,
                 HorsePanel, Hotbar, InventoryPanel, MarketPanel, MindPanel,
                 PauseMenu, PersonaCard,
-                RelationsPanel, ResearchPanel, RoutePanel, ShipMarketPanel,
+                RelationsPanel, ResearchPanel, ShipMarketPanel,
                 SignPanel, SmithPanel)
 from village import (NPC_SPACING, ROOFS, SPACING, VILLAGE_SCALE,
                      House, Villages, nation_color, set_forest,
@@ -889,9 +889,6 @@ def main() -> None:
     g.naming_text = ""
     g.naming_placeholder = ""
     g.conquered_count = 0
-    g.route_open = False
-    g.route_panel = None
-    g.route_horse = None
     g.research_open = False
     g.research_panel = None
     import research as _research
@@ -1143,7 +1140,7 @@ def main() -> None:
                 "workshop_open", "smith_open", "artisan_open", "trade_open",
                 "inventory_open", "chest_open", "worker_panel_open",
                 "npc_card_open", "stall_open", "body_open", "folder_open",
-                "naming_open", "route_open", "market_open", "research_open",
+                "naming_open", "market_open", "research_open",
                 "confirm_open", "map_open"):
             if getattr(g, _flag, False):
                 return False
@@ -1496,9 +1493,10 @@ def main() -> None:
 
         Tamed or wild does not matter: walking up to an unspooked horse and
         pressing E takes it.  Sprinting at it first is what makes it run.
+        A horse currently carrying a trader is busy.
         """
         for _h in getattr(g, "horses", ()):
-            if getattr(_h, "alive", True):
+            if getattr(_h, "alive", True) and getattr(_h, "trader_rider", None) is None:
                 if math.hypot(g.player.x - _h.x, g.player.y - _h.y) < 48.0:
                     return _h
         return None
@@ -1509,7 +1507,6 @@ def main() -> None:
         # bolt from the next person who walks past.
         horse.tamed = True
         horse.conquered = True
-        horse.route = None              # a ridden horse forgets its route
         horse.delivering = False
         horse.returning = False
         horse.flee_timer = 0.0

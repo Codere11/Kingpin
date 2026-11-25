@@ -70,34 +70,6 @@ def _spicemen_available(g) -> bool:
         return False
 
 
-def _route_items(g, camp):
-    """The chest-filter goods a settlement's route node may move."""
-    import crop
-    t = g.world.temperature(camp.x, camp.y)
-    h = g.world.humidity(camp.x, camp.y)
-    return [i for i in crop.chest_filter_items(t, h) if i not in (None, "horse")]
-
-
-def _open_route(g, horse) -> None:
-    """Open the route planner for a horse: its own settlement is pre-filled,
-    and the destination is chosen from the other conquered settlements plus
-    the ship."""
-    camps = [s for s in getattr(g, "native_settlements", {}).values()
-             if getattr(s, "conquered", False)]
-    if not camps:
-        g.toast("Conquer a settlement first")
-        return
-    home = getattr(horse, "home", (horse.x, horse.y))
-    origin = min(camps, key=lambda c: (c.x - home[0]) ** 2 + (c.y - home[1]) ** 2)
-    dests = [c for c in camps if c is not origin] + ["ship"]
-    def _items(d):
-        return _route_items(g, origin) if d == "ship" else _route_items(g, d)
-    g.route_panel = RoutePanel(horse, origin, dests, _route_items(g, origin), _items)
-    g.route_horse = horse
-    g.route_open = True
-    pygame.mouse.set_visible(True)
-
-
 def _artisan_rects(g):
     """(panel, left-arrow, right-arrow) for the artisan's bench panel."""
     sw, sh = getattr(g, "vw", 1280), getattr(g, "vh", 720)
@@ -127,7 +99,7 @@ def _world_click_allowed(g) -> bool:
             "workshop_open", "smith_open", "artisan_open", "trade_open",
             "inventory_open", "chest_open", "worker_panel_open",
             "npc_card_open", "stall_open", "body_open", "folder_open",
-            "naming_open", "route_open", "market_open", "research_open",
+            "naming_open", "market_open", "research_open",
             "confirm_open", "map_open"):
         if getattr(g, _flag, False):
             return False
@@ -563,38 +535,6 @@ def run(g):
                     g.naming_open = False
                     g.naming_camp = None
                     pygame.mouse.set_visible(False)
-            elif g.route_open:
-                if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
-                                                                  pygame.K_ESCAPE):
-                    g.route_open = False
-                    g.route_panel = None
-                    g.route_horse = None
-                    pygame.mouse.set_visible(False)
-                else:
-                    _r = g.route_panel.handle_event(event)
-                    if _r == "close":
-                        g.route_open = False
-                        g.route_panel = None
-                        g.route_horse = None
-                        pygame.mouse.set_visible(False)
-                    elif _r == "start":
-                        _dest, _ship, _item_a, _item_b = g.route_panel._current()
-                        _h = g.route_horse
-                        if _h is not None and _item_a is not None:
-                            _h.route = {"origin": g.route_panel.origin,
-                                        "dest": _dest,
-                                        "item_a": _item_a,
-                                        "item_b": _item_b,
-                                        "amount": g.route_panel.amount}
-                            _h.route_phase = "to_dest"
-                            _h.route_loaded = False
-                            _h.route_eat_t = 0.0
-                            _dl = "the ship" if _dest == "ship" else getattr(_dest, "name", "?") or "?"
-                            g.toast("Route set: %s <-> %s" % (_item_a, _dl))
-                        g.route_open = False
-                        g.route_panel = None
-                        g.route_horse = None
-                        pygame.mouse.set_visible(False)
             elif g.board_open:
                 if g.board_panel.handle_event(event):
                     g.board_open = False
@@ -737,8 +677,6 @@ def run(g):
                     _r = g.horse_panel.handle_event(event)
                     if _r == "send":
                         g.send_horse()
-                    elif _r == "route":
-                        _open_route(g, g.horse_panel.horse)
                     elif _r == "escort":
                         g.toggle_horse_escort(g.horse_panel.horse)
             elif g.workshop_open:
@@ -1143,7 +1081,7 @@ def run(g):
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE
                   and not (g.inventory_open or g.trade_open or g.board_open
                            or g.chest_open or g.stall_open or g.worker_panel_open
-                           or g.workshop_open or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.market_open or g.research_open or g.confirm_open
+                           or g.workshop_open or g.smith_open or g.artisan_open or g.naming_open or g.market_open or g.research_open or g.confirm_open
                            or g.map_open or g.pause_open or g.build_menu_open
                            or g.dialogue_panel.open_ or g.placing is not None)):
                 # SPACE: LUNGE. A quarter of the wind, in the way he is holding
@@ -1215,7 +1153,7 @@ def run(g):
                 if (g.inventory_open or g.trade_open or g.board_open or g.chest_open
                         or g.worker_panel_open or g.stall_open or g.body_open
                         or g.folder_open or g.npc_card_open
-                        or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.market_open or g.research_open or g.workshop_open or g.confirm_open
+                        or g.smith_open or g.artisan_open or g.naming_open or g.market_open or g.research_open or g.workshop_open or g.confirm_open
                         or g.map_open or g.build_menu_open or g.placing is not None):
                     g.close_modals()
                 elif g.pause_open:
@@ -1468,7 +1406,7 @@ def run(g):
                 or g.worker_panel_open or getattr(g, "npc_card_open", False)
                 or g.horse_panel_open
                 or g.placing is not None or g.inside_house is not None
-                or g.inside_mine is not None or g.board_open or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.market_open or g.research_open):
+                or g.inside_mine is not None or g.board_open or g.smith_open or g.artisan_open or g.naming_open or g.market_open or g.research_open):
             g._blk += g.dt
             # A MENU LEFT ALONE FOR TWENTY SECONDS RELEASES THE WORLD. Not a
             # fix for any particular panel -- a guarantee that no panel, known
@@ -1509,7 +1447,7 @@ def run(g):
                          % (g._HF[0] / max(1e-6, g._now_hf - g._HF[1])))
                 g._HF[0], g._HF[1] = 0, g._now_hf
             g.keys = pygame.key.get_pressed()
-            if g.board_open or g.smith_open or g.artisan_open or g.naming_open or g.route_open or g.market_open or g.research_open:                       # reading the board: stand still
+            if g.board_open or g.smith_open or g.artisan_open or g.naming_open or g.market_open or g.research_open:                       # reading the board: stand still
                 g.keys = _NO_KEYS
             # THE ROOM IS ZOOMED, SO THE AIM MUST BE. Reading the window
             # mouse against a zoomed camera skews every look by the zoom --
@@ -3934,8 +3872,6 @@ def run(g):
                 _h = g.font.render("type a name, then Enter      [Esc] keep \"%s\""
                                    % g.naming_placeholder, True, (196, 226, 168))
                 g.screen.blit(_h, (_np.centerx - _h.get_width() // 2, _np.bottom - 30))
-            if g.route_open and g.route_panel is not None:
-                g.route_panel.draw(g.screen)
             if g.smith_open and g.smith_shop is not None:
                 g._w = g.smith_shop.worker
                 g._orders = list(getattr(g._w, "tool_orders", ()) or ())

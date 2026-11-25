@@ -22,6 +22,7 @@ SKIP = {
     "village", "native_camp", "home_house", "home_door", "workplace",
     "refuge", "social_target", "bond_partner", "breed_partner",
     "artisan_bench",
+    "trader_horse", "trader_home",
     "escort_horse", "_log_tree",
     "_field_task", "_trunks_cache", "_trunks_dirty", "_trunks_tick",
     "_trunks_built", "_orchard_task", "_orchard_task_tick",

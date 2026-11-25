@@ -841,6 +841,7 @@ class Horse:
         self._anim_t = 0.0
         self._anim_x = float(x)
         self._anim_y = float(y)
+        self.trader_rider = None      # a trader riding this horse, if any
         self.graze_timer = random.uniform(0.5, 2.0)
         self.hunger = random.uniform(0.0, 30.0)   # like a man's belly
         self.food = random.randint(0, 2)          # what it has stored
@@ -855,11 +856,6 @@ class Horse:
         self.born_at = 0.0
         self.breeding = False                     # facing a mate, hearts out
         self.breed_partner = None
-        self.route = None                         # a planned route: {origin, dest, item_a, item_b, amount}
-        self.route_phase = None                   # "to_dest" | "to_home"
-        self.route_loaded = False                 # cargo + feed are aboard
-        self.route_feed = 0.0
-        self.route_eat_t = 0.0
         self.escort = False                       # a soldier rides with it (Army)
         self.escort_soldier = None                # the soldier on its back
         self.target = (self.x, self.y)
@@ -877,7 +873,6 @@ class Horse:
             _p = getattr(self, "pack", None)
             if _p is not None and hasattr(_p, "slots"):
                 _p.slots = [None] * len(_p.slots)
-            self.route = None
             self.delivering = False
             self.returning = False
             self.escort_soldier = None
@@ -1025,164 +1020,11 @@ class Horse:
         except Exception:
             pass
 
-    # -- horse routes ----------------------------------------------------
-    ROUTE_FEED = 10                # feed the horse takes per leg
-    ROUTE_EAT_EVERY = 6.0          # seconds between eating one feed on the road
-
-    def _route_chest(self, camp):
-        """The 'Horse' chest nearest a settlement (its route node)."""
-        g = getattr(self, "g", None)
-        chests = getattr(g, "built_chests", ()) if g is not None else ()
-        mine = [c for c in chests if getattr(c, "filter", None) == "horse"]
-        if not mine:
-            return None
-        return min(mine, key=lambda c: (c.x - camp.x) ** 2 + (c.y - camp.y) ** 2)
-
-    def _route_take(self, chest, item, amount):
-        """Take up to `amount` of item out of a chest and into the saddle
-        bags, grade intact. Returns how many were loaded."""
-        inv = getattr(chest, "inventory", None)
-        if inv is None:
-            return 0
-        want = min(int(amount), inv.count_of(item))
-        if want <= 0:
-            return 0
-        remaining = want
-        grades = []
-        for i, stack in enumerate(inv.slots):
-            if stack is None or stack.defn.id != item:
-                continue
-            take = min(remaining, stack.count)
-            q = stack.quality if stack.defn.quality else None
-            if q is not None:
-                grades.append((q, take))
-            stack.count -= take
-            remaining -= take
-            if stack.count <= 0:
-                inv.slots[i] = None
-            if remaining <= 0:
-                break
-        taken = want - remaining
-        if taken <= 0:
-            return 0
-        pack = self._pack()
-        if grades:
-            tot = sum(c for _, c in grades)
-            grade = int(round(sum(q * c for q, c in grades) / max(1, tot)))
-            pack.add(item, taken, quality=grade)
-        else:
-            pack.add(item, taken)
-        return taken
-
-    def _route_drop(self, chest, item):
-        """Pour every unit of item out of the saddle bags into a chest."""
-        inv = getattr(chest, "inventory", None)
-        if inv is None:
-            return
-        pack = self._pack()
-        for i, stack in enumerate(list(pack.slots)):
-            if stack is None or stack.defn.id != item:
-                continue
-            inv.add(item, stack.count, stack.quality)
-            pack.slots[i] = None
-
-    def _route_feed(self, chest):
-        """Load a little food from the chest for the road."""
-        inv = getattr(chest, "inventory", None)
-        if inv is None:
-            return
-        want = max(0, self.ROUTE_FEED - int(getattr(self, "food", 0)))
-        if want <= 0:
-            return
-        for item in economy.FOOD:
-            have = inv.count_of(item)
-            if have <= 0:
-                continue
-            take = min(want, have)
-            remaining = take
-            for i, stack in enumerate(inv.slots):
-                if stack is None or stack.defn.id != item:
-                    continue
-                d = min(remaining, stack.count)
-                stack.count -= d
-                remaining -= d
-                if stack.count <= 0:
-                    inv.slots[i] = None
-                if remaining <= 0:
-                    break
-            self.food = int(getattr(self, "food", 0)) + take
-            return
-
-    def _route_steer(self, tx, ty, dt, colliders):
-        ux, uy = steering.steer(self, tx, ty, colliders or (), ())
-        self.x += ux * self.speed * 1.4 * dt
-        self.y += uy * self.speed * 1.4 * dt
-        self.facing = (ux, uy)
-
-    def _do_route(self, dt, colliders=None):
-        """Run a planned route forever: load cargo + feed at the home horse
-        chest, carry it to the destination, drop it, load the destination's
-        cargo + feed, and carry that home. Repeat."""
-        r = self.route
-        g = getattr(self, "g", None)
-        if r is None or g is None:
-            self.route = None
-            return
-        origin = r.get("origin")
-        dest = r.get("dest")
-        item_a = r.get("item_a")
-        item_b = r.get("item_b")
-        amount = int(r.get("amount", 300))
-        ship = dest == "ship"
-        if ship:
-            tx, ty = g.ship_pos()
-            dest_chest = getattr(g, "ship_hold", None)
-        else:
-            tx, ty = dest.x, dest.y
-            dest_chest = self._route_chest(dest)
-        home_chest = self._route_chest(origin)
-        # eat (or get hungry) on the road
-        self.route_eat_t += dt
-        if self.route_eat_t >= self.ROUTE_EAT_EVERY:
-            self.route_eat_t = 0.0
-            if int(getattr(self, "food", 0)) > 0:
-                self.food -= 1
-                self.hunger = max(0.0, self.hunger - 20.0)
-            else:
-                self.hunger = min(130.0, self.hunger + 8.0)
-        if self.route_phase != "to_home":
-            self.route_phase = "to_dest"
-            if not self.route_loaded:
-                if home_chest is not None:
-                    self._route_take(home_chest, item_a, amount)
-                    self._route_feed(home_chest)
-                self.route_loaded = True
-            if math.hypot(tx - self.x, ty - self.y) > 28.0:
-                self._route_steer(tx, ty, dt, colliders)
-                return
-            if ship:
-                self._sell_pack(g)          # the ship buys the cargo, coin to the purse
-            elif dest_chest is not None:
-                self._route_drop(dest_chest, item_a)
-                self._route_take(dest_chest, item_b, amount)
-                self._route_feed(dest_chest)
-            self.route_phase = "to_home"
-            return
-        # to_home
-        hx, hy = origin.x, origin.y
-        if math.hypot(hx - self.x, hy - self.y) > 28.0:
-            self._route_steer(hx, hy, dt, colliders)
-            return
-        self._drop_coin(g)              # the ship's coin reaches the settlement
-        if home_chest is not None:
-            if item_b and not ship:
-                self._route_drop(home_chest, item_b)
-            self._route_drop(home_chest, item_a)
-        self.route_phase = "to_dest"
-        self.route_loaded = False
-        return
-
     def update(self, dt: float, threat=None, colliders=None) -> None:
+        # A horse carrying a trader is driven by that trader's errand, not by
+        # the grazing/fleeing herd update.
+        if getattr(self, "trader_rider", None) is not None:
+            return
         if self.hit_flash > 0.0:
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if not self.alive:
@@ -1193,10 +1035,6 @@ class Horse:
                 sound.play("horse", min_gap=15.0)
         self._animal_baby_tick(dt)
         if self._animal_breeding_tick():
-            return
-        # RUNNING A PLANNED ROUTE: it outranks everything but life itself.
-        if getattr(self, "route", None) is not None:
-            self._do_route(dt, colliders)
             return
         # RUNNING A DELIVERY: to the ship, then back to the sleeping spot.
         if self.delivering or self.returning:
