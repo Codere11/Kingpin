@@ -397,8 +397,8 @@ def run(g):
             elif (g.test_mode and event.type == pygame.KEYDOWN
                   and event.key in (pygame.K_F2, pygame.K_F3, pygame.K_F4)):
                 # TEST MODE.  The old NPC-lab controls lived here; the lab is
-                # gone.  F3 now puts one wolf just west of the player so the
-                # walk cycle can actually be watched.  F4 still starts the
+                # gone.  F3 puts a few rabbits just west of the player so the
+                # hop cycle can actually be watched.  F4 still starts the
                 # full event pack.
                 try:
                     import events as _events
@@ -406,7 +406,7 @@ def run(g):
                         _events.spawn_test_kind(g, "rogue")
                         g.toast("Rogue test")
                     elif event.key == pygame.K_F3:
-                        _events.spawn_test_wolf(g)
+                        _events.spawn_test_rabbits(g)
                     elif event.key == pygame.K_F4:
                         _events.spawn_test(g)
                 except Exception as _ev_exc:

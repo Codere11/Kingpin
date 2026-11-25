@@ -604,33 +604,35 @@ def spawn_test(g):
     return ensure(g).spawn_test()
 
 
-def spawn_test_wolf(g):
-    """F3: one wolf just west of the player, owned by the normal wolf AI.
+def spawn_test_rabbits(g):
+    """F3: a few rabbits just west of the player.
 
-    This is deliberately not an event wolf: events.py does not tick it, so
-    the generic targeter walks it toward the player and the walk animation
-    can be inspected in isolation.  No camp, no pack, no rain.
+    They use the ordinary rabbit update, so the distance-driven hop and the
+    eight-direction facing are visible immediately.  No event owns them.
     """
     player = getattr(g, "player", None)
     if player is None:
-        return None
-    x = float(player.x) - 135.0
-    y = float(player.y)
-    w = creatures.Wolf(x, y)
-    w.name = "test-wolf"
-    w.home = (x, y)
-    w.target = (float(player.x), float(player.y))
-    w.facing = (1.0, 0.0)
-    w.aware = True
-    w.aware_timer = 600.0
-    w.idle_timer = 0.0
-    # Let the ordinary town targeter pick the watcher/player.  event_ai would
-    # make engine skip it and leave the wolf standing still.
-    w.event_ai = False
-    g.enemies.append(w)
-    _record(g, "test_wolf", x=round(x, 1), y=round(y, 1))
-    _toast(g, "Wolf test: one wolf west of you")
-    return w
+        return []
+    rng = random.Random(int(float(getattr(g, "now", 0.0)) * 1000.0)
+                        ^ id(player))
+    furs = ("grey", "brown", "white", "yellow")
+    out = []
+    for i, (dx, dy) in enumerate(((-135.0, -26.0),
+                                    (-158.0, 16.0),
+                                    (-118.0, 38.0))):
+        x = float(player.x) + dx
+        y = float(player.y) + dy
+        r = creatures.Rabbit(x, y, rng.choice(furs))
+        r.home = (x, y)
+        r.target = (x - 40.0, y)
+        r.facing = (1.0, 0.0)
+        _keep_land(g, r)
+        g.rabbits.append(r)
+        out.append(r)
+    _record(g, "test_rabbits", x=round(float(player.x), 1),
+            y=round(float(player.y), 1), count=len(out))
+    _toast(g, "Rabbit test: %d rabbits west of you" % len(out))
+    return out
 
 
 _TEST_KINDS = ("wolves", "rogue", "buffalo", "blight", "horses", "rain")
