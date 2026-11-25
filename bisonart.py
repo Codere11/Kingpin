@@ -188,14 +188,62 @@ class _P:
                 self.tuft((u, side * 4.8, z), (u + 1.2, side * 5.6, z),
                           (u - 1.8, side * 7.0, z - ln),
                           self.col("beard" if j % 2 else "shag"))
-        # head and long muzzle
-        hz = 12.5 - lowered
-        self.oval(21.5, 0.0, hz, 7.6, 6.4, self.col("coat"),
-                  self.col("dark"))
-        self.oval(27.0, 0.0, hz - 2.2, 4.8, 4.2, self.col("coat2"))
-        self.oval(30.0, 0.0, hz - 3.0, 1.9, 1.55, self.col("nose"))
-        self.line(self.p(29.7, 0.0, hz - 3.5),
-                  self.p(24.0, 0.0, hz - 2.8), self.col("dark"), 0.7)
+        # ANGULAR BUFFALO HEAD.  A buffalo skull is a broad, flat-topped
+        # wedge with a square muzzle -- not a rounded wolf snout.  Everything
+        # here is built from hard planes and corners.
+        hz = 13.0 - lowered
+        self.poly([self.p(17.2, -5.0, hz + 0.5),
+                   self.p(17.8, -5.6, hz + 4.8),
+                   self.p(21.0, -5.2, hz + 5.9),
+                   self.p(24.6, -4.8, hz + 5.2),
+                   self.p(27.5, -3.8, hz + 3.8),
+                   self.p(30.5, -2.7, hz + 1.6),
+                   self.p(33.0, -1.7, hz - 1.0),
+                   self.p(33.0, 1.7, hz - 1.0),
+                   self.p(30.5, 2.7, hz + 1.6),
+                   self.p(27.5, 3.8, hz + 3.8),
+                   self.p(24.6, 4.8, hz + 5.2),
+                   self.p(21.0, 5.2, hz + 5.9),
+                   self.p(17.8, 5.6, hz + 4.8),
+                   self.p(17.2, 5.0, hz + 0.5),
+                   self.p(19.5, 4.8, hz - 1.0),
+                   self.p(19.5, -4.8, hz - 1.0)],
+                  self.col("coat"), self.col("dark"), 1.1)
+        # flat cheek planes
+        self.poly([self.p(20.0, -4.4, hz + 3.8),
+                   self.p(24.0, -4.1, hz + 4.4),
+                   self.p(25.2, -3.2, hz + 1.2),
+                   self.p(21.0, -4.2, hz - 0.2)],
+                  self.col("coat2"))
+        self.poly([self.p(20.0, 4.4, hz + 3.8),
+                   self.p(24.0, 4.1, hz + 4.4),
+                   self.p(25.2, 3.2, hz + 1.2),
+                   self.p(21.0, 4.2, hz - 0.2)],
+                  self.col("coat2"))
+        # squared-off muzzle: a blunt box, not a taper
+        self.poly([self.p(26.0, -3.2, hz + 2.9),
+                   self.p(30.2, -2.4, hz + 1.0),
+                   self.p(33.2, -1.7, hz - 0.7),
+                   self.p(33.2, 1.7, hz - 0.7),
+                   self.p(30.2, 2.4, hz + 1.0),
+                   self.p(26.0, 3.2, hz + 2.9)],
+                  self.col("coat2"), self.col("dark"), 0.9)
+        # lower jaw and square chin
+        self.poly([self.p(25.4, -2.8, hz - 0.8),
+                   self.p(30.0, -2.0, hz - 2.6),
+                   self.p(33.0, -1.4, hz - 2.0),
+                   self.p(33.0, 1.4, hz - 2.0),
+                   self.p(30.0, 2.0, hz - 2.6),
+                   self.p(25.4, 2.8, hz - 0.8)],
+                  self.col("coat"), self.col("dark"), 0.8)
+        # broad, flat nose pad
+        self.poly([self.p(32.8, -1.5, hz - 0.8),
+                   self.p(34.3, -1.0, hz - 1.5),
+                   self.p(34.3, 1.0, hz - 1.5),
+                   self.p(32.8, 1.5, hz - 0.8)],
+                  self.col("nose"))
+        self.line(self.p(33.8, 0.0, hz - 1.1),
+                  self.p(25.5, 0.0, hz + 1.2), self.col("dark"), 0.65)
         # beard hanging from the jaw
         for u, side in ((23, -2.8), (25, -1.0), (25, 1.0), (23, 2.8)):
             self.tuft((u, side, hz - 3.0), (u - 1.8, side, hz - 4.6),
@@ -230,15 +278,28 @@ class _P:
             else:
                 eyes = ((3.2,) if self.fx >= 0.0 else (-3.2,))
             for v in eyes:
-                self.oval(23.2, v, hz + 1.2, 1.35, 1.15,
-                          (30, 19, 14), (16, 10, 8))
-                self.oval(23.2, v, hz + 1.2, 0.78, 0.70, self.col("eye"))
-                self.dot(23.4, v, hz + 1.2, 0.20, (2, 2, 2))
-                self.dot(22.8, v - 0.25, hz + 1.5, 0.22, (244, 234, 208))
-            self.dot(29.6, -0.8, hz - 3.0, 0.30, self.col("nose"))
-            self.dot(29.6, 0.8, hz - 3.0, 0.30, self.col("nose"))
-            self.line(self.p(29.5, 0.0, hz - 4.0),
-                      self.p(26.0, 0.0, hz - 4.5), self.col("dark"), 0.6)
+                # angular eye socket, not a round cartoon eye
+                self.poly([self.p(23.0, v - 1.7, hz + 2.8),
+                           self.p(27.0, v - 1.4, hz + 2.3),
+                           self.p(27.0, v + 1.0, hz + 1.6),
+                           self.p(23.2, v + 1.2, hz + 2.0)],
+                          (30, 19, 14), (16, 10, 8), 0.7)
+                self.poly([self.p(24.0, v - 0.9, hz + 2.3),
+                           self.p(26.1, v - 0.7, hz + 2.0),
+                           self.p(26.1, v + 0.5, hz + 1.7),
+                           self.p(24.1, v + 0.7, hz + 1.9)],
+                          self.col("eye"))
+                self.dot(25.3, v, hz + 1.9, 0.18, (2, 2, 2))
+                self.dot(24.2, v - 0.20, hz + 2.15, 0.18, (244, 234, 208))
+            self.poly([self.p(33.6, -0.85, hz - 1.2),
+                       self.p(34.0, -0.45, hz - 1.5),
+                       self.p(34.0, 0.45, hz - 1.5),
+                       self.p(33.6, 0.85, hz - 1.2)],
+                      self.col("nose"))
+            self.dot(33.9, -0.55, hz - 1.25, 0.20, self.col("nose"))
+            self.dot(33.9, 0.55, hz - 1.25, 0.20, self.col("nose"))
+            self.line(self.p(33.5, 0.0, hz - 2.2),
+                      self.p(27.0, 0.0, hz - 2.3), self.col("dark"), 0.6)
             # a shaggy forehead tuft between the horns
             self.tuft((19.0, -2.2, hz + 4.2), (21.0, 2.2, hz + 4.4),
                       (18.2, 0.0, hz + 7.0), self.col("shag"))
