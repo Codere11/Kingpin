@@ -87,7 +87,11 @@ def _cold_hint(npc, target, g):
     camp = getattr(npc, "native_camp", None)
     if camp is None or not getattr(camp, "conquered", False):
         return None
-    if not bool(getattr(g, "night", False)):
+    # ASK DURING THE DAY, NOT WHILE THEY ARE IN BED.  This is a warning about
+    # the coming night, so the player has time to build the walls and door.
+    if bool(getattr(g, "night", False)):
+        return None
+    if getattr(npc, "asleep", False) or getattr(npc, "in_interior", False):
         return None
     now = float(getattr(g, "now", 0.0))
     if now < float(getattr(camp, "_cold_hint_t", 0.0)):
@@ -104,10 +108,10 @@ def _cold_hint(npc, target, g):
         return None
     if cells:
         text = ("The fire is walled now, but my bedroll is still outside it. "
-                "If I move it inside the door, I will sleep warm.")
+                "If I move it inside the door before dark, I will sleep warm.")
     else:
-        text = ("It is cold at night. If we put four walls around the fire and "
-                "leave a door, we would all sleep warmer.")
+        text = ("It will be cold tonight. If we put four walls around the fire "
+                "and leave a door, we would all sleep warmer.")
     camp._cold_hint_t = now + 180.0
     reply = ("Then we will build it before the next night.",
              "Good. A wall and a door will do more than another blanket.",
