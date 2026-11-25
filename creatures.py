@@ -14,6 +14,7 @@ import random
 
 import pygame
 import face
+import horseart
 import rabbitart
 import wolfart
 
@@ -835,6 +836,10 @@ class Horse:
         self.flee_timer = 0.0
         self.flee_dir = None
         self._flee_retarget = 0.0
+        self._anim_phase = random.uniform(0.0, 2.0 * math.pi)
+        self._anim_t = 0.0
+        self._anim_x = float(x)
+        self._anim_y = float(y)
         self.graze_timer = random.uniform(0.5, 2.0)
         self.hunger = random.uniform(0.0, 30.0)   # like a man's belly
         self.food = random.randint(0, 2)          # what it has stored
@@ -1242,20 +1247,32 @@ class Horse:
             self.facing = (dx / d, dy / d)
 
     def draw(self, screen, cam_x, cam_y):
-        img = self._sprite()
+        # EIGHT 45-DEGREE HORSE VIEWS.  A distance-driven trot, a swaying
+        # mane and tail, and a real head/neck instead of a rotated PNG.
         sx, sy = self.x - cam_x, self.y - cam_y
-        if img is None:
-            # fallback if the PNG is missing: a plain top-down oval
-            pygame.draw.ellipse(screen, (120, 90, 56),
-                                (sx - 13, sy - 22, 26, 44))
-            return
-        # A NEWBORN IS SMALL: it grows into a full horse across one day.
-        if getattr(self, "baby", False):
-            img = pygame.transform.smoothscale(img, (45, 45))
+        now = float(_NOW)
+        dt = now - float(getattr(self, "_anim_t", now))
+        if dt < 0.0 or dt > 0.5:
+            dt = 0.0
+        moved = math.hypot(self.x - float(getattr(self, "_anim_x", self.x)),
+                           self.y - float(getattr(self, "_anim_y", self.y)))
+        self._anim_t = now
+        self._anim_x = float(self.x)
+        self._anim_y = float(self.y)
+        self._anim_phase = (float(getattr(self, "_anim_phase", 0.0))
+                            + moved * 0.11 + dt * 0.45)
+        step = int(self._anim_phase / (2.0 * math.pi) * 8.0) % 8
         fx, fy = self.facing
-        deg = math.degrees(math.atan2(fy, fx))
-        rot = pygame.transform.rotate(img, -(deg + 90.0))
-        screen.blit(rot, rot.get_rect(center=(int(sx), int(sy))))
+        if abs(fx) + abs(fy) < 0.01:
+            fx, fy = 1.0, 0.0
+        direction = int(round(math.atan2(fy, fx) / (math.pi / 4.0))) % 8
+        baby = bool(getattr(self, "baby", False))
+        zoom = 0.64 if baby else 0.90
+        hit = float(getattr(self, "hit_flash", 0.0)) > 0.0
+        img = horseart.frame(self.coat, direction, step, zoom, hit=hit)
+        sh = horseart.shadow(zoom)
+        screen.blit(sh, (int(sx - sh.get_width() * 0.5), int(sy + 4)))
+        screen.blit(img, (int(sx - horseart.AX), int(sy - horseart.AY)))
         if getattr(self, "breeding", False):
             self._draw_breeding_hearts(screen, sx, sy)
 
