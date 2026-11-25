@@ -397,16 +397,16 @@ def run(g):
             elif (g.test_mode and event.type == pygame.KEYDOWN
                   and event.key in (pygame.K_F2, pygame.K_F3, pygame.K_F4)):
                 # TEST MODE.  The old NPC-lab controls lived here; the lab is
-                # gone.  F3 puts a few buffalo just west of the player so the
-                # gait and shaggy silhouette can be watched.  F4 still starts
-                # the full event pack.
+                # gone.  F3 puts a few horses just west of the player so the
+                # trot and coat can be watched.  F4 still starts the full
+                # event pack.
                 try:
                     import events as _events
                     if event.key == pygame.K_F2:
                         _events.spawn_test_kind(g, "rogue")
                         g.toast("Rogue test")
                     elif event.key == pygame.K_F3:
-                        _events.spawn_test_buffaloes(g)
+                        _events.spawn_test_horses(g)
                     elif event.key == pygame.K_F4:
                         _events.spawn_test(g)
                 except Exception as _ev_exc:
@@ -1008,7 +1008,7 @@ def run(g):
                 if getattr(g, "riding", None) is not None:
                     g.dismount()
                     continue
-                if g.animals_researched() and g.near_horse() is not None:
+                if g.near_horse() is not None:
                     g.mount(g.near_horse())
                     continue
                 plog.log("E-KEY", "board", g.near_board() is not None,

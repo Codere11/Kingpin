@@ -604,33 +604,37 @@ def spawn_test(g):
     return ensure(g).spawn_test()
 
 
-def spawn_test_buffaloes(g):
-    """F3: a few buffalo just west of the player.
+def spawn_test_horses(g):
+    """F3: a few horses just west of the player.
 
-    They are ordinary herd animals, not event-owned: the normal bison update
-    walks them, so the distance-driven gait, shaggy silhouette and flee turn
-    can be watched immediately.
+    They are ordinary, unspooked horses.  Walk up to one and press E; only
+    sprinting straight at them makes them run.
     """
     player = getattr(g, "player", None)
     if player is None:
         return []
+    coats = ("brown", "black", "white", "palomino")
     out = []
-    for dx, dy in ((-145.0, -36.0), (-172.0, 8.0), (-132.0, 48.0)):
+    for i, (dx, dy) in enumerate(((-145.0, -38.0),
+                                    (-175.0, 12.0),
+                                    (-132.0, 52.0))):
         x = float(player.x) + dx
         y = float(player.y) + dy
-        b = creatures.Bison(x, y)
-        b.name = "buffalo"
-        b.home = (x, y)
-        b.target = (x - 45.0, y)
-        b.facing = (1.0, 0.0)
-        b.aggro = False
-        b.event_ai = False
-        _keep_land(g, b)
-        g.enemies.append(b)
-        out.append(b)
-    _record(g, "test_buffaloes", x=round(float(player.x), 1),
+        h = creatures.Horse(x, y, coats[i % len(coats)])
+        h.home = (x, y)
+        h.target = (x - 30.0, y)
+        h.facing = (1.0, 0.0)
+        h.tamed = False
+        h.conquered = False
+        h.delivering = False
+        h.returning = False
+        h.g = g
+        _keep_land(g, h)
+        g.horses.append(h)
+        out.append(h)
+    _record(g, "test_horses", x=round(float(player.x), 1),
             y=round(float(player.y), 1), count=len(out))
-    _toast(g, "Buffalo test: %d buffalo west of you" % len(out))
+    _toast(g, "Horse test: %d horses west of you -- walk up, press E" % len(out))
     return out
 
 

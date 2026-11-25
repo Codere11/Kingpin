@@ -1206,14 +1206,19 @@ class Horse:
         if self.hunger >= economy.STARVE_AT:
             self.health = 0
             return
-        # SKITTISH: a person near spooks it into a full run -- a TAMED horse
-        # does not run from people.  The heading is committed for a moment so
-        # a moving player cannot make the horse snap left/right every frame.
+        # SKITTISH, BUT NOT SHY.  A horse lets you walk right up to it; it
+        # only bolts when you are SPRINTING straight at it.  Walking nearby is
+        # how a rider gets close enough to press E.  A tamed horse never runs.
         if not getattr(self, "tamed", False) and threat is not None and not getattr(threat, "dead", False):
             d = math.hypot(self.x - threat.x, self.y - threat.y)
             if d < 260.0:
-                self.flee_timer = max(self.flee_timer, 1.4)
-                _flee_heading(self, threat, dt, retarget=0.34, turn=0.30)
+                vx, vy = getattr(threat, "move_dir", (0.0, 0.0))
+                toward = ((self.x - threat.x) * vx
+                          + (self.y - threat.y) * vy) > (d * 0.18)
+                if (getattr(threat, "sprinting", False)
+                        and getattr(threat, "moving", False) and toward):
+                    self.flee_timer = max(self.flee_timer, 1.4)
+                    _flee_heading(self, threat, dt, retarget=0.34, turn=0.30)
         if self.flee_timer > 0.0:
             fx, fy = getattr(self, "flee_dir", (1.0, 0.0))
             self._move(fx, fy, SPRINTER_MAX, dt)

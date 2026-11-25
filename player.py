@@ -93,6 +93,7 @@ class Player:
     farm_plot = None        # his OWN field, by index into his town's list
     smuggling = 0.0
     social = 0.0
+    move_dir = (0.0, 0.0)     # last WASD direction, for beasts reading a charge
     # WHAT HE HAS BUILT AND WHOM HE PAYS. Class defaults: a player restored
     # from a save never runs __init__, and every one of these is read before
     # it is written (work.slots, work.payroll, the plot and station lists).
@@ -111,6 +112,7 @@ class Player:
         self.speed = speed
         self.facing = (0.0, 1.0)
         self.moving = False
+        self.move_dir = (0.0, 0.0)
         # THE SAME BODY AS THE MAN IN THE RANKS. creatures.Soldier has 115;
         # the player had 100, so he was both the strongest blow in the world
         # and the frailest body that threw one. One standard, applied.
@@ -312,6 +314,7 @@ class Player:
         dx = float(any(keys[k] for k in KEY_RIGHT)) - float(any(keys[k] for k in KEY_LEFT))
         dy = float(any(keys[k] for k in KEY_DOWN)) - float(any(keys[k] for k in KEY_UP))
         self.moving = bool(dx or dy)
+        self.move_dir = (0.0, 0.0)
 
         sprinting = (self.moving
                      and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT])
@@ -321,6 +324,7 @@ class Player:
         if self.moving:
             length = math.hypot(dx, dy)
             dx, dy = dx / length, dy / length
+            self.move_dir = (dx, dy)
             if sprinting and self.god:
                 speed = self.speed * 10.0 * speed_scale
             else:

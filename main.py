@@ -1492,18 +1492,28 @@ def main() -> None:
         return _research.state(g, "animals") == "done"
 
     def near_horse():
-        """The nearest conquered horse he can mount, or None."""
+        """The nearest living horse he can mount, or None.
+
+        Tamed or wild does not matter: walking up to an unspooked horse and
+        pressing E takes it.  Sprinting at it first is what makes it run.
+        """
         for _h in getattr(g, "horses", ()):
-            if getattr(_h, "conquered", False) and getattr(_h, "alive", True):
+            if getattr(_h, "alive", True):
                 if math.hypot(g.player.x - _h.x, g.player.y - _h.y) < 48.0:
                     return _h
         return None
 
     def mount(horse) -> None:
         g.riding = horse
+        # A horse you have mounted is yours now; dismounting must not make it
+        # bolt from the next person who walks past.
+        horse.tamed = True
+        horse.conquered = True
         horse.route = None              # a ridden horse forgets its route
         horse.delivering = False
         horse.returning = False
+        horse.flee_timer = 0.0
+        horse.flee_dir = None
         toast("Mounted")
 
     def dismount() -> None:
