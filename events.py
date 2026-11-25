@@ -58,6 +58,13 @@ def _record(g, action, **fields):
         pass
 
 
+def _keep_land(g, body):
+    try:
+        getattr(g, "world").keep_on_land(body, float(getattr(body, "radius", 10.0)) + 1.0)
+    except Exception:
+        pass
+
+
 class WolfPack:
     def __init__(self, g, camp, rng=None):
         self.g = g
@@ -82,6 +89,7 @@ class WolfPack:
             x = cx + ux * forward + px * side
             y = cy + uy * forward + py * side
             w = creatures.Wolf(x, y)
+            _keep_land(g, w)
             try:
                 w.name = "wolf-%d" % (i + 1)
             except Exception:
@@ -203,9 +211,11 @@ class WolfPack:
                          occluders=None, speed_scale=0.62, view_scale=1.0,
                          visible=True, colliders=w._rects)
                 self._separate(w)
+                _keep_land(self.g, w)
             else:
                 w.update(dt, None, getattr(self.g, "combat", None),
                          visible=False, colliders=getattr(self.g, "colliders", ()) or ())
+                _keep_land(self.g, w)
         if alive == 0:
             self.done = True
             self.outcome = "killed"
@@ -243,6 +253,7 @@ class RogueRaider:
         w = village.NPC(x, y, rng.randint(1, 2 ** 31 - 1),
                         name="rogue warrior", npc_id="rogue_event",
                         role="Warrior")
+        _keep_land(g, w)
         w.native = True
         w.native_role = "warrior"
         w.job = "warrior"
@@ -294,6 +305,7 @@ class RogueRaider:
         # between two people and looked like he was vibrating.
         w._rects = getattr(self.g, "colliders", ()) or ()
         w._fight(dt, target, getattr(self.g, "combat", None), 0.72, True)
+        _keep_land(self.g, w)
         if self.age > 90.0:
             self.done = True
             _record(self.g, "rogue_end", camp=getattr(self.camp, "name", "camp"),
@@ -315,6 +327,7 @@ class BuffaloHerd:
             x = float(camp.x) + math.cos(ang) * (700.0 + i * 40.0)
             y = float(camp.y) + math.sin(ang) * (700.0 + i * 40.0)
             b = creatures.Bison(x, y)
+            _keep_land(g, b)
             b.name = "buffalo"
             b.event_ai = True
             b.home = (float(camp.x) + rng.uniform(-260.0, 260.0),
@@ -336,6 +349,7 @@ class BuffaloHerd:
             alive += 1
             b.update(dt, None, getattr(self.g, "combat", None),
                      colliders=getattr(self.g, "colliders", ()) or ())
+            _keep_land(self.g, b)
         if alive == 0 or self.age > 90.0:
             self.done = True
             _record(self.g, "buffalo_end", camp=getattr(self.camp, "name", "camp"),
@@ -360,6 +374,7 @@ class HorseVisit:
             x = float(camp.x) + math.cos(ang) * 900.0
             y = float(camp.y) + math.sin(ang) * 900.0
             h = creatures.Horse(x, y, rng.choice(("brown", "black", "white", "palomino")))
+            _keep_land(g, h)
             h.tamed = True
             h.conquered = True
             h.g = g

@@ -39,8 +39,8 @@ PALETTES = {
         "back": (53, 56, 64), "belly": (198, 194, 184),
         "leg": (70, 70, 78), "paw": (43, 43, 49),
         "ear": (78, 78, 86), "inner": (146, 112, 104),
-        "eye": (238, 44, 30), "eye_glow": (255, 24, 16),
-        "eye_hot": (255, 148, 82), "brow": (38, 36, 42),
+        "eye": (254, 26, 18), "eye_glow": (255, 16, 10),
+        "eye_hot": (255, 88, 38), "brow": (38, 36, 42),
         "nose": (27, 25, 28), "mouth": (126, 54, 54),
         "tooth": (238, 232, 212), "spot": (68, 68, 76),
     },
@@ -49,8 +49,8 @@ PALETTES = {
         "back": (146, 154, 168), "belly": (250, 250, 248),
         "leg": (176, 182, 192), "paw": (126, 134, 148),
         "ear": (190, 196, 208), "inner": (206, 162, 158),
-        "eye": (238, 44, 30), "eye_glow": (255, 24, 16),
-        "eye_hot": (255, 148, 82), "brow": (92, 96, 106),
+        "eye": (254, 26, 18), "eye_glow": (255, 16, 10),
+        "eye_hot": (255, 88, 38), "brow": (92, 96, 106),
         "nose": (53, 56, 64), "mouth": (146, 72, 76),
         "tooth": (255, 250, 236), "spot": (182, 188, 198),
     },
@@ -59,8 +59,8 @@ PALETTES = {
         "back": (86, 64, 42), "belly": (218, 198, 158),
         "leg": (104, 82, 54), "paw": (66, 50, 34),
         "ear": (112, 88, 60), "inner": (158, 112, 94),
-        "eye": (238, 44, 30), "eye_glow": (255, 24, 16),
-        "eye_hot": (255, 148, 82), "brow": (62, 46, 30),
+        "eye": (254, 26, 18), "eye_glow": (255, 16, 10),
+        "eye_hot": (255, 88, 38), "brow": (62, 46, 30),
         "nose": (35, 28, 20), "mouth": (128, 58, 60),
         "tooth": (246, 238, 218), "spot": (84, 66, 48),
     },
@@ -405,14 +405,17 @@ class _Painter:
             else:
                 eyes = ((2.9,) if self.fx >= 0.0 else (-2.9,))
             for v in eyes:
-                self.glow(23.1, v, 12.1, 1.65, self.col("eye_glow"))
-                self.oval(23.1, v, 12.1, 1.75, 1.50,
-                          self.col("brow"), (13, 10, 12))
-                self.oval(23.1, v, 12.1, 1.20, 1.05,
-                          self.col("eye"), (28, 10, 8))
-                self.dot(23.5, v, 12.1, 0.57, (26, 7, 5))
-                self.dot(23.0, v - 0.32, 12.35, 0.34, self.col("eye_hot"))
-                self.dot(22.8, v - 0.42, 12.45, 0.20, (255, 238, 218))
+                # The glow is the eye, not a red cloud painted around it.
+                # A dark socket, a hot red iris, a black slit and one white
+                # catchlight -- all inside the lid.
+                self.oval(23.1, v, 12.1, 2.35, 1.95,
+                          (32, 10, 10), (12, 7, 8))
+                self.oval(23.1, v, 12.1, 1.95, 1.60,
+                          self.col("eye"), (118, 12, 8))
+                self.oval(23.35, v, 12.1, 1.10, 1.10,
+                          self.col("eye_hot"))
+                self.dot(23.58, v, 12.1, 0.46, (22, 4, 4))
+                self.dot(23.15, v - 0.34, 12.32, 0.24, (255, 242, 218))
             # forehead fur breaks up the smooth skull
             for v in (-2.2, 0.0, 2.2):
                 self.tuft((20.0, v - 0.7, 13.5), (20.6, v + 0.7, 13.5),

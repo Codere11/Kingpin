@@ -1041,6 +1041,14 @@ class NPC:
                 economy.pair_trade(home, self, other)
         threat = threat_of(self) if threat_of is not None else None
         self.update(dt, threat, colliders, combat, night, world, now, phase)
+        # THE SEA IS SOLID FOR EVERYONE.  A man could previously be steered
+        # through the beach and out over open water; the player had a coast
+        # check, but the people did not.  This is the one post-move rule.
+        if world is not None:
+            try:
+                world.keep_on_land(self, float(getattr(self, "radius", 10.0)) + 1.0)
+            except Exception:
+                pass
         if not self.alive:
             self.die()
             return False

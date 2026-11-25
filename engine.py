@@ -2005,14 +2005,8 @@ def run(g):
                     list(g.grid.near(g.player.x, g.player.y, g.player.radius + 6.0))
                     + g._block_cols)
             # THE OCEAN IS IMPASSABLE: the shore is the eastern edge of the
-            # world. Walk into the sea and he is pushed back to the sand.
-            try:
-                import world as _world
-                _c = _world.coast_x(g.player.y, g.world.seed)
-                if g.player.x > _c:
-                    g.player.x = _c - g.player.radius
-            except Exception:
-                pass
+            # world. The same helper is used for every body in the world.
+            g.world.keep_on_land(g.player, g.player.radius + 1.0)
 
             for patrol in g.patrols:
                 g.best = None
@@ -2028,10 +2022,12 @@ def run(g):
                 patrol.update(g.dt)
             for rabbit in g.rabbits:
                 rabbit.update(g.dt, None if g.player.dead else g.player, g.grid)
+                g.world.keep_on_land(rabbit, rabbit.radius + 1.0)
             for horse in g.horses:
                 if horse is getattr(g, "riding", None):
                     continue               # the rider drives it, not the herd
                 horse.update(g.dt, None if g.player.dead else g.player, g.grid)
+                g.world.keep_on_land(horse, horse.radius + 1.0)
             # THE LIVESTOCK BREED: one baby a day, one animal per food box.
             try:
                 import colony as _colony
@@ -2220,6 +2216,7 @@ def run(g):
                                  colliders=g.e_colliders)
                     enemy.x, enemy.y = resolve_circle_rects(
                         enemy.x, enemy.y, enemy.radius, g.e_colliders)
+                    g.world.keep_on_land(enemy, enemy.radius + 1.0)
 
             for village in g.visible_villages:
                 for npc in village.npcs:

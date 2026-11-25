@@ -170,6 +170,28 @@ class World:
         with self._lock:
             self._overrides[(tx, ty)] = kind
 
+    def keep_on_land(self, body, margin: float = 1.0) -> bool:
+        """Stop a body at the shoreline.  Water begins east of coast_x().
+
+        One rule for every moving thing -- player, NPC, rabbit, wolf, horse,
+        buffalo, soldier.  The coastline is the world's eastern wall, not a
+        player-only wall.  Returns True when the body had to be pushed back.
+        """
+        try:
+            x = float(body.x)
+            # The coast is coast_x() = 0 +/- 150 px.  Anything west of this
+            # cannot be in the sea, so the common inland case costs nothing.
+            if x < -180.0:
+                return False
+            y = float(body.y)
+            limit = coast_x(y, self.seed) - max(0.0, float(margin))
+            if x > limit:
+                body.x = limit
+                return True
+        except Exception:
+            pass
+        return False
+
     # -- player-worked soil -------------------------------------------------
     def plot_at(self, tx: int, ty: int) -> Plot | None:
         with self._lock:

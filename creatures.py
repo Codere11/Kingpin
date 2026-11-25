@@ -874,7 +874,9 @@ class Horse:
                 return
             sx, sy = g.ship_pos()
             d = math.hypot(sx - self.x, sy - self.y)
-            if d < 52.0:
+            # The horse stops at the shoreline now; the ship lies just off
+            # it.  Do business from the sand instead of trying to swim.
+            if d < 90.0:
                 self._deliver(g)
                 self.delivering = False
                 self.returning = True
