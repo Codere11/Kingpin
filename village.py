@@ -1519,7 +1519,12 @@ class NPC:
                     continue             # this chest only takes its one kind
                 g = grades.get(item)
                 _def = items.get(item)
-                if getattr(_def, "quality", False) and g is not None:
+                cg = getattr(self, "carry_genetics", None)
+                gen = cg.pop(item, None) if isinstance(cg, dict) else None
+                if gen is not None:
+                    inv.add(item, int(n), quality=(int(g) if g is not None else None),
+                            genetics=gen)
+                elif getattr(_def, "quality", False) and g is not None:
                     inv.add(item, int(n), quality=int(g))
                 else:
                     inv.add(item, int(n))
@@ -1833,6 +1838,20 @@ class NPC:
         if drink is None:
             return
         self.carry[drink] = int(self.carry.get(drink, 0) or 0) + 5
+        # LOCAL ALE INHERITS THE CROP STRAIN.  The brewer's skill decides how
+        # much of the field bonus survives the ferment.
+        try:
+            import cropgenetics
+            _src = cropgenetics.genetics(camp, mash)
+            _gen = cropgenetics.extract(_src, getattr(self.skills, "farming", 0.0),
+                                        items.get(drink).name)
+            if _gen is not None:
+                cg = getattr(self, "carry_genetics", None)
+                if not isinstance(cg, dict):
+                    cg = self.carry_genetics = {}
+                cg[drink] = _gen
+        except Exception:
+            pass
         self._snd("bench", min_gap=0.8)
         self._did_work()
         self.skills.gain_farming(0.05)
