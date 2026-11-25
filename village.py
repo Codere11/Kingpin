@@ -467,7 +467,13 @@ class NPC:
     loan_clock: Any = 0.0
     wants_product: Any = None
     wants_drink: Any = ""
+    consumed_items: Any = None    # item -> times he has actually tried it
     use_fx: Any = None
+    activity: Any = ""            # dance / chase, for the social antics
+    _antic_active: Any = False
+    _antic_until: Any = 0.0
+    _antic_spot: Any = None
+    _antic_phase: Any = 0.0
     _last_phase: Any = None
     # work_flash is NOT here on purpose. It is a `cdef public double` in
     # village.pxd -- a C struct member, because it is read and written for
@@ -3014,6 +3020,11 @@ class NPC:
             return
         if getattr(self, "_brawl_target", None) is not None:
             return
+        # A DANCE OR A CHASE OWNS THE BODY while it lasts.  The antics module
+        # moves these people; the ordinary work/idle schedule must not drag
+        # them back to the field mid-step.
+        if getattr(self, "_antic_active", False):
+            return
         # ATTACKED IN HIS SLEEP: he is awake now and running before any work,
         # bedroll or social branch can put him back down.
         if getattr(self, "_wake_flee", False):
@@ -3965,12 +3976,18 @@ class NPC:
                 and economy.house_wood(house) < economy.STOCK_WOOD):
             needs.append("wood")                 # the woodpile needs topping up
         _drink = getattr(self, "wants_drink", None)
-        if (_drink and self.stock.get(_drink, 0) <= 0
+        if (_drink and economy.has_tried(self, _drink)
+                and self.stock.get(_drink, 0) <= 0
                 and self.stock.get("govbeer", 0) <= 0
                 and self.yearning >= economy.YEARING_BUY):
             needs.append("govbeer")          # the cheap bottle on the shelf
+        product = getattr(self, "wants_product", None)
+        if (product and economy.has_tried(self, product)
+                and self.yearning >= economy.YEARING_BUY
+                and self.stock.get(product, 0) <= 0):
+            needs.append(product)
         leaf = getattr(self, "leaf_item", None)
-        if (leaf and self.yearning >= economy.YEARING_BUY
+        if (self.job == "lab" and leaf
                 and self.stock.get(leaf, 0) <= 0):
             needs.append(leaf)
         for tool in economy.TOOLS:
@@ -5021,6 +5038,11 @@ class NPC:
     def draw(self, screen: pygame.Surface, cam_x: float, cam_y: float,
              show_name: bool = False) -> None:
         sx, sy = self.x - cam_x, self.y - cam_y
+        # DANCING IS A BODY, NOT A TOAST: a small bob makes the whole figure
+        # move with the music, while the feet stay close to the fire.
+        if getattr(self, "activity", "") == "dance":
+            _t = pygame.time.get_ticks() / 1000.0
+            sy += math.sin(_t * 5.2 + (id(self) % 17) * 0.37) * 1.8
         fx, fy = self.facing
         hx, hy = sx + fx * 2, sy + fy * 2 - 2      # head centre
         wear = getattr(self, "wear", "normal")
@@ -5171,7 +5193,34 @@ class NPC:
         # player wears, drawn on screen only (he is in view by being drawn).
         if getattr(self, "level_flash", 0.0) > 0.0:
             effects.draw_level_up(screen, sx, sy, 1.0 - self.level_flash / 1.6)
+        self._draw_activity_fx(screen, sx, sy, hx, hy)
         self._draw_use_fx(screen, sx, sy, hx, hy)
+
+    def _draw_activity_fx(self, screen, sx, sy, hx, hy) -> None:
+        """Notes, dust and a little motion for the social antics."""
+        act = getattr(self, "activity", "")
+        if act == "dance":
+            try:
+                fnt = pygame.font.SysFont("dejavusans", 14, bold=True)
+                t = pygame.time.get_ticks() / 1000.0
+                for i, off in enumerate((-11.0, 7.0, 15.0)):
+                    rise = (t * 15.0 + i * 13.0) % 26.0
+                    note = fnt.render("\u266a" if i % 2 else "\u266b",
+                                      True, (242, 206, 96))
+                    screen.blit(note, (int(hx + off - note.get_width() / 2),
+                                       int(hy - 22 - rise)))
+            except Exception:
+                pass
+        elif act == "chase":
+            try:
+                dust = pygame.Surface((8, 5), pygame.SRCALPHA)
+                pygame.draw.ellipse(dust, (174, 158, 126, 90), (0, 0, 8, 5))
+                bx = sx - self.facing[0] * 14.0
+                by = sy + 3.0 - self.facing[1] * 14.0
+                screen.blit(dust, (int(bx - 4), int(by - 2)))
+                screen.blit(dust, (int(bx - 9), int(by + 1)))
+            except Exception:
+                pass
 
     def _draw_use_fx(self, screen, sx, sy, hx, hy) -> None:
         """Three seconds of enjoyment: a cigar and its smoke, a mouthful of

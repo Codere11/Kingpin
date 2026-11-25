@@ -333,6 +333,16 @@ def ledger_value(village, item: str) -> float:
     return max(0.05, base * quality.SELL_VALUE[quality.clamp(grade)])
 
 
+def has_tried(npc, item: str) -> bool:
+    """True once this man has actually consumed one of this product."""
+    if not item:
+        return False
+    try:
+        return int((getattr(npc, "consumed_items", None) or {}).get(item, 0)) > 0
+    except Exception:
+        return False
+
+
 # -- a villager's books ------------------------------------------------------
 def setup(npc) -> None:
     npc.stock = {}
@@ -786,6 +796,8 @@ def urgency(npc, item: str) -> float:
         # his bench off his own craving left the artisan unable to buy anything.
         if npc.job == "lab" and item in PROCESS:
             return 1.0
+        if item == getattr(npc, "wants_product", None) and not has_tried(npc, item):
+            return 0.0
         return min(1.0, npc.yearning)
     if item in MASH:
         # Same for the mash tun: the brewer buys to brew, not to taste.
@@ -876,14 +888,14 @@ def wants(npc, item: str) -> int:
         return 0
     if item in FINISHED:
         # The habit is for the FINISHED good now. Raw leaf does nothing for it.
-        if (item == npc.wants_product
+        if (item == npc.wants_product and has_tried(npc, item)
                 and npc.yearning >= YEARING_BUY):
             return 1
         return 0
     if item in DRINKS:
-        # A drink is a want of its own, and everybody wants one. The state's
-        # own beer answers the same thirst as any other.
-        if ((item == npc.wants_drink or item == "govbeer")
+        # A drink is a want of its own -- but only after the first taste.
+        if (((item == npc.wants_drink and has_tried(npc, item))
+             or (item == "govbeer" and has_tried(npc, item)))
                 and npc.yearning >= YEARING_BUY):
             return 1
         return 0
@@ -2204,9 +2216,18 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
         hunger = hunger + HUNGER_RATE * dt
     if hunger > 130.0:
         hunger = 130.0
-    yearning = npc.yearning + YEARING_RATE * npc.addiction * dt
-    if yearning > 1.0:
-        yearning = 1.0
+    _want = getattr(npc, "wants_product", None)
+    _drink = getattr(npc, "wants_drink", None)
+    _tried_any = has_tried(npc, _want) or has_tried(npc, _drink)
+    if _tried_any:
+        yearning = npc.yearning + YEARING_RATE * npc.addiction * dt
+        if yearning > 1.0:
+            yearning = 1.0
+    else:
+        # No craving exists until he has actually tried at least one of his
+        # two products.  The first taste can come from a gift, a shared drink
+        # or the player; after that the habit can grow.
+        yearning = 0.0
     stock = npc.stock
     if (npc.asleep or npc.in_interior) and hunger < HEAL_WELL_FED:
         health = npc.health
@@ -2242,7 +2263,7 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
                     hunger = 0.0
     if yearning >= YEARING_ACT:
         want = npc.wants_product
-        if want and stock.get(want, 0) > 0:
+        if (want and has_tried(npc, want)) and stock.get(want, 0) > 0:
             stock[want] -= 1
             yearning = 0.0
             npc.use_fx = (want, USE_FX_SECONDS)
@@ -2253,7 +2274,7 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
                 pass
         else:
             drink = npc.wants_drink
-            if stock.get(drink, 0) > 0:
+            if has_tried(npc, drink) and stock.get(drink, 0) > 0:
                 stock[drink] -= 1
                 yearning = 0.0
                 npc.use_fx = (drink, USE_FX_SECONDS)
@@ -2262,7 +2283,7 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
                     _mind.consume(npc, drink, now)
                 except Exception:
                     pass
-            elif stock.get("govbeer", 0) > 0:
+            elif has_tried(npc, "govbeer") and stock.get("govbeer", 0) > 0:
                 # the state's bottle does the same work
                 stock["govbeer"] -= 1
                 yearning = 0.0

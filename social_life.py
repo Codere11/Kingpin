@@ -66,6 +66,16 @@ def _exchange(buyer, seller, item, camp, g, now, kind="gift"):
         return True
     stock[item] = int(stock[item]) - 1
     buyer.stock[item] = int((getattr(buyer, "stock", {}) or {}).get(item, 0)) + 1
+    # FIRST TASTE: a luxury handed to someone who has never tried it is
+    # consumed now.  That is what creates the first craving; before this, the
+    # product is not a need at all.
+    if item in economy.LUXURY and not economy.has_tried(buyer, item):
+        try:
+            buyer.stock[item] = max(0, int(buyer.stock.get(item, 0)) - 1)
+            import mind as _mind
+            _mind.consume(buyer, item, now)
+        except Exception:
+            pass
     mood.add_thought(buyer, "fed" if item in economy.FOOD else "luxury",
                      3.0 if item in economy.FOOD else 5.0, now, 300.0)
     _bubble(seller, "need" if item in economy.FOOD else "praise",

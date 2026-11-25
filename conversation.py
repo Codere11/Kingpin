@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 
 import economy
+import persona
 import relationships
 
 
@@ -31,6 +32,7 @@ def _busy(who):
     return (not getattr(who, "alive", True)
             or getattr(who, "asleep", False)
             or getattr(who, "in_interior", False)
+            or getattr(who, "_antic_active", False)
             or getattr(who, "break_state", "normal") in
             ("berserk", "breaking_spree", "crop_spree", "depression"))
 
@@ -42,33 +44,181 @@ def _front(target):
             float(target.y) + fy / d * 36.0)
 
 
-def _need_line(npc, target, g):
-    """One readable line, grounded in a need or a relationship."""
+def _tried(npc, item):
+    try:
+        return int((getattr(npc, "consumed_items", None) or {}).get(item, 0)) > 0
+    except Exception:
+        return False
+
+
+def _role_name(npc):
+    return (getattr(npc, "native_role", "") or getattr(npc, "job", "") or "").lower()
+
+
+def _reply_for(target, kind):
+    """A short, human answer -- not a second monologue."""
+    rng = getattr(target, "rng", None)
+    if kind == "need":
+        lines = ("Then we'll find a way.", "I'll see what I can spare.",
+                 "You're not the only one carrying that.", "We'll make it stretch.")
+    elif kind == "complaint":
+        lines = ("Say it plainly, then.", "I hear you. I don't agree.",
+                 "We can settle it without shouting.", "That isn't the whole story.")
+    elif kind == "praise":
+        lines = ("I noticed. Thank you.", "You did the work; I only watched.",
+                 "We remember that sort of thing.", "Good. We needed that.")
+    else:
+        lines = ("Aye. Walk with me a moment.", "I was thinking the same.",
+                 "Tell me the rest of it.", "That's a fair point.",
+                 "We should speak more often.", "I hadn't looked at it that way.")
+    return rng.choice(lines) if rng is not None else lines[0]
+
+
+def _speech(npc, target, g):
+    """A line with a little life in it, plus the listener's reply.
+
+    Needs come first only when they are actually urgent.  Product cravings
+    do not exist until the person has tried that product once; the rest is
+    role, relationship, mood and type.
+    """
     name = getattr(npc, "name", "?")
     other = getattr(target, "name", "you")
+    role = _role_name(npc)
+    rng = getattr(npc, "rng", None)
+    pick = (lambda seq: rng.choice(seq)) if rng is not None else (lambda seq: seq[0])
     try:
         if float(getattr(npc, "hunger", 0.0)) >= 80.0:
-            return "need", "I'm starving. We have no food."
+            return ("need",
+                    "The pot has been thin since morning. I can last until supper, but I would not say no to something solid before then.",
+                    _reply_for(target, "need"))
         if float(getattr(npc, "health", 1.0)) < float(getattr(npc, "max_health", 1.0)) * 0.55:
-            return "need", "I'm hurt. Do we have medicine?"
+            return ("need",
+                    "That last knock left my side aching. If there is medicine in the camp, I would take it.",
+                    _reply_for(target, "need"))
         if getattr(npc, "slept_outside", False):
-            return "need", "I need a bed before another night outside."
-        if float(getattr(npc, "mood", 50.0)) <= 30.0:
-            return "need", "I can't keep working like this."
+            return ("need",
+                    "The ground was cold as stone last night. I need a bedroll, or at least a place by the fire.",
+                    _reply_for(target, "need"))
+        if float(getattr(npc, "mood", 50.0)) <= 27.0:
+            return ("need",
+                    "I keep doing the same work and wondering why it matters. It is not the work -- it is the quiet.",
+                    _reply_for(target, "need"))
+
         if _player(target):
-            line = getattr(npc, "wants_product", None) or getattr(npc, "wants_drink", None)
-            if line:
-                return "need", "I need a %s." % str(line).replace("_", " ")
-            return "talk", "%s, we should talk when you have a moment." % name
-        rec = relationships.ensure(npc).get(getattr(target, "id", ""))
-        aff = float(rec.get("affinity", 0.0)) if isinstance(rec, dict) else 0.0
+            product = getattr(npc, "wants_product", None)
+            drink = getattr(npc, "wants_drink", None)
+            if (float(getattr(npc, "yearning", 0.0)) >= economy.YEARING_BUY
+                    and ((product and _tried(npc, product))
+                         or (drink and _tried(npc, drink)))):
+                if product and _tried(npc, product) and (not drink or pick((True, False))):
+                    return ("need",
+                            "When there is a quiet minute, I would not say no to a smoke. My hands will not settle otherwise.",
+                            _reply_for(target, "need"))
+                return ("need",
+                        "If there is a bottle to spare, I would take it. The evening sits easier with one.",
+                        _reply_for(target, "need"))
+
+            if role in ("farmer", "farm"):
+                if persona.is_sensing(npc):
+                    return ("talk", pick((
+                        "The east rows are dry, and the wind has been wrong all day. If the weather holds we get a harvest; if it turns, we lose half of it.",
+                        "The soil under the wheat is still cold. I would give it another day before I trust it with seed.",
+                        "Something has been at the edge of the field. Not enough to ruin it yet, but enough that I noticed.")),
+                        _reply_for(target, "talk"))
+                return ("talk", pick((
+                        "The fields are talking to each other. What happens in one row keeps showing up in another, and I do not like the pattern.",
+                        "I keep thinking the crop is one thing, and the water another, and the work a third. They are all the same argument.",
+                        "Give it a season and this camp will be known for what it grows -- if we do not eat the seed corn first.")),
+                        _reply_for(target, "talk"))
+            if role in ("warrior", "soldier"):
+                return ("talk", pick((
+                        "The treeline has been quiet all day. Too quiet for my liking. I would rather be bored than surprised.",
+                        "Two of the new tracks are old and one is fresh. I have not decided what that means yet.",
+                        "A wall is only as good as the people who walk it when nobody is watching.")),
+                        _reply_for(target, "talk"))
+            if role == "doctor":
+                return ("talk", pick((
+                        "I have been mending small things all day. A real conversation would be a welcome change.",
+                        "Half my work is knowing when to do nothing. The other half is convincing people of it.",
+                        "I could use more clean water and less heroism. The heroes are harder to keep alive.")),
+                        _reply_for(target, "talk"))
+            if role == "trader":
+                return ("talk", pick((
+                        "The ship's prices are moving again. If you have goods to spare, now is the time to move them.",
+                        "A full cart is a promise. An empty one is a story about the road.",
+                        "I can find a buyer for almost anything. The difficult part is finding the thing worth carrying.")),
+                        _reply_for(target, "talk"))
+            if role == "logger":
+                return ("talk", pick((
+                        "The woodlot is thinning faster than it grows. We should talk about what we leave standing.",
+                        "A tree takes a lifetime and a fire takes an afternoon. I think about that more than I used to.",
+                        "The wood is good this season. The work is not the problem; the walk back is.")),
+                        _reply_for(target, "talk"))
+            if role in ("unemployed", ""):
+                return ("talk", pick((
+                        "I have been watching the camp. Everyone has a place except me. I would like to earn mine.",
+                        "I am not afraid of work. I am afraid of being the man nobody notices is missing.",
+                        "Give me a job and I will learn it. I have been idle long enough to know the difference.")),
+                        _reply_for(target, "talk"))
+
+            aff = 0.0
+            try:
+                rec = relationships.ensure(npc).get("player")
+                if isinstance(rec, dict):
+                    aff = float(rec.get("affinity", 0.0))
+            except Exception:
+                pass
+            if aff <= -10.0:
+                return ("complaint",
+                        "We should settle what happened. I do not like carrying it around, and I doubt you do either.",
+                        _reply_for(target, "complaint"))
+            if aff >= 20.0:
+                return ("praise",
+                        "You have been good to me. I do not forget that sort of thing.",
+                        _reply_for(target, "praise"))
+            return ("talk", pick((
+                    "You have been quiet lately. Is it the work, the camp, or something you would rather not put into words?",
+                    "The camp feels different tonight. I cannot tell whether that is the weather or the people.",
+                    "I have been thinking about what we are building here. I am not sure it is the same thing you are building.",
+                    "You do not have to answer this, but I would like to know what keeps you going.")),
+                    _reply_for(target, "talk"))
+
+        # NPC to NPC: relationship, work and personality, not a random bark.
+        aff = 0.0
+        try:
+            rec = relationships.ensure(npc).get(getattr(target, "id", ""))
+            if isinstance(rec, dict):
+                aff = float(rec.get("affinity", 0.0))
+        except Exception:
+            pass
         if aff <= -10.0:
-            return "complaint", "We need to settle what happened between us."
+            return ("complaint",
+                    "We need to settle what happened between us. I am tired of stepping around it.",
+                    _reply_for(target, "complaint"))
         if aff >= 20.0:
-            return "praise", "You have been good to me, %s." % other
-        return "talk", "How are things going here?"
+            return ("praise",
+                    "You have been carrying more than your share lately. I noticed.",
+                    _reply_for(target, "praise"))
+        if role and role == _role_name(target):
+            return ("talk",
+                    "Two pairs of hands at the same job. We should compare notes before the day gets away from us.",
+                    _reply_for(target, "talk"))
+        if persona.is_sensing(npc) and persona.is_intuitive(target):
+            return ("talk",
+                    "You see the whole pattern; I see the row in front of me. Between us we might get it right.",
+                    _reply_for(target, "talk"))
+        if persona.is_intuitive(npc) and persona.is_sensing(target):
+            return ("talk",
+                    "I keep looking at the larger shape of this place. You keep me honest about what is actually under our feet.",
+                    _reply_for(target, "talk"))
+        return ("talk", pick((
+                "How are things on your side of the camp? Mine have been stranger than usual.",
+                "I heard something today that I cannot make fit. Have you noticed anything odd?",
+                "You look like a man carrying a question. I have time for one if you do.",
+                "We should compare notes before the day decides for us.")),
+                _reply_for(target, "talk"))
     except Exception:
-        return "talk", "We should talk."
+        return ("talk", "We should talk when there is a moment.", _reply_for(target, "talk"))
 
 
 def _start(g, speaker, target, now):
@@ -84,9 +234,10 @@ def _start(g, speaker, target, now):
                 return False
         except Exception:
             pass
-    kind, text = _need_line(speaker, target, g)
+    kind, text, reply = _speech(speaker, target, g)
     st["active"] = {"speaker": speaker, "target": target, "kind": kind,
-                    "text": text, "phase": "walk", "until": 0.0}
+                    "text": text, "reply": reply, "reply_at": 0.0,
+                    "reply_said": False, "phase": "walk", "until": 0.0}
     try:
         speaker._convo_busy_until = now + 12.0
         target._convo_busy_until = now + 12.0
@@ -132,7 +283,8 @@ def tick(g, dt):
             if not _player(target):
                 target.facing = (-ux / den, -uy / den)
             act["phase"] = "talk"
-            act["until"] = now + 6.0
+            act["until"] = now + 7.0
+            act["reply_at"] = now + 1.5
             try:
                 import comm
                 comm.spawn_cloud(speaker.x, speaker.y, act["kind"],
@@ -154,6 +306,18 @@ def tick(g, dt):
                 pass
             return
         if act["phase"] == "talk":
+            if (not act.get("reply_said", False)
+                    and act.get("reply")
+                    and now >= float(act.get("reply_at", 0.0))):
+                try:
+                    import comm
+                    comm.spawn_cloud(target.x, target.y, "talk",
+                                     text=act.get("reply"))
+                    g.toast("%s: %s" % (getattr(target, "name", "Someone"),
+                                        act.get("reply")))
+                except Exception:
+                    pass
+                act["reply_said"] = True
             if now < float(act.get("until", 0.0)):
                 return
             try:

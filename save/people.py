@@ -39,6 +39,7 @@ SKIP = {
     "knows", "witness_to", "no_make", "no_sell", "_rects", "_fences",
     "_player", "_soldiers",
     "_blood", "_target", "_colliders",
+    "activity", "_antic_active", "_antic_until", "_antic_spot", "_antic_phase",
 }
 
 

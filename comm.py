@@ -166,7 +166,7 @@ def draw_bar(screen, font, vw, vh, selected):
 
 
 _clouds = []          # [world_x, world_y, kind, text, seconds_left]
-CLOUD_SECONDS = 1.5
+CLOUD_SECONDS = 3.0
 
 MESSAGES = {
     "insult": ("F#!K", "Scum!", "Idiot!", "Fool!"),
@@ -214,12 +214,37 @@ def draw_clouds(screen, cam_x, cam_y):
         screen.blit(surf, rect)
 
 
+def _render_wrapped(font, text, color, max_width=250):
+    """A long sentence becomes two or three readable lines, not one ribbon."""
+    words = str(text or "?").split()
+    lines = []
+    cur = ""
+    for word in words:
+        test = (cur + " " + word).strip()
+        if cur and font.size(test)[0] > max_width:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = test
+    if cur:
+        lines.append(cur)
+    if not lines:
+        lines = ["?"]
+    lh = font.get_height() + 2
+    width = max(1, max(font.size(line)[0] for line in lines))
+    surf = pygame.Surface((width, lh * len(lines)), pygame.SRCALPHA)
+    for i, line in enumerate(lines):
+        img = font.render(line, True, color)
+        surf.blit(img, (0, i * lh))
+    return surf
+
+
 def _cloud_surf(font, kind, text, ttl):
     if text is None and kind in KINDS:
         content = _symbol_surface(kind)
     else:
-        content = font.render(text if text else "?", True,
-                              TEXT_COLOR.get(kind, (20, 20, 20)))
+        content = _render_wrapped(font, text if text else "?",
+                                  TEXT_COLOR.get(kind, (20, 20, 20)))
     pad_x, pad_y = 10, 7
     bw = content.get_width() + pad_x * 2 + 8
     bh = content.get_height() + pad_y * 2 + 8
@@ -353,13 +378,16 @@ def need_line(npc):
         return None
     product = getattr(npc, "wants_product", None)
     drink = getattr(npc, "wants_drink", None)
+    if not ((product and economy.has_tried(npc, product))
+            or (drink and economy.has_tried(npc, drink))):
+        return None
     rng = getattr(npc, "rng", None)
-    if product and drink:
+    if product and economy.has_tried(npc, product) and drink and economy.has_tried(npc, drink):
         return ("I need a smoke" if (rng is None or rng.random() < 0.5)
                 else "I need a %s" % drink)
-    if product:
+    if product and economy.has_tried(npc, product):
         return "I need a smoke"
-    if drink:
+    if drink and economy.has_tried(npc, drink):
         return "I need a %s" % drink
     return None
 

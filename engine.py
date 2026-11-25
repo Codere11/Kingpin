@@ -276,6 +276,11 @@ def run(g):
         except Exception:
             pass
         try:
+            import antics
+            antics.tick(g, g.dt)
+        except Exception:
+            pass
+        try:
             import events as _events
             _events.tick(g, g.dt)
         except Exception:

@@ -44,6 +44,16 @@ def consume(npc, item, now):
         npc.drunk_level = float(getattr(npc, "drunk_level", 0.0) or 0.0) + 1.0
     elif item == "dried_mushroom":
         npc.high_level = float(getattr(npc, "high_level", 0.0) or 0.0) + 1.0
+    # REMEMBER THE FIRST TASTE.  A product is not a need until he has tried
+    # it at least once; economy.wants()/needs() read this before opening a
+    # craving for cigars, beer, liqueur or mezcal.
+    try:
+        tried = getattr(npc, "consumed_items", None)
+        if not isinstance(tried, dict):
+            tried = npc.consumed_items = {}
+        tried[item] = int(tried.get(item, 0) or 0) + 1
+    except Exception:
+        pass
     npc._break_off = float(getattr(npc, "_break_off", 0.0)) + 10.0
     npc._break_off_until = now + CONSUME_BREAK_SECONDS
     try:

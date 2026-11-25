@@ -99,6 +99,7 @@ done
     --hidden-import events \
     --hidden-import wind \
     --hidden-import conversation \
+    --hidden-import antics \
     --hidden-import wolfart \
     --hidden-import rabbitart \
     --hidden-import horseart \
