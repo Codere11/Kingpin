@@ -604,34 +604,33 @@ def spawn_test(g):
     return ensure(g).spawn_test()
 
 
-def spawn_test_rabbits(g):
-    """F3: a few rabbits just west of the player.
+def spawn_test_buffaloes(g):
+    """F3: a few buffalo just west of the player.
 
-    They use the ordinary rabbit update, so the distance-driven hop and the
-    eight-direction facing are visible immediately.  No event owns them.
+    They are ordinary herd animals, not event-owned: the normal bison update
+    walks them, so the distance-driven gait, shaggy silhouette and flee turn
+    can be watched immediately.
     """
     player = getattr(g, "player", None)
     if player is None:
         return []
-    rng = random.Random(int(float(getattr(g, "now", 0.0)) * 1000.0)
-                        ^ id(player))
-    furs = ("grey", "brown", "white", "yellow")
     out = []
-    for i, (dx, dy) in enumerate(((-135.0, -26.0),
-                                    (-158.0, 16.0),
-                                    (-118.0, 38.0))):
+    for dx, dy in ((-145.0, -36.0), (-172.0, 8.0), (-132.0, 48.0)):
         x = float(player.x) + dx
         y = float(player.y) + dy
-        r = creatures.Rabbit(x, y, rng.choice(furs))
-        r.home = (x, y)
-        r.target = (x - 40.0, y)
-        r.facing = (1.0, 0.0)
-        _keep_land(g, r)
-        g.rabbits.append(r)
-        out.append(r)
-    _record(g, "test_rabbits", x=round(float(player.x), 1),
+        b = creatures.Bison(x, y)
+        b.name = "buffalo"
+        b.home = (x, y)
+        b.target = (x - 45.0, y)
+        b.facing = (1.0, 0.0)
+        b.aggro = False
+        b.event_ai = False
+        _keep_land(g, b)
+        g.enemies.append(b)
+        out.append(b)
+    _record(g, "test_buffaloes", x=round(float(player.x), 1),
             y=round(float(player.y), 1), count=len(out))
-    _toast(g, "Rabbit test: %d rabbits west of you" % len(out))
+    _toast(g, "Buffalo test: %d buffalo west of you" % len(out))
     return out
 
 
