@@ -139,7 +139,11 @@ def describe(stack) -> list[str]:
     if stack is None:
         return []
     prov = getattr(stack, "provenance", None)
-    lines = [stack.defn.name]
+    try:
+        import cropgenetics
+        lines = [cropgenetics.display_name(stack)]
+    except Exception:
+        lines = [stack.defn.name]
     q = quality_text(stack)
     if q:
         lines[0] += "  (%s)" % q
@@ -147,7 +151,18 @@ def describe(stack) -> list[str]:
         if getattr(stack, "plant_kind", None):
             lines.append("Plant: %s" % stack.plant_kind)
         if getattr(stack, "genetics", None):
-            lines.append("Genetics: %s" % stack.genetics)
+            _gen = stack.genetics
+            _t = _gen.get("targets") if isinstance(_gen, dict) else None
+            _p = _gen.get("progress") if isinstance(_gen, dict) else None
+            if _t:
+                _bits = []
+                for _tag in _t:
+                    _bits.append("%s %d%%" % (
+                        str(_tag).replace("quality_", "quality "),
+                        int(round(100.0 * float((_p or {}).get(_tag, 0.0))))))
+                lines.append("Genetics: " + ", ".join(_bits))
+            else:
+                lines.append("Genetics: %s" % _gen)
     except Exception:
         pass
     if not isinstance(prov, dict):

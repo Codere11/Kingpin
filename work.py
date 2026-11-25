@@ -1050,7 +1050,8 @@ def _farm_step(npc, world, ground, plots, now: float) -> str:
         if _elapsed < (getattr(plot, "grow", None) or _crop.GROW_SECONDS):
             continue
         if _farm.harvest(world, bag(npc), plot, now, _quiet, tx=tx, ty=ty,
-                         skill=float(getattr(npc.skills, "farming", 0.0))):
+                         skill=float(getattr(npc.skills, "farming", 0.0)),
+                         camp=getattr(npc, "native_camp", None)):
             return "harvested"
     # 2. DIG, WATER, SOW -- one action
     seed = _next_seed(npc)

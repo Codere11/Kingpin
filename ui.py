@@ -29,9 +29,14 @@ DIM = (138, 138, 148)
 def stack_label(stack) -> str:
     if stack is None:
         return ""
+    try:
+        import cropgenetics
+        name = cropgenetics.display_name(stack)
+    except Exception:
+        name = stack.defn.name
     if stack.defn.quality and stack.quality is not None:
-        return f"{stack.defn.name} ({GRADES[stack.quality]})"
-    return stack.defn.name
+        return f"{name} ({GRADES[stack.quality]})"
+    return name
 
 
 def _draw_quality(screen, rect, stack, font) -> None:
@@ -317,8 +322,7 @@ class InventoryPanel:
             slot = self.inv._first_empty()
             if slot is not None:
                 self.inv.slots[slot] = self.held
-            elif self.inv.add(self.held.defn.id, self.held.count,
-                              self.held.quality) is None:
+            elif self.inv.add_stack(self.held, owner=getattr(self, "player", None)) is None:
                 return                          # inventory full: keep holding it
         self.held = None
         self.held_from = None
@@ -418,6 +422,10 @@ def _place_left(held, other):
         if room > 0:
             take = min(room, held.count)
             _merge_quality(other, held, take)
+            # A local crop strain that touches a different lot becomes
+            # ordinary.  This is the same rule as Inventory.add.
+            if getattr(held, "genetics", None) != getattr(other, "genetics", None):
+                other.genetics = None
             other.count += take
             held.count -= take
             if held.count <= 0:
@@ -432,7 +440,10 @@ def _place_right(held, other):
         if other is not None and other.count > 1:
             take = other.count // 2
             other.count -= take
-            return ItemStack(other.defn, take, other.quality), other
+            new = ItemStack(other.defn, take, other.quality)
+            new.plant_kind = getattr(other, "plant_kind", None)
+            new.genetics = getattr(other, "genetics", None)
+            return new, other
         return None, other
     if other is None:
         held.count -= 1

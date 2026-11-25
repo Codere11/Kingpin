@@ -104,6 +104,7 @@ done
     --hidden-import rabbitart \
     --hidden-import horseart \
     --hidden-import itemstory \
+    --hidden-import cropgenetics \
     --hidden-import bisonart \
     "${DATA_ARGS[@]}" \
     main.py 2>&1 | tail -1

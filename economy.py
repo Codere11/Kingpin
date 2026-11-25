@@ -686,6 +686,19 @@ def harvest(village, npc, kind: str, rng) -> None:
     item, count = crop_yield(kind, rng)
     if not item or count <= 0:
         return
+    # SETTLEMENT STRAIN: every harvest advances every local target.  The
+    # native camp's stock is a shared lot, so the strain lives on the camp
+    # and is copied into the next batch that reaches a real ItemStack.
+    _strain = None
+    try:
+        import cropgenetics
+        _camp = getattr(npc, "native_camp", None) or village
+        _strain = cropgenetics.advance(_camp, kind)
+        if _strain is not None:
+            count = max(1, int(round(count * cropgenetics.yield_mult(_strain))))
+            npc.last_crop_genetics = cropgenetics.genetics(_camp, kind)
+    except Exception:
+        pass
     # A MASTER'S HAND GATHERS THREE TIMES AS MUCH from the same plant.
     try:
         import crop as _crop
@@ -700,10 +713,21 @@ def harvest(village, npc, kind: str, rng) -> None:
         pass
     if kind == "wheat":                    # thresh it too: bread, and grain
         grain = rng.randint(2, 4)
+        if _strain is not None:
+            try:
+                grain = max(1, int(round(grain * cropgenetics.yield_mult(_strain))))
+            except Exception:
+                pass
         npc.stock["wheat"] = npc.stock.get("wheat", 0) + grain
     grade = 3
     if item in LEAF:                       # leaf has a grade; grain does not (yet)
-        grade = npc.skills.leaf_grade()
+        grade = min(5, int(npc.skills.leaf_grade()))   # base cap A
+        if _strain is not None:
+            try:
+                import cropgenetics
+                grade = cropgenetics.cap_quality(_strain, grade)
+            except Exception:
+                pass
         npc.grade[item] = grade
     keep = farmer_keep(npc, item, int(count))
     if keep > 0:

@@ -89,7 +89,7 @@ def kind_name(kind: str) -> str:
 
 def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
             tx: int | None = None, ty: int | None = None,
-            share=None, skill: float = 0.0) -> bool:
+            share=None, skill: float = 0.0, camp=None) -> bool:
     """Collect a ripe crop and its own seed.
 
     ``share``, when given, is called with (item, amount) for every crop taken
@@ -115,19 +115,42 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
     kind = plot.kind
     seed = crop.CROP_SEED.get(kind)
     _scale = crop.yield_scale(skill)
+    # LOCAL STRAIN: every harvest advances every target of this settlement's
+    # crop, and the bonus belongs to this lot, not to the whole world.
+    _gen = None
+    _strain = None
+    _ymult = 1.0
+    _smult = 1.0
+    try:
+        import cropgenetics
+        _strain = cropgenetics.advance(camp, kind) if camp is not None else None
+        if _strain is not None:
+            _gen = cropgenetics.genetics(camp, kind)
+            _ymult = cropgenetics.yield_mult(_strain)
+            _smult = cropgenetics.seed_mult(_strain)
+    except Exception:
+        pass
+    if quality is not None and quality > 5:
+        quality = 5                          # base quality is capped at A
+    if _strain is not None:
+        try:
+            import cropgenetics
+            quality = cropgenetics.cap_quality(_strain, quality)
+        except Exception:
+            pass
     if kind in crop.LEAF_KINDS:
         item = crop.LEAF_ITEM[kind]
-        amount = max(1, int(round(random.randint(3, 6) * _scale)))
-        seeds = random.randint(2, 5)
-        inventory.add(item, amount, quality, plant_kind=kind)
+        amount = max(1, int(round(random.randint(3, 6) * _scale * _ymult)))
+        seeds = max(1, int(round(random.randint(2, 5) * _smult)))
+        inventory.add(item, amount, quality, plant_kind=kind, genetics=_gen)
         if share is not None:
             share(item, amount)
     elif kind in crop.FIBRE_KINDS:
         # COTTON: 5-10 cotton, 1-3 cotton seeds. No quality system.
         item = "cotton"
-        amount = random.randint(5, 10)
-        seeds = random.randint(1, 3)
-        inventory.add(item, amount, plant_kind=kind)
+        amount = max(1, int(round(random.randint(5, 10) * _ymult)))
+        seeds = max(1, int(round(random.randint(1, 3) * _smult)))
+        inventory.add(item, amount, plant_kind=kind, genetics=_gen)
         if share is not None:
             share(item, amount)
     else:
@@ -135,20 +158,20 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
         amount = max(1, int(round({"wheat": random.randint(1, 3),
                                    "berries": random.randint(2, 5),
                                    "cactus": random.randint(1, 2)}.get(kind, 1)
-                                  * _scale)))
-        seeds = random.randint(1, 3)
-        inventory.add(item, amount, plant_kind=kind)
+                                  * _scale * _ymult)))
+        seeds = max(1, int(round(random.randint(1, 3) * _smult)))
+        inventory.add(item, amount, plant_kind=kind, genetics=_gen)
         if share is not None:
             share(item, amount)
         if kind == "wheat":
             # ...AND THE GRAIN. Bread is the crop's food, but the grain is what
             # the mash is made of -- without it a farmer could bake a loaf and
             # never brew a beer, which made no sense at all.
-            inventory.add("wheat", amount, plant_kind=kind)
+            inventory.add("wheat", amount, plant_kind=kind, genetics=_gen)
             if share is not None:
                 share("wheat", amount)
     if seed is not None:
-        inventory.add(seed, seeds, plant_kind=kind)
+        inventory.add(seed, seeds, plant_kind=kind, genetics=_gen)
     # The crop took everything out of the soil: it is spent, and grass returns.
     plot.kind = "grass"
     plot.planted_at = None

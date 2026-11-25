@@ -909,7 +909,8 @@ def on_click(g):
         grade = g.skills.tobacco_grade()
         if farm.harvest(g.world, g.inventory, plot, g.now, g.toast, grade,
                         skill=g.skills.farming,
-                        tx=tx, ty=ty, share=g.pay_share):
+                        tx=tx, ty=ty, share=g.pay_share,
+                        camp=getattr(g, "player_camp", None)):
             try:
                 import playlog as _pl
                 _pl.record(getattr(g, "root", None), "action",
@@ -926,7 +927,8 @@ def on_click(g):
     if plot is not None and plot.kind in crop.FOOD_KINDS:
         if farm.harvest(g.world, g.inventory, plot, g.now, g.toast, tx=tx, ty=ty,
                         skill=g.skills.farming,
-                        share=g.pay_share):
+                        share=g.pay_share,
+                        camp=getattr(g, "player_camp", None)):
             try:
                 import playlog as _pl
                 _pl.record(getattr(g, "root", None), "action",
@@ -939,7 +941,8 @@ def on_click(g):
     if plot is not None and plot.kind in crop.FIBRE_KINDS:
         if farm.harvest(g.world, g.inventory, plot, g.now, g.toast,
                         tx=tx, ty=ty, skill=g.skills.farming,
-                        share=g.pay_share):
+                        share=g.pay_share,
+                        camp=getattr(g, "player_camp", None)):
             try:
                 import playlog as _pl
                 _pl.record(getattr(g, "root", None), "action",

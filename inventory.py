@@ -77,8 +77,17 @@ class Inventory:
                         stack.count += take
                         if stack.plant_kind is None:
                             stack.plant_kind = plant_kind
-                        if stack.genetics is None and genetics is not None:
-                            stack.genetics = genetics
+                        # A STRAIN THAT MIXES WITH ANYTHING ELSE BECOMES
+                        # ORDINARY.  This is the player-facing rule and it
+                        # must apply both ways: local + regular, or two
+                        # different settlements.
+                        if genetics is not None:
+                            if stack.genetics is None:
+                                stack.genetics = genetics
+                            elif stack.genetics != genetics:
+                                stack.genetics = None
+                        elif stack.genetics is not None:
+                            stack.genetics = None
                         remaining -= take
                         if first is None:
                             first = i
