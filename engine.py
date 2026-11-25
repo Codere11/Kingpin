@@ -395,55 +395,25 @@ def run(g):
                 # the world does not stop for a menu.
                 pass
             elif (g.test_mode and event.type == pygame.KEYDOWN
-                  and event.key in (pygame.K_F2, pygame.K_F3, pygame.K_F4, pygame.K_F5,
-                                    pygame.K_F6, pygame.K_F7, pygame.K_F8,
-                                    pygame.K_F9, pygame.K_F10, pygame.K_F12)):
-                # THE NPC LAB (NPC.md Phase 0).  Test mode only; the normal
-                # game never imports or builds it.
+                  and event.key in (pygame.K_F2, pygame.K_F3, pygame.K_F4)):
+                # TEST MODE.  The old NPC-lab controls lived here; the lab is
+                # gone.  F3 now puts one wolf just west of the player so the
+                # walk cycle can actually be watched.  F4 still starts the
+                # full event pack.
                 try:
-                    import npclab as _npclab
+                    import events as _events
                     if event.key == pygame.K_F2:
-                        import events as _events
                         _events.spawn_test_kind(g, "rogue")
                         g.toast("Rogue test")
                     elif event.key == pygame.K_F3:
-                        import events as _events
-                        import wind as _wind
-                        _events.spawn_test_kind(g, "rain")
-                        _wind.boost(20.0)
-                        g.toast("Rain + wind test")
+                        _events.spawn_test_wolf(g)
                     elif event.key == pygame.K_F4:
-                        import events as _events
                         _events.spawn_test(g)
-                    elif event.key == pygame.K_F5:
-                        _npclab.toggle(g)
-                    elif event.key == pygame.K_F6:
-                        _npclab.reset(g)
-                    elif event.key == pygame.K_F7:
-                        _npclab.next_subject(g)
-                    elif event.key == pygame.K_F8:
-                        _npclab.cycle_mood(g)
-                    elif event.key == pygame.K_F9:
-                        _npclab.force_break(g)
-                    elif event.key == pygame.K_F10:
-                        _npclab.give_medicine(g)
-                    elif event.key == pygame.K_F12:
-                        _mods = pygame.key.get_mods()
-                        if _mods & pygame.KMOD_CTRL:
-                            _npclab.destroy_crops(g)
-                        elif (_mods & pygame.KMOD_ALT
-                              and _mods & pygame.KMOD_SHIFT):
-                            _npclab.consume_other(g)
-                        elif _mods & pygame.KMOD_ALT:
-                            _npclab.drink(g)
-                        else:
-                            _npclab.social_incident(
-                                g, "threaten" if _mods & pygame.KMOD_SHIFT else "insult")
-                except Exception as _lab_exc:
-                    g.toast("NPC lab: %s" % _lab_exc)
+                except Exception as _ev_exc:
+                    g.toast("Event test: %s" % _ev_exc)
                     try:
                         import plog as _plog
-                        _plog.log("NPC-LAB-KEY", repr(_lab_exc)[:160])
+                        _plog.log("EVENT-TEST-KEY", repr(_ev_exc)[:160])
                     except Exception:
                         pass
             elif (g.test_mode and event.type == pygame.KEYDOWN
@@ -3285,11 +3255,6 @@ def run(g):
                 g.player.draw(g.screen, g.cam_x, g.cam_y, g._sel.defn.id if g._sel else None)
             g.observer_.draw(g.screen)
             try:
-                import npclab as _npclab_draw
-                _npclab_draw.draw(g)
-            except Exception:
-                pass
-            try:
                 if g.chest_open:
                     g.chest_panel.draw(g.screen)
                 if g.workshop_open:
@@ -3908,11 +3873,6 @@ def run(g):
             # reading observer.open, which was True the whole time, and told
             # you it worked three times on that basis. State is not a picture.
             g.observer_.draw(g.screen)
-            try:
-                import npclab as _npclab_draw2
-                _npclab_draw2.draw(g)
-            except Exception:
-                pass
             if not g.hud_hidden:
                 g.hotbar.draw_stamina(g.screen, g.player.stamina / g.player.max_stamina,
                                     g.player.exhausted)

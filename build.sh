@@ -62,13 +62,6 @@ echo "Checking persona and mood..."
 "$VENV/bin/python" tools/doctor_selftest.py > /tmp/kingpin-doctor.log 2>&1 || { echo "  DOCTOR SELFTEST FAILED"; tail -20 /tmp/kingpin-doctor.log; exit 1; }
 "$VENV/bin/python" tools/major_break_selftest.py > /tmp/kingpin-major-break.log 2>&1 || { echo "  MAJOR BREAK SELFTEST FAILED"; tail -20 /tmp/kingpin-major-break.log; exit 1; }
 
-# THE LAB MUST ALSO SURVIVE A SAVE.  This uses the test slot only; it never
-# reads or writes the player's normal save.
-echo "Checking the NPC lab round-trip..."
-"$VENV/bin/python" tools/npclab_selftest.py make > /tmp/kingpin-npclab-make.log 2>&1 || { echo "  NPC LAB SELFTEST (make) FAILED"; tail -20 /tmp/kingpin-npclab-make.log; exit 1; }
-"$VENV/bin/python" tools/npclab_selftest.py verify > /tmp/kingpin-npclab-verify.log 2>&1 || { echo "  NPC LAB SELFTEST (verify) FAILED"; tail -20 /tmp/kingpin-npclab-verify.log; exit 1; }
-"$VENV/bin/python" tools/npclab_keytest.py > /tmp/kingpin-npclab-keys.log 2>&1 || { echo "  NPC LAB KEYTEST FAILED"; tail -20 /tmp/kingpin-npclab-keys.log; exit 1; }
-
 echo "Building..."
 rm -rf "$DIST" SettleWest.spec __pycache__
 
@@ -98,7 +91,6 @@ done
     --hidden-import persona \
     --hidden-import mood \
     --hidden-import doctor \
-    --hidden-import npclab \
     --hidden-import needs \
     --hidden-import incidents \
     --hidden-import relationships \

@@ -589,6 +589,35 @@ def spawn_test(g):
     return ensure(g).spawn_test()
 
 
+def spawn_test_wolf(g):
+    """F3: one wolf just west of the player, owned by the normal wolf AI.
+
+    This is deliberately not an event wolf: events.py does not tick it, so
+    the generic targeter walks it toward the player and the walk animation
+    can be inspected in isolation.  No camp, no pack, no rain.
+    """
+    player = getattr(g, "player", None)
+    if player is None:
+        return None
+    x = float(player.x) - 135.0
+    y = float(player.y)
+    w = creatures.Wolf(x, y)
+    w.name = "test-wolf"
+    w.home = (x, y)
+    w.target = (float(player.x), float(player.y))
+    w.facing = (1.0, 0.0)
+    w.aware = True
+    w.aware_timer = 600.0
+    w.idle_timer = 0.0
+    # Let the ordinary town targeter pick the watcher/player.  event_ai would
+    # make engine skip it and leave the wolf standing still.
+    w.event_ai = False
+    g.enemies.append(w)
+    _record(g, "test_wolf", x=round(x, 1), y=round(y, 1))
+    _toast(g, "Wolf test: one wolf west of you")
+    return w
+
+
 _TEST_KINDS = ("wolves", "rogue", "buffalo", "blight", "horses", "rain")
 
 
