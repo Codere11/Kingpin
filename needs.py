@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 
+import climate
 import mood
 
 
@@ -50,12 +51,23 @@ def _temperature(npc, now: float) -> None:
     if g is None:
         return
     camp = getattr(npc, "native_camp", None)
-    warmth = _near_fire(npc, g, camp)
     inside = bool(getattr(npc, "in_interior", False))
+    conquered = bool(getattr(camp, "conquered", False))
+    # A FIRE IS NOT INSULATION.  On conquered ground the fire only keeps the
+    # weather out when it is enclosed by walls and a door; before conquest the
+    # old open-fire behaviour remains.
+    if conquered:
+        warmth = inside or climate.inside(g, camp, npc.x, npc.y)
+    else:
+        warmth = inside or _near_fire(npc, g, camp)
     try:
         temp = float(g.world.temperature(npc.x, npc.y))
     except Exception:
         temp = 0.5
+    if conquered and not warmth and not inside:
+        npc._climate_hunger = 1.35 if (temp < 0.24 or temp > 0.82) else 1.0
+    elif conquered:
+        npc._climate_hunger = 1.0
     if warmth or inside:
         _set(npc, "cold", None, now)
         _set(npc, "freezing", None, now)
@@ -91,18 +103,41 @@ def _environment(npc, now: float) -> None:
     inside = bool(getattr(npc, "in_interior", False))
 
     # SHELTER / SLEEP.
-    if inside or (getattr(npc, "asleep", False)
-                  and getattr(npc, "bed", None) is not None):
+    conquered = bool(getattr(camp, "conquered", False))
+    asleep = bool(getattr(npc, "asleep", False))
+    bed = getattr(npc, "bed", None)
+    insulated_bed = bool(conquered and asleep and climate.bed_inside(g, camp, bed))
+    sheltered = inside or (asleep and bed is not None and
+                           (not conquered or insulated_bed))
+    if sheltered:
         _set(npc, "sheltered", 2.0, now, 300.0)
     else:
         _set(npc, "sheltered", None, now)
-    if getattr(npc, "asleep", False):
-        if getattr(npc, "bed", None) is None:
-            _set(npc, "slept_outside", -5.0, now, 600.0)
+    if asleep:
+        if inside:
+            # A house is already shelter; do not call a man outdoors because
+            # the bed he is using is not the camp's walled fireplace.
+            _set(npc, "slept_outside", None, now)
+            _set(npc, "slept_bed", 4.0, now, 600.0)
+            npc._climate_hunger = 1.0
+        elif conquered and not insulated_bed:
+            # A BEDROLL OUTSIDE IS STILL OUTSIDE.  This is the real cost of not
+            # building a walled fireplace room: bad sleep, bad mood and a belly
+            # that empties faster in the cold/heat.
+            _set(npc, "slept_outside", -10.0, now, 600.0)
+            _set(npc, "slept_bed", None, now)
+            npc._climate_hunger = 1.5
+        elif bed is None:
+            _set(npc, "slept_outside", -8.0, now, 600.0)
             _set(npc, "slept_bed", None, now)
         else:
             _set(npc, "slept_bed", 4.0, now, 600.0)
             _set(npc, "slept_outside", None, now)
+            npc._climate_hunger = 1.0
+    elif conquered:
+        # Awake again: the night-long hunger penalty ends.  Daytime cold/heat
+        # is set separately by _temperature().
+        npc._climate_hunger = 1.0
 
     # CROWDING: only extreme crowding matters.
     try:

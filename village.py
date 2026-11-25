@@ -525,6 +525,7 @@ class NPC:
     break_cooldown: Any = 0.0
     frustration: Any = 0.0
 
+    _climate_hunger: Any = 1.0    # cold/heat/sleeping-outside hunger multiplier
     _break_off: Any = 0.0        # consumption raises his breaking point
     _break_off_until: Any = 0.0   # ...and it wears off three minutes later
     _consume_mood_off: Any = 0.0  # the mood the fix added, to remove on expiry

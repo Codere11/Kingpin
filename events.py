@@ -531,11 +531,10 @@ class Director:
                        if getattr(a, "alive", True)])
         plots = len(getattr(camp, "farm_plots", ()) or ())
         score = {}
-        if self._available("wolves", 420.0):
-            # More likely when the camp has people and some wilderness left,
-            # but never a constant parade.  The smell field gives the pack a
-            # reason to be nearby; this cooldown stops it becoming a schedule.
-            score["wolves"] = 1.4 + min(2.2, len(people) / 6.0)
+        # WOLF PACK EVENT REMOVED.  Wolves still exist in the wild and hunt by
+        # scent; they are no longer an outside-event spawn that arrives on a
+        # camp.  The old WolfPack class is kept only for the F2/F4 test hooks
+        # and is not selected by the director.
         # Automatic rogue spawns are disabled until the crash after a rogue
         # arrival is fully reproduced.  F2 still tests the event manually.
         if plots and self._available("blight"):

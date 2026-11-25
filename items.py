@@ -146,6 +146,8 @@ REGISTRY: dict[str, ItemDef] = {
                           stackable=True, max_stack=100),
     "bed": ItemDef("bed", "Bedroll", "A white cotton bedroll. Place it and sleep.",
                    stackable=True, max_stack=10),
+    "door": ItemDef("door", "Door", "A wooden door for a camp wall. Walk through it.",
+                    stackable=True, max_stack=10),
 }
 
 
@@ -879,6 +881,19 @@ def _draw_chili(s: int) -> pygame.Surface:
         return surf
 
 
+def _draw_door(s: int) -> pygame.Surface:
+    """A small wooden door, top-down, with a bright handle."""
+    surf = pygame.Surface((s, s), pygame.SRCALPHA)
+    w, h = int(s * 0.42), int(s * 0.72)
+    x, y = (s - w) // 2, (s - h) // 2
+    pygame.draw.rect(surf, (126, 82, 46), (x, y, w, h), border_radius=2)
+    pygame.draw.rect(surf, (66, 40, 24), (x, y, w, h), 2, border_radius=2)
+    pygame.draw.line(surf, (86, 54, 30), (x + w // 2, y + 2),
+                     (x + w // 2, y + h - 2), 1)
+    pygame.draw.circle(surf, (216, 190, 100), (x + w - 5, y + h // 2), 2)
+    return surf
+
+
 def _draw_bed(s: int) -> pygame.Surface:
     """A small bed, top-down: mattress, blanket and a pillow."""
     surf = _canvas(s)
@@ -1004,6 +1019,7 @@ _DRAWERS = {
     "chili": _draw_chili,
     "chili_seed": _draw_chili_seed,
     "bed": _draw_bed,
+    "door": _draw_door,
 }
 
 _cache: dict[tuple[str, int], pygame.Surface] = {}

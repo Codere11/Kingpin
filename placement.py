@@ -331,6 +331,7 @@ def placement_box(x, y, placing, fence_horizontal, player, build_w, build_h):
               "smith": (64, 64), "mine": (64, 64),
               "stall": (64, 64), "dummy": (64, 64), "target": (64, 64),
               "fireplace": (64, 64), "chest": (32, 32), "sign": (32, 32),
+              "door": (32, 32),
               "foodbox": (32, 32), "workshop": (64, 64), "research": (64, 32),
               "weaver": (64, 64), "spice": (64, 64), "barracks": (96, 96)}
     if placing in _sizes:
@@ -588,6 +589,38 @@ def try_place(g):
         g.built_foodboxes.append(_fb)
         g.mark_dirty()
         g.toast("Food box built")
+        placing = None
+        pygame.mouse.set_visible(False)
+        return
+    if placing == "door":
+        # A 1x1 door for the camp wall.  It costs wood, but it is a walk-through
+        # opening -- not a solid block -- so a walled fireplace stays usable.
+        _tx = int(x // TILE)
+        _ty = int(y // TILE)
+        _br = pygame.Rect(_tx * TILE, _ty * TILE, TILE, TILE)
+        if not g.can_place(_br, sight):
+            g.toast("Can't build there")
+            return
+        if (_tx, _ty) in getattr(g, "built_blocks", {}):
+            g.toast("Something is already on that square")
+            return
+        _cost = g.build_materials("door")
+        if not g.test_mode:
+            for _it, _q in _cost.items():
+                if g.inventory.count_of(_it) < _q:
+                    g.toast("Need %d %s" % (_q, _it))
+                    placing = None
+                    pygame.mouse.set_visible(False)
+                    return
+            for _it, _q in _cost.items():
+                g.inventory.consume(_it, _q)
+        g.built_blocks[(_tx, _ty)] = "door"
+        try:
+            g._BUILD_VER[0] += 1
+        except Exception:
+            pass
+        g.mark_dirty()
+        g.toast("Door built   -%d wood" % int(_cost.get("wood", 0)))
         placing = None
         pygame.mouse.set_visible(False)
         return

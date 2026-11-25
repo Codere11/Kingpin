@@ -22,6 +22,7 @@ JOB_LISTS = ("workers", "loggers", "artisans", "researchers", "doctors",
 
 SKIP = {
     "g", "fireplace", "people", "people_count", "animals",
+    "_climate_room", "_climate_room_key",
     "orchard_state", "_breeding", "_breeding_people",
     "farm_tiles", "orchard_tiles", "ledger_lots", "_save_uid", "_save_key", "_saved",
     "farmers", "warriors", "handlers", "workers", "loggers", "artisans",

@@ -2210,10 +2210,11 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
     """
     hunger = npc.hunger
     house = npc.home_house
+    _climate = max(1.0, float(getattr(npc, "_climate_hunger", 1.0) or 1.0))
     if house is not None and house.warmth <= 0.0:
-        hunger = hunger + HUNGER_RATE * COLD_HUNGER * dt
+        hunger = hunger + HUNGER_RATE * COLD_HUNGER * _climate * dt
     else:
-        hunger = hunger + HUNGER_RATE * dt
+        hunger = hunger + HUNGER_RATE * _climate * dt
     if hunger > 130.0:
         hunger = 130.0
     _want = getattr(npc, "wants_product", None)

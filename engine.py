@@ -377,11 +377,10 @@ def run(g):
                 # the world does not stop for a menu.
                 pass
             elif (g.test_mode and event.type == pygame.KEYDOWN
-                  and event.key in (pygame.K_F2, pygame.K_F3, pygame.K_F4)):
-                # TEST MODE.  The old NPC-lab controls lived here; the lab is
-                # gone.  F3 puts a few horses just west of the player so the
-                # trot and coat can be watched.  F4 still starts the full
-                # event pack.
+                  and event.key in (pygame.K_F2, pygame.K_F3)):
+                # TEST MODE.  The old NPC-lab controls and the wolf-pack event
+                # are gone.  F3 puts a few horses just west of the player so
+                # the trot and coat can be watched.
                 try:
                     import events as _events
                     if event.key == pygame.K_F2:
@@ -389,8 +388,6 @@ def run(g):
                         g.toast("Rogue test")
                     elif event.key == pygame.K_F3:
                         _events.spawn_test_horses(g)
-                    elif event.key == pygame.K_F4:
-                        _events.spawn_test(g)
                 except Exception as _ev_exc:
                     g.toast("Event test: %s" % _ev_exc)
                     try:
@@ -1935,7 +1932,9 @@ def run(g):
             try:
                 import block as _block
                 g._block_cols = []
-                for (btx, bty) in getattr(g, "built_blocks", {}):
+                for (btx, bty), _kind in getattr(g, "built_blocks", {}).items():
+                    if _kind == "door":
+                        continue          # a door is deliberately walk-through
                     _br = pygame.Rect(btx * _block.TILE, bty * _block.TILE,
                                       _block.TILE, _block.TILE)
                     if _br.inflate(60, 60).collidepoint(g.player.x, g.player.y):
@@ -3673,7 +3672,9 @@ def run(g):
                       if (house.x - g.player.x) ** 2 + (house.y - g.player.y) ** 2
                       < (g.reach + max(house.w, house.h)) ** 2]
         # Placed planks block sight like tree trunks.
-        for (_tx, _ty) in getattr(g, "built_blocks", {}):
+        for (_tx, _ty), _kind in getattr(g, "built_blocks", {}).items():
+            if _kind == "door":
+                continue
             _br = pygame.Rect(_tx * TILE, _ty * TILE, TILE, TILE)
             if _br.colliderect(pygame.Rect(g.player.x - g.reach, g.player.y - g.reach,
                                            g.reach * 2, g.reach * 2)):

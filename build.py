@@ -14,6 +14,7 @@ import pygame
 BUILDINGS = [
     {"id": "fence", "name": "Fence", "wood": 10, "where": "outside"},
     {"id": "gate", "name": "Gate", "wood": 30, "where": "outside"},
+    {"id": "door", "name": "Door", "wood": 10, "where": "outside"},
     # THE TRADES, OUT OF DOORS. A bench, a brewhouse, a forge and a shaft
     # are things a man puts on his own ground -- not only inside a house.
     # Only legal in the wilderness or in the player's own hub (see

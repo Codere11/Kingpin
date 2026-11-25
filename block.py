@@ -9,7 +9,7 @@ import math
 
 
 # what counts as a block you can place in the hand
-BUILDABLE = ("wood", "hide", "bed")
+BUILDABLE = ("wood", "hide", "bed", "door")
 
 
 # colours: fill, light bevel, dark shadow, grain/edge
@@ -18,6 +18,8 @@ _COLORS = {
              "dark": (60, 38, 22), "edge": (78, 50, 28)},
     "hide": {"fill": (124, 86, 54), "light": (166, 122, 74),
              "dark": (66, 42, 26), "edge": (82, 54, 34)},
+    "door": {"fill": (126, 82, 46), "light": (176, 126, 72),
+             "dark": (66, 40, 24), "edge": (86, 54, 30)},
 }
 
 
@@ -25,6 +27,16 @@ def _fill_block(screen, x, y, kind):
     """The block's face only -- no border, so a row stays one solid wall."""
     c = _COLORS[kind]
     pygame.draw.rect(screen, c["fill"], (x, y, TILE, TILE))
+    if kind == "door":
+        # A door in a wall: two vertical leaves and a dark handle.  It is
+        # deliberately drawn like a block so it reads as part of the wall,
+        # but it is not in the collision list and can be walked through.
+        pygame.draw.rect(screen, c["dark"], (x + 2, y + 2, TILE - 4, TILE - 4), 2)
+        pygame.draw.line(screen, c["edge"], (x + TILE // 2, y + 3),
+                         (x + TILE // 2, y + TILE - 4), 2)
+        pygame.draw.circle(screen, (216, 190, 100),
+                           (x + TILE // 2 + 4, y + TILE // 2), 2)
+        return
     if kind == "wood":
         for i in range(2):
             yy = y + 9 + i * 12
@@ -140,6 +152,10 @@ def place_block(g, tx, ty, kind):
         return False
     g.inventory.consume(kind, 1)
     g.built_blocks[(tx, ty)] = kind
+    try:
+        g._BUILD_VER[0] += 1
+    except Exception:
+        pass
     _clear_cell(g, tx, ty)
     return True
 
