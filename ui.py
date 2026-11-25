@@ -386,6 +386,13 @@ class InventoryPanel:
             text = "click to move   ·   right-click to split   ·   E to close"
         label = self.font_tiny.render(text, True, DIM if self.hover < 0 else TEXT)
         screen.blit(label, (panel.centerx - label.get_width() // 2, panel.bottom - 22))
+        if 0 <= self.hover < len(rects):
+            try:
+                import itemstory
+                itemstory.draw_tooltip(screen, self.inv.slots[self.hover],
+                                        pygame.mouse.get_pos(), self.font_tiny)
+            except Exception:
+                pass
 
         if self.held is not None:
             mx, my = pygame.mouse.get_pos()

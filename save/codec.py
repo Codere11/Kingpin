@@ -190,7 +190,8 @@ def stack_to_data(stack):
     if not is_simple(payload):
         payload = None
     return [stack.defn.id, int(stack.count),
-            getattr(stack, "quality", None), payload]
+            getattr(stack, "quality", None), payload,
+            getattr(stack, "provenance", None)]
 
 
 def data_to_stack(data):
@@ -203,6 +204,8 @@ def data_to_stack(data):
         stack = ItemStack(items.get(data[0]), int(data[1]), quality)
         if len(data) > 3 and data[3] is not None:
             stack.payload = data[3]
+        if len(data) > 4 and data[4] is not None:
+            stack.provenance = data[4]
         return stack
     except Exception:
         return None

@@ -860,7 +860,10 @@ def craft(npc, chest) -> dict | None:
             if gun not in ok:
                 return None
         npc.made_guns = n + 1
-        bag(npc).add(gun, 1)
+        _origin = getattr(getattr(getattr(npc, "native_camp", None), "g", None),
+                          "player_camp", None)
+        _origin = getattr(_origin, "name", "") or "a workshop"
+        bag(npc).add(gun, 1, maker=npc, origin=_origin, owner=npc)
         bag(npc).add(AMMO_ITEM, SMITH_AMMO)
         return {"spent": "iron", "made": {gun: 1, AMMO_ITEM: SMITH_AMMO}}
     spent = None
@@ -889,7 +892,10 @@ def craft(npc, chest) -> dict | None:
     if not item:
         return None
     n = int(r.get("out", 1) or 1)
-    bag(npc).add(item, n, _grade)
+    _origin = getattr(getattr(getattr(npc, "native_camp", None), "g", None),
+                      "player_camp", None)
+    _origin = getattr(_origin, "name", "") or "the camp"
+    bag(npc).add(item, n, _grade, maker=npc, origin=_origin, owner=npc)
     # WHAT HE LAST MADE IS THE HONEST ANSWER TO "what quality do you make?".
     npc.last_grade = int(_grade)
     npc.last_item = item

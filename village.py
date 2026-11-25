@@ -468,6 +468,7 @@ class NPC:
     wants_product: Any = None
     wants_drink: Any = ""
     consumed_items: Any = None    # item -> times he has actually tried it
+    known_items: Any = None       # item uid -> what this man knows about it
     use_fx: Any = None
     activity: Any = ""            # dance / chase, for the social antics
     _antic_active: Any = False

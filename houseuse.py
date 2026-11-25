@@ -183,6 +183,11 @@ def work_action(key, smith_shop, player, now, economy, inventory, skills,
                    (getattr(wp.worker, "tool_orders", ()) or ())):
                 kindw = want
                 break
-        inventory.add(kindw, 1, skills.leaf_grade())
+        _maker = getattr(getattr(wp, "worker", None), "name", None) or \
+                 getattr(player, "name", "you")
+        _origin = getattr(getattr(getattr(wp, "worker", None), "village", None),
+                        "name", None) or "the forge"
+        inventory.add(kindw, 1, skills.leaf_grade(), maker=_maker,
+                      origin=_origin, owner=player)
         return 2.0, "Forged a %s" % kindw
     return 0.0, ""

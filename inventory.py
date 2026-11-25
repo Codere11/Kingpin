@@ -17,6 +17,8 @@ class ItemStack:
     # count: a Secret Folder is one dead agent's messages, and which agent's is
     # the whole point.
     payload: object = None
+    # A unique thing's plain-data biography: maker, origin, owner, history.
+    provenance: dict | None = None
 
 
 class Inventory:
@@ -32,7 +34,8 @@ class Inventory:
         return None
 
     def add(self, item_id: str, count: int = 1,
-            quality: int | None = None) -> int | None:
+            quality: int | None = None, maker=None, origin=None,
+            owner=None, now: float = 0.0) -> int | None:
         """Add items, stacking up to max_stack and spilling into new slots."""
         defn = items.get(item_id)
         if item_id == "coin":
@@ -85,7 +88,22 @@ class Inventory:
                 slot = self._first_empty()
                 if slot is None:
                     break
-                self.slots[slot] = ItemStack(defn, 1)
+                stack = ItemStack(defn, 1)
+                # Tools, weapons, armour and other non-stacking objects get a
+                # biography the moment they enter the world.  Bulk goods stay
+                # as cheap counts.
+                try:
+                    import itemstory
+                    if itemstory.is_unique(item_id):
+                        stack.provenance = itemstory.make(
+                            item_id, maker=maker, origin=origin,
+                            owner=owner, now=now)
+                        itemstory.record(stack, "made", actor=maker,
+                                         place=origin, now=now)
+                        itemstory.remember(owner, stack)
+                except Exception:
+                    pass
+                self.slots[slot] = stack
                 remaining -= 1
                 if first is None:
                     first = slot
