@@ -36,6 +36,7 @@ BUILDINGS = [
      "cost": {"iron_bar": 300, "wood": 300}, "needs": "army", "where": "outside"},
     {"id": "workshop", "name": "Workbench", "wood": 100, "where": "outside"},
     {"id": "brewery", "name": "Brewhouse", "wood": 120, "where": "outside"},
+    {"id": "brew_table", "name": "Brewer's bench", "wood": 60, "where": "inside"},
     # THE PLAYER'S OWN SHOP. It stands inside his hub (main refuses it
     # anywhere else) and it is the one place his goods may be sold from.
     {"id": "stall", "name": "Market stall", "wood": 100, "where": "outside"},
@@ -43,8 +44,6 @@ BUILDINGS = [
     # post is what makes him better than a man with a gun.
     {"id": "dummy", "name": "Training dummy", "wood": 40, "where": "outside"},
     {"id": "target", "name": "Archery target", "wood": 60, "where": "outside"},
-    # A FIREPLACE: twenty wood, and it lights the night around it.
-    {"id": "fireplace", "name": "Fireplace", "wood": 20, "where": "outside"},
     # A CHEST: 1x2 on the mesh, 64 slots -- double the player's 32.
     {"id": "chest", "name": "Chest", "wood": 50, "where": "outside"},
     # A FORGE IS IRON -- not wood alone.

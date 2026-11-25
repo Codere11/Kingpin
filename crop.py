@@ -117,6 +117,18 @@ def chest_filter_items(t, h):
         out.append("chili")
     # Sauce is bottled anywhere a spice stall stands.
     out.append("sauce")
+    # LOCAL BREWING.  The chest lid can filter mash, wort and the finished
+    # drinks, so a brewer can keep wheat/berries/agave and their products
+    # separate instead of dumping everything into one undifferentiated bin.
+    try:
+        import economy as _eco
+        for _item in ("wheat", "berries", "agave",
+                      "wheat_wort", "berry_wort", "agave_wort",
+                      "beer", "liqueur", "mezcal"):
+            if _item not in out:
+                out.append(_item)
+    except Exception:
+        pass
     return out
 
 # the leaf plant takes its colour from where it grows

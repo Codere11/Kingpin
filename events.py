@@ -31,6 +31,7 @@ def _people(camp):
     seen = set()
     out = []
     for attr in ("farmers", "warriors", "handlers", "workers", "loggers",
+                 "brewers",
                  "artisans", "researchers", "doctors", "traders", "miners",
                  "smiths", "weavers", "spicemen", "gunsmiths", "unemployed"):
         for p in (getattr(camp, attr, ()) or ()):

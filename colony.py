@@ -65,6 +65,7 @@ def make_camp(g) -> object:
         "researchers": [],         # the conquered RESEARCHERS (at the bench)
         "doctors": [],             # the conquered DOCTORS (at the Medicine Hut)
         "traders": [],             # conquered TRADERS (chests -> ship)
+        "brewers": [],             # conquered BREWERS (mash -> local drink)
         "miners": [],              # the conquered MINERS (iron in the snow)
         "smiths": [],              # the conquered SMITHS (iron bars at the forge)
         "weavers": [],             # the conquered WEAVERS (cotton to cloth at the loom)
@@ -125,6 +126,8 @@ def _campify(s, g) -> None:
         s.doctors = []
     if getattr(s, "traders", None) is None:
         s.traders = []
+    if getattr(s, "brewers", None) is None:
+        s.brewers = []
     # the camp's pool is its living farmers (the native `people` was a count)
     s.people = [n for n in getattr(s, "farmers", ()) or ()
                 if getattr(n, "alive", True)]
@@ -472,6 +475,7 @@ def _assign_jobs(g, camp, sign) -> None:
         ("researcher", count("researchers")),
         ("doctor", count("doctors")),
         ("trader", count("traders")),
+        ("brewer", count("brewers")),
         ("miner", count("miners")),
         ("smith", count("smiths")),
         ("weaver", count("weavers")),
@@ -479,13 +483,14 @@ def _assign_jobs(g, camp, sign) -> None:
         ("gunsmith", count("gunsmiths")),
     ]
     for attr in ("workers", "loggers", "artisans", "researchers", "doctors",
-                 "traders", "miners", "smiths", "weavers", "spicemen",
-                 "gunsmiths", "unemployed"):
+                 "traders", "brewers", "miners", "smiths", "weavers",
+                 "spicemen", "gunsmiths", "unemployed"):
         setattr(camp, attr, [])
     roster = {
         "farmer": "workers", "logger": "loggers", "artisan": "artisans",
         "researcher": "researchers", "doctor": "doctors",
-        "trader": "traders", "miner": "miners", "smith": "smiths",
+        "trader": "traders", "brewer": "brewers", "miner": "miners",
+        "smith": "smiths",
         "weaver": "weavers",
         "spiceman": "spicemen", "gunsmith": "gunsmiths",
     }
@@ -500,7 +505,10 @@ def _assign_jobs(g, camp, sign) -> None:
             n.farm_plot = None
             n.artisan_bench = None
             n.native_role = role
-            n.job = role
+            # The work recipes know the trade as "brewery"; the assignment
+            # panel calls the person a brewer.  Keep the visible role separate
+            # from the recipe key.
+            n.job = "brewery" if role == "brewer" else role
             getattr(camp, roster[role]).append(n)
             if role == "smith" and getattr(n, "smith_product", None) is None:
                 n.smith_product = "iron_bar"

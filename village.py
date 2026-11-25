@@ -1771,6 +1771,71 @@ class NPC:
             self.carry_grade[leaf] = quality.merge(
                 self.carry_grade.get(leaf, 3), old_n, g, taken)
 
+    def _work_brewery(self, dt: float) -> None:
+        """A brewer takes local mash to the brewhouse and makes local drink.
+
+        Mash is any local staple in economy.MASH: wheat -> beer, berries ->
+        liqueur, agave -> mezcal.  The products go back into his pack and then
+        into a chest, so the chest filter can sort them.
+        """
+        camp = getattr(self, "native_camp", None)
+        g = getattr(camp, "g", None) if camp is not None else None
+        if g is None:
+            self._native_idle(dt)
+            return
+        bench = self._nearest_workplace(g, "brewery")
+        if bench is None:
+            bench = self._nearest_workplace(g, "brew_table")
+        if bench is None or getattr(bench, "broken", False):
+            self._native_idle(dt)
+            return
+        drinks = ("beer", "liqueur", "mezcal")
+        # Deliver finished drink before starting another batch.
+        if any(int(self.carry.get(i, 0) or 0) > 0 for i in drinks):
+            if self._deposit_to_chest(dt):
+                return
+        if self._wp_go(bench, dt, 22.0):
+            return
+        # Which mash is in his hands?
+        mash = None
+        for item in economy.MASH:
+            if int(self.carry.get(item, 0) or 0) >= 5:
+                mash = item
+                break
+        if mash is None:
+            for item in economy.MASH:
+                chest = self._chest_with(item, 5)
+                if chest is None:
+                    continue
+                if math.hypot(chest.x - self.x, chest.y - self.y) > 22.0:
+                    self._step_toward(chest.x, chest.y, dt)
+                    return
+                taken, grade = self._take_from_chest(chest, item, 5)
+                if taken >= 5:
+                    self.carry[item] = int(self.carry.get(item, 0) or 0) + taken
+                    self.carry_grade[item] = grade
+                    mash = item
+                break
+        if mash is None:
+            self._wait_at_post(bench, dt)
+            return
+        self.produce_acc = float(getattr(self, "produce_acc", 0.0)) + dt * mood.work_mult(self)
+        if self.produce_acc < 4.0:
+            return
+        self.produce_acc = 0.0
+        self.carry[mash] = int(self.carry.get(mash, 0) or 0) - 5
+        if self.carry.get(mash, 0) <= 0:
+            self.carry.pop(mash, None)
+            self.carry_grade.pop(mash, None)
+        drink = {"wheat": "beer", "berries": "liqueur",
+                 "agave": "mezcal"}.get(mash)
+        if drink is None:
+            return
+        self.carry[drink] = int(self.carry.get(drink, 0) or 0) + 5
+        self._snd("bench", min_gap=0.8)
+        self._did_work()
+        self.skills.gain_farming(0.05)
+
     def _nearest_research_bench(self, g):
         """The research bench this man works at, or None."""
         benches = [wp for wp in getattr(g, "placed_work", ()) or ()
@@ -3070,6 +3135,9 @@ class NPC:
             return
         if _nat and getattr(self, "native_role", "") == "trader":
             self._work_trader(dt)
+            return
+        if _nat and getattr(self, "native_role", "") == "brewer":
+            self._work_brewery(dt)
             return
         if _nat and getattr(self, "native_role", "") == "miner":
             self._work_mine(dt)

@@ -798,7 +798,7 @@ class SignPanel:
         jobs = [("Farmers", "farmers"), ("Loggers", "loggers"),
                 ("Artisans", "artisans"), ("Researchers", "researchers"),
                 ("Doctors", "doctors"), ("Traders", "traders"),
-                ("Miners", "miners")]
+                ("Brewers", "brewers"), ("Miners", "miners")]
         if self.show_smiths is not None and self.show_smiths():
             jobs.append(("Smiths", "smiths"))
         if self.show_weavers is not None and self.show_weavers():
@@ -810,17 +810,22 @@ class SignPanel:
         return jobs
 
     def _rects(self, sw: int, sh: int):
+        """TWO COLUMNS OF JOBS -- the old single column grew past the screen."""
         jobs = self._jobs()
-        w = 380
-        h = 66 + len(jobs) * 52 + 46
+        per_col = max(1, (len(jobs) + 1) // 2)
+        w = 620
+        h = 66 + per_col * 52 + 46
         x0, y0 = (sw - w) // 2, (sh - h) // 2
         panel = pygame.Rect(x0, y0, w, h)
         rows = []
         for i, (label, key) in enumerate(jobs):
-            ry = y0 + 66 + i * 52
-            minus = pygame.Rect(x0 + w - 150, ry, 40, 34)
-            plus = pygame.Rect(x0 + w - 52, ry, 40, 34)
-            rows.append((label, key, minus, plus, ry))
+            col = i // per_col
+            row = i % per_col
+            ry = y0 + 66 + row * 52
+            lx = x0 + 22 + col * 294
+            minus = pygame.Rect(lx + 170, ry, 38, 34)
+            plus = pygame.Rect(lx + 218, ry, 38, 34)
+            rows.append((label, key, minus, plus, ry, lx))
         return panel, rows
 
     def handle_event(self, event):
@@ -831,13 +836,13 @@ class SignPanel:
         total = self._total()
         if event.type == pygame.MOUSEMOTION:
             self.hover = None
-            for _label, key, minus, plus, _ry in rows:
+            for _label, key, minus, plus, _ry, _lx in rows:
                 if minus.collidepoint(event.pos):
                     self.hover = (key, -1)
                 elif plus.collidepoint(event.pos):
                     self.hover = (key, +1)
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            for _label, key, minus, plus, _ry in rows:
+            for _label, key, minus, plus, _ry, _lx in rows:
                 if minus.collidepoint(event.pos):
                     setattr(self.sign, key, max(0, int(getattr(self.sign, key, 0)) - 1))
                     self.sync()
@@ -867,10 +872,10 @@ class SignPanel:
         title = self.font.render("JOBS", True, TEXT)
         screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 18))
         total = self._total()
-        for label, key, minus, plus, ry in rows:
+        for label, key, minus, plus, ry, lx in rows:
             val = int(getattr(self.sign, key, 0))
             t = self.font_small.render("%s" % label, True, (206, 184, 122))
-            screen.blit(t, (panel.left + 26, ry + 8))
+            screen.blit(t, (lx, ry + 8))
             for rect, sym, hkey in ((minus, "-", (key, -1)), (plus, "+", (key, +1))):
                 hovered = (self.hover == hkey)
                 pygame.draw.rect(screen, (58, 104, 62) if hovered else (44, 46, 52),
@@ -881,7 +886,7 @@ class SignPanel:
                 screen.blit(tt, (rect.centerx - tt.get_width() // 2,
                                  rect.centery - tt.get_height() // 2))
             n = self.font.render(str(val), True, TEXT)
-            screen.blit(n, (minus.left - 40 - n.get_width(), ry + 8))
+            screen.blit(n, (minus.left - 34 - n.get_width(), ry + 8))
         used = sum(int(getattr(self.sign, k, 0)) for _l, k in self._jobs())
         unemp = max(0, total - used)
         u = self.font_small.render("Unemployed:  %d" % unemp, True, (176, 168, 152))

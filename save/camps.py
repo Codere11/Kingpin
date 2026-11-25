@@ -17,7 +17,7 @@ from . import people as people_mod
 from . import store
 
 JOB_LISTS = ("workers", "loggers", "artisans", "researchers", "doctors",
-             "traders", "miners", "smiths", "weavers", "spicemen", "gunsmiths",
+             "traders", "brewers", "miners", "smiths", "weavers", "spicemen", "gunsmiths",
              "unemployed", "farmers", "warriors", "handlers")
 
 SKIP = {
