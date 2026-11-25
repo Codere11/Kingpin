@@ -305,11 +305,29 @@ class TradeMenu:
             stack = self.inv.slots[index]
             if sold <= 0 or stack is None:
                 return False
+            _item = stack.defn.id
+            _gen = getattr(stack, "genetics", None)
             stack.count -= sold
             if stack.count <= 0:
                 self.inv.slots[index] = None
-            self._wants.pop(stack.defn.id, None)      # his want has changed
+            self._wants.pop(_item, None)      # his want has changed
             self.inv.add("coin", coins)
+            # THE GOODS ACTUALLY REACH THE BUYER.  Without this the trader
+            # paid for a bottle and had nothing to drink, so no local brew
+            # could ever affect an NPC's mood.
+            try:
+                self.npc.stock[_item] = int(self.npc.stock.get(_item, 0)) + sold
+                if _gen is not None:
+                    _sg = getattr(self.npc, "stock_genetics", None)
+                    if not isinstance(_sg, dict):
+                        _sg = self.npc.stock_genetics = {}
+                    _old = _sg.get(_item)
+                    if _old is None:
+                        _sg[_item] = _gen
+                    elif _old != _gen:
+                        _sg[_item] = None
+            except Exception:
+                pass
             record_sale(self.npc, stack.defn.id, sold)   # the day's budget
             # A LUXURY KEEPS WHO SOLD IT. If the militia catches him drinking
             # it and he talks, the name he gives is the player's.

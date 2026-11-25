@@ -333,7 +333,7 @@ def ledger_value(village, item: str) -> float:
     return max(0.05, base * quality.SELL_VALUE[quality.clamp(grade)])
 
 
-def has_tried(npc, item: str) -> bool:
+def has_tried(npc, item) -> bool:
     """True once this man has actually consumed one of this product."""
     if not item:
         return False
@@ -1197,6 +1197,22 @@ def _settle(village, item, price, qty, seller, buyer) -> int:
         flow(village, '_settle', (cut))
         village.ledger_coins += cut
     buyer.stock[item] = buyer.stock.get(item, 0) + qty
+    try:
+        _sg = getattr(seller, "stock_genetics", None) if seller is not None else None
+        if isinstance(_sg, dict) and item in _sg:
+            bg = getattr(buyer, "stock_genetics", None)
+            if not isinstance(bg, dict):
+                bg = buyer.stock_genetics = {}
+            incoming = _sg.get(item)
+            old = bg.get(item)
+            if incoming is None:
+                bg[item] = None          # regular stock mixed in
+            elif old is not None and old != incoming:
+                bg[item] = None          # two local strains mixed
+            elif old is None:
+                bg[item] = incoming
+    except Exception:
+        pass
     if item in LUXURY:
         _record_seller(buyer, item, seller)
     if seller is not None:
@@ -2305,7 +2321,9 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
                 npc.use_fx = (drink, USE_FX_SECONDS)
                 try:
                     import mind as _mind
-                    _mind.consume(npc, drink, now)
+                    _sg = getattr(npc, "stock_genetics", None)
+                    _gen = _sg.get(drink) if isinstance(_sg, dict) else None
+                    _mind.consume(npc, drink, now, genetics=_gen)
                 except Exception:
                     pass
             elif has_tried(npc, "govbeer") and stock.get("govbeer", 0) > 0:

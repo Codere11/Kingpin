@@ -469,6 +469,7 @@ class NPC:
     wants_drink: Any = ""
     consumed_items: Any = None    # item -> times he has actually tried it
     known_items: Any = None       # item uid -> what this man knows about it
+    stock_genetics: Any = None    # item id -> local lot genetics in his stock
     use_fx: Any = None
     activity: Any = ""            # dance / chase, for the social antics
     _antic_active: Any = False
@@ -1609,6 +1610,22 @@ class NPC:
                 continue
             take = min(remaining, stack.count)
             q = stack.quality if stack.defn.quality else 3
+            try:
+                if take > 0:
+                    _sg = getattr(stack, "genetics", None)
+                    sg = getattr(self, "stock_genetics", None)
+                    if not isinstance(sg, dict):
+                        sg = self.stock_genetics = {}
+                    old = sg.get(item)
+                    if _sg is None:
+                        if old is not None:
+                            sg[item] = None       # regular mixed in
+                    elif old is not None and old != _sg:
+                        sg[item] = None           # two local lots mixed
+                    elif old is None:
+                        sg[item] = _sg
+            except Exception:
+                pass
             grades.append((q, take))
             stack.count -= take
             remaining -= take
@@ -1850,6 +1867,10 @@ class NPC:
                 if not isinstance(cg, dict):
                     cg = self.carry_genetics = {}
                 cg[drink] = _gen
+                sg = getattr(self, "stock_genetics", None)
+                if not isinstance(sg, dict):
+                    sg = self.stock_genetics = {}
+                sg[drink] = _gen
         except Exception:
             pass
         self._snd("bench", min_gap=0.8)
