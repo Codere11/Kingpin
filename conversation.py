@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 
+import climate
 import economy
 import persona
 import relationships
@@ -74,6 +75,47 @@ def _reply_for(target, kind):
     return rng.choice(lines) if rng is not None else lines[0]
 
 
+def _cold_hint(npc, target, g):
+    """One person per camp per few minutes points out the obvious.
+
+    The player should learn the shelter rule from the people living with it,
+    not from a manual.  The cooldown is on the CAMP, so a whole settlement
+    does not line up to say the same sentence.
+    """
+    if not _player(target):
+        return None
+    camp = getattr(npc, "native_camp", None)
+    if camp is None or not getattr(camp, "conquered", False):
+        return None
+    if not bool(getattr(g, "night", False)):
+        return None
+    now = float(getattr(g, "now", 0.0))
+    if now < float(getattr(camp, "_cold_hint_t", 0.0)):
+        return None
+    try:
+        temp = float(g.world.temperature(camp.x, camp.y))
+    except Exception:
+        temp = 0.5
+    if temp > 0.58:
+        return None                         # a hot climate is not this lesson
+    cells = climate.room(g, camp)
+    bed = getattr(npc, "bed", None)
+    if cells and bed is not None and climate.bed_inside(g, camp, bed):
+        return None
+    if cells:
+        text = ("The fire is walled now, but my bedroll is still outside it. "
+                "If I move it inside the door, I will sleep warm.")
+    else:
+        text = ("It is cold at night. If we put four walls around the fire and "
+                "leave a door, we would all sleep warmer.")
+    camp._cold_hint_t = now + 180.0
+    reply = ("Then we will build it before the next night.",
+             "Good. A wall and a door will do more than another blanket.",
+             "Tell the others. We will make room by the fire.")
+    rng = getattr(npc, "rng", None)
+    return ("need", text, rng.choice(reply) if rng is not None else reply[0])
+
+
 def _speech(npc, target, g):
     """A line with a little life in it, plus the listener's reply.
 
@@ -111,6 +153,10 @@ def _speech(npc, target, g):
                     "I am not broken. I am tired in a way sleep does not fix, and I do not know what to do with that.",
                     "Everyone keeps asking me for things. Nobody has asked how I am, so I am telling you.")),
                     _reply_for(target, "need"))
+
+        cold = _cold_hint(npc, target, g)
+        if cold is not None:
+            return cold
 
         if _player(target):
             product = getattr(npc, "wants_product", None)
