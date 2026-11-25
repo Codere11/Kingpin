@@ -148,16 +148,22 @@ class TreeSprites:
 
     def stump(self):
         if self._stump is None:
-            r, pad = 17, 5
-            w = h = r * 2 + pad * 2
+            # A third of the old stump size.
+            k = 1.0 / 3.0
+            r, pad = 17 * k, 5 * k
+            w = h = max(8, int(r * 2 + pad * 2))
             surf = pygame.Surface((w, h), pygame.SRCALPHA)
             cx, cy = w / 2.0, h - pad
-            pygame.draw.ellipse(surf, (12, 24, 12, 70), (cx - 20, cy - 7, 40, 14))
-            pygame.draw.ellipse(surf, (112, 78, 46), (cx - r, cy - r * 0.85, r * 2, r * 1.7))
-            pygame.draw.ellipse(surf, (70, 46, 26), (cx - r, cy - r * 0.85, r * 2, r * 1.7), 2)
-            pygame.draw.ellipse(surf, (188, 152, 106), (cx - r * 0.7, cy - r * 0.6, r * 1.4, r * 1.2))
-            pygame.draw.ellipse(surf, (150, 118, 80), (cx - r * 0.35, cy - r * 0.3, r * 0.7, r * 0.6))
-            pygame.draw.line(surf, (150, 118, 80), (cx, cy - r * 0.55), (cx + r * 0.55, cy + r * 0.1), 2)
+            pygame.draw.ellipse(surf, (12, 24, 12, 70),
+                                (cx - 20 * k, cy - 7 * k, 40 * k, 14 * k))
+            pygame.draw.ellipse(surf, (112, 78, 46),
+                                (cx - r, cy - r * 0.85, r * 2, r * 1.7))
+            pygame.draw.ellipse(surf, (70, 46, 26),
+                                (cx - r, cy - r * 0.85, r * 2, r * 1.7), 1)
+            pygame.draw.ellipse(surf, (188, 152, 106),
+                                (cx - r * 0.7, cy - r * 0.6, r * 1.4, r * 1.2))
+            pygame.draw.line(surf, (150, 118, 80),
+                             (cx, cy - r * 0.55), (cx + r * 0.55, cy + r * 0.1), 1)
             self._stump = (surf, cx, cy)
         return self._stump
 
@@ -486,6 +492,9 @@ class TreeSprites:
                 u = (j + rng.uniform(-0.35, 0.35)) / max(1, n)
                 bx = cx + (u * 2.0 - 1.0) * lw
                 by = ly - (1.0 - abs(u * 2.0 - 1.0)) * lh + rng.uniform(-3.0, 3.0)
+                # A needle cluster grows from a twig, never floats unsupported.
+                pygame.draw.line(canopy, _darken(base, 28),
+                                 (cx, ly), (bx, by), 1)
                 TreeSprites._leaf_cluster(canopy, bx, by,
                                            radius * rng.uniform(0.035, 0.060),
                                            rng, base, 0.25 - f * 0.45)
