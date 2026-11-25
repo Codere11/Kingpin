@@ -1453,7 +1453,7 @@ class Bison(Enemy):
             fx, fy = 1.0, 0.0
         direction = int(round(math.atan2(fy, fx) / (math.pi / 4.0))) % 8
         baby = bool(getattr(self, "baby", False))
-        zoom = 0.62 if baby else 0.92
+        zoom = 0.64 if baby else 1.0
         hit = float(getattr(self, "hit_flash", 0.0)) > 0.0
         charge = bool(getattr(self, "aggro", False)
                       and not getattr(self, "tamed", False))

@@ -29,13 +29,13 @@ FW, FH = 108, 88
 AX, AY = 54, 58
 
 PALETTE = {
-    "coat": (92, 62, 40), "coat2": (116, 80, 50),
-    "dark": (50, 34, 24), "belly": (134, 98, 62),
-    "shag": (66, 44, 30), "hump": (128, 88, 54),
-    "horn": (218, 200, 166), "horn_d": (150, 128, 96),
-    "hoof": (34, 26, 20), "eye": (12, 9, 7),
-    "nose": (28, 20, 16), "beard": (58, 40, 28),
-    "dust": (154, 126, 88),
+    "coat": (108, 72, 46), "coat2": (144, 100, 62),
+    "dark": (56, 37, 25), "belly": (166, 122, 78),
+    "shag": (80, 52, 34), "hump": (154, 105, 64),
+    "horn": (224, 208, 176), "horn_d": (156, 132, 98),
+    "hoof": (36, 27, 21), "eye": (12, 9, 7),
+    "nose": (30, 21, 17), "beard": (65, 43, 30),
+    "dust": (172, 142, 98),
 }
 
 
@@ -121,10 +121,10 @@ class _P:
         self.oval(u - 1.0, v, z - 2.2, 2.6, 2.3, self.col("beard"))
 
     def legs(self):
-        legs = ((-12.0, -5.6, 0.0, 3.3, True),
-                (-12.0, 5.6, math.pi, 3.3, True),
-                (10.0, -5.2, math.pi, 3.0, False),
-                (10.0, 5.2, 0.0, 3.0, False))
+        legs = ((-12.0, -6.0, 0.0, 3.8, True),
+                (-12.0, 6.0, math.pi, 3.8, True),
+                (9.0, -5.6, math.pi, 3.5, False),
+                (9.0, 5.6, 0.0, 3.5, False))
         for (hu, hv, off, thick, hind) in legs:
             sw = math.sin(self.phase + off) * (2.8 if hind else 2.4)
             lift = max(0.0, math.cos(self.phase + off)) * 1.2
@@ -135,113 +135,131 @@ class _P:
             hoof = self.p(hu + sw, hv, -9.5 + lift)
             self.line(hip, knee, self.col("coat"), thick)
             self.line(knee, hoof, self.col("shag"), max(1.8, thick * 0.65))
-            self.oval(hu + sw, hv, -9.6 + lift, 2.4, 1.35, self.col("hoof"))
+            self.oval(hu + sw, hv, -9.6 + lift, 2.8, 1.55, self.col("hoof"))
             if hind:
                 self.oval(hu, hv, 7.5, 5.4, 4.6, self.col("coat2"))
 
     def body(self):
-        # barrel, low rump and the enormous shoulder hump
-        self.oval(-3.0, 0.0, 13.0, 17.0, 9.0, self.col("coat"),
+        # A buffalo is a round barrel with a mountain of shoulder on top.
+        # Keep the mass broad and the edge broken by long hanging fur.
+        self.oval(-2.0, 0.0, 15.0, 16.5, 13.0, self.col("coat"),
                   self.col("dark"))
-        self.oval(-14.0, 0.0, 12.0, 7.6, 8.0, self.col("coat2"))
-        self.oval(7.0, 0.0, 21.0, 9.5, 8.0, self.col("hump"))
-        self.oval(0.0, 0.0, 8.0, 13.0, 6.2, self.col("belly"))
+        self.oval(-14.0, 0.0, 14.0, 8.8, 10.8, self.col("coat2"))
+        self.oval(7.0, 0.0, 23.0, 10.0, 11.5, self.col("hump"))
+        self.oval(0.0, 0.0, 9.0, 14.0, 8.8, self.col("belly"))
+        self.oval(10.5, 0.0, 14.0, 7.2, 9.0, self.col("coat2"))
+        # long skirt of hair under the barrel
+        for u in range(-18, 15, 2):
+            self.tuft((u - 1.0, -6.0, 5.7),
+                      (u + 1.0, 6.0, 5.7),
+                      (u - 0.7, 0.0, -0.3 - (u % 3) * 0.28),
+                      self.col("shag" if (u // 2) % 2 else "beard"))
         # shaggy shoulder mantle
-        for i, (u, w, z) in enumerate(((2, 7.0, 26.0), (7, 7.2, 29.0),
-                                        (12, 6.0, 27.0), (-2, 6.8, 23.0))):
-            self.tuft((u - 1.3, -w * 0.30, z),
-                      (u + 1.3, w * 0.30, z),
-                      (u - 1.6, 0.0, z + 1.5 + (i % 2) * 0.7),
+        for i, (u, w, z) in enumerate(((1, 8.0, 27.0), (6, 8.5, 30.0),
+                                        (11, 7.2, 28.5), (-3, 7.6, 25.0))):
+            self.tuft((u - 1.6, -w * 0.32, z),
+                      (u + 1.6, w * 0.32, z),
+                      (u - 1.8, 0.0, z + 1.8 + (i % 2) * 0.8),
                       self.col("shag" if i % 2 else "dark"))
-        for u, side in ((-16, -1), (-11, 1), (0, -1), (8, 1), (13, -1)):
-            self.tuft((u + 0.8, side * 7.5, 15.0),
-                      (u - 1.0, side * 8.2, 13.6),
-                      (u - 2.8, side * 9.2, 11.0), self.col("shag"))
-        # belly fringe
-        for u in (-12, -6, 0, 6):
-            self.tuft((u - 1.0, -4.0, 5.0), (u + 1.0, 4.0, 5.0),
-                      (u - 0.8, 0.0, 3.0), self.col("coat2"))
+        for u, side in ((-17, -1), (-13, 1), (-7, -1), (0, 1),
+                        (7, -1), (13, 1)):
+            self.tuft((u + 0.8, side * 8.0, 15.0),
+                      (u - 1.2, side * 9.0, 13.0),
+                      (u - 2.8, side * 10.0, 10.5), self.col("shag"))
+        # loose fur strokes over the flank
+        for i in range(8):
+            u = -15.0 + i * 3.8
+            self.stroke(u, -7.0, u - 2.0, -4.5,
+                        16.0 - abs(u + 3.0) * 0.12,
+                        15.0 - abs(u + 3.0) * 0.12,
+                        self.col("coat2" if i % 2 else "shag"), 0.55)
 
     def head(self):
-        lowered = 2.8 if self.charge else 0.0
-        # low neck, broad skull
-        self.poly([self.p(8.0, -5.5, 17.0), self.p(8.0, 5.5, 17.0),
-                   self.p(20.0, 4.4, 12.5 - lowered),
-                   self.p(20.0, -4.4, 12.5 - lowered)],
+        lowered = 1.6 if self.charge else 0.0
+        # low, broad neck flowing into the shoulder mountain
+        self.poly([self.p(7.0, -6.0, 18.0), self.p(7.0, 6.0, 18.0),
+                   self.p(20.0, 5.0, 14.0 - lowered),
+                   self.p(20.0, -5.0, 14.0 - lowered)],
                   self.col("coat"), self.col("dark"), 1.0)
-        # shaggy neck/beard
+        # shaggy neck and beard
         for side in (-1.0, 1.0):
-            for j, (u, z, ln) in enumerate(((9, 17, 2.6), (13, 15, 3.2),
-                                             (17, 13.5, 2.8))):
-                self.tuft((u, side * 4.5, z), (u + 1.0, side * 5.2, z),
-                          (u - 1.3, side * 6.4, z - ln),
+            for j, (u, z, ln) in enumerate(((8, 19, 3.0), (12, 17, 3.5),
+                                             (16, 15, 3.0), (19, 13, 2.0))):
+                self.tuft((u, side * 4.8, z), (u + 1.2, side * 5.6, z),
+                          (u - 1.8, side * 7.0, z - ln),
                           self.col("beard" if j % 2 else "shag"))
-        # head and muzzle
-        hz = 11.0 - lowered
-        self.oval(22.0, 0.0, hz, 6.5, 4.8, self.col("coat"),
+        # head and long muzzle
+        hz = 12.5 - lowered
+        self.oval(21.5, 0.0, hz, 7.6, 6.4, self.col("coat"),
                   self.col("dark"))
-        self.oval(26.5, 0.0, hz - 2.4, 4.2, 3.2, self.col("coat2"))
-        self.oval(29.5, 0.0, hz - 3.0, 1.5, 1.2, self.col("nose"))
-        self.line(self.p(29.0, 0.0, hz - 3.5),
-                  self.p(24.0, 0.0, hz - 2.8), self.col("dark"), 0.6)
-        # beard under the jaw
-        for u, side in ((23, -2.2), (25, 0.0), (23, 2.2)):
-            self.tuft((u, side, hz - 3.0), (u - 1.6, side, hz - 4.4),
-                      (u - 3.2, side * 1.2, hz - 8.0), self.col("beard"))
-        # ears, small and low
+        self.oval(27.0, 0.0, hz - 2.2, 4.8, 4.2, self.col("coat2"))
+        self.oval(30.0, 0.0, hz - 3.0, 1.9, 1.55, self.col("nose"))
+        self.line(self.p(29.7, 0.0, hz - 3.5),
+                  self.p(24.0, 0.0, hz - 2.8), self.col("dark"), 0.7)
+        # beard hanging from the jaw
+        for u, side in ((23, -2.8), (25, -1.0), (25, 1.0), (23, 2.8)):
+            self.tuft((u, side, hz - 3.0), (u - 1.8, side, hz - 4.6),
+                      (u - 3.4, side * 1.3, hz - 8.2), self.col("beard"))
+        # ears
         for side in (-1.0, 1.0):
-            self.tuft((20.0, side * 4.0, hz + 2.2),
-                      (22.0, side * 4.8, hz + 1.8),
-                      (21.0, side * 5.4, hz + 5.0), self.col("coat2"))
-        # horns: sweeping out, forward and down
+            self.tuft((19.8, side * 4.4, hz + 2.4),
+                      (22.0, side * 5.4, hz + 2.0),
+                      (21.0, side * 6.2, hz + 5.2), self.col("coat2"))
+        # horns: thick, pale, curved out and forward
         if not self.baby:
             for side in (-1.0, 1.0):
-                pts = ((21.0, side * 4.0, hz + 4.2),
-                       (22.5, side * 6.5, hz + 5.5),
-                       (24.8, side * 8.0, hz + 4.8),
-                       (26.0, side * 7.2, hz + 2.8))
+                pts = ((20.5, side * 4.4, hz + 4.6),
+                       (22.0, side * 7.6, hz + 6.5),
+                       (25.0, side * 9.2, hz + 6.0),
+                       (27.5, side * 8.2, hz + 3.5))
                 for j in range(len(pts) - 1):
                     a = self.p(*pts[j])
                     b = self.p(*pts[j + 1])
-                    self.line(a, b, self.col("horn_d"), 3.2 - j * 0.45)
-                    self.line(a, b, self.col("horn"), 1.25 - j * 0.18)
+                    self.line(a, b, self.col("horn_d"), 4.0 - j * 0.55)
+                    self.line(a, b, self.col("horn"), 1.6 - j * 0.22)
                 self.dot(pts[-1][0], pts[-1][1], pts[-1][2],
-                         0.9, self.col("horn_d"))
+                         1.15, self.col("horn_d"))
         else:
             for side in (-1.0, 1.0):
-                self.tuft((21.2, side * 3.8, hz + 2.8),
-                          (22.2, side * 4.1, hz + 2.6),
-                          (21.5, side * 4.6, hz + 4.4), self.col("horn_d"))
+                self.tuft((21.0, side * 4.2, hz + 2.8),
+                          (22.2, side * 4.8, hz + 2.5),
+                          (21.5, side * 5.4, hz + 4.4), self.col("horn_d"))
         if not self.back:
-            # eyes: both from the front, one in profile
             if self.front:
-                eyes = (-2.8, 2.8)
+                eyes = (-3.2, 3.2)
             else:
-                eyes = ((2.8,) if self.fx >= 0.0 else (-2.8,))
+                eyes = ((3.2,) if self.fx >= 0.0 else (-3.2,))
             for v in eyes:
-                self.oval(24.0, v, hz + 1.1, 1.15, 1.0,
-                          (28, 18, 14), (15, 10, 8))
-                self.oval(24.0, v, hz + 1.1, 0.68, 0.62, self.col("eye"))
-                self.dot(24.2, v, hz + 1.1, 0.18, (2, 2, 2))
-                self.dot(23.7, v - 0.22, hz + 1.4, 0.18, (240, 232, 210))
-            # nostrils
-            self.dot(29.1, -0.65, hz - 3.0, 0.23, self.col("nose"))
-            self.dot(29.1, 0.65, hz - 3.0, 0.23, self.col("nose"))
-            # mouth line
-            self.line(self.p(29.0, 0.0, hz - 4.0),
-                      self.p(26.0, 0.0, hz - 4.4), self.col("dark"), 0.55)
+                self.oval(23.2, v, hz + 1.2, 1.35, 1.15,
+                          (30, 19, 14), (16, 10, 8))
+                self.oval(23.2, v, hz + 1.2, 0.78, 0.70, self.col("eye"))
+                self.dot(23.4, v, hz + 1.2, 0.20, (2, 2, 2))
+                self.dot(22.8, v - 0.25, hz + 1.5, 0.22, (244, 234, 208))
+            self.dot(29.6, -0.8, hz - 3.0, 0.30, self.col("nose"))
+            self.dot(29.6, 0.8, hz - 3.0, 0.30, self.col("nose"))
+            self.line(self.p(29.5, 0.0, hz - 4.0),
+                      self.p(26.0, 0.0, hz - 4.5), self.col("dark"), 0.6)
+            # a shaggy forehead tuft between the horns
+            self.tuft((19.0, -2.2, hz + 4.2), (21.0, 2.2, hz + 4.4),
+                      (18.2, 0.0, hz + 7.0), self.col("shag"))
         else:
-            # rear view: rump, tail and horns
-            self.oval(22.0, 0.0, hz, 5.2, 4.0, self.col("coat2"))
-            self.line(self.p(21.0, -3.5, hz + 2.0),
-                      self.p(21.0, 3.5, hz + 2.0), self.col("dark"), 0.8)
+            self.oval(21.5, 0.0, hz, 5.8, 4.6, self.col("coat2"))
+            self.line(self.p(20.0, -4.0, hz + 2.0),
+                      self.p(20.0, 4.0, hz + 2.0), self.col("dark"), 0.9)
 
     def details(self):
-        # dust and loose hair along the hump
+        # layered locks over the hump and flank, so the coat reads as fur
+        # rather than one smooth brown oval.
+        for i in range(10):
+            u = -15.0 + i * 3.1
+            z = 18.0 - abs(u + 2.0) * 0.10
+            self.stroke(u, -6.5, u - 1.8, -3.8, z, z - 1.3,
+                        self.col("coat2" if i % 2 else "shag"), 0.55)
         for i in range(5):
-            self.stroke(0.0 + i * 3.0, -5.0, 1.0 + i * 3.0, -3.0,
-                        24.0 - i * 0.8, 23.0 - i * 0.8,
-                        self.col("coat2"), 0.5)
+            u = 0.5 + i * 2.2
+            self.stroke(u, -4.8, u + 0.8, -2.2,
+                        25.5 - i * 0.7, 24.6 - i * 0.7,
+                        self.col("shag" if i % 2 else "coat2"), 0.55)
         if self.charge:
             # a little dust at the hooves
             for side in (-1.0, 1.0):
