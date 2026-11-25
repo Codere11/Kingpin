@@ -393,14 +393,18 @@ def run(g):
                 # the world does not stop for a menu.
                 pass
             elif (g.test_mode and event.type == pygame.KEYDOWN
-                  and event.key in (pygame.K_F3, pygame.K_F4, pygame.K_F5,
+                  and event.key in (pygame.K_F2, pygame.K_F3, pygame.K_F4, pygame.K_F5,
                                     pygame.K_F6, pygame.K_F7, pygame.K_F8,
                                     pygame.K_F9, pygame.K_F10, pygame.K_F12)):
                 # THE NPC LAB (NPC.md Phase 0).  Test mode only; the normal
                 # game never imports or builds it.
                 try:
                     import npclab as _npclab
-                    if event.key == pygame.K_F3:
+                    if event.key == pygame.K_F2:
+                        import events as _events
+                        _events.spawn_test_kind(g, "rogue")
+                        g.toast("Rogue test")
+                    elif event.key == pygame.K_F3:
                         import events as _events
                         import wind as _wind
                         _events.spawn_test_kind(g, "rain")

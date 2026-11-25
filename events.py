@@ -480,6 +480,7 @@ class Director:
         self.events = []
         self.eval_t = 4.0
         self.last = {}
+        self.last_any = {}
         self.rng = random.Random(int(getattr(g, "now", 0.0) * 41) ^ id(g))
 
     def _available(self, kind, cooldown=90.0):
@@ -500,8 +501,8 @@ class Director:
         if self._available("wolves"):
             # More likely when the camp has people and some wilderness left.
             score["wolves"] = 2.0 + min(3.0, len(people) / 4.0)
-        if self._available("rogue"):
-            score["rogue"] = 1.5 + min(2.0, len(people) / 6.0)
+        # Automatic rogue spawns are disabled until the crash after a rogue
+        # arrival is fully reproduced.  F2 still tests the event manually.
         if plots and self._available("blight"):
             score["blight"] = 2.0 + min(2.0, plots / 4.0)
         if plots and self._available("buffalo"):
@@ -525,8 +526,6 @@ class Director:
         choice = choice or max(score, key=score.get)
         if choice == "wolves":
             self.events.append(WolfPack(self.g, camp, self.rng))
-        elif choice == "rogue":
-            self.events.append(RogueRaider(self.g, camp, self.rng))
         elif choice == "buffalo":
             self.events.append(BuffaloHerd(self.g, camp, self.rng))
         elif choice == "blight":
@@ -553,8 +552,13 @@ class Director:
             return
         self.eval_t = 8.0
         for camp in list(getattr(self.g, "player_camps", ()) or ()):
-            if not self._active(camp):
-                self._spawn_best(camp)
+            if self._active(camp):
+                continue
+            key = id(camp)
+            if float(self.g.now) - float(self.last_any.get(key, -1e9)) < 180.0:
+                continue
+            self.last_any[key] = float(self.g.now)
+            self._spawn_best(camp)
 
     def spawn_test(self):
         camp = getattr(self.g, "_npc_lab", None)
