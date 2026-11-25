@@ -1041,3 +1041,32 @@ def icon(item_id: str, size: int = 48) -> pygame.Surface:
     surf = pygame.transform.smoothscale(big, (size, size))
     _cache[key] = surf
     return surf
+
+
+_special_cache: dict[tuple[str, int], pygame.Surface] = {}
+
+
+def icon_for(stack, size: int = 48) -> pygame.Surface:
+    """The item icon, plus the blank white label for special alcohol."""
+    if stack is None:
+        return icon("unknown", size)
+    base = icon(stack.defn.id, size)
+    gen = getattr(stack, "genetics", None)
+    if not (isinstance(gen, dict) and gen.get("special")):
+        return base
+    key = (stack.defn.id, size)
+    got = _special_cache.get(key)
+    if got is not None:
+        return got
+    s = base.copy()
+    # A small blank white label stitched onto the bottle/cask.  It stays empty
+    # until the player writes on it; this is the physical marker of a special
+    # local brew.
+    w = max(8, int(size * 0.46))
+    h = max(5, int(size * 0.17))
+    x = max(2, size - w - 3)
+    y = max(2, int(size * 0.12))
+    pygame.draw.rect(s, (238, 236, 224), (x, y, w, h), border_radius=2)
+    pygame.draw.rect(s, (72, 64, 52), (x, y, w, h), 1, border_radius=2)
+    _special_cache[key] = s
+    return s

@@ -409,8 +409,7 @@ class TradeMenu:
                     leaf_name = cropgenetics.display_name(stack).lower() if stack is not None else "leaf"
                 except Exception:
                     leaf_name = stack.defn.name.lower() if stack is not None else "leaf"
-                icon = items.icon(stack.defn.id if stack is not None else "tobacco",
-                                  rect.height - 12)
+                icon = items.icon_for(stack, rect.height - 12) if stack is not None else items.icon("tobacco", rect.height - 12)
                 # A GRADE ONLY WHERE A GRADE MEANS SOMETHING. Wood is wood and
                 # iron is iron; showing "A wood" was noise, and worse, a lie --
                 # the grade of an ungraded stack is meaningless.

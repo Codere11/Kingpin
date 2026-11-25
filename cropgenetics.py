@@ -172,6 +172,50 @@ def cap_quality(strain, grade: int) -> int:
     return min(8, base)
 
 
+def brewer_mult(skill: float) -> float:
+    """Mid-skill (4/8) extracts 75%; max (8/8) extracts 150%."""
+    s = max(0.0, min(8.0, float(skill or 0.0)))
+    if s <= 4.0:
+        return 0.75
+    return 0.75 + 0.75 * ((s - 4.0) / 4.0)
+
+
+def extract(source, skill: float, drink_name: str = "") -> dict | None:
+    """Copy a crop strain into alcohol, scaled by the brewer's hands.
+
+    The alcohol keeps the source settlement/crop name and a copy of every
+    bonus.  Only the sell and mood bonuses affect the drink itself; the rest
+    remain provenance until cooking/trade uses them.
+    """
+    if not isinstance(source, dict):
+        return None
+    bonus = source.get("bonuses")
+    if not isinstance(bonus, dict):
+        # Old/manual records: derive from progress.
+        p = source.get("progress") or {}
+        bonus = {
+            key: cap * max(0.0, min(1.0, float(p.get(key, 0.0))))
+            for key, cap, _label in COMMON_TARGETS
+        }
+    mult = brewer_mult(skill)
+    scaled = {str(k): float(v) * mult for k, v in bonus.items()}
+    src_name = source.get("name") or source.get("settlement") or ""
+    name = ("%s %s" % (src_name, drink_name)).strip()
+    special = any(v >= 0.15 for v in scaled.values())
+    return {
+        "crop": source.get("crop", ""),
+        "settlement": source.get("settlement", ""),
+        "source_name": src_name,
+        "name": name,
+        "targets": list(source.get("targets", ())),
+        "progress": dict(source.get("progress", {})),
+        "bonuses": scaled,
+        "brewer_skill": float(skill or 0.0),
+        "extraction": mult,
+        "special": bool(special),
+    }
+
+
 def display_name(stack) -> str:
     gen = getattr(stack, "genetics", None)
     if isinstance(gen, dict) and gen.get("name"):

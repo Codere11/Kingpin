@@ -147,7 +147,7 @@ class Hotbar:
             pygame.draw.rect(screen, ACCENT if selected else BORDER, rect,
                              width=2, border_radius=8)
             if stack is not None:
-                ic = items.icon(stack.defn.id, self.slot - 14)
+                ic = items.icon_for(stack, self.slot - 14)
                 screen.blit(ic, (rect.centerx - ic.get_width() // 2,
                                  rect.centery - ic.get_height() // 2))
                 if stack.defn.stackable and stack.count > 1:
@@ -375,7 +375,7 @@ class InventoryPanel:
             pygame.draw.rect(screen, ACCENT if hovered else BORDER, rect,
                              width=2, border_radius=8)
             if stack is not None:
-                ic = items.icon(stack.defn.id, self.slot - 14)
+                ic = items.icon_for(stack, self.slot - 14)
                 screen.blit(ic, (rect.centerx - ic.get_width() // 2,
                                  rect.centery - ic.get_height() // 2))
                 if stack.defn.stackable and stack.count > 1:
@@ -400,7 +400,7 @@ class InventoryPanel:
 
         if self.held is not None:
             mx, my = pygame.mouse.get_pos()
-            ic = items.icon(self.held.defn.id, self.slot - 14)
+            ic = items.icon_for(self.held, self.slot - 14)
             screen.blit(ic, (mx - ic.get_width() // 2, my - ic.get_height() // 2))
             if self.held.defn.stackable and self.held.count > 1:
                 c = self.font_small.render(str(self.held.count), True, TEXT)
@@ -692,7 +692,7 @@ class ChestPanel:
                 pygame.draw.rect(screen, ACCENT if hovered else BORDER, rect,
                                  width=2, border_radius=6)
                 if stack is not None:
-                    ic = items.icon(stack.defn.id, self.slot - 12)
+                    ic = items.icon_for(stack, self.slot - 12)
                     screen.blit(ic, (rect.centerx - ic.get_width() // 2,
                                      rect.centery - ic.get_height() // 2))
                     if stack.defn.stackable and stack.count > 1:
@@ -723,7 +723,7 @@ class ChestPanel:
 
         if self.held is not None:
             mx, my = pygame.mouse.get_pos()
-            ic = items.icon(self.held.defn.id, self.slot - 12)
+            ic = items.icon_for(self.held, self.slot - 12)
             screen.blit(ic, (mx - ic.get_width() // 2, my - ic.get_height() // 2))
             if self.held.defn.stackable and self.held.count > 1:
                 c = self.font_small.render(str(self.held.count), True, TEXT)
@@ -1396,7 +1396,8 @@ class ShipMarketPanel:
             if stack is None or stack.defn.id != good:
                 continue
             grade = stack.quality if stack.defn.quality is not None else market.MID_GRADE
-            coin += market.sell_value(self.g, good, stack.count, grade)
+            coin += market.sell_value(self.g, good, stack.count, grade,
+                                      genetics=getattr(stack, "genetics", None))
             self.hold.slots[i] = None
         if coin > 0.0:
             self.player.add("coin", int(round(coin)))
@@ -1432,7 +1433,7 @@ class ShipMarketPanel:
                 pygame.draw.rect(screen, SLOT, rect, border_radius=5)
                 pygame.draw.rect(screen, ACCENT if hovered else BORDER, rect, width=2, border_radius=5)
                 if stack is not None:
-                    ic = items.icon(stack.defn.id, rect.width - 10)
+                    ic = items.icon_for(stack, rect.width - 10)
                     screen.blit(ic, (rect.centerx - ic.get_width() // 2,
                                      rect.centery - ic.get_height() // 2))
                     if stack.defn.stackable and stack.count > 1:
@@ -1508,7 +1509,7 @@ class ShipMarketPanel:
         # held stack follows the mouse
         if self.held is not None:
             mx, my = pygame.mouse.get_pos()
-            ic = items.icon(self.held.defn.id, 30)
+            ic = items.icon_for(self.held, 30)
             screen.blit(ic, (mx - 15, my - 15))
 
 

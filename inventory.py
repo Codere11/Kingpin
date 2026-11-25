@@ -180,6 +180,38 @@ class Inventory:
                 return True
         return remaining <= 0
 
+    def take_lot(self, item_id: str, amount: int):
+        """Consume up to amount and return (taken, genetics).
+
+        If the consumed amount spans different strains, the genetics is
+        dropped: mixed lots are ordinary, exactly as when stacks merge.
+        """
+        remaining = int(amount)
+        taken = 0
+        gen = None
+        mixed = False
+        for i, stack in enumerate(self.slots):
+            if stack is None or stack.defn.id != item_id:
+                continue
+            take = min(remaining, stack.count)
+            if take <= 0:
+                break
+            sg = getattr(stack, "genetics", None)
+            if gen is None:
+                gen = sg
+            elif sg != gen:
+                mixed = True
+            stack.count -= take
+            taken += take
+            remaining -= take
+            if stack.count <= 0:
+                self.slots[i] = None
+            if remaining <= 0:
+                break
+        if mixed:
+            gen = None
+        return taken, gen
+
     def selected_stack(self) -> ItemStack | None:
         return self.slots[self.selected]
 

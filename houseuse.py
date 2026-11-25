@@ -135,19 +135,36 @@ def work_action(key, smith_shop, player, now, economy, inventory, skills,
     if kind == "brewery":
         brew = getattr(player, "brew", None)
         if brew is not None and now >= brew[2]:
-            wort, count, _r = brew
+            wort, count, _r = brew[:3]
+            src_gen = brew[3] if len(brew) > 3 else None
             player.brew = None
             out = economy.BREW.get(wort)
             if out:
-                inventory.add(out, count)
+                gen = None
+                try:
+                    import cropgenetics
+                    gen = cropgenetics.extract(
+                        src_gen, getattr(skills, "farming", 0.0),
+                        items.get(out).name)
+                except Exception:
+                    pass
+                inventory.add(out, count, genetics=gen)
                 return 2.0, "Drew %d %s" % (count, out)
         if brew is None:
-            food = getattr(wp.worker.village, "local_food", "wheat") \
-                if wp.worker else "wheat"
+            food = "wheat"
+            for _f in economy.MASH:
+                if inventory.count_of(_f) >= economy.WORT_BATCH:
+                    food = _f
+                    break
             if inventory.count_of(food) >= economy.WORT_BATCH:
-                inventory.consume(food, economy.WORT_BATCH)
+                taken, src_gen = inventory.take_lot(food, economy.WORT_BATCH)
+                if taken < economy.WORT_BATCH:
+                    # put the partial lot back rather than eating it
+                    inventory.add(food, taken, genetics=src_gen)
+                    return 0.0, "Not enough mash"
                 player.brew = (economy.WORT.get(food, "wheat_wort"),
-                               economy.WORT_BATCH, now + economy.BREW_SECONDS)
+                               economy.WORT_BATCH, now + economy.BREW_SECONDS,
+                               src_gen)
                 return 2.0, "Mashed %d %s   -   ready in %d min" % (
                     economy.WORT_BATCH, food, int(economy.BREW_SECONDS / 60))
         return 0.0, "Nothing to draw"

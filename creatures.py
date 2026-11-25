@@ -1015,7 +1015,8 @@ class Horse:
             if stack.defn.id not in sellable:
                 continue
             grade = stack.quality if stack.defn.quality is not None else _market.MID_GRADE
-            coin += _market.sell_value(g, stack.defn.id, stack.count, grade)
+            coin += _market.sell_value(g, stack.defn.id, stack.count, grade,
+                                       genetics=getattr(stack, "genetics", None))
             sold += stack.count
             pack.slots[i] = None
         if coin > 0.0:

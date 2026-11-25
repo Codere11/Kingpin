@@ -97,13 +97,24 @@ def record_sale(g, good: str, count: int) -> None:
     m["sold_today"][good] = m["sold_today"].get(good, 0) + int(count)
 
 
-def sell_value(g, good: str, count: int, grade: int) -> float:
-    """Coin for selling count units at this grade (the sale is recorded)."""
+def sell_value(g, good: str, count: int, grade: int,
+               genetics=None) -> float:
+    """Coin for selling count units at this grade (the sale is recorded).
+
+    Local alcohol can carry a brewer-extracted crop bonus in its genetics.
+    The ship pays that bonus only here, where the actual lot is being sold.
+    """
     if good not in sellable(g):
         return 0.0
     record_sale(g, good, count)
     base = getattr(g, "market", {}).get("base", {}).get(good, spec(good)[0])
-    return unit_price(base, grade) * int(count)
+    mult = 1.0
+    if isinstance(genetics, dict):
+        try:
+            mult += float((genetics.get("bonuses") or {}).get("sell", 0.0))
+        except Exception:
+            pass
+    return unit_price(base, grade) * int(count) * mult
 
 
 def tick(g) -> None:
