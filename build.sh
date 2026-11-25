@@ -102,6 +102,7 @@ done
     --hidden-import wolfart \
     --hidden-import rabbitart \
     --hidden-import horseart \
+    --hidden-import bisonart \
     "${DATA_ARGS[@]}" \
     main.py 2>&1 | tail -1
 

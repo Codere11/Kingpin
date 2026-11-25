@@ -13,6 +13,7 @@ import math
 import random
 
 import pygame
+import bisonart
 import face
 import horseart
 import rabbitart
@@ -1301,6 +1302,13 @@ class Bison(Enemy):
         self.breeding = False                     # facing a mate, hearts out
         self.breed_partner = None
         self.fire_cd = 0.0
+        self.flee_timer = 0.0
+        self.flee_dir = None
+        self._flee_retarget = 0.0
+        self._anim_phase = random.uniform(0.0, 2.0 * math.pi)
+        self._anim_t = 0.0
+        self._anim_x = float(x)
+        self._anim_y = float(y)
         Bison.BISONS = [b for b in Bison.BISONS if b.alive]   # drop the dead
         Bison.BISONS.append(self)
 
@@ -1362,15 +1370,23 @@ class Bison(Enemy):
             self._charge(dt, target)
             return
         # PASSIVE: keep a respectful distance from the player, else graze.
+        # The buffalo uses the same committed heading as the rabbit/horse; a
+        # fresh "away" vector every frame made the herd twitch.
         if not getattr(self, "tamed", False) and target is not None and not getattr(target, "dead", False):
-            dx, dy = self.x - target.x, self.y - target.y
-            d = math.hypot(dx, dy)
+            d = math.hypot(self.x - target.x, self.y - target.y)
             if d < 220.0:
-                ux, uy = (dx / d, dy / d)
-                # RUN: a bison at full flight is as fast as the fastest man.
-                self._move(ux, uy, SPRINTER_MAX, dt)
-                self.facing = (ux, uy)
-                return
+                self.flee_timer = max(self.flee_timer, 1.4)
+                _flee_heading(self, target, dt, retarget=0.32, turn=0.32)
+        if self.flee_timer > 0.0:
+            fx, fy = getattr(self, "flee_dir", (1.0, 0.0))
+            # RUN: a bison at full flight is as fast as the fastest man.
+            self._move(fx, fy, SPRINTER_MAX, dt)
+            self.facing = (fx, fy)
+            self.flee_timer = max(0.0, self.flee_timer - dt)
+            if self.flee_timer <= 0.0:
+                self.flee_dir = None
+                self._flee_retarget = 0.0
+            return
         # HUNGRY: a wild bison forages; a tamed one eats from the feed box.
         if self.hunger >= economy.EAT_AT and self.food <= 0:
             if getattr(self, "tamed", False):
@@ -1416,48 +1432,36 @@ class Bison(Enemy):
                     target.take_damage(max(1, int(round(self.melee_damage))))
 
     def draw(self, screen, cam_x, cam_y):
+        # EIGHT 45-DEGREE BUFFALO VIEWS.  The hump, low head and short legs
+        # carry the silhouette; a charging animal lowers its head and kicks
+        # up dust.
         sx, sy = self.x - cam_x, self.y - cam_y
+        now = float(_NOW)
+        dt = now - float(getattr(self, "_anim_t", now))
+        if dt < 0.0 or dt > 0.5:
+            dt = 0.0
+        moved = math.hypot(self.x - float(getattr(self, "_anim_x", self.x)),
+                           self.y - float(getattr(self, "_anim_y", self.y)))
+        self._anim_t = now
+        self._anim_x = float(self.x)
+        self._anim_y = float(self.y)
+        self._anim_phase = (float(getattr(self, "_anim_phase", 0.0))
+                            + moved * 0.10 + dt * 0.38)
+        step = int(self._anim_phase / (2.0 * math.pi) * 8.0) % 8
         fx, fy = self.facing
-        coat = (110, 72, 44)
-        coat_d = (70, 44, 26)
-        hump = (164, 114, 62)
-        head = (82, 52, 30)
-        horn = (214, 196, 164)
-        horn_d = (150, 128, 96)
-        eye = (12, 9, 7)
-        if self.hit_flash > 0.0:
-            coat = hump = head = (240, 236, 230)
-        # A NEWBORN CALF IS SMALL: a simple small body, no full horns yet.
-        if getattr(self, "baby", False):
-            pygame.draw.ellipse(screen, (16, 13, 10), (sx - 10, sy - 2, 20, 8))
-            pygame.draw.circle(screen, coat_d, (int(sx), int(sy)), 9)
-            pygame.draw.circle(screen, coat, (int(sx), int(sy)), 8)
-            pygame.draw.circle(screen, head, (int(sx + fx * 7), int(sy + fy * 7)), 5)
-            if getattr(self, "breeding", False):
-                self._draw_breeding_hearts(screen, sx, sy)
-            return
-        pygame.draw.ellipse(screen, (16, 13, 10), (sx - 15, sy - 3, 32, 10))
-        pygame.draw.line(screen, coat_d, (sx - fx * 14, sy - fy * 14),
-                         (sx - fx * 22, sy - fy * 22), 3)
-        pygame.draw.circle(screen, coat_d, (int(sx), int(sy)), 14)
-        pygame.draw.circle(screen, coat, (int(sx), int(sy)), 13)
-        hx0, hy0 = int(sx - fx * 4), int(sy - fy * 4)
-        pygame.draw.ellipse(screen, hump, (hx0 - 8, hy0 - 7, 16, 14))
-        hx, hy = sx + fx * 13, sy + fy * 13
-        pygame.draw.circle(screen, coat_d, (int(hx), int(hy)), 9)
-        pygame.draw.circle(screen, head, (int(hx), int(hy)), 8)
-        # two thick curved horns, sweeping forward
-        for sgn in (1, -1):
-            cx, cy = int(hx), int(hy + sgn * 8)
-            rect = pygame.Rect(cx - 6, cy - 5, 16, 10)
-            if sgn == 1:
-                pygame.draw.arc(screen, horn_d, rect, -1.15, -0.05, 4)
-                pygame.draw.arc(screen, horn, rect, -1.15, -0.05, 2)
-            else:
-                pygame.draw.arc(screen, horn_d, rect, 0.05, 1.15, 4)
-                pygame.draw.arc(screen, horn, rect, 0.05, 1.15, 2)
-        pygame.draw.circle(screen, eye, (int(hx), int(hy - 4)), 2)
-        pygame.draw.circle(screen, eye, (int(hx), int(hy + 4)), 2)
+        if abs(fx) + abs(fy) < 0.01:
+            fx, fy = 1.0, 0.0
+        direction = int(round(math.atan2(fy, fx) / (math.pi / 4.0))) % 8
+        baby = bool(getattr(self, "baby", False))
+        zoom = 0.62 if baby else 0.92
+        hit = float(getattr(self, "hit_flash", 0.0)) > 0.0
+        charge = bool(getattr(self, "aggro", False)
+                      and not getattr(self, "tamed", False))
+        img = bisonart.frame(direction, step, zoom, hit=hit,
+                             charge=charge, baby=baby)
+        sh = bisonart.shadow(zoom)
+        screen.blit(sh, (int(sx - sh.get_width() * 0.5), int(sy + 4)))
+        screen.blit(img, (int(sx - bisonart.AX), int(sy - bisonart.AY)))
         if getattr(self, "breeding", False):
             self._draw_breeding_hearts(screen, sx, sy)
 
