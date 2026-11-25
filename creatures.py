@@ -680,6 +680,39 @@ class Wolf(Enemy):
                          (hx + fx * 14, hy + fy * 14), 1)
 
 
+def _flee_heading(body, threat, dt, retarget=0.30, turn=0.38):
+    """A committed, gradually turned flee direction.
+
+    Recomputing `away from the player` every frame made rabbits and horses
+    snap left and right as the player moved; the old code also dropped the
+    flee the instant the radius was crossed and walked straight back in.
+    This keeps one heading for a few tenths of a second and eases toward a
+    new one instead of reversing instantly.
+    """
+    if threat is None:
+        return getattr(body, "flee_dir", None)
+    dx = float(body.x) - float(threat.x)
+    dy = float(body.y) - float(threat.y)
+    d = math.hypot(dx, dy)
+    if d < 0.01:
+        dx, dy, d = 1.0, 0.0, 1.0
+    desired = math.atan2(dy / d, dx / d)
+    old = getattr(body, "flee_dir", None)
+    wait = float(getattr(body, "_flee_retarget", 0.0))
+    if old is None or wait <= 0.0:
+        if old is None:
+            a = desired
+        else:
+            cur = math.atan2(old[1], old[0])
+            delta = (desired - cur + math.pi) % (2.0 * math.pi) - math.pi
+            a = cur + delta * turn
+        body.flee_dir = (math.cos(a), math.sin(a))
+        body._flee_retarget = retarget
+    else:
+        body._flee_retarget = wait - dt
+    return body.flee_dir
+
+
 class Rabbit:
     kind = "rabbit"
 
@@ -704,6 +737,8 @@ class Rabbit:
         self._anim_t = 0.0
         self._anim_x = float(x)
         self._anim_y = float(y)
+        self.flee_dir = None
+        self._flee_retarget = 0.0
 
     @property
     def alive(self) -> bool:
@@ -716,17 +751,22 @@ class Rabbit:
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if not self.alive:
             return
+        # A rabbit commits to a run instead of recomputing "away" every frame.
         if threat is not None and not getattr(threat, "dead", False):
-            dx, dy = self.x - threat.x, self.y - threat.y
-            distance = math.hypot(dx, dy)
-            if distance < 230.0:
-                self.flee_timer = 1.2
-                if distance > 1e-4:
-                    self.x += dx / distance * self.speed * dt
-                    self.y += dy / distance * self.speed * dt
-                    self.facing = (dx / distance, dy / distance)
-                return
-        self.flee_timer = max(0.0, self.flee_timer - dt)
+            _d = math.hypot(self.x - threat.x, self.y - threat.y)
+            if _d < 230.0:
+                self.flee_timer = max(self.flee_timer, 1.2)
+                _flee_heading(self, threat, dt)
+        if self.flee_timer > 0.0:
+            fx, fy = getattr(self, "flee_dir", (1.0, 0.0))
+            self.x += fx * self.speed * dt
+            self.y += fy * self.speed * dt
+            self.facing = (fx, fy)
+            self.flee_timer = max(0.0, self.flee_timer - dt)
+            if self.flee_timer <= 0.0:
+                self.flee_dir = None
+                self._flee_retarget = 0.0
+            return
         self.hop_timer -= dt
         if self.hop_timer <= 0.0:
             self.hop_timer = random.uniform(0.5, 1.8)
@@ -793,6 +833,8 @@ class Horse:
         self.speed = 190.0
         self.hit_flash = 0.0
         self.flee_timer = 0.0
+        self.flee_dir = None
+        self._flee_retarget = 0.0
         self.graze_timer = random.uniform(0.5, 2.0)
         self.hunger = random.uniform(0.0, 30.0)   # like a man's belly
         self.food = random.randint(0, 2)          # what it has stored
@@ -1159,17 +1201,22 @@ class Horse:
             self.health = 0
             return
         # SKITTISH: a person near spooks it into a full run -- a TAMED horse
-        # does not run from people.
+        # does not run from people.  The heading is committed for a moment so
+        # a moving player cannot make the horse snap left/right every frame.
         if not getattr(self, "tamed", False) and threat is not None and not getattr(threat, "dead", False):
-            dx, dy = self.x - threat.x, self.y - threat.y
-            d = math.hypot(dx, dy)
+            d = math.hypot(self.x - threat.x, self.y - threat.y)
             if d < 260.0:
-                self.flee_timer = 1.4
-                if d > 1e-4:
-                    self._move(dx / d, dy / d, SPRINTER_MAX, dt)
-                    self.facing = (dx / d, dy / d)
-                return
-        self.flee_timer = max(0.0, self.flee_timer - dt)
+                self.flee_timer = max(self.flee_timer, 1.4)
+                _flee_heading(self, threat, dt, retarget=0.34, turn=0.30)
+        if self.flee_timer > 0.0:
+            fx, fy = getattr(self, "flee_dir", (1.0, 0.0))
+            self._move(fx, fy, SPRINTER_MAX, dt)
+            self.facing = (fx, fy)
+            self.flee_timer = max(0.0, self.flee_timer - dt)
+            if self.flee_timer <= 0.0:
+                self.flee_dir = None
+                self._flee_retarget = 0.0
+            return
         # HUNGRY: a wild horse forages; a tamed one eats from the feed box.
         if self.hunger >= economy.EAT_AT and self.food <= 0:
             if getattr(self, "tamed", False):
