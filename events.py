@@ -107,6 +107,11 @@ class WolfPack:
             g.enemies.append(w)
             self.wolves.append(w)
         self.targets = list(people)
+        # Horses and livestock smell too; a hungry pack will take one if it is
+        # the strongest scent in the settlement.
+        for _a in (getattr(camp, "animals", ()) or ()):
+            if getattr(_a, "alive", True):
+                self.targets.append(_a)
         self._assign_targets()
         _record(g, "wolves_arrive", camp=getattr(camp, "name", "camp"),
                 count=len(self.wolves), x=round(cx, 1), y=round(cy, 1),
@@ -197,6 +202,19 @@ class WolfPack:
             if target is not None and not getattr(target, "alive", True):
                 w.event_target = None
                 target = None
+            # Follow the strongest scent the wolf can actually smell, rather
+            # than walking straight to a target chosen at spawn time.
+            try:
+                import scent
+                _smell = scent.target_for(self.g, w, 1600.0)
+                if _smell is not None:
+                    target = _smell
+                    w.event_target = _smell
+                    w._scent_chase = True
+                else:
+                    w._scent_chase = False
+            except Exception:
+                pass
             if target is not None:
                 # Look at the person he chose; otherwise the wolf's view cone
                 # can leave him wandering with a target assigned.
@@ -513,9 +531,11 @@ class Director:
                        if getattr(a, "alive", True)])
         plots = len(getattr(camp, "farm_plots", ()) or ())
         score = {}
-        if self._available("wolves"):
-            # More likely when the camp has people and some wilderness left.
-            score["wolves"] = 2.0 + min(3.0, len(people) / 4.0)
+        if self._available("wolves", 420.0):
+            # More likely when the camp has people and some wilderness left,
+            # but never a constant parade.  The smell field gives the pack a
+            # reason to be nearby; this cooldown stops it becoming a schedule.
+            score["wolves"] = 1.4 + min(2.2, len(people) / 6.0)
         # Automatic rogue spawns are disabled until the crash after a rogue
         # arrival is fully reproduced.  F2 still tests the event manually.
         if plots and self._available("blight"):

@@ -399,6 +399,32 @@ class Soldier(Enemy):
                     self.attack_flash = face.WAR_SECONDS
                     self._shoot(combat, mx, my, angle, dist + 160.0, 80, 80)
 
+    def update(self, dt, target, combat, occluders=None,
+               speed_scale: float = 1.0, view_scale: float = 1.0,
+               visible: bool = True, colliders=None) -> None:
+        """A wolf following a scent does not need line of sight to keep going.
+
+        The normal Enemy.update only fights a target it can see; that turned
+        smell into a target that was assigned and then ignored behind a tree.
+        When the engine or an event has set `_scent_chase`, Wolf follows the
+        body at the end of the trail directly.  Ordinary sight/patrol remains
+        unchanged once the scent target is gone.
+        """
+        if getattr(self, "_scent_chase", False) and target is not None \
+                and getattr(target, "alive", True) \
+                and not getattr(target, "dead", False):
+            self._colliders = colliders or []
+            if self.hit_flash > 0.0:
+                self.hit_flash = max(0.0, self.hit_flash - dt)
+            if self.bleed > 0.0:
+                self.bleed = max(0.0, self.bleed - dt)
+            self.aware = True
+            self.aware_timer = 600.0
+            self._fight(dt, target, combat, speed_scale, True)
+            return
+        super().update(dt, target, combat, occluders, speed_scale,
+                       view_scale, visible, colliders)
+
     def _fight(self, dt, target, combat, speed_scale, visible=True):
         dx, dy = target.x - self.x, target.y - self.y
         distance = math.hypot(dx, dy) or 1.0

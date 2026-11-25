@@ -5,6 +5,7 @@ import time
 import threading
 import comm
 import save as savemod
+import scent
 import sound
 import village as village_mod
 import work
@@ -278,6 +279,10 @@ def run(g):
         try:
             import antics
             antics.tick(g, g.dt)
+        except Exception:
+            pass
+        try:
+            scent.tick(g, g.dt)
         except Exception:
             pass
         try:
@@ -2151,6 +2156,17 @@ def run(g):
                             or not getattr(g.tgt, "alive", True)
                             or getattr(g.tgt, "dead", False)):
                         g.tgt = g.choose_target(enemy, g.e_villages)
+                        if getattr(enemy, "kind", "") == "wolf":
+                            # A wolf does not choose a name from a list.  It
+                            # follows the strongest smell within reach; the
+                            # body it finds at the end of the trail is the
+                            # target.
+                            _smell = scent.target_for(g, enemy)
+                            if _smell is not None:
+                                g.tgt = _smell
+                                enemy._scent_chase = True
+                            else:
+                                enemy._scent_chase = False
                         enemy._target = g.tgt
                         enemy._retarget = 0.2
                     enemy.update(g.dt, g.tgt, g.combat, g.e_occluders,
@@ -2666,8 +2682,14 @@ def run(g):
                                     if e.kind == "soldier" and e.alive)
                 g.live_wolves = sum(1 for e in g.enemies
                                   if e.kind == "wolf" and e.alive)
-                if g.live_wolves < 4:
-                    g.spawn_wolf()
+                # Wolves are not a five-second trickle.  The wild population
+                # stays small, and a replacement only comes after a long gap.
+                if g.live_wolves < 2:
+                    _next_wolf = float(getattr(g, "_next_wild_wolf",
+                                               g.now + 120.0))
+                    if g.now >= _next_wolf:
+                        g.spawn_wolf()
+                        g._next_wild_wolf = g.now + 300.0
                 if sum(1 for r in g.rabbits if r.alive) < 6:
                     g.spawn_rabbit()
                 if sum(1 for h in g.horses if h.alive) < 3:
