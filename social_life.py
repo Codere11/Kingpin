@@ -116,21 +116,15 @@ def _pulse(g, camp, now):
                 _kind = "shared_food" if item in economy.FOOD else "shared_drink"
                 if _exchange(buyer, seller, item, camp, g, now, _kind):
                     return
-    # 3. Otherwise, two nearby people talk.
+    # 3. Otherwise, ask for a proper walk-up conversation.  The conversation
+    # manager handles the approach, the single active slot and the talk timer.
     for a in people:
         for b in people:
-            if a is b or not _near(a, b):
+            if a is b:
                 continue
             try:
-                import comm
-                if comm.npc_try_chat(a, [b], now) is not None:
-                    try:
-                        import playlog
-                        playlog.record(g, "social", action="chat",
-                                       actor=getattr(a, "name", "?"),
-                                       target=getattr(b, "name", "?"))
-                    except Exception:
-                        pass
+                import conversation
+                if conversation.request_npc(g, a, b, now):
                     return
             except Exception:
                 continue

@@ -330,11 +330,13 @@ def run(g):
 
         # CHAT CLOUDS: what was just said to a man, fading over a few seconds.
         comm.tick_clouds(g.dt)
-        # A NEARBY MAN MAY SPEAK TO THE PLAYER: praise, insult or threaten.
+        # ONE MEANINGFUL CONVERSATION AT A TIME: an NPC walks into the
+        # other person's front before saying anything.  No nearby-shout spam.
         try:
-            comm.tick_npc_to_player(list(village_mod.PEOPLE), g.player, g.dt)
+            import conversation as _conversation
+            _conversation.tick(g, g.dt)
         except Exception as _np:
-            plog.log("NPC-TO-PLAYER-ERR", repr(_np)[:120])
+            plog.log("CONVERSATION-ERR", repr(_np)[:160])
 
         # THE LANES HAVE FINISHED A TICK: take their state before anything
         # reads a man or draws one. Never blocks -- a lane that is late is one
