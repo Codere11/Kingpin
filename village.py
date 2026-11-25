@@ -793,8 +793,60 @@ class NPC:
         except Exception:
             pass
 
+    def wake_and_flee(self, threat=None) -> None:
+        """Leave the bedroll and run from whatever just hit him."""
+        self.asleep = False
+        self.sleep_t = 0.0
+        self.in_interior = False
+        self.bed = None
+        self._ground_spot = None
+        self._wake_awake = True       # do not lie straight back down tonight
+        self._wake_flee = True
+        self.panic = max(float(getattr(self, "panic", 0.0)), 9.0)
+        self.attacked = True
+        self._dir = None
+        if threat is not None:
+            dx = float(getattr(self, "x", 0.0)) - float(getattr(threat, "x", 0.0))
+            dy = float(getattr(self, "y", 0.0)) - float(getattr(threat, "y", 0.0))
+            d = math.hypot(dx, dy)
+            if d < 0.01:
+                dx, dy, d = 1.0, 0.0, 1.0
+            a = math.atan2(dy / d, dx / d) + self.rng.uniform(-0.65, 0.65)
+            self.flee_dir = (math.cos(a), math.sin(a))
+        else:
+            a = self.rng.uniform(0.0, 2.0 * math.pi)
+            self.flee_dir = (math.cos(a), math.sin(a))
+        try:
+            import plog
+            plog.log("WAKE", getattr(self, "name", "?"),
+                     "attacked while asleep",
+                     "from", getattr(threat, "name",
+                                     getattr(threat, "kind", "?")))
+        except Exception:
+            pass
+
+    def _run_from_attack(self, dt: float) -> None:
+        """Panic flight that does not need a known town threat object."""
+        self.panic = max(0.0, float(getattr(self, "panic", 0.0)) - dt)
+        if self.panic <= 0.0 or not getattr(self, "flee_dir", None):
+            self._wake_flee = False
+            self.flee_dir = None
+            return
+        fx, fy = self.flee_dir
+        if not fx and not fy:
+            fx, fy = 0.0, 1.0
+        speed = max(120.0, float(getattr(self, "base_speed", 50.0)) * 1.8)
+        self.x += fx * speed * dt
+        self.y += fy * speed * dt
+        self.facing = (fx, fy)
+        self.moving = True
+        try:
+            self.skills.gain_movement(speed * dt)
+        except Exception:
+            pass
+
     def take_damage(self, amount: int, record: bool = True,
-                    tranq: bool = False) -> bool:
+                    tranq: bool = False, attacker=None) -> bool:
         # THE TRUTH-TELLER DOES NOT BLEED. He used to hold a million
         # health to stand in for that, which made one villager's body a
         # lie; the rule is here instead.
@@ -814,6 +866,12 @@ class NPC:
         # as many times.
         if not getattr(self, "alive", True) or getattr(self, "dead", False):
             return True
+        # A BLOW WAKES A SLEEPING MAN.  Before this, a wolf could stand over
+        # a sleeping villager and chew through him while the body stayed in
+        # the sleep branch -- closed eyes, no panic, no movement.  Wake first,
+        # then take the wound, then run in the opposite direction.
+        if getattr(self, "asleep", False):
+            self.wake_and_flee(attacker)
         self.health -= amount
         try:
             persona.add_trauma(self, amount)
@@ -2712,7 +2770,9 @@ class NPC:
                 d = math.hypot(dx, dy) or 1.0
                 self.facing = (dx / d, dy / d)
             return True
-        if night:
+        if not night:
+            self._wake_awake = False
+        if night and not getattr(self, "_wake_awake", False):
             return self._sleep_on_bedroll(dt, g)
         if getattr(self, "asleep", False):
             self.asleep = False
@@ -2819,6 +2879,11 @@ class NPC:
                                                       "crop_spree", "depression"):
             return
         if getattr(self, "_brawl_target", None) is not None:
+            return
+        # ATTACKED IN HIS SLEEP: he is awake now and running before any work,
+        # bedroll or social branch can put him back down.
+        if getattr(self, "_wake_flee", False):
+            self._run_from_attack(dt)
             return
         # THE PLAYER'S OWN PEOPLE: babies grow, breeders face each other, and
         # at night they sleep on their bedrolls.

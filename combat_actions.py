@@ -302,7 +302,7 @@ def resolve_swing(g, kills) -> int:
     _add_man(g.truth[0])
     for npc in _folk:
         if npc.alive and in_arc(npc.x, npc.y, npc.radius):
-                died = npc.take_damage(melee, record=False)
+                died = npc.take_damage(melee, record=False, attacker=g.player)
                 _flesh = True
                 g.work_lanes.damage(npc, melee)
                 # HE KNOWS THE MAN WHO HIT HIM -- and likes him twenty less.

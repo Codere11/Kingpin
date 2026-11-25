@@ -603,7 +603,10 @@ class Wolf(Enemy):
             self.fire_cd = 1.0
             if hasattr(target, "take_damage"):
                 hit = self.melee_damage * (self.lunge_scale if lunging else 1.0)
-                target.take_damage(max(1, int(round(hit))))
+                if hasattr(target, "wake_and_flee"):
+                    target.take_damage(max(1, int(round(hit))), attacker=self)
+                else:
+                    target.take_damage(max(1, int(round(hit))))
 
     def draw(self, screen, cam_x, cam_y):
         if self.species == "snake":
@@ -1313,7 +1316,11 @@ class Bison(Enemy):
         if d <= 44.0 and self.fire_cd <= 0.0:
             self.fire_cd = 1.0
             if hasattr(target, "take_damage"):
-                target.take_damage(max(1, int(round(self.melee_damage))))
+                if hasattr(target, "wake_and_flee"):
+                    target.take_damage(max(1, int(round(self.melee_damage))),
+                                       attacker=self)
+                else:
+                    target.take_damage(max(1, int(round(self.melee_damage))))
 
     def draw(self, screen, cam_x, cam_y):
         sx, sy = self.x - cam_x, self.y - cam_y
