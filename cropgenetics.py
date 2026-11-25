@@ -11,6 +11,7 @@ lots carry a copy of the strain in their item genetics field.
 from __future__ import annotations
 
 import hashlib
+import math
 import random
 
 
@@ -157,7 +158,18 @@ def quality_cap(strain) -> int:
 
 
 def cap_quality(strain, grade: int) -> int:
-    return max(0, min(quality_cap(strain), int(grade)))
+    """Apply a quality target as a grade floor, not merely a ceiling.
+
+    A strain with the S target must actually be able to produce S; the base
+    crop is A, so a target of S at high progress raises the result to S.
+    """
+    base = max(0, min(5, int(grade)))
+    for target, target_grade, _label in QUALITY_TARGETS:
+        p = _target_progress(strain, target)
+        if p > 0.0:
+            unlocked = 5 + int(math.floor(p * (target_grade - 5) + 0.5))
+            base = max(base, unlocked)
+    return min(8, base)
 
 
 def display_name(stack) -> str:

@@ -941,7 +941,9 @@ def _deposit_stacks(npc, dst, only, into_stall: bool, player=None) -> dict:
                     else:
                         room = 0
                 else:
-                    dst.add(item, room, q)
+                    dst.add(item, room, q,
+                            plant_kind=getattr(s, "plant_kind", None),
+                            genetics=getattr(s, "genetics", None))
         if room > 0:
             if s.defn.stackable:
                 s.count = have - room
