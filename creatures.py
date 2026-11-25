@@ -14,6 +14,7 @@ import random
 
 import pygame
 import face
+import wolfart
 
 from enemy import AWARE_MEMORY, VIEW_RANGE, Enemy
 from combat import friendly_in_line
@@ -556,6 +557,12 @@ class Wolf(Enemy):
         # the one moment in a careful dance when teeth can find flesh.
         self.lunge_cd = random.uniform(2.0, 4.0)
         self.lunging = 0.0
+        # The walk cycle is driven by distance travelled, not by a wall-clock
+        # timer: a stalking wolf and a sprinting one get different gaits.
+        self._anim_phase = random.uniform(0.0, 2.0 * math.pi)
+        self._anim_t = 0.0
+        self._anim_x = float(x)
+        self._anim_y = float(y)
         self._apply_tier()          # last, so nothing overwrites the station
 
     def _apply_tier(self) -> None:
@@ -612,31 +619,36 @@ class Wolf(Enemy):
         if self.species == "snake":
             self._draw_snake(screen, cam_x, cam_y)
             return
+        # EIGHT 45-DEGREE VIEWS, ONE CACHED FRAME AT A TIME.  The old wolf was
+        # a circle with a tail; this one has a projected body, neck, ears,
+        # muzzle, four legs and a brush tail, and its gait follows movement.
         sx, sy = self.x - cam_x, self.y - cam_y
-        fx, fy = self.facing
-        if self.species == "white_wolf":
-            body, line, ear, eye = (230, 233, 238), (168, 174, 184), (150, 158, 172), (90, 120, 150)
-        elif self.species == "hyena":
-            body, line, ear, eye = (156, 128, 84), (98, 78, 52), (110, 86, 56), (40, 32, 24)
-        else:
-            body, line, ear, eye = (96, 96, 104), (58, 58, 66), (58, 58, 66), (222, 196, 120)
-        pygame.draw.ellipse(screen, (18, 16, 14), (sx - 12, sy - 4, 24, 10))
-        body_c = (238, 236, 232) if self.hit_flash > 0.0 else body
-        pygame.draw.line(screen, line, (sx - fx * 12, sy - fy * 12),
-                         (sx - fx * 22, sy - fy * 22), 4)
-        pygame.draw.circle(screen, body_c, (int(sx), int(sy)), 10)
-        if self.species == "hyena":                      # sloped back + spots
-            pygame.draw.circle(screen, (104, 84, 56), (int(sx - 3), int(sy - 2)), 2)
-            pygame.draw.circle(screen, (104, 84, 56), (int(sx + 2), int(sy + 2)), 2)
-            pygame.draw.circle(screen, (104, 84, 56), (int(sx - 1), int(sy + 4)), 2)
-        pygame.draw.circle(screen, line, (int(sx), int(sy)), 10, 2)
-        hx, hy = sx + fx * 9, sy + fy * 9
-        pygame.draw.circle(screen, body_c, (int(hx), int(hy)), 6)
-        pygame.draw.polygon(screen, ear, [
-            (hx - fy * 5 - fx * 2, hy + fx * 5 - fy * 2),
-            (hx - fy * 5 + fx * 3, hy + fx * 5 + fy * 3),
-            (hx - fy * 2, hy + fx * 2)])
-        pygame.draw.circle(screen, eye, (int(hx + fx * 3), int(hy + fy * 3)), 2)
+        now = float(_NOW)
+        dt = now - float(getattr(self, "_anim_t", now))
+        if dt < 0.0 or dt > 0.5:
+            dt = 0.0
+        moved = math.hypot(self.x - float(getattr(self, "_anim_x", self.x)),
+                           self.y - float(getattr(self, "_anim_y", self.y)))
+        self._anim_t = now
+        self._anim_x = float(self.x)
+        self._anim_y = float(self.y)
+        # A step is about 0.10 rad per pixel; idle animals still breathe and
+        # swish their tails at a slower rate.
+        self._anim_phase = (float(getattr(self, "_anim_phase", 0.0))
+                            + moved * 0.10 + dt * 0.55)
+        step = int(self._anim_phase / (2.0 * math.pi) * 8.0) % 8
+        dx, dy = self.facing
+        if abs(dx) + abs(dy) < 0.01:
+            dx, dy = 0.0, 1.0
+        d = int(round(math.atan2(dy, dx) / (math.pi / 4.0))) % 8
+        zoom = 0.92 + max(0.0, float(getattr(self, "radius", 11)) - 11.0) * 0.035
+        lunge = float(getattr(self, "lunging", 0.0)) > 0.0
+        hit = float(getattr(self, "hit_flash", 0.0)) > 0.0
+        species = self.species if self.species in ("white_wolf", "hyena") else "wolf"
+        img = wolfart.frame(species, d, step, zoom, hit=hit, lunge=lunge)
+        sh = wolfart.shadow(zoom)
+        screen.blit(sh, (int(sx - sh.get_width() * 0.5), int(sy + 2)))
+        screen.blit(img, (int(sx - wolfart.AX), int(sy - wolfart.AY)))
 
     def _draw_snake(self, screen, cam_x, cam_y):
         sx, sy = self.x - cam_x, self.y - cam_y
