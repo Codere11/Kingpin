@@ -100,6 +100,7 @@ done
     --hidden-import wind \
     --hidden-import conversation \
     --hidden-import wolfart \
+    --hidden-import rabbitart \
     "${DATA_ARGS[@]}" \
     main.py 2>&1 | tail -1
 

@@ -14,6 +14,7 @@ import random
 
 import pygame
 import face
+import rabbitart
 import wolfart
 
 from enemy import AWARE_MEMORY, VIEW_RANGE, Enemy
@@ -697,6 +698,12 @@ class Rabbit:
         self.flee_timer = 0.0
         self.hop_timer = random.uniform(0.4, 1.6)
         self.target = (self.x, self.y)
+        # A hop cycle is driven by travel; idle rabbits still breathe, twitch
+        # their ears and nibble.
+        self._anim_phase = random.uniform(0.0, 2.0 * math.pi)
+        self._anim_t = 0.0
+        self._anim_x = float(x)
+        self._anim_y = float(y)
 
     @property
     def alive(self) -> bool:
@@ -736,23 +743,31 @@ class Rabbit:
             self.facing = (dx / distance, dy / distance)
 
     def draw(self, screen, cam_x, cam_y):
-        sx = self.x - cam_x
-        sy = self.y - cam_y
+        # EIGHT 45-DEGREE RABBIT VIEWS.  The hop is distance-driven, so a
+        # fleeing rabbit's feet move faster than a grazing one's.
+        sx, sy = self.x - cam_x, self.y - cam_y
+        now = float(_NOW)
+        dt = now - float(getattr(self, "_anim_t", now))
+        if dt < 0.0 or dt > 0.5:
+            dt = 0.0
+        moved = math.hypot(self.x - float(getattr(self, "_anim_x", self.x)),
+                           self.y - float(getattr(self, "_anim_y", self.y)))
+        self._anim_t = now
+        self._anim_x = float(self.x)
+        self._anim_y = float(self.y)
+        self._anim_phase = (float(getattr(self, "_anim_phase", 0.0))
+                            + moved * 0.30 + dt * 1.25)
+        step = int(self._anim_phase / (2.0 * math.pi) * 8.0) % 8
         fx, fy = self.facing
-        palette = {"white": ((240, 242, 246), (176, 182, 190)),
-                   "yellow": ((222, 198, 112), (156, 134, 66)),
-                   "brown": ((154, 118, 78), (100, 74, 46)),
-                   "grey": ((206, 196, 186), (120, 112, 106))}
-        body, line = palette.get(self.fur, palette["grey"])
-        pygame.draw.ellipse(screen, (18, 16, 14), (sx - 7, sy - 2, 14, 6))
-        if self.hit_flash > 0.0:
-            body = (250, 240, 240)
-        pygame.draw.circle(screen, body, (int(sx), int(sy)), 7)
-        pygame.draw.circle(screen, line, (int(sx), int(sy)), 7, 1)
-        hx, hy = sx + fx * 6, sy + fy * 5 - 2
-        pygame.draw.circle(screen, body, (int(hx), int(hy)), 4)
-        pygame.draw.line(screen, line, (hx, hy - 2), (hx - 2, hy - 9), 2)
-        pygame.draw.line(screen, line, (hx, hy - 2), (hx + 2, hy - 9), 2)
+        if abs(fx) + abs(fy) < 0.01:
+            fx, fy = 1.0, 0.0
+        direction = int(round(math.atan2(fy, fx) / (math.pi / 4.0))) % 8
+        zoom = 0.92
+        hit = float(getattr(self, "hit_flash", 0.0)) > 0.0
+        img = rabbitart.frame(self.fur, direction, step, zoom, hit=hit)
+        sh = rabbitart.shadow(zoom)
+        screen.blit(sh, (int(sx - sh.get_width() * 0.5), int(sy + 2)))
+        screen.blit(img, (int(sx - rabbitart.AX), int(sy - rabbitart.AY)))
 
 
 class Horse:
