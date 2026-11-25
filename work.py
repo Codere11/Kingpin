@@ -925,11 +925,28 @@ def _deposit_stacks(npc, dst, only, into_stall: bool, player=None) -> dict:
         else:
             room = min(have, int(can_hold(dst, item, have)))
             if room > 0:
-                dst.add(item, room, q)
+                if not s.defn.stackable:
+                    # Keep the unique object itself: add() would mint a new
+                    # one and lose maker, owner and history.
+                    if player is not None:
+                        try:
+                            import itemstory
+                            itemstory.transfer(s, player, "stored",
+                                               actor=npc, place="the chest")
+                        except Exception:
+                            pass
+                    if dst.add_stack(s, owner=player) is not None:
+                        inv.slots[i] = None
+                        room = have
+                    else:
+                        room = 0
+                else:
+                    dst.add(item, room, q)
         if room > 0:
-            s.count = have - room
-            if s.count <= 0:
-                inv.slots[i] = None
+            if s.defn.stackable:
+                s.count = have - room
+                if s.count <= 0:
+                    inv.slots[i] = None
             out["moved"][item] = out["moved"].get(item, 0) + room
     for s in inv.slots:
         if s is not None and s.defn.id in allowed and int(s.count) > 0:

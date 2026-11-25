@@ -702,6 +702,13 @@ class ChestPanel:
             text = "click to move   ·   right-click to split   ·   E to close"
         label = self.font_tiny.render(text, True, DIM)
         screen.blit(label, (panel.centerx - label.get_width() // 2, panel.bottom - 18))
+        if self.hover is not None and stack is not None:
+            try:
+                import itemstory
+                itemstory.draw_tooltip(screen, stack, pygame.mouse.get_pos(),
+                                        self.font_tiny)
+            except Exception:
+                pass
 
         if self.held is not None:
             mx, my = pygame.mouse.get_pos()

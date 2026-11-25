@@ -2603,6 +2603,24 @@ def run(g):
                         pass
                     if g.died:
                         g._loot(bullet.shooter, obj)
+                        # A GUN REMEMBERS ITS KILLS, not every shot.  The
+                        # victim's name is enough; the weapon's owner can
+                        # carry the rest.
+                        try:
+                            _weapon = getattr(bullet, "weapon", None)
+                            if _weapon is not None:
+                                import itemstory
+                                _where = getattr(getattr(obj, "native_camp", None),
+                                                 "name", None) or \
+                                         getattr(getattr(obj, "village", None),
+                                                 "name", "") or "the field"
+                                itemstory.record(_weapon, "killed",
+                                                 actor=bullet.shooter,
+                                                 place=_where, now=g.now,
+                                                 detail=getattr(obj, "name",
+                                                                "someone"))
+                        except Exception:
+                            pass
                     g.blood.spawn(obj.x, obj.y,
                                 20 if g.died else 7, 24.0 if g.died else 14.0)
                     if (bullet.team == "player" and g.player.nation is not None

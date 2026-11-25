@@ -119,7 +119,7 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
         item = crop.LEAF_ITEM[kind]
         amount = max(1, int(round(random.randint(3, 6) * _scale)))
         seeds = random.randint(2, 5)
-        inventory.add(item, amount, quality)
+        inventory.add(item, amount, quality, plant_kind=kind)
         if share is not None:
             share(item, amount)
     elif kind in crop.FIBRE_KINDS:
@@ -127,7 +127,7 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
         item = "cotton"
         amount = random.randint(5, 10)
         seeds = random.randint(1, 3)
-        inventory.add(item, amount)
+        inventory.add(item, amount, plant_kind=kind)
         if share is not None:
             share(item, amount)
     else:
@@ -137,18 +137,18 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
                                    "cactus": random.randint(1, 2)}.get(kind, 1)
                                   * _scale)))
         seeds = random.randint(1, 3)
-        inventory.add(item, amount)
+        inventory.add(item, amount, plant_kind=kind)
         if share is not None:
             share(item, amount)
         if kind == "wheat":
             # ...AND THE GRAIN. Bread is the crop's food, but the grain is what
             # the mash is made of -- without it a farmer could bake a loaf and
             # never brew a beer, which made no sense at all.
-            inventory.add("wheat", amount)
+            inventory.add("wheat", amount, plant_kind=kind)
             if share is not None:
                 share("wheat", amount)
     if seed is not None:
-        inventory.add(seed, seeds)
+        inventory.add(seed, seeds, plant_kind=kind)
     # The crop took everything out of the soil: it is spent, and grass returns.
     plot.kind = "grass"
     plot.planted_at = None

@@ -19,6 +19,9 @@ class ItemStack:
     payload: object = None
     # A unique thing's plain-data biography: maker, origin, owner, history.
     provenance: dict | None = None
+    # Bulk crop lots carry the PLANT KIND and (later) a genetics record.
+    plant_kind: str | None = None
+    genetics: dict | None = None
 
 
 class Inventory:
@@ -35,7 +38,8 @@ class Inventory:
 
     def add(self, item_id: str, count: int = 1,
             quality: int | None = None, maker=None, origin=None,
-            owner=None, now: float = 0.0) -> int | None:
+            owner=None, now: float = 0.0, plant_kind: str | None = None,
+            genetics: dict | None = None) -> int | None:
         """Add items, stacking up to max_stack and spilling into new slots."""
         defn = items.get(item_id)
         if item_id == "coin":
@@ -71,6 +75,10 @@ class Inventory:
                             base = stack.quality if stack.quality is not None else quality
                             stack.quality = merge(base, stack.count, quality, take)
                         stack.count += take
+                        if stack.plant_kind is None:
+                            stack.plant_kind = plant_kind
+                        if stack.genetics is None and genetics is not None:
+                            stack.genetics = genetics
                         remaining -= take
                         if first is None:
                             first = i
@@ -79,7 +87,10 @@ class Inventory:
                 if slot is None:
                     break
                 take = min(defn.max_stack, remaining)
-                self.slots[slot] = ItemStack(defn, take, q_here)
+                stack = ItemStack(defn, take, q_here)
+                stack.plant_kind = plant_kind
+                stack.genetics = genetics
+                self.slots[slot] = stack
                 remaining -= take
                 if first is None:
                     first = slot
@@ -89,6 +100,8 @@ class Inventory:
                 if slot is None:
                     break
                 stack = ItemStack(defn, 1)
+                stack.plant_kind = plant_kind
+                stack.genetics = genetics
                 # Tools, weapons, armour and other non-stacking objects get a
                 # biography the moment they enter the world.  Bulk goods stay
                 # as cheap counts.
@@ -108,6 +121,33 @@ class Inventory:
                 if first is None:
                     first = slot
         return first
+
+    def add_stack(self, stack, owner=None, now: float = 0.0):
+        """Put a real ItemStack into this inventory, keeping its provenance.
+
+        Bulk goods can still merge by count; a unique object must not be
+        recreated by add() because that would erase its biography.
+        """
+        if stack is None or int(getattr(stack, "count", 0)) <= 0:
+            return None
+        if stack.defn.stackable:
+            first = self.add(stack.defn.id, int(stack.count),
+                              getattr(stack, "quality", None),
+                              owner=owner, now=now,
+                              plant_kind=getattr(stack, "plant_kind", None),
+                              genetics=getattr(stack, "genetics", None))
+            return first
+        slot = self._first_empty()
+        if slot is None:
+            return None
+        self.slots[slot] = stack
+        try:
+            import itemstory
+            if owner is not None:
+                itemstory.set_owner(stack, owner)
+        except Exception:
+            pass
+        return slot
 
     def select(self, index: int) -> None:
         if 0 <= index < self.capacity:

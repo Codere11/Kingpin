@@ -191,7 +191,9 @@ def stack_to_data(stack):
         payload = None
     return [stack.defn.id, int(stack.count),
             getattr(stack, "quality", None), payload,
-            getattr(stack, "provenance", None)]
+            getattr(stack, "provenance", None),
+            getattr(stack, "plant_kind", None),
+            getattr(stack, "genetics", None)]
 
 
 def data_to_stack(data):
@@ -206,6 +208,10 @@ def data_to_stack(data):
             stack.payload = data[3]
         if len(data) > 4 and data[4] is not None:
             stack.provenance = data[4]
+        if len(data) > 5 and data[5] is not None:
+            stack.plant_kind = data[5]
+        if len(data) > 6 and data[6] is not None:
+            stack.genetics = data[6]
         return stack
     except Exception:
         return None

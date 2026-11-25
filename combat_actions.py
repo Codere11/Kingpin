@@ -27,6 +27,18 @@ from interior import Interior, fill_loot
 from ui import ChestPanel
 
 
+def _record_kill_weapon(stack, victim, g) -> None:
+    if stack is None or victim is None:
+        return
+    try:
+        import itemstory
+        itemstory.record(stack, "killed", actor=g.player,
+                         place="the field", now=getattr(g, "now", 0.0),
+                         detail=getattr(victim, "name", "someone"))
+    except Exception:
+        pass
+
+
 def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
     stack = inventory.selected_stack()
     if stack is None or stack.defn.id not in (guns.MUSKET, guns.DOUBLE_SHOT,
@@ -54,7 +66,7 @@ def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
         dmg = max(1, round(_m.MELEE_DAMAGE * skills.axe_damage_scale()))
         combat.fire(muzzle_x, muzzle_y, player.facing_angle, distance,
                     shooter=player, owner="player", damage=dmg, team="player",
-                    spread=skills.shot_spread(), arrow=True)
+                    spread=skills.shot_spread(), arrow=True, weapon=stack)
         sound.play("shot_bow")
         skills.gain_shooting()
         return
@@ -87,7 +99,7 @@ def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
         extra = 0.11 if kind == guns.SHOTGUN else 0.0   # only the shotgun scatters
         combat.fire(muzzle_x, muzzle_y, player.facing_angle, distance,
                     shooter=player, owner="player", damage=guns.DAMAGE[kind],
-                    team="player", spread=spread + extra)
+                    team="player", spread=spread + extra, weapon=stack)
     sound.play("shot_rifle" if kind == guns.RIFLE else "shot_musket")
     skills.gain_shooting()
 
@@ -237,6 +249,10 @@ def resolve_swing(g, kills) -> int:
         return kills
     g.player._pending_swing = None
     angle, melee, _armed = _p
+    stack = g.inventory.selected_stack()
+    if stack is None or stack.defn.id != "axe":
+        stack = next((_s for _s in g.inventory.slots
+                      if _s is not None and _s.defn.id == "axe"), None)
     g.skills.gain_axe()
     g.combat.spawn_swing(g.player.x, g.player.y, angle)
     _flesh = False
@@ -254,6 +270,7 @@ def resolve_swing(g, kills) -> int:
             enemy.take_damage(melee)
             _flesh = True
             if _was_alive and not getattr(enemy, "alive", True):
+                _record_kill_weapon(stack, enemy, g)
                 if getattr(enemy, "kind", "") == "bison":
                     g.inventory.add("raw_meat", random.randint(5, 10))
                     g.inventory.add("hide", random.randint(30, 50))
@@ -268,6 +285,7 @@ def resolve_swing(g, kills) -> int:
             _flesh = True
             g.blood.spawn(rabbit.x, rabbit.y, 8, 12.0)
             if died:
+                _record_kill_weapon(stack, rabbit, g)
                 amount = random.randint(1, 2)
                 g.inventory.add("raw_meat", amount)
                 g.toast(f"Caught a rabbit   +{amount} raw meat")
@@ -278,6 +296,7 @@ def resolve_swing(g, kills) -> int:
             _flesh = True
             g.blood.spawn(horse.x, horse.y, 8, 14.0)
             if died:
+                _record_kill_weapon(stack, horse, g)
                 g.toast("Felled a horse")
     # EVERY MAN THE BLADE REACHES IS CUT -- once each.
     #
@@ -304,6 +323,8 @@ def resolve_swing(g, kills) -> int:
         if npc.alive and in_arc(npc.x, npc.y, npc.radius):
                 died = npc.take_damage(melee, record=False, attacker=g.player)
                 _flesh = True
+                if died:
+                    _record_kill_weapon(stack, npc, g)
                 g.work_lanes.damage(npc, melee)
                 # HE KNOWS THE MAN WHO HIT HIM -- and likes him twenty less.
                 try:

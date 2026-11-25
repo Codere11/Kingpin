@@ -105,6 +105,23 @@ def set_owner(stack, owner) -> None:
     prov = ensure(stack)
     if prov:
         prov["owner"] = _name(owner)
+        remember(owner, stack)
+
+
+def transfer(stack, new_owner, action="taken", actor=None, place=None,
+             now=0.0) -> None:
+    """Record an ownership change and who made it.  This is the hook theft,
+    trade, gifting and inheritance call; the item story then writes itself."""
+    prov = ensure(stack)
+    if not prov:
+        return
+    old = prov.get("owner", "")
+    new = _name(new_owner)
+    prov["owner"] = new
+    detail = ("%s -> %s" % (old or "nobody", new or "nobody"))
+    record(stack, action, actor=actor or new_owner, place=place, now=now,
+           detail=detail)
+    remember(new_owner, stack)
 
 
 def quality_text(stack) -> str:
@@ -126,6 +143,13 @@ def describe(stack) -> list[str]:
     q = quality_text(stack)
     if q:
         lines[0] += "  (%s)" % q
+    try:
+        if getattr(stack, "plant_kind", None):
+            lines.append("Plant: %s" % stack.plant_kind)
+        if getattr(stack, "genetics", None):
+            lines.append("Genetics: %s" % stack.genetics)
+    except Exception:
+        pass
     if not isinstance(prov, dict):
         lines.append("No provenance recorded.")
         return lines
