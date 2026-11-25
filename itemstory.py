@@ -155,12 +155,24 @@ def describe(stack) -> list[str]:
             _t = _gen.get("targets") if isinstance(_gen, dict) else None
             _p = _gen.get("progress") if isinstance(_gen, dict) else None
             if _t:
-                _bits = []
+                import cropgenetics as _cg
+                _common = {_k: (_cap, _label) for _k, _cap, _label in _cg.COMMON_TARGETS}
+                _quality = {_k: (_grade, _label) for _k, _grade, _label in _cg.QUALITY_TARGETS}
+                _cap = int(_gen.get("quality_cap", 5) or 5)
+                if _cap > 5:
+                    lines.append("Quality cap: %s" % quality.letter(_cap))
                 for _tag in _t:
-                    _bits.append("%s %d%%" % (
-                        str(_tag).replace("quality_", "quality "),
-                        int(round(100.0 * float((_p or {}).get(_tag, 0.0))))))
-                lines.append("Genetics: " + ", ".join(_bits))
+                    _prog = max(0.0, min(1.0, float((_p or {}).get(_tag, 0.0))))
+                    if _tag in _common:
+                        _max, _label = _common[_tag]
+                        _pct = int(math.floor(_max * _prog * 100.0 + 0.5))
+                        lines.append("%s  +%d%%" % (_label, _pct))
+                    elif _tag in _quality:
+                        _grade, _label = _quality[_tag]
+                        _pct = int(math.floor(_prog * 100.0 + 0.5))
+                        lines.append("%s target  %d%%" % (_label, _pct))
+                    else:
+                        lines.append("%s  %d%%" % (_tag, int(math.floor(_prog * 100.0 + 0.5))))
             else:
                 lines.append("Genetics: %s" % _gen)
     except Exception:

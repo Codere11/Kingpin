@@ -404,7 +404,11 @@ class TradeMenu:
                 enabled = sold > 0
                 grade = self._quality_of(data)
                 stack = self.inv.slots[data]
-                leaf_name = stack.defn.name.lower() if stack is not None else "leaf"
+                try:
+                    import cropgenetics
+                    leaf_name = cropgenetics.display_name(stack).lower() if stack is not None else "leaf"
+                except Exception:
+                    leaf_name = stack.defn.name.lower() if stack is not None else "leaf"
                 icon = items.icon(stack.defn.id if stack is not None else "tobacco",
                                   rect.height - 12)
                 # A GRADE ONLY WHERE A GRADE MEANS SOMETHING. Wood is wood and
@@ -428,6 +432,16 @@ class TradeMenu:
                 price = "%d coin%s" % (cost, "" if cost == 1 else "s")
 
             screen.blit(icon, (rect.left + 6, rect.centery - icon.get_height() // 2))
+        if 0 <= self.hover < len(entries):
+            kind, data = entries[self.hover]
+            if kind == "sell":
+                try:
+                    import itemstory
+                    stack = self.inv.slots[data]
+                    itemstory.draw_tooltip(screen, stack, pygame.mouse.get_pos(),
+                                            self.font_small)
+                except Exception:
+                    pass
             text = self.font.render(label, True, TEXT if enabled else DIM)
             screen.blit(text, (rect.left + icon.get_width() + 14,
                                rect.centery - text.get_height() // 2))

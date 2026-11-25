@@ -1439,6 +1439,19 @@ class ShipMarketPanel:
                         c = self.font_tiny.render(str(stack.count), True, TEXT)
                         screen.blit(c, (rect.right - c.get_width() - 2, rect.bottom - c.get_height() - 1))
                     _draw_quality(screen, rect, stack, self.font_tiny)
+        if self.hover is not None:
+            for _which, _rects, _inv in (("player", pr, self.player),
+                                         ("hold", hr, self.hold)):
+                for _i, _rect in enumerate(_rects):
+                    if _rect.collidepoint(self.hover):
+                        try:
+                            import itemstory
+                            itemstory.draw_tooltip(screen, _inv.slots[_i],
+                                                    pygame.mouse.get_pos(),
+                                                    self.font_tiny)
+                        except Exception:
+                            pass
+                        break
         # right goods list
         t = self.font.render("THE MARKET", True, (238, 224, 190))
         screen.blit(t, (rx + 4, ly))
