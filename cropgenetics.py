@@ -20,7 +20,7 @@ COMMON_TARGETS = (
     ("yield", 0.35, "Yield"),
     ("sell", 0.50, "Alcohol value"),
     ("seeds", 0.35, "Seed yield"),
-    ("mood", 0.40, "Alcohol mood"),
+    ("mood", 2.00, "Alcohol mood"),
     ("drought", 0.50, "Drought resistance"),
     ("rain", 0.50, "Rain resistance"),
 )

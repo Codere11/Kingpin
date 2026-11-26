@@ -35,13 +35,17 @@ def consume(npc, item, now, genetics=None):
     Three minutes of it: +10 mood and +10 to his breaking point, both
     temporary. The item is in his hand until he finishes it."""
     old = float(getattr(npc, "mood", 50.0))
+    # Alcohol is a smaller base lift than a cigar or a mushroom.  Its local
+    # strain can push that *base* up by as much as 300% (a +15 mood swing on
+    # a base of 5), which is what makes a famous local brew matter.
+    _base = 5.0 if item in economy.DRINKS else 10.0
     _extra = 0.0
     if isinstance(genetics, dict):
         try:
-            _extra = 10.0 * max(0.0, float((genetics.get("bonuses") or {}).get("mood", 0.0)))
+            _extra = _base * max(0.0, float((genetics.get("bonuses") or {}).get("mood", 0.0)))
         except Exception:
             _extra = 0.0
-    apply_mood(npc, 10.0 + _extra, reason="consumed %s" % item)
+    apply_mood(npc, _base + _extra, reason="consumed %s" % item)
     new = float(getattr(npc, "mood", 50.0))
     # remember exactly how much mood the fix actually added, so the expiry
     # removes exactly that (clamping at 100 cannot leak a phantom 10).
