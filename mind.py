@@ -85,12 +85,20 @@ def consume(npc, item, now, genetics=None):
                     npc.cocoa_tasted = True
             except Exception:
                 pass
+    try:
+        import localstyles as _ls
+        if item in _ls.STYLE_DRINKS:
+            _ls.apply_npc(npc, item, now)
+    except Exception:
+        pass
     new = float(getattr(npc, "mood", 50.0))
     # remember exactly how much mood the fix actually added, so the expiry
     # removes exactly that (clamping at 100 cannot leak a phantom 10).
     npc._consume_mood_off = float(getattr(npc, "_consume_mood_off", 0.0)) + (new - old)
     if item in ("beer", "liqueur", "mezcal", "govbeer",
-                "chili_beer", "chili_mezcal", "banana_liqueur"):
+                "chili_beer", "chili_mezcal", "banana_liqueur",
+                "steel_ale", "steelworm", "bananale", "braggot",
+                "chocolate_stout"):
         npc.drunk_level = float(getattr(npc, "drunk_level", 0.0) or 0.0) + 1.0
     elif item == "dried_mushroom":
         npc.high_level = float(getattr(npc, "high_level", 0.0) or 0.0) + 1.0

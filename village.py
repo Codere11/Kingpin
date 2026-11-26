@@ -547,8 +547,14 @@ class NPC:
     iron_armor: Any = False       # second-ring warrior plate
     iron_helmet: Any = False      # the local iron cap
     flower_archer: Any = False    # a Flower Flats bowman
-    speed_boost_t: Any = 0.0      # banana-liqueur quickening
+    speed_boost_t: Any = 0.0      # local-style quickening
+    speed_boost_mult: Any = 1.5
     cocoa_tasted: Any = False     # first chocolate stamina boost
+    damage_resist: Any = 0.0
+    damage_resist_perm: Any = 0.0
+    damage_resist_t: Any = 0.0
+    steelworm_used: Any = False
+    bananale_used: Any = False
 
     # -- WHAT A MAN IS, WRITTEN DOWN --------------------------------------
     # One plain dict: every compiled field and everything in __dict__. The
@@ -615,7 +621,13 @@ class NPC:
         self.max_stamina = 100.0
         self.stamina = 100.0
         self.speed_boost_t = 0.0
+        self.speed_boost_mult = 1.5
         self.cocoa_tasted = False
+        self.damage_resist = 0.0
+        self.damage_resist_perm = 0.0
+        self.damage_resist_t = 0.0
+        self.steelworm_used = False
+        self.bananale_used = False
         self._market_spot = None
         self.skills = skills.Skills()      # the same skills the player has
         self.target = (x, y)
@@ -913,6 +925,12 @@ class NPC:
             except Exception:
                 pass
             return False
+        try:
+            amount = max(0, int(round(float(amount)
+                                     * (1.0 - max(0.0, min(0.85,
+                                         float(self.damage_resist)))))))
+        except Exception:
+            pass
         self.health -= amount
         try:
             persona.add_trauma(self, amount)
@@ -2016,7 +2034,8 @@ class NPC:
             self._native_idle(dt)
             return
         drinks = ("beer", "liqueur", "mezcal", "steelka", "mead",
-                  "chili_beer", "chili_mezcal")
+                  "chili_beer", "chili_mezcal", "steel_ale", "steelworm",
+                  "bananale", "braggot", "chocolate_stout")
         # Deliver finished drink before starting another batch.
         if any(int(self.carry.get(i, 0) or 0) > 0 for i in drinks):
             if self._deposit_to_chest(dt):
@@ -2065,6 +2084,25 @@ class NPC:
         elif (getattr(self, "chili_mezcal_recipe", False)
               and base_drink == "mezcal"):
             drink = "chili_mezcal"
+        _style = None
+        if drink == base_drink and float(getattr(self.skills, "farming", 0.0)) >= 6.4:
+            try:
+                import localstyles as _ls
+                for _extra, _variant in _ls.BREW_STYLES.get(base_drink, ()):
+                    _ch = self._chest_with(_extra, 1)
+                    if _ch is None:
+                        continue
+                    if math.hypot(_ch.x - self.x, _ch.y - self.y) > 140.0:
+                        continue
+                    if random.random() >= 0.25:
+                        continue
+                    _taken, _g = self._take_from_chest(_ch, _extra, 1)
+                    if _taken > 0:
+                        drink = _variant
+                        _style = _variant
+                        break
+            except Exception:
+                pass
         self.carry[drink] = int(self.carry.get(drink, 0) or 0) + 5
         # LOCAL ALE INHERITS THE CROP STRAIN.  The brewer's skill decides how
         # much of the field bonus survives the ferment.
@@ -2073,6 +2111,24 @@ class NPC:
             _src = cropgenetics.genetics(camp, mash)
             _gen = cropgenetics.extract(_src, getattr(self.skills, "farming", 0.0),
                                         items.get(drink).name)
+            if _style is not None:
+                if _gen is None:
+                    _gen = {
+                        "crop": mash,
+                        "settlement": getattr(camp, "name", "Settlement"),
+                        "source_name": getattr(camp, "name", "Settlement"),
+                        "name": "%s %s" % (getattr(camp, "name", "Settlement"),
+                                           items.get(drink).name),
+                        "targets": [], "progress": {}, "bonuses": {},
+                        "kind": "alcohol", "extraction": 1.0,
+                        "maker_skill": float(getattr(self.skills, "farming", 0.0)),
+                    }
+                _gen = dict(_gen)
+                _gen["kind"] = "alcohol"
+                _gen["product"] = items.get(drink).name
+                _gen["special"] = True
+                _gen["style"] = _style
+                _gen["label"] = _ls.STYLE_LABEL.get(_style)
             if drink in ("chili_beer", "chili_mezcal"):
                 # THE CHILI MARK IS THE RECIPE.  The label is no longer
                 # blank; the bottle carries the brewer's mark.
@@ -3487,7 +3543,11 @@ class NPC:
             self.forget(now)              # anything has anything to forget.
         if self.speed_boost_t > 0.0:
             self.speed_boost_t = max(0.0, self.speed_boost_t - dt)
-        _boost = 1.5 if self.speed_boost_t > 0.0 else 1.0
+        if self.damage_resist_t > 0.0:
+            self.damage_resist_t = max(0.0, self.damage_resist_t - dt)
+            if self.damage_resist_t <= 0.0:
+                self.damage_resist = self.damage_resist_perm
+        _boost = self.speed_boost_mult if self.speed_boost_t > 0.0 else 1.0
         self.speed = self.base_speed * self.skills.move_scale() * _boost
         # GET TO SAFETY. A refugee has exactly one mission and it outranks
         # his trade: a man running for his life does not stop to run a caravan.

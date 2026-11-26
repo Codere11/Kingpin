@@ -54,7 +54,7 @@ def _note(text: str) -> None:
         pass
 
 FOOD = ("bread", "berries", "cactus_fruit", "hardberries", "bananas",
-        "raw_honey")
+        "raw_honey", "banana_bread", "honey_toast")
 LEAF = ("tobacco", "red_mushroom", "agave", "chili", "pipeleaf", "cocoa",
         "highflower")
 # The artisan's trade: what a laboratory turns leaf INTO. Nobody craves the raw
@@ -75,10 +75,12 @@ BREW = {"wheat_wort": "beer", "berry_wort": "liqueur",
         "agave_wort": "mezcal", "hardberry_wort": "steelka",
         "banana_wort": "banana_liqueur", "honey_wort": "mead"}
 LUXURY = FINISHED + tuple(BREW.values()) + (
-    "govbeer", "chili_beer", "chili_mezcal")
+    "govbeer", "chili_beer", "chili_mezcal", "steel_ale", "steelworm",
+    "bananale", "braggot", "chocolate_stout")
 DRINKS = set(BREW.values()) | {
     "govbeer", "chili_beer", "chili_mezcal", "steelka",
-    "banana_liqueur", "mead"}  # made, not grown
+    "banana_liqueur", "mead", "steel_ale", "steelworm", "bananale",
+    "braggot", "chocolate_stout"}  # made, not grown
 WORT_BATCH = 50            # fifty at a time through the table, and the barrel
 WORT_STOCK = 40            # mash a brewer keeps on hand
 BREW_SECONDS = 300.0       # five minutes in the barrel
@@ -97,7 +99,8 @@ GOODS = (FOOD + LEAF + FINISHED + SEEDS + TOOLS + ARMS
          + ("iron", "wood", "ironwood", "tropical_wood", "wheat")
          + ("rose", "tulip", "violet", "daisy", "poppy", "honeycomb")
          + tuple(WORT.values())
-         + tuple(BREW.values()) + ("govbeer",))
+         + tuple(BREW.values()) + ("govbeer", "steel_ale", "steelworm",
+                                   "bananale", "braggot", "chocolate_stout"))
 WAGE_GOODS = FOOD + LEAF + SEEDS
 
 ITEM_VALUE = {
@@ -109,6 +112,8 @@ ITEM_VALUE = {
     "steelka": 30, "ironwood": 5,     # leaf is the input; this is the good
     "bananas": 4, "banana_wort": 4, "banana_liqueur": 24,
     "cocoa": 14, "chocolate": 38, "tropical_wood": 6,
+    "steel_ale": 28, "steelworm": 31, "bananale": 28, "braggot": 28,
+    "chocolate_stout": 30, "banana_bread": 8, "honey_toast": 7,
     "raw_honey": 12, "honeycomb": 15, "mead": 24, "highflower": 12,
     "highflower_joint": 30, "honey_wort": 4, "rose": 3, "tulip": 3,
     "violet": 3, "daisy": 3, "poppy": 3,
@@ -719,6 +724,25 @@ def harvest(village, npc, kind: str, rng) -> None:
     item, count = crop_yield(kind, rng)
     if not item or count <= 0:
         return
+    # A LOCAL LOAF: bread baked beside bananas or honey in a chest.  The
+    # farmer has to be good enough to notice, and it is a chance, not a law.
+    if item == "bread" and float(getattr(npc.skills, "farming", 0.0)) >= 6.4:
+        try:
+            import localstyles as _ls
+            for _extra, _variant in _ls.BREAD_STYLES:
+                _ch = npc._chest_with(_extra, 1)
+                if _ch is None:
+                    continue
+                if math.hypot(_ch.x - npc.x, _ch.y - npc.y) > 140.0:
+                    continue
+                if random.random() >= 0.25:
+                    continue
+                _taken, _g = npc._take_from_chest(_ch, _extra, 1)
+                if _taken > 0:
+                    item = _variant
+                    break
+        except Exception:
+            pass
     # BARREN ROCKS: half the yield of the easy country.
     try:
         import biomes as _bio
@@ -2324,6 +2348,12 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
                 hunger = hunger - EAT_BY
                 if hunger < 0.0:
                     hunger = 0.0
+                if item in ("banana_bread", "honey_toast"):
+                    try:
+                        import localstyles as _ls
+                        _ls.apply_npc(npc, item, now)
+                    except Exception:
+                        pass
                 _ate = True
                 break
         if not _ate:
@@ -2358,8 +2388,18 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
         else:
             drink = npc.wants_drink
             choice = drink
-            if drink == "mezcal" and stock.get("chili_mezcal", 0) > 0:
+            if drink == "mezcal" and stock.get("steelworm", 0) > 0:
+                choice = "steelworm"
+            elif drink == "mezcal" and stock.get("chili_mezcal", 0) > 0:
                 choice = "chili_mezcal"
+            elif drink == "beer" and stock.get("steel_ale", 0) > 0:
+                choice = "steel_ale"
+            elif drink == "beer" and stock.get("bananale", 0) > 0:
+                choice = "bananale"
+            elif drink == "beer" and stock.get("braggot", 0) > 0:
+                choice = "braggot"
+            elif drink == "beer" and stock.get("chocolate_stout", 0) > 0:
+                choice = "chocolate_stout"
             elif drink == "beer" and stock.get("chili_beer", 0) > 0:
                 choice = "chili_beer"
             elif drink == "liqueur" and stock.get("banana_liqueur", 0) > 0:

@@ -82,6 +82,13 @@ class Player:
     speed_boost_t: float = 0.0
     poison_t: float = 0.0
     poison_next: float = 10.0
+    damage_resist: float = 0.0
+    damage_resist_perm: float = 0.0
+    damage_resist_t: float = 0.0
+    speed_perm: float = 1.0
+    speed_boost_mult: float = 1.5
+    steelworm_used: bool = False
+    bananale_used: bool = False
     # A CLASS ATTRIBUTE, NOT A MODULE ONE. main() has a LOCAL called `player`
     # -- the Player instance -- which SHADOWS the `player` module for the whole
     # of main(). So `player.LEVEL_FLASH` reached the instance, and the module's
@@ -143,6 +150,13 @@ class Player:
         self.speed_boost_t = 0.0
         self.poison_t = 0.0
         self.poison_next = 10.0
+        self.damage_resist = 0.0
+        self.damage_resist_perm = 0.0
+        self.damage_resist_t = 0.0
+        self.speed_perm = 1.0
+        self.speed_boost_mult = 1.5
+        self.steelworm_used = False
+        self.bananale_used = False
         self.exhausted = False
         self.sprinting = False
         self.swing_cd = 0.0
@@ -277,6 +291,8 @@ class Player:
             self.hurt_flash = face.HURT_SECONDS
             self.bleed = 6.0
             return
+        amount = max(0, int(round(float(amount)
+                                 * (1.0 - max(0.0, min(0.85, self.damage_resist))))))
         self.health = max(0, self.health - amount)
         self.hit_flash = 0.15
         self.hurt_flash = face.HURT_SECONDS
@@ -296,9 +312,11 @@ class Player:
         self.stamina = self.max_stamina
         return True
 
-    def quicken(self, seconds: float = 180.0) -> None:
+    def quicken(self, seconds: float = 180.0, mult: float = 1.5) -> None:
         self.speed_boost_t = max(float(getattr(self, "speed_boost_t", 0.0)),
                                  float(seconds))
+        self.speed_boost_mult = max(float(getattr(self, "speed_boost_mult", 1.0)),
+                                    float(mult))
 
     def poison(self, seconds: float = 30.0) -> None:
         """A flower-archer wound: 10% max health every 10 seconds."""
@@ -311,6 +329,10 @@ class Player:
                speed_scale: float = 1.0) -> None:
         if self.speed_boost_t > 0.0:
             self.speed_boost_t = max(0.0, self.speed_boost_t - dt)
+        if self.damage_resist_t > 0.0:
+            self.damage_resist_t = max(0.0, self.damage_resist_t - dt)
+            if self.damage_resist_t <= 0.0:
+                self.damage_resist = self.damage_resist_perm
         if self.poison_t > 0.0 and not self.dead:
             self.poison_t = max(0.0, self.poison_t - dt)
             self.poison_next -= dt
@@ -364,9 +386,9 @@ class Player:
                 self.health = 0
                 self.dead = True
                 self.death_timer = 1.8
-        speed_scale *= self.hunger_factor * self.skill_speed
+        speed_scale *= self.hunger_factor * self.skill_speed * self.speed_perm
         if self.speed_boost_t > 0.0:
-            speed_scale *= 1.5
+            speed_scale *= self.speed_boost_mult
         self.max_stamina = self.base_stamina * self.skill_stamina
         if self.stamina > self.max_stamina:
             self.stamina = self.max_stamina

@@ -43,6 +43,13 @@ GOODS = {
     "violet": (0.1, 0.03, 0.3),
     "daisy": (0.1, 0.03, 0.3),
     "poppy": (0.1, 0.03, 0.3),
+    "steel_ale": (0.1, 0.03, 0.3),
+    "steelworm": (0.1, 0.03, 0.3),
+    "bananale": (0.1, 0.03, 0.3),
+    "braggot": (0.1, 0.03, 0.3),
+    "chocolate_stout": (0.1, 0.03, 0.3),
+    "banana_bread": (0.1, 0.03, 0.3),
+    "honey_toast": (0.1, 0.03, 0.3),
     "liqueur": (0.1, 0.03, 0.3),
     "mezcal": (0.1, 0.03, 0.3),
     "hide": (0.3, 0.15, 0.5),
@@ -59,7 +66,9 @@ PREMIUM = {"steelka": 1.35, "crushed_pipeleaf": 1.35,
            "mead": 1.35, "highflower": 1.35, "highflower_joint": 1.35,
            "raw_honey": 1.35, "honeycomb": 1.35,
            "rose": 1.35, "tulip": 1.35, "violet": 1.35, "daisy": 1.35,
-           "poppy": 1.35}
+           "poppy": 1.35, "steel_ale": 1.35, "steelworm": 1.35,
+           "bananale": 1.35, "braggot": 1.35, "chocolate_stout": 1.35,
+           "banana_bread": 1.35, "honey_toast": 1.35}
 GRADE_STEP = 0.05      # +-5% per grade off B
 THRESHOLD = 100        # units a day that keep the price still
 HISTORY = 40           # how many daily prices the chart remembers
@@ -82,7 +91,9 @@ def sellable(g):
            "mezcal", "chili_mezcal", "steelka", "crushed_pipeleaf",
            "banana_liqueur", "cocoa", "chocolate", "mead", "highflower",
            "highflower_joint", "raw_honey", "honeycomb", "rose", "tulip",
-           "violet", "daisy", "poppy", "chili"]
+           "violet", "daisy", "poppy", "steel_ale", "steelworm",
+           "bananale", "braggot", "chocolate_stout", "banana_bread",
+           "honey_toast", "chili"]
     try:
         import research
         if research.state(g, "animals") == "done":

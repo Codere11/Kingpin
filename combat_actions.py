@@ -738,6 +738,22 @@ def on_click(g):
     # list of three hand-written cases -- and berries and cactus fruit were
     # not among them, so a man could starve with a pocket full of them
     # while every villager in the valley ate the same things for supper.
+    if item_id in ("banana_bread", "honey_toast"):
+        if g.inventory.consume(item_id, 1):
+            g.player.eat(g.eat_restore)
+            g.toast("Ate the %s" % items.get(item_id).name.lower())
+        else:
+            g.toast("None left")
+        return
+    if item_id in ("steel_ale", "steelworm", "bananale", "braggot",
+                   "chocolate_stout"):
+        import localstyles as _ls
+        if g.inventory.consume(item_id, 1):
+            _ls.apply_player(g.player, item_id, getattr(g, "now", 0.0))
+            g.toast("Drank the %s" % items.get(item_id).name.lower())
+        else:
+            g.toast("None left")
+        return
     if item_id in economy.FOOD:
         if g.inventory.consume(item_id, 1):
             g.player.eat(g.eat_restore)

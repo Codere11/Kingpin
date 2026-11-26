@@ -206,6 +206,27 @@ REGISTRY: dict[str, ItemDef] = {
     "chocolate": ItemDef("chocolate", "Chocolate",
                          "Dark, rich chocolate. The first taste can change a body.",
                          stackable=True, max_stack=100, quality=True),
+    "banana_bread": ItemDef("banana_bread", "Banana Bread",
+                            "A sweet local loaf, baked with bananas. Comforting for a whole day.",
+                            stackable=True, max_stack=20),
+    "honey_toast": ItemDef("honey_toast", "Honey Toast",
+                           "Warm bread and raw honey. A small, good thing.",
+                           stackable=True, max_stack=20),
+    "steel_ale": ItemDef("steel_ale", "Steel Ale",
+                         "Hardberry ale with an iron-bar label. Blows glance off the drinker.",
+                         stackable=True, max_stack=100, quality=True),
+    "steelworm": ItemDef("steelworm", "Steelworm",
+                          "Hardberry mezcal. The first bottle permanently hardens the body.",
+                          stackable=True, max_stack=100, quality=True),
+    "bananale": ItemDef("bananale", "Bananale",
+                        "Banana beer. The first one permanently quickens the drinker.",
+                        stackable=True, max_stack=100, quality=True),
+    "braggot": ItemDef("braggot", "Braggot",
+                       "Honeyed beer, warm and golden. Good for the mood.",
+                       stackable=True, max_stack=100, quality=True),
+    "chocolate_stout": ItemDef("chocolate_stout", "Chocolate Stout",
+                               "Dark cocoa beer. Sweet, quick, and cheerful for a day.",
+                               stackable=True, max_stack=100, quality=True),
     "rose": ItemDef("rose", "Rose", "A deep red rose from the flower flats.",
                     stackable=True, max_stack=100),
     "tulip": ItemDef("tulip", "Tulip", "A bright tulip from the flower flats.",
@@ -963,6 +984,32 @@ def _draw_chili_seed(s: int) -> pygame.Surface:
     return _draw_seeds(s, (200, 120, 90), (150, 70, 50))
 
 
+def _draw_banana_bread(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    pygame.draw.ellipse(surf, (178, 122, 62), (0.12 * s, 0.34 * s, 0.76 * s, 0.42 * s))
+    pygame.draw.ellipse(surf, (110, 70, 34), (0.12 * s, 0.34 * s, 0.76 * s, 0.42 * s), 2)
+    for i in range(3):
+        pygame.draw.line(surf, (238, 190, 82), (0.24 * s, (0.46 + i * 0.07) * s),
+                         (0.76 * s, (0.44 + i * 0.07) * s), 2)
+    return surf
+
+
+def _draw_honey_toast(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    pygame.draw.rect(surf, (190, 136, 72), (0.16 * s, 0.28 * s, 0.68 * s, 0.48 * s), border_radius=int(0.05 * s))
+    pygame.draw.rect(surf, (112, 72, 32), (0.16 * s, 0.28 * s, 0.68 * s, 0.48 * s), 2, border_radius=int(0.05 * s))
+    pygame.draw.ellipse(surf, (240, 178, 38), (0.23 * s, 0.36 * s, 0.54 * s, 0.28 * s))
+    pygame.draw.arc(surf, (255, 220, 94), (0.28 * s, 0.40 * s, 0.30 * s, 0.16 * s), 0.3, 2.9, 2)
+    return surf
+
+
+def _draw_steel_ale(s): return _draw_drink(s, (142, 96, 52))
+def _draw_steelworm(s): return _draw_drink(s, (156, 150, 138))
+def _draw_bananale(s): return _draw_drink(s, (232, 196, 52))
+def _draw_braggot(s): return _draw_drink(s, (210, 152, 44))
+def _draw_chocolate_stout(s): return _draw_drink(s, (64, 42, 30))
+
+
 def _draw_banana_seed(s: int) -> pygame.Surface:
     return _draw_seeds(s, (222, 190, 74), (150, 112, 36))
 
@@ -1353,6 +1400,10 @@ _DRAWERS = {
     "honeycomb": _draw_honeycomb, "raw_honey": _draw_raw_honey,
     "highflower": _draw_highflower, "highflower_joint": _draw_highflower_joint,
     "honey_wort": _draw_wort, "mead": _draw_mead,
+    "banana_bread": _draw_banana_bread, "honey_toast": _draw_honey_toast,
+    "steel_ale": _draw_steel_ale, "steelworm": _draw_steelworm,
+    "bananale": _draw_bananale, "braggot": _draw_braggot,
+    "chocolate_stout": _draw_chocolate_stout,
     "crushed_pipeleaf": _draw_crushed_pipeleaf,
     "steelka": _draw_steelka,
     "ironwood": _draw_ironwood,
@@ -1397,7 +1448,8 @@ def icon_for(stack, size: int = 48) -> pygame.Surface:
     if not (isinstance(gen, dict) and gen.get("special")):
         return base
     chili = bool(gen.get("chili"))
-    key = (stack.defn.id, size, chili)
+    label_item = gen.get("label")
+    key = (stack.defn.id, size, chili, label_item)
     got = _special_cache.get(key)
     if got is not None:
         return got
@@ -1410,9 +1462,12 @@ def icon_for(stack, size: int = 48) -> pygame.Surface:
     y = max(2, int(size * 0.12))
     pygame.draw.rect(s, (238, 236, 224), (x, y, w, h), border_radius=2)
     pygame.draw.rect(s, (72, 64, 52), (x, y, w, h), 1, border_radius=2)
-    if chili:
+    if chili or label_item:
         try:
-            mark = _draw_chili(max(4, int(min(w - 4, h - 2))))
+            if label_item:
+                mark = icon(str(label_item), max(4, int(min(w - 4, h - 2))))
+            else:
+                mark = _draw_chili(max(4, int(min(w - 4, h - 2))))
             mark = pygame.transform.smoothscale(mark, (max(4, w - 4), max(3, h - 2)))
             s.blit(mark, (x + 2, y + 1))
         except Exception:
