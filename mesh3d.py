@@ -228,7 +228,7 @@ class Scene:
         if ground:
             # Ground layers are drawn in explicit layers before depth:
             # natural terrain first, then exact worked tiles, then target.
-            self.ground_ops.append((layer, cz) + op)
+            self.ground_ops.append((layer,) + op)
         else:
             self.ops.append(op)
 
