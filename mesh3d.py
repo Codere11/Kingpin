@@ -511,6 +511,133 @@ def add_crops(scene, g, radius=1400.0):
         scene.add_sprite(img, x, y, 44.0, ax=32.0, ay=84.0)
 
 
+
+# ---------------------------------------------------------------------------
+# worked ground, built blocks, fire
+# ---------------------------------------------------------------------------
+def add_plot_tiles(scene, g, radius=1300.0):
+    """Draw the actual worked squares as fixed world quads.
+
+    The ground image is sampled from the old 2D surfaces; near a tilled field
+    that sampling can shimmer as the view turns.  A worked tile is a real,
+    persistent thing, so it gets a real, persistent face here.  This is also
+    what makes a field read as a field from across the settlement.
+    """
+    try:
+        tx = int((scene.ex - radius) // 32)
+        ty = int((scene.ey - radius) // 32)
+        tx1 = int((scene.ex + radius) // 32)
+        ty1 = int((scene.ey + radius) // 32)
+        plots = g.world.plots_in_tile_range(tx, ty, tx1, ty1)
+    except Exception:
+        return
+    spoil = (84, 58, 36)
+    fertile = (104, 72, 42)
+    for (ptx, pty), plot in plots:
+        kind = getattr(plot, "kind", "")
+        if kind in ("grass", "", None):
+            continue
+        wx = ptx * 32.0 + 16.0
+        wy = pty * 32.0 + 16.0
+        if math.hypot(wx - scene.ex, wy - scene.ey) > radius:
+            continue
+        soil = fertile if kind in ("fertile", "plant", "wheat", "berries",
+                                   "mushroom", "agave", "cactus", "cotton",
+                                   "chili", "hardberry", "pipeleaf", "banana",
+                                   "cocoa", "honeyflower", "highflower") else spoil
+        z = 0.45
+        x0, x1 = wx - 15.0, wx + 15.0
+        y0, y1 = wy - 15.0, wy + 15.0
+        scene.add_face(((x0, y0, z), (x1, y0, z),
+                        (x1, y1, z), (x0, y1, z)), soil)
+        # Four dark furrows.  These are world-fixed, so they stay put while
+        # the camera turns.
+        for k in range(4):
+            yy = y0 + 4.0 + k * 7.4
+            scene.add_face(((x0 + 1.5, yy, z + 0.15), (x1 - 1.5, yy, z + 0.15),
+                            (x1 - 1.5, yy + 1.4, z + 0.15),
+                            (x0 + 1.5, yy + 1.4, z + 0.15)),
+                           (56, 38, 24) if soil == spoil else (74, 48, 28))
+
+
+def _bed_faces(tx, ty):
+    x = tx * 32.0 + 16.0
+    y = ty * 32.0 + 16.0
+    wood = (118, 78, 44)
+    sheet = (246, 246, 242)
+    pillow = (255, 255, 252)
+    blanket = (226, 226, 222)
+    faces = []
+    faces += _box(x, y, 1.0, 29, 29, 3.0, wood)
+    faces += _box(x, y, 3.5, 27, 27, 2.0, sheet)
+    faces += _box(x - 7.5, y, 5.3, 10, 24, 3.0, pillow)
+    faces += _box(x + 4.0, y, 5.2, 13, 24, 2.2, blanket)
+    faces += _box(x + 4.0, y, 7.2, 13, 24, 1.0, (198, 198, 194))
+    return faces
+
+
+def add_built_blocks(scene, g, radius=1600.0):
+    """Bedrolls, planks, doors and hide panels placed on the ground."""
+    blocks = getattr(g, "built_blocks", None) or {}
+    if not blocks:
+        return
+    tile = 32.0
+    for (tx, ty), kind in list(blocks.items()):
+        x = tx * tile + tile * 0.5
+        y = ty * tile + tile * 0.5
+        if math.hypot(x - scene.ex, y - scene.ey) > radius:
+            continue
+        if kind == "bed":
+            _add_faces(scene, _bed_faces(tx, ty))
+            continue
+        col = {"wood": (118, 78, 44), "ironwood": (104, 106, 106),
+               "tropical_wood": (218, 214, 198), "hide": (124, 86, 54),
+               "door": (126, 82, 46)}.get(kind, (118, 78, 44))
+        if kind == "door":
+            # A thin door leaf, open enough to read as a doorway.
+            _add_faces(scene, _box(x, y, 0.0, 28, 2.5, 48, col))
+            _add_faces(scene, _box(x + 11.5, y - 1.0, 24, 1.5, 3.5, 3,
+                                   (216, 190, 100)))
+        else:
+            h = 30.0 if kind != "hide" else 20.0
+            _add_faces(scene, _box(x, y, 0.0, 30, 30, h, col))
+            # a lighter top lip makes adjacent blocks read separately
+            _add_faces(scene, _box(x, y, h, 30.5, 30.5, 1.5,
+                                   tuple(min(255, int(c * 1.22)) for c in col)))
+
+
+def add_fire(scene, wp, now):
+    """A living campfire: logs, embers and three licking flame tongues."""
+    x, y = float(wp.x), float(wp.y)
+    phase = float(now) * 7.0 + x * 0.013 + y * 0.017
+    # two crossed logs
+    _add_faces(scene, _box(x, y - 3.0, 2.0, 30, 6, 5, (92, 54, 30)))
+    _add_faces(scene, _box(x, y + 3.0, 2.0, 30, 6, 5, (74, 42, 24)))
+    # ember bed
+    _add_faces(scene, _box(x, y, 0.4, 22, 22, 2.5, (228, 82, 26)))
+    for k in range(3):
+        a = phase * (0.8 + k * 0.17) + k * 2.1
+        sway = math.sin(a) * 5.0
+        h = 17.0 + 9.0 * (0.5 + 0.5 * math.sin(a * 1.7 + k))
+        w = 7.5 - k * 1.3
+        cx = x + (-6.0 + k * 6.0) + sway * 0.35
+        cy = y + math.cos(a * 0.8) * 3.0
+        z = 4.0 + k * 1.2
+        # a tapered, flickering tongue
+        base = ((cx - w, cy - w * 0.5, z), (cx + w, cy - w * 0.5, z),
+                (cx + w * 0.45, cy + w * 0.6, z),
+                (cx - w * 0.45, cy + w * 0.6, z))
+        tip = (cx + sway * 0.4, cy + math.sin(a * 1.3) * 2.0, z + h)
+        scene.add_face((base[0], base[1], tip), (255, 166, 40))
+        scene.add_face((base[1], base[2], tip), (255, 108, 24))
+        scene.add_face((base[2], base[3], tip), (248, 70, 18))
+        scene.add_face((base[3], base[0], tip), (255, 202, 92))
+    # a warm pool at the base
+    scene.add_face(((x - 15, y - 15, 0.7), (x + 15, y - 15, 0.7),
+                    (x + 15, y + 15, 0.7), (x - 15, y + 15, 0.7)),
+                   (166, 68, 26))
+
+
 # ---------------------------------------------------------------------------
 # scene assembly
 # ---------------------------------------------------------------------------
@@ -550,6 +677,10 @@ def build_scene(g, fwd, right, up, ex, ey):
     works.extend(getattr(g, "placed_work", ()) or ())
     for wp in works:
         add_workplace(scene, g, wp)
+        if getattr(wp, "kind", "") == "fireplace":
+            add_fire(scene, wp, float(getattr(g, "now", 0.0)))
+    add_plot_tiles(scene, g)
+    add_built_blocks(scene, g)
     add_crops(scene, g)
     return scene
 
@@ -584,6 +715,24 @@ def _vm_cyl(cx, cy, cz, r, h, sides, color):
     return out
 
 
+def _vm_prism(outline, z0, z1, color):
+    """Extrude a 2-D camera-space outline along z, with front/back/sides."""
+    out = []
+    n = len(outline)
+    front = tuple((x, y, z1) for (x, y) in outline)
+    back = tuple((x, y, z0) for (x, y) in outline)
+    out.append((front, color))
+    out.append((tuple(reversed(back)), color))
+    for i in range(n):
+        j = (i + 1) % n
+        side = ((outline[i][0], outline[i][1], z0),
+                (outline[j][0], outline[j][1], z0),
+                (outline[j][0], outline[j][1], z1),
+                (outline[i][0], outline[i][1], z1))
+        out.append((side, color))
+    return out
+
+
 def _rot_x(p, cy, cz, a):
     c, s = math.cos(a), math.sin(a)
     y, z = p[1] - cy, p[2] - cz
@@ -602,12 +751,27 @@ def _item_faces(item_id, empty=False):
                _vm_box(-2, -29, 55, 8, 13, 10, (174, 122, 86))
     if item_id in ("axe", "pickaxe", "shovel"):
         wood, metal = (124, 82, 46), (176, 182, 190)
+        if item_id == "axe":
+            # A heavier, more deliberate axe: wrapped grip, eye, poll and a
+            # broad curved bit.  It is its own shape, not a rotated icon.
+            out = _vm_box(0, -18, 55, 5.0, 58, 5.0, wood)
+            for gy in (4, -5, -14):
+                out += _vm_box(0, gy, 55, 5.6, 2.0, 5.3, (70, 44, 28))
+            out += _vm_box(0, -2, 55, 11, 12, 11, (190, 132, 92))
+            out += _vm_box(0, -45, 55, 9, 13, 9, metal)
+            # the poll (back of the head)
+            out += _vm_box(-8, -45, 55, 7, 10, 7, (146, 152, 160))
+            # the bit, extruded as a real blade profile
+            blade = [(3, -51), (18, -49), (26, -39), (22, -30),
+                     (12, -27), (4, -33)]
+            out += _vm_prism(blade, 51.0, 59.0, (194, 200, 208))
+            edge = [(21, -39), (26, -39), (22, -30), (18, -31)]
+            out += _vm_prism(edge, 50.5, 59.5, (238, 240, 244))
+            out += _vm_box(0, -37, 55, 5, 3, 5, (96, 100, 108))
+            return out
         out = _vm_box(0, -18, 55, 3.5, 40, 3.5, wood)
         out += _vm_box(0, -2, 55, 9, 10, 9, (190, 132, 92))
-        if item_id == "axe":
-            out += _vm_box(-5, -39, 55, 18, 6, 4, metal)
-            out += _vm_box(4, -42, 55, 5, 12, 4, metal)
-        elif item_id == "pickaxe":
+        if item_id == "pickaxe":
             out += _vm_box(0, -40, 55, 25, 4, 4, metal)
             out += _vm_box(-11, -38, 55, 4, 8, 4, metal)
             out += _vm_box(11, -38, 55, 4, 8, 4, metal)
@@ -679,6 +843,8 @@ def draw_viewmodel(g, screen) -> None:
     # not a perspective camera of its own; it is a presentation space whose
     # only job is to keep the object in frame and in the hand.
     scale = min(w, h) / 180.0
+    if item_id in ("axe", "pickaxe", "shovel"):
+        scale *= 1.24
     cx = w * 0.72
     cy = h * 0.80
     ops = []
@@ -687,7 +853,17 @@ def draw_viewmodel(g, screen) -> None:
         d = abs(_dot(n, _LIGHT))
         f = 0.48 + 0.64 * d
         c = tuple(max(0, min(255, int(v * f))) for v in color[:3])
-        proj = [(cx + x * scale, cy + (y + 20.0) * scale) for (x, y, _z) in pts]
+        ca = sa = 0.0
+        if item_id == "axe":
+            ca, sa = math.cos(-0.20), math.sin(-0.20)
+        proj = []
+        for (x, y, _z) in pts:
+            if ca or sa:
+                qx = x * ca - y * sa
+                qy = x * sa + y * ca
+            else:
+                qx, qy = x, y
+            proj.append((cx + qx * scale, cy + (qy + 20.0) * scale))
         z = sum(v[2] for v in pts) / len(pts)
         ops.append((z, proj, c))
     ops.sort(key=lambda op: op[0], reverse=True)
