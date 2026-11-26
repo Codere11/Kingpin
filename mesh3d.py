@@ -189,7 +189,7 @@ class Scene:
         return (float(IW * 0.5 + FOCAL * p[0] / p[2]),
                 float(IH * 0.5 - FOCAL * p[1] / p[2]))
 
-    def add_face(self, world_pts, color, ground=False, outline=None):
+    def add_face(self, world_pts, color, ground=False, outline=None, layer=0):
         if len(world_pts) < 3:
             return
         # normal from the original world points
@@ -226,7 +226,9 @@ class Scene:
             return
         op = (cz, "face", pts, _shade(color, n, cz, self.night), outline)
         if ground:
-            self.ground_ops.append(op)
+            # Ground layers are drawn in explicit layers before depth:
+            # natural terrain first, then exact worked tiles, then target.
+            self.ground_ops.append((layer, cz) + op)
         else:
             self.ops.append(op)
 
@@ -239,7 +241,7 @@ class Scene:
         for i in range(n):
             a = i * (2.0 * math.pi / n)
             pts.append((x + math.cos(a) * rx, y + math.sin(a) * ry, 0.32))
-        self.add_face(pts, (34, 47, 32), ground=True)
+        self.add_face(pts, (34, 47, 32), ground=True, layer=1)
 
     def add_sprite(self, image, x, y, world_h=50.0, ax=None, ay=None):
         base = self._cam((x, y, 0.0))
@@ -268,9 +270,9 @@ class Scene:
     def draw(self, screen):
         # Worked ground is a surface under everything else, even when a
         # crop/character is at almost the same depth.
-        self.ground_ops.sort(key=lambda op: op[0], reverse=True)
+        self.ground_ops.sort(key=lambda op: (op[0], -op[1]))
         for op in self.ground_ops:
-            _d, _k, pts, color, outline = op
+            _layer, _d, _k, pts, color, outline = op
             pygame.draw.polygon(screen, color, pts)
             if outline is not None:
                 pygame.draw.polygon(screen, outline, pts, 1)
@@ -625,17 +627,17 @@ def _ground_state(g, tx, ty):
     return (kind, getattr(plot, "planted_at", None) is not None)
 
 
-def _edge_strips(scene, x0, y0, x1, y1, z, color, width=0.9):
+def _edge_strips(scene, x0, y0, x1, y1, z, color, width=0.9, layer=1):
     """Four thin world quads around a tile, instead of filling its outline."""
     w = width
     scene.add_face(((x0, y0, z), (x1, y0, z),
-                    (x1, y0 + w, z), (x0, y0 + w, z)), color, ground=True)
+                    (x1, y0 + w, z), (x0, y0 + w, z)), color, ground=True, layer=layer)
     scene.add_face(((x0, y1 - w, z), (x1, y1 - w, z),
-                    (x1, y1, z), (x0, y1, z)), color, ground=True)
+                    (x1, y1, z), (x0, y1, z)), color, ground=True, layer=layer)
     scene.add_face(((x0, y0, z), (x0 + w, y0, z),
-                    (x0 + w, y1, z), (x0, y1, z)), color, ground=True)
+                    (x0 + w, y1, z), (x0, y1, z)), color, ground=True, layer=layer)
     scene.add_face(((x1 - w, y0, z), (x1, y0, z),
-                    (x1, y1, z), (x1 - w, y1, z)), color, ground=True)
+                    (x1, y1, z), (x1 - w, y1, z)), color, ground=True, layer=layer)
 
 
 def add_ground_target(scene, g):
@@ -651,7 +653,7 @@ def add_ground_target(scene, g):
     cx, cy = tx * 32.0 + 16.0, ty * 32.0 + 16.0
     z = 0.96
     _edge_strips(scene, cx - 15.2, cy - 15.2, cx + 15.2, cy + 15.2,
-                 z, (255, 235, 142), 1.4)
+                 z, (255, 235, 142), 1.4, layer=2)
 
 
 def _add_natural_layer(scene, g, size, min_dist, max_dist):
@@ -743,33 +745,33 @@ def add_ground_blocks(scene, g, radius=420.0):
         y0, y1 = wy - 16.0, wy + 16.0
         scene.add_face(((x0, y0, z), (x1, y0, z),
                         (x1, y1, z), (x0, y1, z)),
-                       top, ground=True)
+                       top, ground=True, layer=1)
         mine = _ground_state(g, tx, ty)
         ex0, ey0 = wx - 16.0, wy - 16.0
         ex1, ey1 = wx + 16.0, wy + 16.0
         if _ground_state(g, tx, ty - 1) != mine:
             scene.add_face(((ex0, ey0, z + 0.12), (ex1, ey0, z + 0.12),
                             (ex1, ey0 + 0.9, z + 0.12),
-                            (ex0, ey0 + 0.9, z + 0.12)), edge, ground=True)
+                            (ex0, ey0 + 0.9, z + 0.12)), edge, ground=True, layer=1)
         if _ground_state(g, tx, ty + 1) != mine:
             scene.add_face(((ex0, ey1 - 0.9, z + 0.12), (ex1, ey1 - 0.9, z + 0.12),
                             (ex1, ey1, z + 0.12), (ex0, ey1, z + 0.12)),
-                           edge, ground=True)
+                           edge, ground=True, layer=1)
         if _ground_state(g, tx - 1, ty) != mine:
             scene.add_face(((ex0, ey0, z + 0.12), (ex0 + 0.9, ey0, z + 0.12),
                             (ex0 + 0.9, ey1, z + 0.12),
-                            (ex0, ey1, z + 0.12)), edge, ground=True)
+                            (ex0, ey1, z + 0.12)), edge, ground=True, layer=1)
         if _ground_state(g, tx + 1, ty) != mine:
             scene.add_face(((ex1 - 0.9, ey0, z + 0.12), (ex1, ey0, z + 0.12),
                             (ex1, ey1, z + 0.12), (ex1 - 0.9, ey1, z + 0.12)),
-                           edge, ground=True)
+                           edge, ground=True, layer=1)
         for k in range(4):
             yy = y0 + 4.0 + k * 7.0
             scene.add_face(((x0 + 1.5, yy, z + 0.06),
                             (x1 - 1.5, yy, z + 0.06),
                             (x1 - 1.5, yy + 1.2, z + 0.06),
                             (x0 + 1.5, yy + 1.2, z + 0.06)),
-                           (52, 34, 20), ground=True)
+                           (52, 34, 20), ground=True, layer=1)
 
 
 def add_plot_tiles(scene, g, radius=1300.0):
