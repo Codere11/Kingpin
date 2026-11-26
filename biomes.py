@@ -58,6 +58,7 @@ _TROPICS_LITE = rich((98, 156, 82))
 _FLOWER_DARK = rich((92, 116, 68))
 _FLOWER_LITE = rich((164, 176, 98))
 _FLOWER_NOISE_SEED = 71113
+_OUTER_CELL = 11000.0
 _BARREN_NOISE_SCALE = 0.000014
 _BARREN_NOISE_SEED = 90210
 
@@ -88,27 +89,36 @@ def _barren_noise(x, y, salt: int = 0):
     return fbm(xs, ys, _BARREN_NOISE_SEED + int(salt), octaves=3)
 
 
-def _outer_masks(x, y):
-    """Barren Rocks and Tropics split the outer ring into equal-sized chunks.
+def _outer_categories(x, y):
+    """Equal-sized coarse chunks in the outer country.
 
-    One low-frequency field decides which patches are barren and which are
-    tropical; the rest stays one of the four regular biomes.  Because the
-    field is cut at half the same threshold, the two special biomes cover
-    roughly the same area by construction.
+    A jittered lattice gives three special biomes and the regular biomes
+    equal shares by construction, while the wavy boundaries keep the chunks
+    from looking like a spreadsheet.
     """
     xs = np.asarray(x, np.float32)
     ys = np.asarray(y, np.float32)
-    d = np.hypot(xs - _SPAWN[0], ys - _SPAWN[1])
-    ramp = np.clip((d - RING1_RADIUS) / 180000.0, 0.0, 1.0)
-    chance = 0.10 + 0.25 * (ramp * ramp * (3.0 - 2.0 * ramp))
-    n_b = _barren_noise(x, y, 0)
-    outside = d >= RING1_RADIUS
-    barren = outside & (n_b < chance)
-    # The same field's other tail: the two special biomes get the same share
-    # of the outer country, so they cover roughly the same area.
-    tropics = outside & (n_b > (1.0 - chance))
-    return barren, tropics
+    # warp the lattice boundaries so they are not straight cell walls
+    w = fbm(xs * 0.000018, ys * 0.000018, _FLOWER_NOISE_SEED, octaves=2)
+    gx = np.floor((xs + (w - 0.5) * 18000.0) / _OUTER_CELL).astype(np.int64)
+    gy = np.floor((ys + (w - 0.5) * 18000.0) / _OUTER_CELL).astype(np.int64)
+    h = (gx * 73856093) ^ (gy * 19349663) ^ (_FLOWER_NOISE_SEED * 2654435761)
+    h &= 0xFFFFFFFF
+    h = ((h ^ (h >> 13)) * 1274126177) & 0xFFFFFFFF
+    h ^= h >> 16
+    return ((h >> 24) & 3).astype(np.int8)
 
+
+def _outer_masks(x, y):
+    """Return (barren, tropics) masks from the equal outer chunks."""
+    xs = np.asarray(x, np.float32)
+    ys = np.asarray(y, np.float32)
+    d = np.hypot(xs - _SPAWN[0], ys - _SPAWN[1])
+    cat = _outer_categories(x, y)
+    outside = d >= RING1_RADIUS
+    barren = outside & (cat == 0)
+    tropics = outside & (cat == 1)
+    return barren, tropics
 
 def barren_mask(x, y):
     return _outer_masks(x, y)[0]
@@ -123,15 +133,11 @@ def tropics_mask(x, y):
 
 
 def flower_flats_mask(x, y):
-    """Flower Flats: a third-ring country, in large open patches."""
+    """Flower Flats: one of the equal second-ring outer chunks."""
     xs = np.asarray(x, np.float32)
     ys = np.asarray(y, np.float32)
     d = np.hypot(xs - _SPAWN[0], ys - _SPAWN[1])
-    if not (d >= RING2_RADIUS).any() if getattr(d, "ndim", 0) else d < RING2_RADIUS:
-        return np.zeros_like(xs, dtype=bool) if getattr(d, "ndim", 0) else False
-    barren, tropics = _outer_masks(x, y)
-    n = fbm(xs * 0.000021, ys * 0.000021, _FLOWER_NOISE_SEED, octaves=3)
-    return (d >= RING2_RADIUS) & (~barren) & (~tropics) & (n < 0.40)
+    return (d >= RING1_RADIUS) & (_outer_categories(x, y) == 2)
 
 def is_barren(x: float, y: float) -> bool:
     m = barren_mask(x, y)

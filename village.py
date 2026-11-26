@@ -546,6 +546,7 @@ class NPC:
     _seller_of: Any = None        # luxury -> the man who sold it to him
     iron_armor: Any = False       # second-ring warrior plate
     iron_helmet: Any = False      # the local iron cap
+    flower_archer: Any = False    # a Flower Flats bowman
     speed_boost_t: Any = 0.0      # banana-liqueur quickening
     cocoa_tasted: Any = False     # first chocolate stamina boost
 
@@ -701,6 +702,7 @@ class NPC:
         self.reinforced_armor = False  # a bought soldier in reinforced armor
         self.iron_armor = False        # a second-ring warrior's iron plates
         self.iron_helmet = False       # the local iron cap
+        self.flower_archer = False
         self.raiding = False           # a native warrior marching on a raid
         self.raid_target = None        # (x, y) the raid is heading for
         self.escort_horse = None       # the cargo horse a soldier rides escort for
@@ -1294,7 +1296,8 @@ class NPC:
                 if combat is not None:
                     combat.fire(self.x + ux * 16.0, self.y + uy * 16.0,
                                 math.atan2(dy, dx), dist + 80.0,
-                                owner="enemy", damage=dmg, team=self.team)
+                                owner="enemy", damage=dmg, team=self.team,
+                                shooter=self, arrow=True)
                     self._snd("shot_bow")
         # KEEP THE GAP, AND CLEAR THE LINE: back off when he is too close,
         # close in when too far, and strafe around whatever blocks the shot.

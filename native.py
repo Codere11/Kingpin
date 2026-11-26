@@ -385,6 +385,9 @@ def build(g, cx: float, cy: float, seed: int,
         n._orbit = ang
         n.wear = biomes.npc_wear(temp, hum)
         n.skills.configure_local(n.wear)
+        if biomes.is_flower_flats(cx, cy):
+            n.weapon = "bow"
+            n.flower_archer = True
         if _barren:
             _barren_persona(n)
             n.iron_armor = True

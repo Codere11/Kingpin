@@ -2697,6 +2697,11 @@ def run(g):
                                 g.player.tranq()
                         else:
                             g.player.take_damage(bullet.damage)
+                            if (getattr(bullet, "arrow", False)
+                                    and getattr(getattr(bullet, "shooter", None),
+                                                "flower_archer", False)):
+                                g.player.poison(30.0)
+                                g.toast("Flower-archer poison   -   10% health every 10 seconds")
                         g.blood.spawn(g.player.x, g.player.y, 7, 14.0)
                         bullet.remove = True
                         break
