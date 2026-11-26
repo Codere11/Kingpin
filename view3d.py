@@ -617,16 +617,48 @@ def interact(g) -> bool:
     # A HELD AXE IS A WEAPON, NOT A CONVERSATION.  Clicking a person swings
     # even if the crosshair happens to be on them.
     if held == "axe":
+        # The event runs before the world tick; make the swing use the yaw
+        # the crosshair is actually on, not last frame's facing.
+        yaw = float(getattr(g, "v3d_yaw", 0.0))
+        g.player.facing = (math.cos(yaw), math.sin(yaw))
+        g.aim = g.player.facing
+        # `on_click` normally passes a small proxy with these two names.
+        # The 3D path calls use_axe on the real game object, where they live
+        # under the private names.
+        try:
+            g.work_lanes = g._WORK
+        except Exception:
+            pass
+        try:
+            g.truth = g._TRUTH
+        except Exception:
+            pass
         try:
             import combat_actions
             combat_actions.use_axe(g, 0)
-        except Exception:
-            pass
+        except Exception as _atk:
+            try:
+                import plog
+                plog.log("VIEW3D-AXE", repr(_atk)[:180])
+            except Exception:
+                pass
+            try:
+                g.player.start_swing()
+            except Exception:
+                pass
         return True
     npc = _aim_npc(g)
     if npc is not None:
         return _open_npc_card(g, npc)
     if stack is not None and held in ("pickaxe", "shovel"):
+        try:
+            g.work_lanes = g._WORK
+        except Exception:
+            pass
+        try:
+            g.truth = g._TRUTH
+        except Exception:
+            pass
         try:
             import combat_actions
             combat_actions.use_axe(g, 0)
