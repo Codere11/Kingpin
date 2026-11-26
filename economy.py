@@ -54,7 +54,8 @@ def _note(text: str) -> None:
         pass
 
 FOOD = ("bread", "berries", "cactus_fruit", "hardberries", "bananas",
-        "raw_honey", "banana_bread", "honey_toast")
+        "raw_honey", "banana_bread", "honey_toast", "chili_chocolate",
+        "berry_tart", "meat_pie", "highflower_tea")
 LEAF = ("tobacco", "red_mushroom", "agave", "chili", "pipeleaf", "cocoa",
         "highflower")
 # The artisan's trade: what a laboratory turns leaf INTO. Nobody craves the raw
@@ -80,7 +81,7 @@ LUXURY = FINISHED + tuple(BREW.values()) + (
 DRINKS = set(BREW.values()) | {
     "govbeer", "chili_beer", "chili_mezcal", "steelka",
     "banana_liqueur", "mead", "steel_ale", "steelworm", "bananale",
-    "braggot", "chocolate_stout"}  # made, not grown
+    "braggot", "chocolate_stout", "melomel", "cactus_mead"}  # made
 WORT_BATCH = 50            # fifty at a time through the table, and the barrel
 WORT_STOCK = 40            # mash a brewer keeps on hand
 BREW_SECONDS = 300.0       # five minutes in the barrel
@@ -100,7 +101,8 @@ GOODS = (FOOD + LEAF + FINISHED + SEEDS + TOOLS + ARMS
          + ("rose", "tulip", "violet", "daisy", "poppy", "honeycomb")
          + tuple(WORT.values())
          + tuple(BREW.values()) + ("govbeer", "steel_ale", "steelworm",
-                                   "bananale", "braggot", "chocolate_stout"))
+                                   "bananale", "braggot", "chocolate_stout",
+                                   "melomel", "cactus_mead", "honey_cigar"))
 WAGE_GOODS = FOOD + LEAF + SEEDS
 
 ITEM_VALUE = {
@@ -114,6 +116,8 @@ ITEM_VALUE = {
     "cocoa": 14, "chocolate": 38, "tropical_wood": 6,
     "steel_ale": 28, "steelworm": 31, "bananale": 28, "braggot": 28,
     "chocolate_stout": 30, "banana_bread": 8, "honey_toast": 7,
+    "chili_chocolate": 12, "honey_cigar": 24, "highflower_tea": 10,
+    "berry_tart": 8, "meat_pie": 12, "melomel": 28, "cactus_mead": 26,
     "raw_honey": 12, "honeycomb": 15, "mead": 24, "highflower": 12,
     "highflower_joint": 30, "honey_wort": 4, "rose": 3, "tulip": 3,
     "violet": 3, "daisy": 3, "poppy": 3,
@@ -2348,12 +2352,12 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
                 hunger = hunger - EAT_BY
                 if hunger < 0.0:
                     hunger = 0.0
-                if item in ("banana_bread", "honey_toast"):
-                    try:
-                        import localstyles as _ls
+                try:
+                    import localstyles as _ls
+                    if item in _ls.STYLE_FOOD:
                         _ls.apply_npc(npc, item, now)
-                    except Exception:
-                        pass
+                except Exception:
+                    pass
                 _ate = True
                 break
         if not _ate:
@@ -2375,14 +2379,17 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
     if yearning >= YEARING_ACT:
         want = npc.wants_product
         if (want and has_tried(npc, want)) and stock.get(want, 0) > 0:
-            stock[want] -= 1
+            _choice = want
+            if want == "cigar" and stock.get("honey_cigar", 0) > 0:
+                _choice = "honey_cigar"
+            stock[_choice] = stock.get(_choice, 0) - 1
             yearning = 0.0
-            npc.use_fx = (want, USE_FX_SECONDS)
+            npc.use_fx = (_choice, USE_FX_SECONDS)
             try:
                 import mind as _mind
                 _sg = getattr(npc, "stock_genetics", None)
-                _gen = _sg.get(want) if isinstance(_sg, dict) else None
-                _mind.consume(npc, want, now, genetics=_gen)
+                _gen = _sg.get(_choice) if isinstance(_sg, dict) else None
+                _mind.consume(npc, _choice, now, genetics=_gen)
             except Exception:
                 pass
         else:
@@ -2404,6 +2411,10 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
                 choice = "chili_beer"
             elif drink == "liqueur" and stock.get("banana_liqueur", 0) > 0:
                 choice = "banana_liqueur"
+            elif drink == "mead" and stock.get("melomel", 0) > 0:
+                choice = "melomel"
+            elif drink == "mead" and stock.get("cactus_mead", 0) > 0:
+                choice = "cactus_mead"
             if has_tried(npc, drink) and stock.get(choice, 0) > 0:
                 stock[choice] -= 1
                 yearning = 0.0

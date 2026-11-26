@@ -227,6 +227,27 @@ REGISTRY: dict[str, ItemDef] = {
     "chocolate_stout": ItemDef("chocolate_stout", "Chocolate Stout",
                                "Dark cocoa beer. Sweet, quick, and cheerful for a day.",
                                stackable=True, max_stack=100, quality=True),
+    "chili_chocolate": ItemDef("chili_chocolate", "Chili Chocolate",
+                               "Bitter chocolate with a red chili burn. Warm and steadying.",
+                               stackable=True, max_stack=50),
+    "honey_cigar": ItemDef("honey_cigar", "Honey-Cured Cigar",
+                           "A cigar rolled with honey. Sweet smoke and a long good mood.",
+                           stackable=True, max_stack=100, quality=True),
+    "highflower_tea": ItemDef("highflower_tea", "Highflower Tea",
+                              "A cup of bright, shifting colours. Steadies the wind.",
+                              stackable=True, max_stack=50),
+    "berry_tart": ItemDef("berry_tart", "Berry Tart",
+                          "A small tart of red berries and warm pastry.",
+                          stackable=True, max_stack=20),
+    "meat_pie": ItemDef("meat_pie", "Meat Pie",
+                        "A hand pie of meat and gravy. A whole meal in a crust.",
+                        stackable=True, max_stack=20),
+    "melomel": ItemDef("melomel", "Melomel",
+                       "Mead fermented with berries. Fruity, strong, and cheerful.",
+                       stackable=True, max_stack=100, quality=True),
+    "cactus_mead": ItemDef("cactus_mead", "Cactus Mead",
+                           "Cool, green mead from cactus fruit. Takes the heat out of a day.",
+                           stackable=True, max_stack=100, quality=True),
     "rose": ItemDef("rose", "Rose", "A deep red rose from the flower flats.",
                     stackable=True, max_stack=100),
     "tulip": ItemDef("tulip", "Tulip", "A bright tulip from the flower flats.",
@@ -1058,6 +1079,60 @@ def _draw_banana_liqueur(s: int) -> pygame.Surface:
     return _draw_drink(s, (238, 206, 58))
 
 
+def _draw_chili_chocolate(s: int) -> pygame.Surface:
+    surf = _draw_chocolate(s)
+    pygame.draw.circle(surf, (190, 44, 36), (int(0.68 * s), int(0.38 * s)), max(2, int(0.05 * s)))
+    pygame.draw.line(surf, (226, 88, 50), (int(0.72 * s), int(0.34 * s)),
+                     (int(0.80 * s), int(0.44 * s)), 2)
+    return surf
+
+
+def _draw_honey_cigar(s: int) -> pygame.Surface:
+    surf = _draw_cigar(s)
+    pygame.draw.rect(surf, (222, 166, 42), (int(0.34 * s), int(0.40 * s),
+                                           int(0.20 * s), max(2, int(0.055 * s))))
+    pygame.draw.rect(surf, (142, 96, 24), (int(0.34 * s), int(0.40 * s),
+                                          int(0.20 * s), max(2, int(0.055 * s))), 1)
+    return surf
+
+
+def _draw_highflower_tea(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    pygame.draw.ellipse(surf, (224, 220, 202), (0.20 * s, 0.48 * s, 0.60 * s, 0.34 * s))
+    pygame.draw.ellipse(surf, (132, 86, 52), (0.20 * s, 0.48 * s, 0.60 * s, 0.34 * s), 2)
+    for col, dx in (((156, 70, 210), 0.34), ((74, 180, 96), 0.48),
+                    ((92, 186, 226), 0.62), ((236, 200, 52), 0.76)):
+        pygame.draw.ellipse(surf, col, ((dx - 0.05) * s, 0.58 * s, 0.10 * s, 0.06 * s))
+    pygame.draw.arc(surf, (226, 224, 206), (0.70 * s, 0.52 * s, 0.20 * s, 0.24 * s), -1.3, 1.3, 2)
+    return surf
+
+
+def _draw_berry_tart(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    pygame.draw.ellipse(surf, (210, 164, 88), (0.16 * s, 0.38 * s, 0.68 * s, 0.40 * s))
+    pygame.draw.ellipse(surf, (142, 92, 42), (0.16 * s, 0.38 * s, 0.68 * s, 0.40 * s), 2)
+    for dx, dy in ((0.30, 0.48), (0.45, 0.43), (0.60, 0.50), (0.50, 0.62)):
+        pygame.draw.circle(surf, (188, 46, 62), (int(dx * s), int(dy * s)), max(2, int(0.055 * s)))
+    return surf
+
+
+def _draw_meat_pie(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    pygame.draw.ellipse(surf, (204, 158, 84), (0.14 * s, 0.36 * s, 0.72 * s, 0.44 * s))
+    pygame.draw.ellipse(surf, (130, 82, 38), (0.14 * s, 0.36 * s, 0.72 * s, 0.44 * s), 2)
+    pygame.draw.arc(surf, (238, 204, 126), (0.20 * s, 0.42 * s, 0.56 * s, 0.22 * s), 0.2, 2.9, 2)
+    pygame.draw.line(surf, (136, 88, 42), (0.50 * s, 0.38 * s), (0.50 * s, 0.50 * s), 2)
+    return surf
+
+
+def _draw_melomel(s: int) -> pygame.Surface:
+    return _draw_drink(s, (198, 82, 92))
+
+
+def _draw_cactus_mead(s: int) -> pygame.Surface:
+    return _draw_drink(s, (126, 190, 94))
+
+
 def _draw_chocolate(s: int) -> pygame.Surface:
     surf = _canvas(s)
     brown, dark, light = (96, 58, 38), (58, 32, 22), (150, 98, 62)
@@ -1401,6 +1476,10 @@ _DRAWERS = {
     "highflower": _draw_highflower, "highflower_joint": _draw_highflower_joint,
     "honey_wort": _draw_wort, "mead": _draw_mead,
     "banana_bread": _draw_banana_bread, "honey_toast": _draw_honey_toast,
+    "chili_chocolate": _draw_chili_chocolate, "honey_cigar": _draw_honey_cigar,
+    "highflower_tea": _draw_highflower_tea, "berry_tart": _draw_berry_tart,
+    "meat_pie": _draw_meat_pie, "melomel": _draw_melomel,
+    "cactus_mead": _draw_cactus_mead,
     "steel_ale": _draw_steel_ale, "steelworm": _draw_steelworm,
     "bananale": _draw_bananale, "braggot": _draw_braggot,
     "chocolate_stout": _draw_chocolate_stout,

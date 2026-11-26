@@ -89,6 +89,9 @@ class Player:
     speed_boost_mult: float = 1.5
     steelworm_used: bool = False
     bananale_used: bool = False
+    stamina_boost_t: float = 0.0
+    stamina_boost_mult: float = 1.0
+    heat_resist_t: float = 0.0
     # A CLASS ATTRIBUTE, NOT A MODULE ONE. main() has a LOCAL called `player`
     # -- the Player instance -- which SHADOWS the `player` module for the whole
     # of main(). So `player.LEVEL_FLASH` reached the instance, and the module's
@@ -157,6 +160,9 @@ class Player:
         self.speed_boost_mult = 1.5
         self.steelworm_used = False
         self.bananale_used = False
+        self.stamina_boost_t = 0.0
+        self.stamina_boost_mult = 1.0
+        self.heat_resist_t = 0.0
         self.exhausted = False
         self.sprinting = False
         self.swing_cd = 0.0
@@ -333,6 +339,10 @@ class Player:
             self.damage_resist_t = max(0.0, self.damage_resist_t - dt)
             if self.damage_resist_t <= 0.0:
                 self.damage_resist = self.damage_resist_perm
+        if self.stamina_boost_t > 0.0:
+            self.stamina_boost_t = max(0.0, self.stamina_boost_t - dt)
+        if self.heat_resist_t > 0.0:
+            self.heat_resist_t = max(0.0, self.heat_resist_t - dt)
         if self.poison_t > 0.0 and not self.dead:
             self.poison_t = max(0.0, self.poison_t - dt)
             self.poison_next -= dt
@@ -389,7 +399,8 @@ class Player:
         speed_scale *= self.hunger_factor * self.skill_speed * self.speed_perm
         if self.speed_boost_t > 0.0:
             speed_scale *= self.speed_boost_mult
-        self.max_stamina = self.base_stamina * self.skill_stamina
+        self.max_stamina = (self.base_stamina * self.skill_stamina
+                            * (self.stamina_boost_mult if self.stamina_boost_t > 0.0 else 1.0))
         if self.stamina > self.max_stamina:
             self.stamina = self.max_stamina
         if self.dead:

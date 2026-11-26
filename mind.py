@@ -87,7 +87,7 @@ def consume(npc, item, now, genetics=None):
                 pass
     try:
         import localstyles as _ls
-        if item in _ls.STYLE_DRINKS:
+        if item in _ls.STYLE_DRINKS or item in _ls.STYLE_SMOKE:
             _ls.apply_npc(npc, item, now)
     except Exception:
         pass

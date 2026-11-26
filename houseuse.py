@@ -8,6 +8,7 @@ so the engine does not carry the furniture logic.
 from __future__ import annotations
 
 import math
+import random
 
 import cropgenetics
 import economy
@@ -113,8 +114,31 @@ def craft_at_table(player, inventory, skills, toast) -> None:
         _taken, src_gen = inventory.take_lot(leaf, 1)
         if _taken <= 0:
             continue
+        _style = None
+        if float(getattr(skills, "farming", 0.0)) >= 6.4:
+            try:
+                import localstyles as _ls
+                for _extra, _variant in _ls.ARTISAN_STYLES.get(out, ()):
+                    if inventory.count_of(_extra) <= 0:
+                        continue
+                    if random.random() >= 0.25:
+                        continue
+                    inventory.consume(_extra, 1)
+                    out = _variant
+                    _style = _variant
+                    break
+            except Exception:
+                pass
         gen = cropgenetics.extract(src_gen, getattr(skills, "farming", 0.0),
                                    items.get(out).name, kind="artisan")
+        if _style is not None:
+            if gen is None:
+                gen = {"kind": "artisan", "extraction": 1.0,
+                       "bonuses": {}, "targets": [], "progress": {}}
+            gen = dict(gen)
+            gen["special"] = True
+            gen["style"] = _style
+            gen["label"] = _ls.STYLE_LABEL.get(_style)
         inventory.add(out, 1, g, genetics=gen)
         skills.gain_farming(0.02)          # you learn at the bench too
         toast("Made a %s  (%s)" % (items.get(out).name, quality.letter(g)))
@@ -183,8 +207,31 @@ def work_action(key, smith_shop, player, now, economy, inventory, skills,
                 inventory.add(leaf, _taken, genetics=src_gen)
             return 0.0, "Not enough leaf"
         g = skills.leaf_grade()
+        _style = None
+        if float(getattr(skills, "farming", 0.0)) >= 6.4:
+            try:
+                import localstyles as _ls
+                for _extra, _variant in _ls.ARTISAN_STYLES.get(out, ()):
+                    if inventory.count_of(_extra) <= 0:
+                        continue
+                    if random.random() >= 0.25:
+                        continue
+                    inventory.consume(_extra, 1)
+                    out = _variant
+                    _style = _variant
+                    break
+            except Exception:
+                pass
         gen = cropgenetics.extract(src_gen, getattr(skills, "farming", 0.0),
                                    items.get(out).name, kind="artisan")
+        if _style is not None:
+            if gen is None:
+                gen = {"kind": "artisan", "extraction": 1.0,
+                       "bonuses": {}, "targets": [], "progress": {}}
+            gen = dict(gen)
+            gen["special"] = True
+            gen["style"] = _style
+            gen["label"] = _ls.STYLE_LABEL.get(_style)
         inventory.add(out, 1, g, genetics=gen)
         return 2.0, "Made one %s   (%s)" % (out, quality.letter(g))
     if kind == "mine":

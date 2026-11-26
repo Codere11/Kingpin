@@ -13,9 +13,19 @@ BREW_STYLES = {
              ("raw_honey", "braggot"),
              ("cocoa", "chocolate_stout")),
     "mezcal": (("hardberries", "steelworm"),),
+    "mead": (("berries", "melomel"),
+             ("cactus_fruit", "cactus_mead")),
 }
 BREAD_STYLES = (("bananas", "banana_bread"),
-                ("raw_honey", "honey_toast"))
+                ("raw_honey", "honey_toast"),
+                ("berries", "berry_tart"),
+                ("cooked_meat", "meat_pie"))
+# artisan base -> extra -> variant
+ARTISAN_STYLES = {
+    "chocolate": (("chili", "chili_chocolate"),),
+    "cigar": (("raw_honey", "honey_cigar"),),
+    "highflower_joint": (("raw_honey", "highflower_tea"),),
+}
 
 STYLE_LABEL = {
     "steel_ale": "iron_bar",
@@ -25,10 +35,20 @@ STYLE_LABEL = {
     "chocolate_stout": "cocoa",
     "banana_bread": "bananas",
     "honey_toast": "raw_honey",
+    "chili_chocolate": "chili",
+    "honey_cigar": "raw_honey",
+    "highflower_tea": "highflower",
+    "berry_tart": "berries",
+    "meat_pie": "cooked_meat",
+    "melomel": "berries",
+    "cactus_mead": "cactus_fruit",
 }
 
 STYLE_DRINKS = {"steel_ale", "steelworm", "bananale", "braggot",
-                "chocolate_stout"}
+                "chocolate_stout", "melomel", "cactus_mead"}
+STYLE_FOOD = {"banana_bread", "honey_toast", "chili_chocolate",
+              "berry_tart", "meat_pie", "highflower_tea"}
+STYLE_SMOKE = {"honey_cigar"}
 
 
 def apply_npc(npc, item, now: float) -> None:
@@ -47,6 +67,28 @@ def apply_npc(npc, item, now: float) -> None:
             npc.speed_boost_t = max(float(getattr(npc, "speed_boost_t", 0.0)), 600.0)
             npc.speed_boost_mult = (max(float(getattr(npc, "speed_boost_mult", 1.10)), 1.10)
                                      if _had_temp else 1.10)
+        elif item == "berry_tart":
+            mood.add_thought(npc, "local:berry_tart", 6.0, now, 600.0)
+        elif item == "meat_pie":
+            mood.add_thought(npc, "local:meat_pie", 5.0, now, 600.0)
+            npc.health = min(npc.max_health, float(npc.health) + 15.0)
+        elif item == "chili_chocolate":
+            mood.add_thought(npc, "local:chili_chocolate", 5.0, now, 600.0)
+            npc.stamina = min(npc.max_stamina, float(npc.stamina) + 10.0)
+        elif item == "honey_cigar":
+            mood.add_thought(npc, "local:honey_cigar", 12.0, now, 600.0)
+        elif item == "highflower_tea":
+            npc.stamina_boost_t = max(float(getattr(npc, "stamina_boost_t", 0.0)), 600.0)
+            npc.stamina_boost_mult = max(float(getattr(npc, "stamina_boost_mult", 1.0)), 1.10)
+            mood.add_thought(npc, "local:highflower_tea", 4.0, now, 600.0)
+        elif item == "melomel":
+            mood.add_thought(npc, "local:melomel", 10.0, now, 600.0)
+            npc.speed_boost_t = max(float(getattr(npc, "speed_boost_t", 0.0)), 180.0)
+            npc.speed_boost_mult = max(float(getattr(npc, "speed_boost_mult", 1.0)), 1.05)
+        elif item == "cactus_mead":
+            npc.heat_resist_t = max(float(getattr(npc, "heat_resist_t", 0.0)), 600.0)
+            npc.stamina = min(npc.max_stamina, float(npc.stamina) + 20.0)
+            mood.add_thought(npc, "local:cactus_mead", 4.0, now, 600.0)
         elif item == "steel_ale":
             npc.damage_resist_t = max(float(getattr(npc, "damage_resist_t", 0.0)), 180.0)
             npc.damage_resist = max(float(getattr(npc, "damage_resist", 0.0)), 0.50)
@@ -73,6 +115,29 @@ def apply_player(player, item, now: float = 0.0) -> bool:
         player.speed_boost_t = max(player.speed_boost_t, 600.0)
         player.speed_boost_mult = (max(player.speed_boost_mult, 1.10)
                                    if _had_temp else 1.10)
+        return True
+    if item == "berry_tart":
+        return True
+    if item == "meat_pie":
+        player.eat(45.0)
+        player.health = min(player.max_health, player.health + 15.0)
+        return True
+    if item == "chili_chocolate":
+        player.stamina = min(player.max_stamina, player.stamina + 10.0)
+        return True
+    if item == "honey_cigar":
+        return True
+    if item == "highflower_tea":
+        player.stamina_boost_t = max(player.stamina_boost_t, 600.0)
+        player.stamina_boost_mult = max(player.stamina_boost_mult, 1.10)
+        return True
+    if item == "melomel":
+        player.speed_boost_t = max(player.speed_boost_t, 180.0)
+        player.speed_boost_mult = max(player.speed_boost_mult, 1.05)
+        return True
+    if item == "cactus_mead":
+        player.heat_resist_t = max(player.heat_resist_t, 600.0)
+        player.stamina = min(player.max_stamina, player.stamina + 20.0)
         return True
     if item == "steel_ale":
         player.damage_resist_t = max(player.damage_resist_t, 180.0)

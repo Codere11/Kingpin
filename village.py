@@ -555,6 +555,10 @@ class NPC:
     damage_resist_t: Any = 0.0
     steelworm_used: Any = False
     bananale_used: Any = False
+    base_max_stamina: Any = 100.0
+    stamina_boost_t: Any = 0.0
+    stamina_boost_mult: Any = 1.0
+    heat_resist_t: Any = 0.0
 
     # -- WHAT A MAN IS, WRITTEN DOWN --------------------------------------
     # One plain dict: every compiled field and everything in __dict__. The
@@ -619,7 +623,11 @@ class NPC:
         self.speed = self.rng.uniform(42.0, 68.0)
         self.base_speed = self.speed
         self.max_stamina = 100.0
+        self.base_max_stamina = 100.0
         self.stamina = 100.0
+        self.stamina_boost_t = 0.0
+        self.stamina_boost_mult = 1.0
+        self.heat_resist_t = 0.0
         self.speed_boost_t = 0.0
         self.speed_boost_mult = 1.5
         self.cocoa_tasted = False
@@ -1792,9 +1800,18 @@ class NPC:
         if not product or not leaf:
             _wait_at_bench()
             return
-        # 1. Deliver the finished article before fetching more leaf.
-        if self.carry.get(product, 0) > 0:
-            chest = self._chest_accepting(product)
+        # 1. Deliver the finished article before fetching more leaf.  A local
+        # artisan style may sit beside the ordinary product, so check both.
+        _outs = [product]
+        try:
+            import localstyles as _ls
+            _outs += [v for _x, v in _ls.ARTISAN_STYLES.get(product, ())]
+        except Exception:
+            pass
+        for _out in _outs:
+            if self.carry.get(_out, 0) <= 0:
+                continue
+            chest = self._chest_accepting(_out)
             if chest is None:
                 return                 # no chest will take it: hold it
             if math.hypot(chest.x - self.x, chest.y - self.y) > 22.0:
@@ -1802,20 +1819,20 @@ class NPC:
                 return
             inv = getattr(chest, "inventory", None)
             if inv is not None:
-                n = int(self.carry.get(product, 0))
-                g = self.carry_grade.get(product)
+                n = int(self.carry.get(_out, 0))
+                g = self.carry_grade.get(_out)
                 cg = getattr(self, "carry_genetics", None)
-                gen = cg.pop(product, None) if isinstance(cg, dict) else None
+                gen = cg.pop(_out, None) if isinstance(cg, dict) else None
                 if gen is not None:
-                    inv.add(product, n,
+                    inv.add(_out, n,
                             quality=(int(g) if g is not None else None),
                             genetics=gen)
-                elif getattr(items.get(product), "quality", False) and g is not None:
-                    inv.add(product, n, quality=int(g))
+                elif getattr(items.get(_out), "quality", False) and g is not None:
+                    inv.add(_out, n, quality=int(g))
                 else:
-                    inv.add(product, n)
-                self.carry.pop(product, None)
-                self.carry_grade.pop(product, None)
+                    inv.add(_out, n)
+                self.carry.pop(_out, None)
+                self.carry_grade.pop(_out, None)
             return
         # 2. With a full batch of leaf, work the bench.
         if self.carry.get(leaf, 0) >= 10:
@@ -1832,8 +1849,26 @@ class NPC:
                     self.carry_grade.pop(leaf, None)
                 hands = self.skills.leaf_grade()
                 g = quality.clamp(int(round((hands + given) / 2.0)))
-                self.carry[product] = self.carry.get(product, 0) + 10
-                self.carry_grade[product] = g
+                _out_product = product
+                _style = None
+                if float(getattr(self.skills, "farming", 0.0)) >= 6.4:
+                    try:
+                        import localstyles as _ls
+                        for _extra, _variant in _ls.ARTISAN_STYLES.get(product, ()):
+                            _ch = self._chest_with(_extra, 1)
+                            if _ch is None or math.hypot(_ch.x - self.x, _ch.y - self.y) > 140.0:
+                                continue
+                            if random.random() >= 0.25:
+                                continue
+                            _taken, _g = self._take_from_chest(_ch, _extra, 1)
+                            if _taken > 0:
+                                _out_product = _variant
+                                _style = _variant
+                                break
+                    except Exception:
+                        pass
+                self.carry[_out_product] = self.carry.get(_out_product, 0) + 10
+                self.carry_grade[_out_product] = g
                 # THE ARTISAN'S HANDS DECIDE HOW MUCH LOCAL LEAF SURVIVES.
                 try:
                     import cropgenetics as _cg
@@ -1845,20 +1880,28 @@ class NPC:
                         cg.pop(leaf, None)
                     gen = _cg.extract(
                         src_gen, getattr(self.skills, "farming", 0.0),
-                        items.get(product).name, kind="artisan")
-                    old_out = cg.get(product)
-                    if product not in cg or old_out == gen:
-                        cg[product] = gen
+                        items.get(_out_product).name, kind="artisan")
+                    if _style is not None:
+                        if gen is None:
+                            gen = {"kind": "artisan", "extraction": 1.0,
+                                   "bonuses": {}, "targets": [], "progress": {}}
+                        gen = dict(gen)
+                        gen["special"] = True
+                        gen["style"] = _style
+                        gen["label"] = _ls.STYLE_LABEL.get(_style)
+                    old_out = cg.get(_out_product)
+                    if _out_product not in cg or old_out == gen:
+                        cg[_out_product] = gen
                     else:
-                        cg[product] = None
+                        cg[_out_product] = None
                     sg = getattr(self, "stock_genetics", None)
                     if not isinstance(sg, dict):
                         sg = self.stock_genetics = {}
-                    prev = sg.get(product)
-                    if product not in sg or prev == gen:
-                        sg[product] = gen
+                    prev = sg.get(_out_product)
+                    if _out_product not in sg or prev == gen:
+                        sg[_out_product] = gen
                     else:
-                        sg[product] = None
+                        sg[_out_product] = None
                 except Exception:
                     pass
                 self._did_work()
@@ -2035,7 +2078,8 @@ class NPC:
             return
         drinks = ("beer", "liqueur", "mezcal", "steelka", "mead",
                   "chili_beer", "chili_mezcal", "steel_ale", "steelworm",
-                  "bananale", "braggot", "chocolate_stout")
+                  "bananale", "braggot", "chocolate_stout", "melomel",
+                  "cactus_mead")
         # Deliver finished drink before starting another batch.
         if any(int(self.carry.get(i, 0) or 0) > 0 for i in drinks):
             if self._deposit_to_chest(dt):
@@ -3547,6 +3591,14 @@ class NPC:
             self.damage_resist_t = max(0.0, self.damage_resist_t - dt)
             if self.damage_resist_t <= 0.0:
                 self.damage_resist = self.damage_resist_perm
+        if self.stamina_boost_t > 0.0:
+            self.stamina_boost_t = max(0.0, self.stamina_boost_t - dt)
+        if self.heat_resist_t > 0.0:
+            self.heat_resist_t = max(0.0, self.heat_resist_t - dt)
+        self.max_stamina = self.base_max_stamina * (
+            self.stamina_boost_mult if self.stamina_boost_t > 0.0 else 1.0)
+        if self.stamina > self.max_stamina:
+            self.stamina = self.max_stamina
         _boost = self.speed_boost_mult if self.speed_boost_t > 0.0 else 1.0
         self.speed = self.base_speed * self.skills.move_scale() * _boost
         # GET TO SAFETY. A refugee has exactly one mission and it outranks
