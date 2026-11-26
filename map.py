@@ -80,12 +80,21 @@ def _tree_icon(surf: pygame.Surface, x: int, y: int, snow: bool = False) -> None
                                        (x, y - 3)])
 
 
-def _ironwood_icon(surf: pygame.Surface, x: int, y: int) -> None:
-    """A tiny grey ironwood: the same tree, in the second ring's colours."""
-    pygame.draw.rect(surf, (92, 92, 88), (x, y + 1, 2, 3))
-    pygame.draw.polygon(surf, (146, 146, 142), [(x - 3, y + 1), (x + 4, y + 1),
-                                                (x, y - 3)])
-    pygame.draw.line(surf, (190, 190, 184), (x - 2, y), (x + 3, y), 1)
+def _rock_icon(surf: pygame.Surface, x: int, y: int) -> None:
+    """A nice chunky pixel rock, not a tree: the Barren Rocks' mark."""
+    dark = (66, 66, 64)
+    mid = (116, 116, 112)
+    light = (174, 174, 168)
+    # a low, irregular boulder with a lit top-left face
+    pygame.draw.polygon(surf, mid,
+                        [(x - 4, y + 2), (x - 3, y - 1), (x - 1, y - 3),
+                         (x + 2, y - 3), (x + 4, y), (x + 4, y + 2)])
+    pygame.draw.polygon(surf, dark,
+                        [(x - 4, y + 2), (x - 3, y - 1), (x - 1, y - 3),
+                         (x + 2, y - 3), (x + 4, y), (x + 4, y + 2)], 1)
+    pygame.draw.line(surf, light, (x - 3, y - 1), (x - 1, y - 3), 1)
+    pygame.draw.line(surf, light, (x - 1, y - 3), (x + 2, y - 3), 1)
+    pygame.draw.line(surf, dark, (x - 1, y - 2), (x + 1, y + 1), 1)
 
 
 def _cactus_icon(surf: pygame.Surface, x: int, y: int) -> None:
@@ -218,7 +227,7 @@ def _chart(world, cx: float, cy: float, half: float):
                 pygame.draw.line(surf, (110, 168, 92), (i, j), (i + 2, j), 1)
             elif k == CLS_BARREN:
                 pygame.draw.line(surf, (166, 166, 160), (i, j), (i + 2, j), 1)
-    # AND THE SPARSER ICONS: tree, cactus, snow tree, ironwood.
+    # AND THE SPARSER ICONS: tree, cactus, snow tree, rock.
     for j in range(4, n, 9):
         for i in range(4, n, 9):
             k = cls[j, i]
@@ -229,7 +238,7 @@ def _chart(world, cx: float, cy: float, half: float):
             elif k == CLS_FOREST:
                 _tree_icon(surf, i, j, snow=False)
             elif k == CLS_BARREN:
-                _ironwood_icon(surf, i, j)
+                _rock_icon(surf, i, j)
     # CAMP MARKERS ARE BAKED INTO THE SAME SURFACE AS THE TERRAIN, so a camp
     # and the tree behind it are one image and can never drift apart.
     try:
@@ -332,7 +341,7 @@ def _paper(world, seed: int):
                 pygame.draw.line(surf, (110, 168, 92), (i, j), (i + 2, j), 1)
             elif k == 4:
                 pygame.draw.line(surf, (166, 166, 160), (i, j), (i + 2, j), 1)
-    # AND THE SPARSER ICONS: tree, cactus, snow tree, ironwood.
+    # AND THE SPARSER ICONS: tree, cactus, snow tree, rock.
     for j in range(4, N, 9):
         for i in range(4, N, 9):
             k = cls[j, i]
@@ -343,7 +352,7 @@ def _paper(world, seed: int):
             elif k == 2:
                 _tree_icon(surf, i, j, snow=False)
             elif k == 4:
-                _ironwood_icon(surf, i, j)
+                _rock_icon(surf, i, j)
     _PAPER = (_key, surf)
     return surf
 
