@@ -718,6 +718,16 @@ def on_click(g):
         else:
             g.toast("Cook raw meat at a fireplace")
         return
+    if item_id == "chili_mezcal":
+        # THE SECOND BREWER'S SECRET: a permanent +35% body, once.
+        if g.inventory.consume("chili_mezcal", 1):
+            if g.player.gain_max_health(0.35):
+                g.toast("Drank the chili mezcal   -   maximum health +35%")
+            else:
+                g.toast("The chili mezcal has already changed your body")
+        else:
+            g.toast("No chili mezcal left")
+        return
     if item_id == "chili_beer":
         # THE BREWER'S SECRET, DRUNK BY THE PLAYER: equip it and click.
         if g.inventory.consume("chili_beer", 1):

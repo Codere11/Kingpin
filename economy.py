@@ -66,8 +66,10 @@ CRAFT_CONSUME = 1          # leaf per finished good
 MASH = ("wheat", "berries", "agave")             # what goes into the brewing table
 WORT = {"wheat": "wheat_wort", "berries": "berry_wort", "agave": "agave_wort"}
 BREW = {"wheat_wort": "beer", "berry_wort": "liqueur", "agave_wort": "mezcal"}
-LUXURY = FINISHED + tuple(BREW.values()) + ("govbeer", "chili_beer")
-DRINKS = set(BREW.values()) | {"govbeer", "chili_beer"}  # made, not grown
+LUXURY = FINISHED + tuple(BREW.values()) + (
+    "govbeer", "chili_beer", "chili_mezcal")
+DRINKS = set(BREW.values()) | {
+    "govbeer", "chili_beer", "chili_mezcal"}  # made, not grown
 WORT_BATCH = 50            # fifty at a time through the table, and the barrel
 WORT_STOCK = 40            # mash a brewer keeps on hand
 BREW_SECONDS = 300.0       # five minutes in the barrel
@@ -2317,15 +2319,20 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
                 pass
         else:
             drink = npc.wants_drink
-            if has_tried(npc, drink) and stock.get(drink, 0) > 0:
-                stock[drink] -= 1
+            choice = drink
+            if drink == "mezcal" and stock.get("chili_mezcal", 0) > 0:
+                choice = "chili_mezcal"
+            elif drink == "beer" and stock.get("chili_beer", 0) > 0:
+                choice = "chili_beer"
+            if has_tried(npc, drink) and stock.get(choice, 0) > 0:
+                stock[choice] -= 1
                 yearning = 0.0
-                npc.use_fx = (drink, USE_FX_SECONDS)
+                npc.use_fx = (choice, USE_FX_SECONDS)
                 try:
                     import mind as _mind
                     _sg = getattr(npc, "stock_genetics", None)
-                    _gen = _sg.get(drink) if isinstance(_sg, dict) else None
-                    _mind.consume(npc, drink, now, genetics=_gen)
+                    _gen = _sg.get(choice) if isinstance(_sg, dict) else None
+                    _mind.consume(npc, choice, now, genetics=_gen)
                 except Exception:
                     pass
             elif has_tried(npc, "govbeer") and stock.get("govbeer", 0) > 0:

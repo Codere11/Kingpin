@@ -17,12 +17,20 @@ def body_for(who) -> float:
     """The most health this man's SKILL earns him, 115 .. 180."""
     sk = getattr(who, "skills", None)
     if sk is None:
-        return float(PLAYER_MAX_HEALTH)
-    frac = max(float(getattr(sk, "axe", 0.0) or 0.0),
-               float(getattr(sk, "shooting", 0.0) or 0.0))
-    frac = max(0.0, min(1.0, frac))
-    return (float(PLAYER_MAX_HEALTH)
-            + (float(SKILL_MAX_HEALTH) - float(PLAYER_MAX_HEALTH)) * frac)
+        base = float(PLAYER_MAX_HEALTH)
+    else:
+        frac = max(float(getattr(sk, "axe", 0.0) or 0.0),
+                   float(getattr(sk, "shooting", 0.0) or 0.0))
+        frac = max(0.0, min(1.0, frac))
+        base = (float(PLAYER_MAX_HEALTH)
+                + (float(SKILL_MAX_HEALTH) - float(PLAYER_MAX_HEALTH)) * frac)
+    # A one-time chili-mezcal bonus follows the body through every later
+    # recomputation, instead of being erased the next time armour changes.
+    try:
+        base *= max(0.1, float(getattr(who, "health_mult", 1.0) or 1.0))
+    except Exception:
+        pass
+    return base
 
 
 def apply_body(who) -> float:

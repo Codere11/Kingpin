@@ -98,6 +98,10 @@ REGISTRY: dict[str, ItemDef] = {
     "mezcal": ItemDef("mezcal", "Mezcal",
                       "Smoke and fire. The desert finally has something to sell.",
                       stackable=True, max_stack=100, quality=True),
+    "chili_mezcal": ItemDef("chili_mezcal", "Chili Mezcal",
+                            "Smoky mezcal with a red chili bite. The first "
+                            "bottle permanently toughens the drinker.",
+                            stackable=True, max_stack=100, quality=True),
     "cigar": ItemDef("cigar", "Cigar",
                      "Rolled and cured tobacco. This is what they are actually addicted to.",
                      stackable=True, max_stack=100, quality=True),
@@ -652,6 +656,11 @@ def _draw_mezcal(s: int) -> pygame.Surface:
     return _draw_drink(s, (198, 190, 150))
 
 
+def _draw_chili_mezcal(s: int) -> pygame.Surface:
+    """A smoky bottle with a chili-red cast; the mark is added by icon_for."""
+    return _draw_drink(s, (184, 132, 74))
+
+
 def _draw_cigar(s: int) -> pygame.Surface:
     surf = pygame.Surface((s, s), pygame.SRCALPHA)
     w, h = int(s * 0.70), int(s * 0.20)
@@ -983,6 +992,7 @@ _DRAWERS = {
     "chili_beer": _draw_chili_beer,
     "liqueur": _draw_liqueur,
     "mezcal": _draw_mezcal,
+    "chili_mezcal": _draw_chili_mezcal,
     "cigar": _draw_cigar,
     "dried_mushroom": _draw_dried_mushroom,
     "rifle": _draw_rifle,

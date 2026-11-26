@@ -182,7 +182,9 @@ def describe(stack) -> list[str]:
                         lines.append("%s target  %d%%" % (_label, _pct))
                     else:
                         lines.append("%s  %d%%" % (_tag, int(math.floor(_prog * 100.0 + 0.5))))
-                if _gen.get("chili"):
+                if _gen.get("max_health") or _gen.get("recipe") == "chili_mezcal":
+                    lines.append("Chili mezcal — first bottle gives +35% maximum health")
+                elif _gen.get("chili"):
                     lines.append("Chili beer — drinking it restores all health")
                 elif _gen.get("special"):
                     if _gen.get("kind", "alcohol") == "alcohol":
@@ -190,7 +192,12 @@ def describe(stack) -> list[str]:
                     else:
                         lines.append("Special local batch — blank label")
             else:
-                lines.append("Genetics: %s" % _gen)
+                if _gen.get("max_health") or _gen.get("recipe") == "chili_mezcal":
+                    lines.append("Chili mezcal — first bottle gives +35% maximum health")
+                elif _gen.get("chili"):
+                    lines.append("Chili beer — drinking it restores all health")
+                else:
+                    lines.append("Genetics: %s" % _gen)
     except Exception:
         pass
     if not isinstance(prov, dict):

@@ -76,6 +76,8 @@ class Player:
     was_inside_v: object = None     # which town's fence he was inside last frame
     search_guard: object = None
     wanted: bool = False
+    chili_mezcal_used: bool = False
+    health_mult: float = 1.0
     # A CLASS ATTRIBUTE, NOT A MODULE ONE. main() has a LOCAL called `player`
     # -- the Player instance -- which SHADOWS the `player` module for the whole
     # of main(). So `player.LEVEL_FLASH` reached the instance, and the module's
@@ -176,6 +178,22 @@ class Player:
 
     def eat(self, amount: float) -> None:
         self.hunger = min(self.max_hunger, self.hunger + amount)
+
+    def gain_max_health(self, fraction: float = 0.35) -> bool:
+        """The chili-mezcal bonus, once, for the rest of this body's life."""
+        if getattr(self, "chili_mezcal_used", False):
+            return False
+        self.chili_mezcal_used = True
+        self.health_mult = max(1.0, float(getattr(self, "health_mult", 1.0)
+                                         or 1.0) * (1.0 + float(fraction)))
+        old = float(getattr(self, "max_health", 0.0) or 0.0)
+        base = stats.body_for(self)
+        if getattr(self, "armor", None) in ("hide_armor", "reinforced_armor"):
+            base *= self.armor_mult()
+        self.max_health = base
+        self.health = min(base, float(getattr(self, "health", 0.0) or 0.0)
+                          + max(0.0, base - old))
+        return True
 
     def respawn(self) -> None:
         self.health = self.max_health

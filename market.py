@@ -27,6 +27,7 @@ GOODS = {
     "dried_mushroom": (0.1, 0.03, 0.3),
     "beer": (0.1, 0.03, 0.3),
     "chili_beer": (0.4, 0.12, 0.9),
+    "chili_mezcal": (0.5, 0.15, 1.1),
     "liqueur": (0.1, 0.03, 0.3),
     "mezcal": (0.1, 0.03, 0.3),
     "hide": (0.3, 0.15, 0.5),
@@ -56,7 +57,7 @@ def sellable(g):
     """What the homeland will buy right now: hide once Animals is done, iron
     bars once Ironworking is done."""
     out = ["cigar", "dried_mushroom", "beer", "chili_beer", "liqueur",
-           "mezcal", "chili"]
+           "mezcal", "chili_mezcal", "chili"]
     try:
         import research
         if research.state(g, "animals") == "done":
