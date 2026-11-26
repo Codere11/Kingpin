@@ -927,6 +927,10 @@ class Trees:
             if x > float(coasts[k]):
                 self._presence[(ix, iy)] = None
                 continue
+            if biomes.is_flower_flats(x, y):
+                # FLOWER FLATS: no trees at all.
+                self._presence[(ix, iy)] = None
+                continue
             if biomes.is_barren(x, y):
                 # BARREN ROCKS: thin, hard ironwood.  No climate forest here.
                 if rng.random() >= 0.14:

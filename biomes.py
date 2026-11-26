@@ -41,6 +41,7 @@ BIOMES = {
     # learned metallurgy before they learned to be friendly.
     "barren":   {"dark": rich((88, 88, 86)),    "lite": rich((142, 142, 138))},
     "tropics":  {"dark": rich((46, 104, 64)),   "lite": rich((98, 156, 82))},
+    "flower":   {"dark": rich((92, 116, 68)),   "lite": rich((164, 176, 98))},
 }
 
 # THE RINGS. The first ring around the ship is the country the game already
@@ -54,6 +55,9 @@ _BARREN_DARK = rich((88, 88, 86))
 _BARREN_LITE = rich((142, 142, 138))
 _TROPICS_DARK = rich((46, 104, 64))
 _TROPICS_LITE = rich((98, 156, 82))
+_FLOWER_DARK = rich((92, 116, 68))
+_FLOWER_LITE = rich((164, 176, 98))
+_FLOWER_NOISE_SEED = 71113
 _BARREN_NOISE_SCALE = 0.000014
 _BARREN_NOISE_SEED = 90210
 
@@ -77,58 +81,60 @@ def ring(x: float, y: float) -> int:
     return 1 if d < RING1_RADIUS else 2
 
 
-def _barren_noise(x, y):
+def _barren_noise(x, y, salt: int = 0):
     """A low-frequency patch field: Barren Rocks come in regions, not a wall."""
     xs = np.asarray(x, np.float32) * _BARREN_NOISE_SCALE
     ys = np.asarray(y, np.float32) * _BARREN_NOISE_SCALE
-    return fbm(xs, ys, _BARREN_NOISE_SEED, octaves=3)
+    return fbm(xs, ys, _BARREN_NOISE_SEED + int(salt), octaves=3)
 
 
-def barren_mask(x, y):
-    """True on land whose patch has turned to Barren Rocks.
+def _outer_masks(x, y):
+    """Barren Rocks and Tropics split the outer ring into equal-sized chunks.
 
-    The first ring is clean. Past it the CHANCE rises with distance, but the
-    low-frequency patch noise means ordinary biomes remain between the rocky
-    patches -- the waste is not one solid grey wall.
+    One low-frequency field decides which patches are barren and which are
+    tropical; the rest stays one of the four regular biomes.  Because the
+    field is cut at half the same threshold, the two special biomes cover
+    roughly the same area by construction.
     """
     xs = np.asarray(x, np.float32)
     ys = np.asarray(y, np.float32)
     d = np.hypot(xs - _SPAWN[0], ys - _SPAWN[1])
     ramp = np.clip((d - RING1_RADIUS) / 180000.0, 0.0, 1.0)
-    # Barren Rocks are an ADDITIONAL possibility out here, not the whole
-    # country: even deep out, most ground is still one of the regular four.
-    chance = 0.06 + 0.48 * (ramp * ramp * (3.0 - 2.0 * ramp))
-    return (d >= RING1_RADIUS) & (_barren_noise(x, y) < chance)
+    chance = 0.10 + 0.25 * (ramp * ramp * (3.0 - 2.0 * ramp))
+    n_b = _barren_noise(x, y, 0)
+    outside = d >= RING1_RADIUS
+    barren = outside & (n_b < chance)
+    # The same field's other tail: the two special biomes get the same share
+    # of the outer country, so they cover roughly the same area.
+    tropics = outside & (n_b > (1.0 - chance))
+    return barren, tropics
 
 
-def barren_factor(x, y):
-    return np.asarray(barren_mask(x, y), np.float32)
+def barren_mask(x, y):
+    return _outer_masks(x, y)[0]
 
 
 def barren_factor_array(x, y):
-    return barren_factor(x, y)
-
-
-def is_barren(x: float, y: float) -> bool:
-    m = barren_mask(x, y)
-    try:
-        return bool(m.item())
-    except Exception:
-        return bool(m)
+    return np.asarray(barren_mask(x, y), np.float32)
 
 
 def tropics_mask(x, y):
-    """Hot, wet country in the second ring and beyond."""
+    return _outer_masks(x, y)[1]
+
+
+def flower_flats_mask(x, y):
+    """Flower Flats: a third-ring country, in large open patches."""
     xs = np.asarray(x, np.float32)
     ys = np.asarray(y, np.float32)
     d = np.hypot(xs - _SPAWN[0], ys - _SPAWN[1])
-    t = np.asarray(temperature(x, y, _SEED[0]), np.float32)
-    h = np.asarray(humidity(x, y, _SEED[0]), np.float32)
-    return (d >= RING1_RADIUS) & (t > 0.54) & (h > 0.55) & (~barren_mask(x, y))
+    if not (d >= RING2_RADIUS).any() if getattr(d, "ndim", 0) else d < RING2_RADIUS:
+        return np.zeros_like(xs, dtype=bool) if getattr(d, "ndim", 0) else False
+    barren, tropics = _outer_masks(x, y)
+    n = fbm(xs * 0.000021, ys * 0.000021, _FLOWER_NOISE_SEED, octaves=3)
+    return (d >= RING2_RADIUS) & (~barren) & (~tropics) & (n < 0.40)
 
-
-def is_tropics(x: float, y: float) -> bool:
-    m = tropics_mask(x, y)
+def is_barren(x: float, y: float) -> bool:
+    m = barren_mask(x, y)
     try:
         return bool(m.item())
     except Exception:
@@ -139,8 +145,32 @@ def tropics_factor_array(x, y):
     return np.asarray(tropics_mask(x, y), np.float32)
 
 
+def is_tropics(x: float, y: float) -> bool:
+    m = tropics_mask(x, y)
+    try:
+        return bool(m.item())
+    except Exception:
+        return bool(m)
+
+
+def flower_flats_factor_array(x, y):
+    return np.asarray(flower_flats_mask(x, y), np.float32)
+
+
+def is_flower_flats(x: float, y: float) -> bool:
+    m = flower_flats_mask(x, y)
+    try:
+        return bool(m.item())
+    except Exception:
+        return bool(m)
+
+
 def tropics_colors():
     return _TROPICS_DARK, _TROPICS_LITE
+
+
+def flower_colors():
+    return _FLOWER_DARK, _FLOWER_LITE
 
 
 def npc_speed_mult(x: float, y: float) -> float:
@@ -256,6 +286,8 @@ def crop_kinds(t, h, x=None, y=None):
     second ring grows its own metal-red berries and pipeleaf."""
     if x is not None and y is not None and is_barren(x, y):
         return "hardberry", "pipeleaf"
+    if x is not None and y is not None and is_flower_flats(x, y):
+        return "honeyflower", "highflower"
     if x is not None and y is not None and is_tropics(x, y):
         return "banana", "cocoa"
     if surface(t, h) == "snow":
@@ -270,6 +302,8 @@ def can_plant(t, h, kind: str, x=None, y=None) -> bool:
     and snow crops won't take in the desert."""
     if x is not None and y is not None and is_barren(x, y):
         return kind in ("hardberry", "pipeleaf")
+    if x is not None and y is not None and is_flower_flats(x, y):
+        return kind in ("honeyflower", "highflower")
     if x is not None and y is not None and is_tropics(x, y):
         return kind in ("banana", "cocoa")
     if surface(t, h) == "snow" and kind in ("cactus", "agave"):

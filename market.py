@@ -33,6 +33,16 @@ GOODS = {
     "banana_liqueur": (0.1, 0.03, 0.3),
     "cocoa": (0.1, 0.03, 0.3),
     "chocolate": (0.1, 0.03, 0.3),
+    "mead": (0.1, 0.03, 0.3),
+    "highflower": (0.1, 0.03, 0.3),
+    "highflower_joint": (0.1, 0.03, 0.3),
+    "raw_honey": (0.1, 0.03, 0.3),
+    "honeycomb": (0.1, 0.03, 0.3),
+    "rose": (0.1, 0.03, 0.3),
+    "tulip": (0.1, 0.03, 0.3),
+    "violet": (0.1, 0.03, 0.3),
+    "daisy": (0.1, 0.03, 0.3),
+    "poppy": (0.1, 0.03, 0.3),
     "liqueur": (0.1, 0.03, 0.3),
     "mezcal": (0.1, 0.03, 0.3),
     "hide": (0.3, 0.15, 0.5),
@@ -45,7 +55,11 @@ GOODS = {
 MID_GRADE = 4          # B, the middle of F..SSS (0..8)
 # HARD-COUNTRY GOODS: the ship pays a premium for the second ring's wares.
 PREMIUM = {"steelka": 1.35, "crushed_pipeleaf": 1.35,
-           "banana_liqueur": 1.35, "cocoa": 1.35, "chocolate": 1.35}
+           "banana_liqueur": 1.35, "cocoa": 1.35, "chocolate": 1.35,
+           "mead": 1.35, "highflower": 1.35, "highflower_joint": 1.35,
+           "raw_honey": 1.35, "honeycomb": 1.35,
+           "rose": 1.35, "tulip": 1.35, "violet": 1.35, "daisy": 1.35,
+           "poppy": 1.35}
 GRADE_STEP = 0.05      # +-5% per grade off B
 THRESHOLD = 100        # units a day that keep the price still
 HISTORY = 40           # how many daily prices the chart remembers
@@ -66,7 +80,9 @@ def sellable(g):
     bars once Ironworking is done."""
     out = ["cigar", "dried_mushroom", "beer", "chili_beer", "liqueur",
            "mezcal", "chili_mezcal", "steelka", "crushed_pipeleaf",
-           "banana_liqueur", "cocoa", "chocolate", "chili"]
+           "banana_liqueur", "cocoa", "chocolate", "mead", "highflower",
+           "highflower_joint", "raw_honey", "honeycomb", "rose", "tulip",
+           "violet", "daisy", "poppy", "chili"]
     try:
         import research
         if research.state(g, "animals") == "done":

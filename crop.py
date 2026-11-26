@@ -37,15 +37,18 @@ def yield_scale(skill: float) -> float:
     return 1.0 + 2.0 * k
 PHASE_SECONDS = GROW_SECONDS / 4.0        # 3 growth phases, then ripe
 
-LEAF_KINDS = ("plant", "mushroom", "agave", "chili", "pipeleaf", "cocoa")
-FOOD_KINDS = ("wheat", "berries", "cactus", "hardberry", "banana")
+LEAF_KINDS = ("plant", "mushroom", "agave", "chili", "pipeleaf", "cocoa",
+              "highflower")
+FOOD_KINDS = ("wheat", "berries", "cactus", "hardberry", "banana",
+              "honeyflower")
+FLOWER_KINDS = ("rose", "tulip", "violet", "daisy", "poppy", "honeyflower")
 FIBRE_KINDS = ("cotton",)      # neither food nor leaf: cotton, spun into cloth
 
 # EVERY CROP A FIELD CAN GROW, in the order a field's type cycles. Bread is
 # the base: a fresh field is wheat, and each click moves on to the next crop.
 FIELD_KINDS = ("wheat", "berries", "cactus", "plant", "mushroom", "agave",
                "cotton", "chili", "hardberry", "pipeleaf", "banana",
-               "cocoa")
+               "cocoa", "honeyflower", "highflower")
 
 # the item whose icon sits on a field of each crop (bread for wheat, the
 # boll for cotton, and so on)
@@ -58,18 +61,24 @@ FIELD_SYMBOL = {
     "pipeleaf": "pipeleaf",
     "banana": "bananas",
     "cocoa": "cocoa",
+    "honeyflower": "raw_honey",
+    "highflower": "highflower",
 }
 
 # what each crop yields
 LEAF_ITEM = {"plant": "tobacco", "mushroom": "red_mushroom", "agave": "agave",
-             "chili": "chili", "pipeleaf": "pipeleaf", "cocoa": "cocoa"}
+             "chili": "chili", "pipeleaf": "pipeleaf", "cocoa": "cocoa",
+             "highflower": "highflower"}
 FOOD_ITEM = {"wheat": "bread", "berries": "berries", "cactus": "cactus_fruit",
-             "hardberry": "hardberries", "banana": "bananas"}
+             "hardberry": "hardberries", "banana": "bananas",
+             "honeyflower": "raw_honey"}
+FLOWER_ITEM = {"rose": "rose", "tulip": "tulip", "violet": "violet",
+               "daisy": "daisy", "poppy": "poppy", "honeyflower": "raw_honey"}
 
 # what an artisan's bench turns each leaf crop into -- the finished article
 LEAF_PRODUCT = {"plant": "cigar", "mushroom": "dried_mushroom",
                 "agave": "mezcal", "pipeleaf": "crushed_pipeleaf",
-                "cocoa": "chocolate"}
+                "cocoa": "chocolate", "highflower": "highflower_joint"}
 LEAF_OF_PRODUCT = {v: k for k, v in LEAF_PRODUCT.items()}
 
 # every crop has its own seed, and every seed grows exactly one crop
@@ -83,6 +92,8 @@ SEED_CROP = {
     "pipeleaf_seed": "pipeleaf",
     "banana_seed": "banana",
     "cocoa_seed": "cocoa",
+    "honeyflower_seed": "honeyflower",
+    "highflower_seed": "highflower",
 }
 CROP_SEED = {crop: seed for seed, crop in SEED_CROP.items()}
 
@@ -551,6 +562,88 @@ def draw_cocoa(screen, x, y, elapsed, cam_x, cam_y, biome=None):
                                 (sx + dx + wx, sy - height * 0.66 + dy + wy, 5, 6), 1)
 
 
+_FLOWER_COL = {
+    "rose": ((172, 38, 62), (238, 120, 142), (92, 24, 38)),
+    "tulip": ((190, 72, 38), (242, 146, 60), (104, 38, 24)),
+    "violet": ((92, 54, 172), (174, 132, 238), (48, 28, 98)),
+    "daisy": ((210, 188, 72), (248, 238, 184), (116, 88, 32)),
+    "poppy": ((168, 34, 38), (232, 82, 70), (88, 22, 24)),
+}
+
+
+def draw_flower(screen, x, y, elapsed, cam_x, cam_y, biome=None, kind="rose"):
+    sx, sy = x - cam_x, y - cam_y
+    p = min(1.0, max(0.0, elapsed / GROW_SECONDS))
+    st = stage(elapsed)
+    pygame.draw.ellipse(screen, (38, 58, 30), (sx - 8, sy - 3, 16, 6))
+    stem, leaf = (54, 108, 52), (82, 148, 66)
+    h = 7.0 + 18.0 * p
+    wx, wy = wind.sway(x, y, 0.9)
+    pygame.draw.line(screen, stem, (sx, sy), (sx + wx, sy - h + wy), 2)
+    pygame.draw.ellipse(screen, leaf, (sx - 5 + wx * 0.5, sy - h * 0.55, 7, 3))
+    if st >= 1:
+        base, light, dark = _FLOWER_COL[kind]
+        r = 3 + (2 if st >= 2 else 0)
+        cx, cy = int(sx + wx), int(sy - h + wy)
+        for i in range(5):
+            a = i * 2.0 * math.pi / 5.0 + 0.2
+            px = cx + int(math.cos(a) * r)
+            py = cy + int(math.sin(a) * r)
+            pygame.draw.circle(screen, base, (px, py), max(2, r - 1))
+            pygame.draw.circle(screen, light, (px - 1, py - 1), 1)
+        pygame.draw.circle(screen, (238, 196, 52), (cx, cy), max(1, r // 2))
+        pygame.draw.circle(screen, dark, (cx, cy), max(1, r // 2), 1)
+
+
+def draw_honeyflower(screen, x, y, elapsed, cam_x, cam_y, biome=None):
+    sx, sy = x - cam_x, y - cam_y
+    p = min(1.0, max(0.0, elapsed / GROW_SECONDS))
+    st = stage(elapsed)
+    pygame.draw.ellipse(screen, (48, 52, 26), (sx - 10, sy - 3, 20, 6))
+    h = 9.0 + 22.0 * p
+    wx, wy = wind.sway(x, y, 0.8)
+    pygame.draw.line(screen, (94, 122, 48), (sx, sy), (sx + wx, sy - h + wy), 2)
+    cx, cy = int(sx + wx), int(sy - h + wy)
+    honey, brown = (236, 178, 48), (142, 88, 38)
+    for i in range(8):
+        a = i * math.pi / 4.0
+        px = cx + int(math.cos(a) * (6 if st >= 2 else 4))
+        py = cy + int(math.sin(a) * (6 if st >= 2 else 4))
+        pygame.draw.circle(screen, honey, (px, py), 3)
+        pygame.draw.circle(screen, brown, (px, py), 3, 1)
+    pygame.draw.circle(screen, (246, 214, 90), (cx, cy), 4)
+    # BEES: always a little swarm, moving with time.
+    t = float(elapsed)
+    for i in range(6):
+        a = t * 2.3 + i * 1.7
+        rr = 7.0 + 4.0 * math.sin(t * 1.7 + i)
+        bx = cx + int(math.cos(a) * rr)
+        by = cy + int(math.sin(a * 1.3) * rr * 0.45)
+        pygame.draw.circle(screen, (34, 30, 20), (bx, by), 1)
+        pygame.draw.line(screen, (238, 196, 52), (bx - 1, by - 1), (bx + 1, by - 1), 1)
+        pygame.draw.line(screen, (156, 120, 36), (bx - 1, by + 1), (bx + 1, by + 1), 1)
+
+
+def draw_highflower(screen, x, y, elapsed, cam_x, cam_y, biome=None):
+    sx, sy = x - cam_x, y - cam_y
+    p = min(1.0, max(0.0, elapsed / GROW_SECONDS))
+    st = stage(elapsed)
+    pygame.draw.ellipse(screen, (42, 58, 30), (sx - 10, sy - 3, 20, 6))
+    h = 10.0 + 34.0 * p
+    wx, wy = wind.sway(x, y, 0.65)
+    pygame.draw.line(screen, (78, 112, 52), (sx, sy), (sx + wx, sy - h + wy), 3)
+    cx, cy = sx + wx, sy - h + wy
+    cols = ((156, 70, 210), (74, 180, 96), (92, 186, 226), (236, 200, 52))
+    for i, col in enumerate(cols):
+        a = -math.pi * 0.9 + i * 0.65
+        ex = cx + math.cos(a) * (9 + 4 * p)
+        ey = cy + math.sin(a) * (9 + 4 * p)
+        pygame.draw.line(screen, col, (cx, cy), (ex, ey), 3)
+        pygame.draw.circle(screen, col, (int(ex), int(ey)), max(1, int(2 + 1 * p)))
+    pygame.draw.circle(screen, (238, 196, 52), (int(cx), int(cy)), 4)
+    pygame.draw.circle(screen, (104, 58, 28), (int(cx), int(cy)), 4, 1)
+
+
 _DRAWERS = {
     "plant": draw_plant,
     "mushroom": draw_mushroom,
@@ -564,4 +657,11 @@ _DRAWERS = {
     "pipeleaf": draw_pipeleaf,
     "banana": draw_banana,
     "cocoa": draw_cocoa,
+    "rose": lambda a,b,c,d,e,f,g=None: draw_flower(a,b,c,d,e,f,g,"rose"),
+    "tulip": lambda a,b,c,d,e,f,g=None: draw_flower(a,b,c,d,e,f,g,"tulip"),
+    "violet": lambda a,b,c,d,e,f,g=None: draw_flower(a,b,c,d,e,f,g,"violet"),
+    "daisy": lambda a,b,c,d,e,f,g=None: draw_flower(a,b,c,d,e,f,g,"daisy"),
+    "poppy": lambda a,b,c,d,e,f,g=None: draw_flower(a,b,c,d,e,f,g,"poppy"),
+    "honeyflower": draw_honeyflower,
+    "highflower": draw_highflower,
 }

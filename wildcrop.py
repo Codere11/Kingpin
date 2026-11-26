@@ -69,6 +69,8 @@ def density_at(x: float, y: float) -> float:
     """
     try:
         import biomes as _b
+        if _b.is_flower_flats(x, y):
+            return 45.0
         ramp = _b._waste_ramp(x, y)
         if ramp > 0.0:
             # A FIFTIETH BY A THIRD OF THE WAY OUT, AND THEN NOTHING AT ALL.
@@ -79,6 +81,14 @@ def density_at(x: float, y: float) -> float:
     except Exception:
         pass
     return DENSITY
+
+
+def _flower_kind(x: float, y: float, h: int) -> str:
+    """Five flower kinds, with honeyflowers at about 5% of them."""
+    roll = (h >> 8) % 100
+    if roll < 5:
+        return "honeyflower"
+    return crop.FLOWER_KINDS[roll % 5]
 
 
 def _plant(world, tx: int, ty: int):
@@ -101,8 +111,11 @@ def _plant(world, tx: int, ty: int):
     if h % 1000 < density_at(x, y) and world.tile_kind(tx, ty) == "grass":
         _t = float(biomes.temperature(x, y, world.seed))
         _h = float(biomes.humidity(x, y, world.seed))
-        food, leaf = biomes.crop_kinds(_t, _h, x, y)
-        _kind = leaf if (h >> 8) & 1 else food
+        if biomes.is_flower_flats(x, y):
+            _kind = _flower_kind(x, y, h)
+        else:
+            food, leaf = biomes.crop_kinds(_t, _h, x, y)
+            _kind = leaf if (h >> 8) & 1 else food
         # COTTON grows wild in the savanna, one tile in four there.
         if biomes.biome_name(_t, _h) == "savanna" and (h >> 4) % 4 == 0:
             _kind = "cotton"
@@ -148,8 +161,11 @@ def _cell(world, cx: int, cy: int):
             wy = ty * TILE + TILE / 2.0
             _t = float(biomes.temperature(wx, wy, world.seed))
             _h = float(biomes.humidity(wx, wy, world.seed))
-            food, leaf = biomes.crop_kinds(_t, _h, wx, wy)
-            kind = leaf if (h >> 8) & 1 else food
+            if biomes.is_flower_flats(wx, wy):
+                kind = _flower_kind(wx, wy, h)
+            else:
+                food, leaf = biomes.crop_kinds(_t, _h, wx, wy)
+                kind = leaf if (h >> 8) & 1 else food
             if biomes.biome_name(_t, _h) == "savanna" and (h >> 4) % 4 == 0:
                 kind = "cotton"
             cached.append((tx, ty, kind, (h >> 4) % STAGES))
@@ -192,6 +208,29 @@ def visible(world, villages, cam_x: float, cam_y: float,
 def harvest(world, tx: int, ty: int, kind: str, stage: int,
             inventory, toast, share=None) -> None:
     """``share`` is called with (item, amount) for the crop -- see main.pay_share."""
+    if kind in crop.FLOWER_KINDS:
+        if kind == "honeyflower":
+            comb = 1 + (1 if stage >= 2 else 0)
+            honey = 2 + stage + (1 if random.random() < 0.5 else 0)
+            inventory.add("honeycomb", comb)
+            inventory.add("raw_honey", honey)
+            if share is not None:
+                share("honeycomb", comb)
+                share("raw_honey", honey)
+            toast("Gathered %d honeycomb and %d raw honey" % (comb, honey))
+        else:
+            item = crop.FLOWER_ITEM.get(kind, kind)
+            amount = 1 + stage
+            inventory.add(item, amount)
+            if share is not None:
+                share(item, amount)
+            toast("Gathered %d %s" % (amount, items.get(item).name.lower()))
+        _forced = getattr(world, "wild_forced", {})
+        if (tx, ty) in _forced:
+            _forced.pop((tx, ty), None)
+        else:
+            world.wild_eaten[(tx, ty)] = _NOW + REGEN
+        return
     if kind in crop.FIBRE_KINDS:
         # COTTON: 5-10 cotton and 1-3 seeds. No quality system.
         item = "cotton"

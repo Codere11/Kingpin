@@ -79,6 +79,12 @@ REGISTRY: dict[str, ItemDef] = {
     "cocoa_seed": ItemDef("cocoa_seed", "Cocoa Seeds",
                           "Plant in tropical soil; grows cocoa.",
                           stackable=True, max_stack=100),
+    "honeyflower_seed": ItemDef("honeyflower_seed", "Honeyflower Seeds",
+                                "Plant in flower-flat soil; grows honeyflowers.",
+                                stackable=True, max_stack=100),
+    "highflower_seed": ItemDef("highflower_seed", "Highflower Seeds",
+                               "Plant in flower-flat soil; grows highflower.",
+                               stackable=True, max_stack=100),
     "tobacco": ItemDef("tobacco", "Tobacco", "Cured leaf. The whole point of all this.",
                        stackable=True, max_stack=100, quality=True),
     "wheat": ItemDef("wheat", "Wheat",
@@ -200,6 +206,34 @@ REGISTRY: dict[str, ItemDef] = {
     "chocolate": ItemDef("chocolate", "Chocolate",
                          "Dark, rich chocolate. The first taste can change a body.",
                          stackable=True, max_stack=100, quality=True),
+    "rose": ItemDef("rose", "Rose", "A deep red rose from the flower flats.",
+                    stackable=True, max_stack=100),
+    "tulip": ItemDef("tulip", "Tulip", "A bright tulip from the flower flats.",
+                     stackable=True, max_stack=100),
+    "violet": ItemDef("violet", "Violet", "A small violet flower.",
+                      stackable=True, max_stack=100),
+    "daisy": ItemDef("daisy", "Daisy", "A cheerful white-and-gold daisy.",
+                     stackable=True, max_stack=100),
+    "poppy": ItemDef("poppy", "Poppy", "A red poppy nodding in the flats.",
+                     stackable=True, max_stack=100),
+    "honeycomb": ItemDef("honeycomb", "Honeycomb",
+                         "Waxy golden comb, heavy with honey.",
+                         stackable=True, max_stack=50),
+    "raw_honey": ItemDef("raw_honey", "Raw Honey",
+                          "Sweet golden honey, straight from the comb.",
+                          stackable=True, max_stack=50),
+    "highflower": ItemDef("highflower", "Highflower",
+                          "A sunflower with leaves of impossible colours.",
+                          stackable=True, max_stack=100, quality=True),
+    "highflower_joint": ItemDef("highflower_joint", "Highflower Joint",
+                                "A rolled highflower joint. The colours get stranger.",
+                                stackable=True, max_stack=100, quality=True),
+    "honey_wort": ItemDef("honey_wort", "Honey Wort",
+                         "Raw honey and water, ready for the ferment.",
+                         stackable=True, max_stack=100, quality=True),
+    "mead": ItemDef("mead", "Mead",
+                    "Golden honey wine from the flower flats.",
+                    stackable=True, max_stack=100, quality=True),
     "bed": ItemDef("bed", "Bedroll", "A white cotton bedroll. Place it and sleep.",
                    stackable=True, max_stack=10),
     "door": ItemDef("door", "Door", "A wooden door for a camp wall. Walk through it.",
@@ -988,6 +1022,83 @@ def _draw_chocolate(s: int) -> pygame.Surface:
     return surf
 
 
+def _draw_flower_item(s: int, col, light=None) -> pygame.Surface:
+    surf = _canvas(s)
+    light = light or tuple(min(255, c + 42) for c in col)
+    for i in range(5):
+        a = i * math.tau / 5.0
+        px = 0.5 + math.cos(a) * 0.22
+        py = 0.43 + math.sin(a) * 0.22
+        pygame.draw.circle(surf, col, (int(px * s), int(py * s)), max(2, int(0.14 * s)))
+        pygame.draw.circle(surf, light, (int((px - 0.025) * s), int((py - 0.025) * s)), max(1, int(0.06 * s)))
+    pygame.draw.circle(surf, (238, 196, 52), (int(0.5 * s), int(0.43 * s)), max(2, int(0.09 * s)))
+    pygame.draw.line(surf, (56, 112, 52), (int(0.5 * s), int(0.5 * s)),
+                     (int(0.5 * s), int(0.85 * s)), 2)
+    return surf
+
+
+def _draw_rose(s): return _draw_flower_item(s, (176, 38, 62), (238, 120, 142))
+def _draw_tulip(s): return _draw_flower_item(s, (190, 72, 38), (242, 146, 60))
+def _draw_violet(s): return _draw_flower_item(s, (92, 54, 172), (174, 132, 238))
+def _draw_daisy(s): return _draw_flower_item(s, (244, 238, 184), (255, 255, 244))
+def _draw_poppy(s): return _draw_flower_item(s, (168, 34, 38), (232, 82, 70))
+
+
+def _draw_honeyflower_seed(s: int) -> pygame.Surface:
+    return _draw_seeds(s, (226, 166, 42), (144, 88, 26))
+
+
+def _draw_highflower_seed(s: int) -> pygame.Surface:
+    return _draw_seeds(s, (142, 74, 196), (84, 46, 126))
+
+
+def _draw_honeycomb(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    cell = (226, 166, 42)
+    dark = (144, 88, 26)
+    for r in range(3):
+        for c in range(3):
+            x = (0.28 + c * 0.20) * s
+            y = (0.28 + r * 0.20) * s
+            pygame.draw.circle(surf, cell, (int(x), int(y)), max(3, int(0.09 * s)))
+            pygame.draw.circle(surf, dark, (int(x), int(y)), max(3, int(0.09 * s)), 1)
+    return surf
+
+
+def _draw_raw_honey(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    pygame.draw.ellipse(surf, (236, 174, 38), (0.18 * s, 0.34 * s, 0.64 * s, 0.42 * s))
+    pygame.draw.ellipse(surf, (150, 92, 22), (0.18 * s, 0.34 * s, 0.64 * s, 0.42 * s), 2)
+    pygame.draw.arc(surf, (255, 220, 92), (0.28 * s, 0.42 * s, 0.34 * s, 0.22 * s), 0.4, 2.8, 2)
+    return surf
+
+
+def _draw_highflower(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    pygame.draw.line(surf, (58, 112, 52), (0.5 * s, 0.50 * s), (0.5 * s, 0.90 * s), 3)
+    for i, col in enumerate(((156, 70, 210), (74, 180, 96), (92, 186, 226), (236, 200, 52))):
+        a = -2.8 + i * 0.55
+        ex = (0.5 + math.cos(a) * 0.32) * s
+        ey = (0.42 + math.sin(a) * 0.28) * s
+        pygame.draw.line(surf, col, (0.5 * s, 0.5 * s), (ex, ey), 4)
+        pygame.draw.circle(surf, col, (int(ex), int(ey)), max(2, int(0.055 * s)))
+    pygame.draw.circle(surf, (238, 196, 52), (int(0.5 * s), int(0.48 * s)), max(3, int(0.09 * s)))
+    return surf
+
+
+def _draw_highflower_joint(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    pygame.draw.line(surf, (244, 240, 224), (0.25 * s, 0.72 * s), (0.76 * s, 0.28 * s), max(5, int(0.12 * s)))
+    pygame.draw.line(surf, (188, 170, 142), (0.30 * s, 0.72 * s), (0.26 * s, 0.82 * s), 2)
+    for col in ((156, 70, 210), (74, 180, 96), (92, 186, 226), (236, 200, 52)):
+        pygame.draw.circle(surf, col, (int(0.70 * s), int(0.33 * s)), max(1, int(0.025 * s)))
+    return surf
+
+
+def _draw_mead(s: int) -> pygame.Surface:
+    return _draw_drink(s, (238, 186, 48))
+
+
 def _draw_hardberry_seed(s: int) -> pygame.Surface:
     return _draw_seeds(s, (180, 112, 106), (112, 70, 68))
 
@@ -1227,6 +1338,8 @@ _DRAWERS = {
     "pipeleaf_seed": _draw_pipeleaf_seed,
     "banana_seed": _draw_banana_seed,
     "cocoa_seed": _draw_cocoa_seed,
+    "honeyflower_seed": _draw_honeyflower_seed,
+    "highflower_seed": _draw_highflower_seed,
     "hardberries": _draw_hardberries,
     "pipeleaf": _draw_pipeleaf,
     "tropical_wood": _draw_tropical_wood,
@@ -1235,6 +1348,11 @@ _DRAWERS = {
     "banana_wort": _draw_wort,
     "banana_liqueur": _draw_banana_liqueur,
     "chocolate": _draw_chocolate,
+    "rose": _draw_rose, "tulip": _draw_tulip, "violet": _draw_violet,
+    "daisy": _draw_daisy, "poppy": _draw_poppy,
+    "honeycomb": _draw_honeycomb, "raw_honey": _draw_raw_honey,
+    "highflower": _draw_highflower, "highflower_joint": _draw_highflower_joint,
+    "honey_wort": _draw_wort, "mead": _draw_mead,
     "crushed_pipeleaf": _draw_crushed_pipeleaf,
     "steelka": _draw_steelka,
     "ironwood": _draw_ironwood,

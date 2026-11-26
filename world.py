@@ -168,6 +168,11 @@ class World:
             with self._lock:
                 self._kind_cache[key] = got
             return got
+        if biomes.is_flower_flats(_wx_c, _wy_c):
+            got = "grass"                          # flowers grow on grass
+            with self._lock:
+                self._kind_cache[key] = got
+            return got
         h = float(biomes.humidity(np.float32(_wx_c),
                                   np.float32(_wy_c), self.seed))
         got = "dry" if h < 0.24 else "grass"       # bare sand in the desert
@@ -358,6 +363,13 @@ class GroundRenderer:
             _tl = np.array(_tl, np.float32)
             dark = dark * (1.0 - _trop) + _td * _trop
             lite = lite * (1.0 - _trop) + _tl * _trop
+        _flower = biomes.flower_flats_factor_array(X, Y)[..., None]
+        if float(np.max(_flower)) > 0.0:
+            _fd, _fl = biomes.flower_colors()
+            _fd = np.array(_fd, np.float32)
+            _fl = np.array(_fl, np.float32)
+            dark = dark * (1.0 - _flower) + _fd * _flower
+            lite = lite * (1.0 - _flower) + _fl * _flower
         mixv = np.clip(0.44 + 0.56 * clump, 0.0, 1.0)[..., None]
         col = dark * (1.0 - mixv) + lite * mixv
         col = col * (0.90 + 0.18 * clump)[..., None]
@@ -526,6 +538,8 @@ class GroundRenderer:
                 dark, lite = biomes.barren_colors()
             elif biomes.is_tropics(mx, my):
                 dark, lite = biomes.tropics_colors()
+            elif biomes.is_flower_flats(mx, my):
+                dark, lite = biomes.flower_colors()
             col = (int((dark[0] + lite[0]) * 0.5),
                    int((dark[1] + lite[1]) * 0.5),
                    int((dark[2] + lite[2]) * 0.5))

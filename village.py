@@ -2012,8 +2012,8 @@ class NPC:
         if bench is None or getattr(bench, "broken", False):
             self._native_idle(dt)
             return
-        drinks = ("beer", "liqueur", "mezcal", "steelka", "chili_beer",
-                  "chili_mezcal")
+        drinks = ("beer", "liqueur", "mezcal", "steelka", "mead",
+                  "chili_beer", "chili_mezcal")
         # Deliver finished drink before starting another batch.
         if any(int(self.carry.get(i, 0) or 0) > 0 for i in drinks):
             if self._deposit_to_chest(dt):
@@ -2052,7 +2052,8 @@ class NPC:
             self.carry.pop(mash, None)
             self.carry_grade.pop(mash, None)
         base_drink = {"wheat": "beer", "berries": "liqueur",
-                      "agave": "mezcal", "hardberries": "steelka"}.get(mash)
+                      "agave": "mezcal", "hardberries": "steelka",
+                      "raw_honey": "mead"}.get(mash)
         if base_drink is None:
             return
         drink = base_drink

@@ -53,34 +53,37 @@ def _note(text: str) -> None:
     except Exception:
         pass
 
-FOOD = ("bread", "berries", "cactus_fruit", "hardberries", "bananas")
-LEAF = ("tobacco", "red_mushroom", "agave", "chili", "pipeleaf", "cocoa")
+FOOD = ("bread", "berries", "cactus_fruit", "hardberries", "bananas",
+        "raw_honey")
+LEAF = ("tobacco", "red_mushroom", "agave", "chili", "pipeleaf", "cocoa",
+        "highflower")
 # The artisan's trade: what a laboratory turns leaf INTO. Nobody craves the raw
 # leaf any more -- the craving is for the finished article.
 PROCESS = {"tobacco": "cigar", "red_mushroom": "dried_mushroom",
-           "pipeleaf": "crushed_pipeleaf", "cocoa": "chocolate"}
+           "pipeleaf": "crushed_pipeleaf", "cocoa": "chocolate",
+           "highflower": "highflower_joint"}
 FINISHED = tuple(PROCESS.values())
 LEAF_STOCK = 24            # leaf an artisan keeps on the bench to work with
 CRAFT_CONSUME = 1          # leaf per finished good
 
 # The brewery: mash first, then ferment. Two steps, two waits, two grades.
-MASH = ("wheat", "berries", "agave", "hardberries", "bananas")
+MASH = ("wheat", "berries", "agave", "hardberries", "bananas", "raw_honey")
 WORT = {"wheat": "wheat_wort", "berries": "berry_wort",
         "agave": "agave_wort", "hardberries": "hardberry_wort",
-        "bananas": "banana_wort"}
+        "bananas": "banana_wort", "raw_honey": "honey_wort"}
 BREW = {"wheat_wort": "beer", "berry_wort": "liqueur",
         "agave_wort": "mezcal", "hardberry_wort": "steelka",
-        "banana_wort": "banana_liqueur"}
+        "banana_wort": "banana_liqueur", "honey_wort": "mead"}
 LUXURY = FINISHED + tuple(BREW.values()) + (
     "govbeer", "chili_beer", "chili_mezcal")
 DRINKS = set(BREW.values()) | {
     "govbeer", "chili_beer", "chili_mezcal", "steelka",
-    "banana_liqueur"}  # made, not grown
+    "banana_liqueur", "mead"}  # made, not grown
 WORT_BATCH = 50            # fifty at a time through the table, and the barrel
 WORT_STOCK = 40            # mash a brewer keeps on hand
 BREW_SECONDS = 300.0       # five minutes in the barrel
 SEEDS = ("wheat_seed", "seed_bag", "hardberry_seed", "pipeleaf_seed",
-         "banana_seed", "cocoa_seed")
+         "banana_seed", "cocoa_seed", "honeyflower_seed", "highflower_seed")
 TOOLS = ("shovel", "pickaxe", "axe")
 # ARMS ARE GOODS. A rifle is 1,050 coin: a HUNDRED AND FIVE DAYS of a
 # labourer's wage at WAGE = 10, or thirty-five days of a rifleman's PAY_RIFLE
@@ -92,6 +95,7 @@ TOOLS = ("shovel", "pickaxe", "axe")
 ARMS = ("rifle", "shotgun", "ammo")
 GOODS = (FOOD + LEAF + FINISHED + SEEDS + TOOLS + ARMS
          + ("iron", "wood", "ironwood", "tropical_wood", "wheat")
+         + ("rose", "tulip", "violet", "daisy", "poppy", "honeycomb")
          + tuple(WORT.values())
          + tuple(BREW.values()) + ("govbeer",))
 WAGE_GOODS = FOOD + LEAF + SEEDS
@@ -105,6 +109,9 @@ ITEM_VALUE = {
     "steelka": 30, "ironwood": 5,     # leaf is the input; this is the good
     "bananas": 4, "banana_wort": 4, "banana_liqueur": 24,
     "cocoa": 14, "chocolate": 38, "tropical_wood": 6,
+    "raw_honey": 12, "honeycomb": 15, "mead": 24, "highflower": 12,
+    "highflower_joint": 30, "honey_wort": 4, "rose": 3, "tulip": 3,
+    "violet": 3, "daisy": 3, "poppy": 3,
     "wheat": 3, "wheat_wort": 4, "berry_wort": 4, "agave_wort": 4,
     "hardberry_wort": 4,
     "beer": 22, "liqueur": 26, "mezcal": 24,
@@ -315,6 +322,10 @@ def crop_yield(kind: str, rng) -> tuple[str, int]:
         return "bananas", rng.randint(2, 5)
     if kind == "cocoa":
         return "cocoa", rng.randint(2, 4)
+    if kind == "honeyflower":
+        return "raw_honey", rng.randint(2, 4)
+    if kind == "highflower":
+        return "highflower", rng.randint(2, 4)
     return "", 0
 
 
