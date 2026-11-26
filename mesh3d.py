@@ -160,6 +160,7 @@ class Scene:
         self.ey = float(ey)
         self.night = bool(night)
         self.ops = []
+        self.ground_ops = []
 
     def _cam(self, p):
         dx, dy, dz = p[0] - self.ex, p[1] - self.ey, p[2] - EYE_Z
@@ -188,7 +189,7 @@ class Scene:
         return (float(IW * 0.5 + FOCAL * p[0] / p[2]),
                 float(IH * 0.5 - FOCAL * p[1] / p[2]))
 
-    def add_face(self, world_pts, color):
+    def add_face(self, world_pts, color, ground=False):
         if len(world_pts) < 3:
             return
         # normal from the original world points
@@ -223,7 +224,11 @@ class Scene:
             return
         if max(abs(v) for v in xs + ys) > 12000.0:
             return
-        self.ops.append((cz, "face", pts, _shade(color, n, cz, self.night)))
+        op = (cz, "face", pts, _shade(color, n, cz, self.night))
+        if ground:
+            self.ground_ops.append(op)
+        else:
+            self.ops.append(op)
 
     def add_sprite(self, image, x, y, world_h=50.0, ax=None, ay=None):
         base = self._cam((x, y, 0.0))
@@ -250,6 +255,12 @@ class Scene:
                          ax * scale, ay * scale))
 
     def draw(self, screen):
+        # Worked ground is a surface under everything else, even when a
+        # crop/character is at almost the same depth.
+        self.ground_ops.sort(key=lambda op: op[0], reverse=True)
+        for op in self.ground_ops:
+            _d, _k, pts, color = op
+            pygame.draw.polygon(screen, color, pts)
         self.ops.sort(key=lambda op: op[0], reverse=True)
         for op in self.ops:
             if op[1] == "face":
@@ -423,6 +434,16 @@ def _work_faces(wp):
     wood_d = (72, 48, 30)
     metal = (104, 108, 116)
     faces = []
+    # A FIREPLACE IS A FIRE, NOT A BENCH.  The generic work table used to be
+    # built before the kind-specific parts, which put a brown wooden slab and
+    # legs on top of every campfire.
+    if kind == "fireplace":
+        for k in range(9):
+            a = k * math.pi * 2.0 / 9.0
+            faces += _box(x + math.cos(a) * w * 0.30,
+                          y + math.sin(a) * d * 0.30,
+                          0, 8, 8, 9, (108, 104, 98), a)
+        return faces
     top_h = 24.0
     # legs and table, small enough to read from a first-person distance
     lw = max(3.0, w * 0.08)
@@ -440,11 +461,6 @@ def _work_faces(wp):
             faces += _cylinder(x, y, top_h * 0.9, w * 0.22, 4, 8, (70, 48, 30))
         else:
             faces += _box(x, y, top_h, w * 0.26, d * 0.18, 9, metal)
-    elif kind in ("fireplace",):
-        for k in range(8):
-            a = k * math.pi / 4.0
-            faces += _box(x + math.cos(a) * w * 0.30, y + math.sin(a) * d * 0.30,
-                          0, 7, 7, 9, (104, 100, 94), a)
     elif kind in ("dummy", "target"):
         faces += _box(x, y, top_h, 6, 6, max(28.0, d * 0.65), wood_d)
         faces += _box(x, y, top_h + 18, w * 0.42, 5, 5, wood)
@@ -546,10 +562,10 @@ def add_plot_tiles(scene, g, radius=1300.0):
                                    "chili", "hardberry", "pipeleaf", "banana",
                                    "cocoa", "honeyflower", "highflower") else spoil
         z = 0.45
-        x0, x1 = wx - 15.0, wx + 15.0
-        y0, y1 = wy - 15.0, wy + 15.0
+        x0, x1 = wx - 16.0, wx + 16.0
+        y0, y1 = wy - 16.0, wy + 16.0
         scene.add_face(((x0, y0, z), (x1, y0, z),
-                        (x1, y1, z), (x0, y1, z)), soil)
+                        (x1, y1, z), (x0, y1, z)), soil, ground=True)
         # Four dark furrows.  These are world-fixed, so they stay put while
         # the camera turns.
         for k in range(4):
@@ -557,7 +573,8 @@ def add_plot_tiles(scene, g, radius=1300.0):
             scene.add_face(((x0 + 1.5, yy, z + 0.15), (x1 - 1.5, yy, z + 0.15),
                             (x1 - 1.5, yy + 1.4, z + 0.15),
                             (x0 + 1.5, yy + 1.4, z + 0.15)),
-                           (56, 38, 24) if soil == spoil else (74, 48, 28))
+                           (56, 38, 24) if soil == spoil else (74, 48, 28),
+                           ground=True)
 
 
 def _bed_faces(tx, ty):
@@ -610,32 +627,29 @@ def add_fire(scene, wp, now):
     """A living campfire: logs, embers and three licking flame tongues."""
     x, y = float(wp.x), float(wp.y)
     phase = float(now) * 7.0 + x * 0.013 + y * 0.017
-    # two crossed logs
-    _add_faces(scene, _box(x, y - 3.0, 2.0, 30, 6, 5, (92, 54, 30)))
-    _add_faces(scene, _box(x, y + 3.0, 2.0, 30, 6, 5, (74, 42, 24)))
-    # ember bed
-    _add_faces(scene, _box(x, y, 0.4, 22, 22, 2.5, (228, 82, 26)))
-    for k in range(3):
-        a = phase * (0.8 + k * 0.17) + k * 2.1
-        sway = math.sin(a) * 5.0
-        h = 17.0 + 9.0 * (0.5 + 0.5 * math.sin(a * 1.7 + k))
-        w = 7.5 - k * 1.3
-        cx = x + (-6.0 + k * 6.0) + sway * 0.35
-        cy = y + math.cos(a * 0.8) * 3.0
-        z = 4.0 + k * 1.2
-        # a tapered, flickering tongue
-        base = ((cx - w, cy - w * 0.5, z), (cx + w, cy - w * 0.5, z),
-                (cx + w * 0.45, cy + w * 0.6, z),
-                (cx - w * 0.45, cy + w * 0.6, z))
-        tip = (cx + sway * 0.4, cy + math.sin(a * 1.3) * 2.0, z + h)
-        scene.add_face((base[0], base[1], tip), (255, 166, 40))
-        scene.add_face((base[1], base[2], tip), (255, 108, 24))
-        scene.add_face((base[2], base[3], tip), (248, 70, 18))
-        scene.add_face((base[3], base[0], tip), (255, 202, 92))
-    # a warm pool at the base
-    scene.add_face(((x - 15, y - 15, 0.7), (x + 15, y - 15, 0.7),
-                    (x + 15, y + 15, 0.7), (x - 15, y + 15, 0.7)),
-                   (166, 68, 26))
+    # NO LOGS ON TOP.  A fireplace is a fire, not a pile of brown boxes:
+    # a low ember bed and a large, living flame.
+    _add_faces(scene, _box(x, y, 0.4, 20, 20, 2.0, (196, 56, 18)))
+    for k in range(5):
+        a = phase * (0.72 + k * 0.13) + k * 1.71
+        sway = math.sin(a) * 7.0
+        h = 30.0 + 18.0 * (0.5 + 0.5 * math.sin(a * 1.65 + k))
+        w = 10.0 - k * 0.8
+        cx = x + (-11.0 + k * 5.5) + sway * 0.4
+        cy = y + math.cos(a * 0.8) * 4.0
+        z = 2.0 + k * 0.8
+        base = ((cx - w, cy - w * 0.55, z), (cx + w, cy - w * 0.55, z),
+                (cx + w * 0.5, cy + w * 0.7, z),
+                (cx - w * 0.5, cy + w * 0.7, z))
+        tip = (cx + sway * 0.5, cy + math.sin(a * 1.3) * 3.0, z + h)
+        scene.add_face((base[0], base[1], tip), (255, 198, 70))
+        scene.add_face((base[1], base[2], tip), (255, 126, 26))
+        scene.add_face((base[2], base[3], tip), (250, 62, 14))
+        scene.add_face((base[3], base[0], tip), (255, 238, 150))
+    # a warm pool at the base, not a wooden platform
+    scene.add_face(((x - 18, y - 18, 0.7), (x + 18, y - 18, 0.7),
+                    (x + 18, y + 18, 0.7), (x - 18, y + 18, 0.7)),
+                   (186, 64, 20))
 
 
 # ---------------------------------------------------------------------------
@@ -844,7 +858,7 @@ def draw_viewmodel(g, screen) -> None:
     # only job is to keep the object in frame and in the hand.
     scale = min(w, h) / 180.0
     if item_id in ("axe", "pickaxe", "shovel"):
-        scale *= 1.24
+        scale *= 1.30
     cx = w * 0.72
     cy = h * 0.80
     ops = []
@@ -855,7 +869,7 @@ def draw_viewmodel(g, screen) -> None:
         c = tuple(max(0, min(255, int(v * f))) for v in color[:3])
         ca = sa = 0.0
         if item_id == "axe":
-            ca, sa = math.cos(-0.20), math.sin(-0.20)
+            ca, sa = math.cos(-0.34), math.sin(-0.34)
         proj = []
         for (x, y, _z) in pts:
             if ca or sa:

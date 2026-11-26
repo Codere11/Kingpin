@@ -403,29 +403,10 @@ class GroundRenderer:
             _sv = (0.93 + 0.12 * np.sin(X * 0.05 + Y * 0.03 + seed * 0.5))[..., None]
             col[_sand] = (SAND[None, None, :] * _sv)[_sand]
 
-        # Player-made soil edits: dug dirt, then watered (fertile) dirt. Each
-        # tile paints a soft blob, and blobs merge naturally where they overlap.
-        radius = TILE * 0.95
-        tx0 = int(math.floor((cx * CHUNK - radius) / TILE))
-        tx1 = int(math.floor((cx * CHUNK + CHUNK + radius) / TILE))
-        ty0 = int(math.floor((cy * CHUNK - radius) / TILE))
-        ty1 = int(math.floor((cy * CHUNK + CHUNK + radius) / TILE))
-        dirt_cov = fert_cov = None
-        for (ptx, pty), plot in self.world.plots_in_tile_range(tx0, ty0, tx1, ty1):
-            pcx = ptx * TILE + TILE / 2.0
-            pcy = pty * TILE + TILE / 2.0
-            cov = 1.0 - _smoothstep(np.hypot(X - pcx, Y - pcy) / radius, 0.55, 1.0)
-            if plot.kind in _WORKED:
-                dirt_cov = cov if dirt_cov is None else np.maximum(dirt_cov, cov)
-            if plot.kind in _PLANTED:
-                fert_cov = cov if fert_cov is None else np.maximum(fert_cov, cov)
-        if dirt_cov is not None:
-            soil = np.array((126, 100, 66), np.float32) * (0.82 + 0.36 * clump)[..., None]
-            col = col * (1.0 - dirt_cov[..., None]) + soil * dirt_cov[..., None]
-        if fert_cov is not None:
-            rich = np.array((72, 52, 34), np.float32) * (0.90 + 0.20 * clump)[..., None]
-            col = col * (1.0 - fert_cov[..., None]) + rich * fert_cov[..., None]
-
+        # Player-made soil edits are painted as CRISP TILES below, after the
+        # colour field is scaled.  The old soft blobs bled a whole plot into
+        # its neighbours; in the first-person view that read as a tile being
+        # tilled from one angle and not another.  A worked square is a square.
         np.clip(col, 0, 255, out=col)
         small = pygame.surfarray.make_surface(col.astype(np.uint8).swapaxes(0, 1))
         big = pygame.transform.smoothscale(small, (self._nx * int(self._step),
