@@ -574,6 +574,12 @@ def _viewmodel(g, screen) -> None:
 
 
 def _draw_chop_bar(g, screen) -> None:
+    """The player's swing recharge, shown while chopping wood.
+
+    This is NOT progress through the tree's hit points.  It is the same
+    cooldown the top-down action bar shows: after a swing the bar fills, and
+    when it is full the player can strike again.
+    """
     b = getattr(g, "chop_bar", None)
     if not isinstance(b, dict):
         return
@@ -581,8 +587,11 @@ def _draw_chop_bar(g, screen) -> None:
         age = float(getattr(g, "now", 0.0)) - float(b.get("t", 0.0))
         if age < 0.0 or age > 4.0:
             return
-        need = max(1, int(b.get("need", 3)))
-        n = max(0, min(need, int(b.get("n", 0))))
+        p = g.player
+        cd = max(0.0, float(getattr(p, "swing_cd", 0.0)))
+        total = max(0.001, float(getattr(p, "skill_axe_cd", 1.0)))
+        prog = 1.0 - min(1.0, cd / total)
+        ready = prog >= 0.999
         vw, vh = screen.get_width(), screen.get_height()
         bw = min(420, max(220, vw // 3))
         bh = 18
@@ -595,7 +604,9 @@ def _draw_chop_bar(g, screen) -> None:
         pygame.draw.rect(plate, (150, 112, 62, int(220 * fade)),
                          plate.get_rect(), 2, border_radius=7)
         try:
-            lab = g.font.render("CHOPPING WOOD", True, (242, 222, 168))
+            label = "READY" if ready else "SWING"
+            lab = g.font.render(label, True,
+                                (196, 238, 166) if ready else (242, 222, 168))
             lab.set_alpha(int(255 * fade))
             plate.blit(lab, (13, 4))
         except Exception:
@@ -603,16 +614,13 @@ def _draw_chop_bar(g, screen) -> None:
         bx, by = 12, 29
         pygame.draw.rect(plate, (42, 34, 26, int(230 * fade)),
                          (bx, by, bw, bh), border_radius=4)
-        fill = int(round(bw * (n / float(need))))
+        fill = int(round(bw * prog))
         if fill > 0:
-            pygame.draw.rect(plate, (198, 112, 54, int(245 * fade)),
+            col = (124, 196, 106) if ready else (198, 112, 54)
+            pygame.draw.rect(plate, (col[0], col[1], col[2], int(245 * fade)),
                              (bx, by, fill, bh), border_radius=4)
-            pygame.draw.rect(plate, (250, 180, 92, int(245 * fade)),
+            pygame.draw.rect(plate, (250, 230, 150, int(245 * fade)),
                              (bx, by, fill, 3), border_radius=4)
-        for k in range(1, need):
-            tx = bx + int(round(bw * k / float(need)))
-            pygame.draw.line(plate, (32, 26, 20, int(220 * fade)),
-                             (tx, by), (tx, by + bh), 2)
         plate.set_alpha(int(255 * fade))
         screen.blit(plate, (x - 13, y - 3))
     except Exception:

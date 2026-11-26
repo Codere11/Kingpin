@@ -386,8 +386,9 @@ def resolve_swing(g, kills) -> int:
         # THE CHOP BAR, not a debug toast.  It belongs to the tree being hit
         # and runs down in the HUD while the player keeps swinging.
         try:
-            g.chop_bar = {"n": int(struck.strikes), "need": int(_need),
-                          "x": float(struck.x), "y": float(struck.y),
+            # This is only a marker that the HUD should show the SWING
+            # recharge bar; the bar itself reads the player's cooldown.
+            g.chop_bar = {"x": float(struck.x), "y": float(struck.y),
                           "t": float(getattr(g, "now", 0.0))}
         except Exception:
             pass
