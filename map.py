@@ -69,7 +69,6 @@ OCEAN_RGB = (16, 38, 74)
 PAPER_RGB = (47, 45, 41)
 BARREN_RGB = (112, 112, 110)
 BORDER_RGB = (8, 8, 10)
-RING_COLOUR = (232, 196, 92)
 
 
 def _tree_icon(surf: pygame.Surface, x: int, y: int, snow: bool = False) -> None:
@@ -188,8 +187,7 @@ def _chart(world, cx: float, cy: float, half: float):
     import world as _world
     _coast = _world.coast_x(gy, seed)
     _ocean = gx > _coast
-    _sx, _sy = biomes.spawn_point()
-    _barren = (~_ocean) & (np.hypot(gx - _sx, gy - _sy) >= biomes.RING1_RADIUS)
+    _barren = (~_ocean) & (biomes.barren_factor_array(gx, gy) > 0.5)
     cls = np.where(_ocean, CLS_OCEAN,
                    np.where(_barren, CLS_BARREN,
                             np.where(temps < 0.32, CLS_SNOW,
@@ -300,8 +298,7 @@ def _paper(world, seed: int):
         _coast = np.full((SN, SN), half + 1.0, np.float32)
     _ocean = gx > _coast
     _land = ~_ocean
-    _sx, _sy = biomes.spawn_point()
-    _barren = _land & (np.hypot(gx - _sx, gy - _sy) >= biomes.RING1_RADIUS)
+    _barren = _land & (biomes.barren_factor_array(gx, gy) > 0.5)
     _snow = _land & ~_barren & (temps < 0.32)
     _desert = _land & ~_barren & (temps > 0.62) & (hums < 0.34)
     _forest = _land & ~_barren & ~_snow & ~_desert
@@ -554,18 +551,6 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
         _spx, _spy = w2s(float(ship[0]), float(ship[1]))
         if x0 - 2 <= _spx <= x0 + size + 2 and y0 - 2 <= _spy <= y0 + size + 2:
             _ship_icon(screen, int(_spx), int(_spy))
-    # THE RING BOUNDARY, ON THE REAL MAP, around the actual ship/spawn.
-    try:
-        _sx, _sy = biomes.spawn_point()
-        _spx, _spy = w2s(_sx, _sy)
-        _rx, _ry = w2s(_sx + biomes.RING1_RADIUS, _sy)
-        _rr = int(abs(_rx - _spx))
-        if _rr > 3:
-            pygame.draw.circle(screen, RING_COLOUR, (int(_spx), int(_spy)),
-                               _rr, 2)
-    except Exception:
-        pass
-
     font = pygame.font.SysFont("dejavusansmono", max(11, vh // 46), bold=True)
     small = pygame.font.SysFont("dejavusansmono", max(9, vh // 60))
     title = font.render("THE COUNTRY", True, WAYPOINT)
@@ -575,6 +560,6 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
     hint = small.render("%d km across   -   WASD pan,  Q/E zoom,  C centre,  M close"
                         % km, True, (196, 190, 176))
     screen.blit(hint, (x0 + size - hint.get_width(), y0 + size + 14))
-    legend = small.render("grey land = Barren Rocks   gold ring = 55,000 from spawn",
+    legend = small.render("grey land = Barren Rocks",
                           True, (196, 190, 176))
     screen.blit(legend, (x0, y0 + size + 14))

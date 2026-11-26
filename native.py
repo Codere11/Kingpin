@@ -48,10 +48,11 @@ _NAMES = ("Awan", "Kiona", "Takoda", "Yuma", "Nashoba", "Chenoa",
 
 
 def _barren_persona(n) -> None:
-    """The second ring's people lean Thinking; assign it after NPC.__init__."""
+    """The second ring's people lean Thinking and wear the local iron cap."""
     try:
         import persona as _persona
         n.mbti_t_bias = 1.5
+        n.iron_helmet = True
         n.mbti = ""
         _persona.assign(n, force=True)
     except Exception:

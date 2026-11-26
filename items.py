@@ -933,7 +933,7 @@ def _draw_hardberries(s: int) -> pygame.Surface:
 
 def _draw_pipeleaf(s: int) -> pygame.Surface:
     surf = _canvas(s)
-    steel, dark, leaf = (168, 172, 176), (88, 92, 98), (78, 112, 68)
+    steel, dark = (168, 172, 176), (88, 92, 98)
     # a steel stem with short pipe branches
     pygame.draw.line(surf, dark, _pt((0.28, 0.86), s), _pt((0.62, 0.18), s),
                      max(2, int(0.10 * s)))
@@ -945,8 +945,10 @@ def _draw_pipeleaf(s: int) -> pygame.Surface:
                          max(2, int(0.075 * s)))
         pygame.draw.line(surf, steel, _pt((bx, by), s), _pt((ex, ey), s),
                          max(1, int(0.04 * s)))
-        pygame.draw.ellipse(surf, leaf, (ex * s - 0.10 * s, ey * s - 0.045 * s,
-                                         0.20 * s, 0.09 * s))
+        pygame.draw.ellipse(surf, steel, (ex * s - 0.10 * s, ey * s - 0.045 * s,
+                                          0.20 * s, 0.09 * s))
+        pygame.draw.ellipse(surf, dark, (ex * s - 0.10 * s, ey * s - 0.045 * s,
+                                         0.20 * s, 0.09 * s), 1)
     return surf
 
 

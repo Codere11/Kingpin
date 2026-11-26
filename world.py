@@ -745,6 +745,7 @@ class Scatter:
         self.pebbles: list[pygame.Surface] = []
         self.snow: list[pygame.Surface] = []
         self.sand: list[pygame.Surface] = []
+        self.rocks: list[pygame.Surface] = []
         self._surf: dict = {}          # scatter cell -> (snow factor, sand factor)
         self._chunks: dict = {}
         self._order: list = []
@@ -800,6 +801,19 @@ class Scatter:
             pygame.draw.ellipse(surf, (min(255, tan + 22), tan - 6, tan - 54),
                                 (1, 1, w * 0.5, (h - 1) * 0.5))
             self.sand.append(surf)
+        for _ in range(10):                         # barren-rock rubble
+            w, h = rng.randint(6, 15), rng.randint(5, 11)
+            surf = pygame.Surface((w, h), pygame.SRCALPHA)
+            base = rng.randint(86, 132)
+            pygame.draw.ellipse(surf, (base - 34, base - 34, base - 30),
+                                (0, h * 0.35, w, h * 0.65))
+            pygame.draw.polygon(surf, (base, base, base - 4),
+                                [(1, h * 0.7), (w * 0.18, h * 0.22),
+                                 (w * 0.55, h * 0.10), (w * 0.86, h * 0.36),
+                                 (w - 1, h * 0.72)])
+            pygame.draw.line(surf, (min(255, base + 30),) * 3,
+                             (w * 0.24, h * 0.36), (w * 0.52, h * 0.24), 1)
+            self.rocks.append(surf)
 
     def _rand(self, cx: int, cy: int, i: int, salt: int) -> float:
         h = (cx * 73856093) ^ (cy * 19349663) ^ (i * 83492791) \
@@ -835,8 +849,9 @@ class Scatter:
                 hh = self.world.humidity(cxs, cys)
                 sf = biomes.snow_factor_array(tt, hh)
                 df = biomes.sand_factor_array(tt, hh)
+                bf = biomes.barren_factor_array(cxs, cys)
                 for i, key in enumerate(need):
-                    self._surf[key] = (float(sf[i]), float(df[i]))
+                    self._surf[key] = (float(sf[i]), float(df[i]), float(bf[i]))
         tilled: set = set()
         if self.world is not None:
             # ONLY THE TILES THIS CHUNK CAN TOUCH. This walked EVERY PLOT IN
@@ -860,7 +875,7 @@ class Scatter:
         blit = surf.blit
         for cy in range(y0, y1 + 1):
             for cx in range(x0, x1 + 1):
-                snowf, sandf = self._surf.get((cx, cy), (0.0, 0.0))
+                snowf, sandf, barrenf = self._surf.get((cx, cy), (0.0, 0.0, 0.0))
                 count = 1 + int(self._rand(cx, cy, 0, 1) * 2.6)
                 for i in range(count):
                     wx = (cx + self._rand(cx, cy, i, 2)) * cell
@@ -873,7 +888,11 @@ class Scatter:
                         if (ttx, tty) in tilled:
                             continue
                     pick = self._rand(cx, cy, i, 4)
-                    if pick < snowf:
+                    if barrenf > 0.5:
+                        # BARREN ROCKS: rubble and boulders, not a blade of grass.
+                        sprite = self.rocks[int(self._rand(cx, cy, i, 5)
+                                                * len(self.rocks))]
+                    elif pick < snowf:
                         if self._rand(cx, cy, i, 7) < 0.78:
                             sprite = self.snow[int(self._rand(cx, cy, i, 5)
                                                    * len(self.snow))]

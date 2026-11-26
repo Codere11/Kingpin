@@ -24,6 +24,7 @@ def _barren_persona(n) -> None:
     try:
         import persona as _persona
         n.mbti_t_bias = 1.5
+        n.iron_helmet = True
         n.mbti = ""
         _persona.assign(n, force=True)
     except Exception:

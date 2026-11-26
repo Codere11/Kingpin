@@ -528,6 +528,55 @@ HAT_BAND = (150, 40, 44)
 HAT_GLINT = (86, 76, 80)       # one bright column down the left of the crown
 
 
+# -- IRON HELMET ------------------------------------------------------------
+IRON_HELMET = (132, 136, 144)
+IRON_HELMET_LIGHT = (184, 188, 192)
+IRON_HELMET_DARK = (66, 70, 78)
+IRON_HELMET_RIVET = (210, 212, 212)
+
+
+def iron_helmet(screen, hx: float, hy: float, r: int) -> None:
+    """A low iron cap with a brow band, nose guard and cheek plates."""
+    try:
+        r = int(r)
+        hx, hy = int(hx), int(hy)
+        w = max(7, int(round(r * 1.95)))
+        h = max(4, int(round(r * 0.95)))
+        top = int(hy - r * 1.18)
+        pygame.draw.ellipse(screen, IRON_HELMET, (hx - w // 2, top, w, h))
+        pygame.draw.ellipse(screen, IRON_HELMET_DARK,
+                            (hx - w // 2, top, w, h), 1)
+        # brow band, sitting just above the eyes
+        by = int(hy - r * 0.58)
+        pygame.draw.rect(screen, IRON_HELMET_DARK,
+                         (hx - w // 2, by, w, max(1, r // 5)))
+        pygame.draw.line(screen, IRON_HELMET_LIGHT, (hx - w // 2 + 1, by),
+                         (hx + w // 2 - 1, by), 1)
+        # nose guard
+        pygame.draw.line(screen, IRON_HELMET_DARK,
+                         (hx, by), (hx, int(hy - r * 0.16)), max(1, r // 4))
+        pygame.draw.line(screen, IRON_HELMET_LIGHT,
+                         (hx - 1, by + 1), (hx - 1, int(hy - r * 0.24)), 1)
+        # cheek plates
+        for sx in (-1, 1):
+            x = hx + sx * (w // 2 - max(1, r // 5))
+            pygame.draw.rect(screen, IRON_HELMET,
+                             (x - max(1, r // 6), by + 1,
+                              max(2, r // 3), max(2, r // 2)),
+                             border_radius=1)
+            pygame.draw.rect(screen, IRON_HELMET_DARK,
+                             (x - max(1, r // 6), by + 1,
+                              max(2, r // 3), max(2, r // 2)), 1,
+                             border_radius=1)
+        # one rivet on the brow
+        pygame.draw.circle(screen, IRON_HELMET_RIVET,
+                           (hx - w // 4, by + max(1, r // 6)), 1)
+        pygame.draw.circle(screen, IRON_HELMET_RIVET,
+                           (hx + w // 4, by + max(1, r // 6)), 1)
+    except Exception:
+        pass
+
+
 # -- LOCAL HEADWEAR ---------------------------------------------------------
 # The snow peoples wear a fur band against the wind; the desert peoples wear a
 # wide straw brim against the sun.  Both are accessories drawn OVER the face,

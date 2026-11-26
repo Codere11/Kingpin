@@ -113,10 +113,13 @@ class OreField:
         rng = random.Random(code)
         x = cx * CELL + CELL / 2.0 + rng.uniform(-JIT, JIT)
         y = cy * CELL + CELL / 2.0 + rng.uniform(-JIT, JIT)
-        # IRON LIVES IN THE SNOW ALONE: the plains and the desert have none.
+        # IRON LIVES IN THE SNOW, AND TWICE AS THICKLY IN BARREN ROCKS.
+        chance = CHANCE_IN_FIELD
         try:
             import biomes as _bio
-            if _bio.temperature(x, y, self.seed) >= 0.32:
+            if _bio.is_barren(x, y):
+                chance = CHANCE_IN_FIELD * 2.0
+            elif _bio.temperature(x, y, self.seed) >= 0.32:
                 self._presence[key] = None
                 return None
         except Exception:
@@ -126,7 +129,7 @@ class OreField:
         if field < FIELD_CUT:
             self._presence[key] = None
             return None
-        if rng.random() >= CHANCE_IN_FIELD:
+        if rng.random() >= chance:
             self._presence[key] = None
             return None
         if self._village_distance(x, y) < 0.0:

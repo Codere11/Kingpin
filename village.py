@@ -545,6 +545,7 @@ class NPC:
     _consume_mood_off: Any = 0.0  # the mood the fix added, to remove on expiry
     _seller_of: Any = None        # luxury -> the man who sold it to him
     iron_armor: Any = False       # second-ring warrior plate
+    iron_helmet: Any = False      # the local iron cap
 
     # -- WHAT A MAN IS, WRITTEN DOWN --------------------------------------
     # One plain dict: every compiled field and everything in __dict__. The
@@ -695,6 +696,7 @@ class NPC:
         self.mounted = False           # a native warrior riding a horse (4th alarm)
         self.reinforced_armor = False  # a bought soldier in reinforced armor
         self.iron_armor = False        # a second-ring warrior's iron plates
+        self.iron_helmet = False       # the local iron cap
         self.raiding = False           # a native warrior marching on a raid
         self.raid_target = None        # (x, y) the raid is heading for
         self.escort_horse = None       # the cargo horse a soldier rides escort for
@@ -5495,6 +5497,9 @@ class NPC:
         # together -- drawn UNDER the mood, so a veteran keeps his beard.
         vet = face.vet_tier(self.skills.axe, self.skills.shooting)
         face.draw(screen, hx, hy, head_r, fx, fy, mood, vet=vet)
+        if (getattr(self, "iron_helmet", False)
+                or getattr(self, "iron_armor", False)):
+            face.iron_helmet(screen, hx, hy, head_r)
         face.feather(screen, hx, hy, head_r, fx, fy)   # the styled feather
         if getattr(self, "is_stalin", False):
             # THE OLD MAN keeps the moustache; his cap is gone with the republic.

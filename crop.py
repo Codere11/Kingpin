@@ -488,7 +488,9 @@ def draw_pipeleaf(screen, x, y, elapsed, cam_x, cam_y, biome=None):
         ex = sx + side * (8 + 4 * p) + wx * t
         pygame.draw.line(screen, dark, (sx + wx * t, py), (ex, py - 4), 2)
         pygame.draw.line(screen, steel, (sx + wx * t, py), (ex, py - 4), 1)
-        pygame.draw.ellipse(screen, (74, 108, 64), (ex - 3, py - 7, 8, 5))
+        # NO GREEN LEAF: the pipe ends in a dull steel bell.
+        pygame.draw.ellipse(screen, (128, 132, 136), (ex - 3, py - 7, 8, 5))
+        pygame.draw.ellipse(screen, (70, 74, 78), (ex - 3, py - 7, 8, 5), 1)
     if st >= 3:
         pygame.draw.ellipse(screen, (196, 198, 196),
                             (sx + wx - 4, sy - height + wy - 8, 8, 6))

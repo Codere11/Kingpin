@@ -50,6 +50,8 @@ RING2_RADIUS = 110000.0
 _SPAWN = [0.0, 0.0]
 _BARREN_DARK = rich((88, 88, 86))
 _BARREN_LITE = rich((142, 142, 138))
+_BARREN_NOISE_SCALE = 0.000070
+_BARREN_NOISE_SEED = 90210
 
 
 def set_spawn(x: float, y: float) -> None:
@@ -67,14 +69,30 @@ def ring(x: float, y: float) -> int:
     return 1 if d < RING1_RADIUS else 2
 
 
+def _barren_noise(x, y):
+    """A low-frequency patch field: Barren Rocks come in regions, not a wall."""
+    xs = np.asarray(x, np.float32) * _BARREN_NOISE_SCALE
+    ys = np.asarray(y, np.float32) * _BARREN_NOISE_SCALE
+    return fbm(xs, ys, _BARREN_NOISE_SEED, octaves=3)
+
+
+def barren_mask(x, y):
+    """True on land whose patch has turned to Barren Rocks.
+
+    The first ring is clean. Past it the CHANCE rises with distance, but the
+    low-frequency patch noise means ordinary biomes remain between the rocky
+    patches -- the waste is not one solid grey wall.
+    """
+    xs = np.asarray(x, np.float32)
+    ys = np.asarray(y, np.float32)
+    d = np.hypot(xs - _SPAWN[0], ys - _SPAWN[1])
+    ramp = np.clip((d - RING1_RADIUS) / 180000.0, 0.0, 1.0)
+    chance = 0.12 + 0.78 * (ramp * ramp * (3.0 - 2.0 * ramp))
+    return (d >= RING1_RADIUS) & (_barren_noise(x, y) < chance)
+
+
 def barren_factor(x, y):
-    """0 in the first ring, 1 in the Barren Rocks, smooth at the border."""
-    if isinstance(x, np.ndarray) or isinstance(y, np.ndarray):
-        d = np.hypot(np.asarray(x, np.float32) - _SPAWN[0],
-                     np.asarray(y, np.float32) - _SPAWN[1])
-        return _ssfa((d - RING1_RADIUS) / 5000.0)
-    d = math.hypot(float(x) - _SPAWN[0], float(y) - _SPAWN[1])
-    return _ssf((d - RING1_RADIUS) / 5000.0)
+    return np.asarray(barren_mask(x, y), np.float32)
 
 
 def barren_factor_array(x, y):
@@ -82,7 +100,11 @@ def barren_factor_array(x, y):
 
 
 def is_barren(x: float, y: float) -> bool:
-    return barren_factor(x, y) >= 0.5
+    m = barren_mask(x, y)
+    try:
+        return bool(m.item())
+    except Exception:
+        return bool(m)
 
 
 def barren_colors():

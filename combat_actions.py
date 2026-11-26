@@ -370,12 +370,21 @@ def resolve_swing(g, kills) -> int:
             nearest = distance
             struck = tree
     if struck is not None:
-        struck.strikes += 1
+        # KEEP THE COUNT BY TREE POSITION, not only on the Tree object.  A
+        # tree rebuilt from a cache or a save can otherwise start again at 1
+        # while the player is halfway through an ironwood trunk.
+        _tkey = (round(float(struck.x), 1), round(float(struck.y), 1))
+        _hits = getattr(g, "tree_chops", None)
+        if not isinstance(_hits, dict):
+            _hits = g.tree_chops = {}
+        struck.strikes = int(_hits.get(_tkey, struck.strikes)) + 1
+        _hits[_tkey] = struck.strikes
         struck.hit_until = float(getattr(g, "now", 0.0)) + 0.5
         sound.play("hit_tree")
         g.combat.spawn_impact(struck.x, struck.y, (120, 90, 50))
         _need = int(getattr(struck, "strikes_needed", _m.AXE_STRIKES))
         if struck.strikes >= _need:
+            _hits.pop(_tkey, None)
             g.trees.fell(struck, g.now)
             amount = random.randint(10, 30)
             _drop = "ironwood" if getattr(struck, "species", "") == "ironwood" else "wood"
