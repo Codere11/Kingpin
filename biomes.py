@@ -87,7 +87,9 @@ def barren_mask(x, y):
     ys = np.asarray(y, np.float32)
     d = np.hypot(xs - _SPAWN[0], ys - _SPAWN[1])
     ramp = np.clip((d - RING1_RADIUS) / 180000.0, 0.0, 1.0)
-    chance = 0.12 + 0.78 * (ramp * ramp * (3.0 - 2.0 * ramp))
+    # Barren Rocks are an ADDITIONAL possibility out here, not the whole
+    # country: even deep out, most ground is still one of the regular four.
+    chance = 0.06 + 0.48 * (ramp * ramp * (3.0 - 2.0 * ramp))
     return (d >= RING1_RADIUS) & (_barren_noise(x, y) < chance)
 
 
