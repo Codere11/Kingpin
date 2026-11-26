@@ -432,6 +432,66 @@ def _project(fwd, right, up, ex, ey, px, py, pz):
             IH * 0.5 - FOCAL * cy / cz, cz)
 
 
+_NPC_ATTACK_CACHE: dict = {}
+
+
+def _npc_attack_sprite(npc) -> pygame.Surface:
+    """A big, unmistakable over-the-shoulder weapon sweep.
+
+    The NPC body card is deliberately small; this card is the action, drawn
+    outside the body silhouette so a swing cannot be mistaken for a twitch.
+    """
+    sw = float(getattr(npc, "swing_anim", 0.0))
+    p = max(0.0, min(1.0, 1.0 - sw / 0.45))
+    bucket = int(p * 8.0)
+    cloth = tuple(getattr(npc, "clothing", (88, 76, 62)) or (88, 76, 62))
+    skin = tuple(getattr(npc, "skin", (216, 172, 132)) or (216, 172, 132))
+    armor = ("hide" if getattr(npc, "hide_armor", False) else
+             "iron" if getattr(npc, "iron_armor", False) else
+             "reinforced" if getattr(npc, "reinforced_armor", False) else "")
+    key = (cloth, skin, armor, bucket)
+    got = _NPC_ATTACK_CACHE.get(key)
+    if got is not None:
+        return got
+    surf = pygame.Surface((180, 180), pygame.SRCALPHA)
+    piv = (78, 108)
+    ang = math.radians(-155.0 + 285.0 * (bucket / 8.0))
+    hx = piv[0] + math.cos(ang) * 46.0
+    hy = piv[1] + math.sin(ang) * 46.0
+    # a sweeping arc trail, behind the arm
+    for i in range(8):
+        a = ang - (i + 1) * 0.16
+        tx = piv[0] + math.cos(a) * 58.0
+        ty = piv[1] + math.sin(a) * 58.0
+        px = piv[0] + math.cos(a + 0.08) * 72.0
+        py = piv[1] + math.sin(a + 0.08) * 72.0
+        pygame.draw.line(surf, (238, 226, 170, max(8, 60 - i * 7)),
+                         (int(tx), int(ty)), (int(px), int(py)), 2)
+    # shoulder and a thick arm
+    pygame.draw.circle(surf, cloth, (piv[0] - 10, piv[1] + 4), 13)
+    pygame.draw.line(surf, cloth, (piv[0] - 8, piv[1] + 4), (int(hx), int(hy)), 15)
+    pygame.draw.circle(surf, skin, (int(hx), int(hy)), 7)
+    # a long axe, oversized so the sweep reads at a glance
+    ax = math.cos(ang + 0.20) * 54.0
+    ay = math.sin(ang + 0.20) * 54.0
+    ex, ey = hx + ax, hy + ay
+    pygame.draw.line(surf, (110, 72, 40), (int(hx), int(hy)),
+                     (int(ex), int(ey)), 7)
+    # axe head at the far end
+    hxp, hyp = ex, ey
+    perp = (-math.sin(ang + 0.20), math.cos(ang + 0.20))
+    blade = [(hxp - perp[0] * 13, hyp - perp[1] * 13),
+             (hxp + perp[0] * 13, hyp + perp[1] * 13),
+             (hxp + math.cos(ang + 0.20) * 17 - perp[0] * 8,
+              hyp + math.sin(ang + 0.20) * 17 - perp[1] * 8),
+             (hxp + math.cos(ang + 0.20) * 17 + perp[0] * 8,
+              hyp + math.sin(ang + 0.20) * 17 + perp[1] * 8)]
+    pygame.draw.polygon(surf, (205, 211, 220), blade)
+    pygame.draw.polygon(surf, (245, 246, 250), blade, 1)
+    _NPC_ATTACK_CACHE[key] = surf
+    return surf
+
+
 def _collect(g, yaw: float):
     """Return actor billboards only; the world above ground is mesh3d now."""
     out = []
@@ -456,6 +516,9 @@ def _collect(g, yaw: float):
         card = _npc_sprite(npc, back=not front)
         out.append((card, float(npc.x), float(npc.y), 68.0, 20.0, 72.0,
                     getattr(npc, "name", "")))
+        if float(getattr(npc, "swing_anim", 0.0)) > 0.0:
+            out.append((_npc_attack_sprite(npc), float(npc.x), float(npc.y),
+                        126.0, 90.0, 174.0, ""))
     for e in list(getattr(g, "enemies", ()) or ()):
         if not getattr(e, "alive", True):
             continue
