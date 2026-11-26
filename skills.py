@@ -71,6 +71,10 @@ class Skills:
     # SMART/STUPID: a born-trait multiplier on action-based learning.  Class
     # default so an old unpickled Skills object keeps the old rate.
     trait_gain = 1.0
+    # LOCAL COMBAT LEARNING. Snow people learn the axe faster; desert people
+    # learn the rifle faster. Class defaults keep old saves working.
+    melee_gain_mult = 1.0
+    ranged_gain_mult = 1.0
 
     def __init__(self, is_player: bool = False) -> None:
         self.farming = 0.0            # 0..8, grows with harvesting
@@ -101,7 +105,8 @@ class Skills:
             self.just_leveled = True
 
     # -- the one way anybody learns -----------------------------------------
-    def _step(self, value: float, cap: float, band: float) -> float:
+    def _step(self, value: float, cap: float, band: float,
+              mult: float = 1.0) -> float:
         """ONE ACTION'S WORTH OF LEARNING, and the whole rework in eight lines.
 
         The rate is set by the LEVEL a man is standing on -- easy at the bottom,
@@ -111,10 +116,17 @@ class Skills:
         lvl = int(value / band)
         rate = LEVEL_RATES[lvl] if lvl < len(LEVEL_RATES) else TAIL_RATE
         rate *= max(0.1, float(getattr(self, "trait_gain", 1.0) or 1.0))
+        rate *= max(0.1, float(mult or 1.0))
         nxt = value + rate
         if random.random() < self.luck:
             nxt = max(nxt, (lvl + 1) * band)
         return min(cap, nxt)
+
+    def configure_local(self, wear) -> None:
+        """The biome a man comes from changes what his hands learn fastest."""
+        wear = str(wear or "normal")
+        self.melee_gain_mult = 1.30 if wear == "fur" else 1.0
+        self.ranged_gain_mult = 1.30 if wear == "tuareg" else 1.0
 
     # -- farming ------------------------------------------------------------
     # The hand learns slowly. Harvests are the only teacher, and a working
@@ -203,7 +215,8 @@ class Skills:
     def gain_axe(self, amount: float = 1.0) -> None:
         # EVERYONE LEARNS THE AXE THE NEW WAY -- the player included.
         _b = self.levels_total()
-        self.axe = self._step(self.axe, 1.0, 0.125)
+        self.axe = self._step(self.axe, 1.0, 0.125,
+                              getattr(self, "melee_gain_mult", 1.0))
         self._note_levels(_b)
 
     def axe_cooldown(self) -> float:
@@ -218,10 +231,12 @@ class Skills:
     def gain_shooting(self, amount: float = 1.0) -> None:
         _b = self.levels_total()
         if self.is_player:               # the player shoots the OLD road
-            self.shooting = min(1.0, self.shooting + amount / SHOOT_NEED)
+            self.shooting = min(1.0, self.shooting + (amount
+                * getattr(self, "ranged_gain_mult", 1.0)) / SHOOT_NEED)
             self._note_levels(_b)
             return
-        self.shooting = self._step(self.shooting, 1.0, 0.125)
+        self.shooting = self._step(self.shooting, 1.0, 0.125,
+                                   getattr(self, "ranged_gain_mult", 1.0))
         self._note_levels(_b)
 
     def shot_spread(self) -> float:

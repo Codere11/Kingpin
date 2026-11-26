@@ -90,6 +90,10 @@ def restore(n, rec: dict, ctx: "_context.Context") -> object:
             pass
     codec.skills_restore(getattr(n, "skills", None), rec.get("skills"))
     try:
+        n.skills.configure_local(getattr(n, "wear", "normal"))
+    except Exception:
+        pass
+    try:
         n.no_make = set(rec.get("no_make") or ())
         n.no_sell = set(rec.get("no_sell") or ())
     except Exception:

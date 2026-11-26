@@ -333,6 +333,7 @@ def build(g, cx: float, cy: float, seed: int,
         n.home = (n.x, n.y)
         n.speed = rng.uniform(95.0, 115.0)
         n.wear = biomes.npc_wear(temp, hum)
+        n.skills.configure_local(n.wear)
         farmers.append(n)
         g._observe_npcs.append(n)             # drawn with the natives
     for i in range(n_warriors):
@@ -362,6 +363,7 @@ def build(g, cx: float, cy: float, seed: int,
         n.speed = rng.uniform(60.0, 90.0)
         n._orbit = ang
         n.wear = biomes.npc_wear(temp, hum)
+        n.skills.configure_local(n.wear)
         warriors.append(n)
         g._observe_npcs.append(n)
 
@@ -454,6 +456,7 @@ def build(g, cx: float, cy: float, seed: int,
         hn.home = (hn.x, hn.y)
         hn.speed = rng.uniform(95.0, 115.0)
         hn.wear = biomes.npc_wear(temp, hum)
+        hn.skills.configure_local(hn.wear)
         settlement.handlers.append(hn)
         g._observe_npcs.append(hn)
     # The frame owns these people and walks them itself, whatever the worker

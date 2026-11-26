@@ -528,6 +528,80 @@ HAT_BAND = (150, 40, 44)
 HAT_GLINT = (86, 76, 80)       # one bright column down the left of the crown
 
 
+# -- LOCAL HEADWEAR ---------------------------------------------------------
+# The snow peoples wear a fur band against the wind; the desert peoples wear a
+# wide straw brim against the sun.  Both are accessories drawn OVER the face,
+# like the mayor's hat, so they never change an expression or an eye.
+FUR_BAND = (232, 226, 206)
+FUR_BAND_SH = (196, 184, 158)
+FUR_EDGE = (124, 98, 70)
+FUR_STITCH = (156, 70, 54)
+STRAW = (224, 192, 116)
+STRAW_LIGHT = (242, 216, 150)
+STRAW_DARK = (150, 112, 56)
+SOMBRERO_BAND = (154, 48, 38)
+
+
+def headband(screen, hx: float, hy: float, r: int) -> None:
+    """A thick fur band around the forehead, with two short ear flaps."""
+    try:
+        r = int(r)
+        hx, hy = int(hx), int(hy)
+        w = max(6, int(round(r * 2.05)))
+        h = max(2, int(round(r * 0.36)))
+        y = int(hy - r * 0.78)
+        x = hx - w // 2
+        pygame.draw.rect(screen, FUR_BAND, (x, y, w, h), border_radius=2)
+        pygame.draw.line(screen, FUR_BAND_SH, (x + 1, y + h - 1),
+                         (x + w - 2, y + h - 1), 1)
+        pygame.draw.rect(screen, FUR_EDGE, (x, y, w, h), 1, border_radius=2)
+        pygame.draw.line(screen, FUR_STITCH, (x + 2, y + h // 2),
+                         (x + w - 3, y + h // 2), 1)
+        # the two short flaps at the sides, framing the ears
+        fh = max(2, int(round(r * 0.55)))
+        for fx in (x - max(1, r // 4), x + w - max(1, r // 4)):
+            pygame.draw.rect(screen, FUR_BAND,
+                             (int(fx), y + h - 1, max(2, r // 3), fh),
+                             border_radius=2)
+            pygame.draw.rect(screen, FUR_EDGE,
+                             (int(fx), y + h - 1, max(2, r // 3), fh),
+                             1, border_radius=2)
+    except Exception:
+        pass
+
+
+def sombrero(screen, hx: float, hy: float, r: int) -> None:
+    """A wide straw brim and a low crown, sitting above the eyes."""
+    try:
+        r = int(r)
+        hx, hy = int(hx), int(hy)
+        bw = max(10, int(round(r * 3.25)))
+        bh = max(3, int(round(r * 0.58)))
+        by = int(hy - r * 0.98)
+        pygame.draw.ellipse(screen, STRAW, (hx - bw // 2, by, bw, bh))
+        pygame.draw.ellipse(screen, STRAW_DARK,
+                            (hx - bw // 2, by, bw, bh), 1)
+        pygame.draw.arc(screen, STRAW_LIGHT,
+                        (hx - bw // 2 + 1, by + 1, bw - 2, max(2, bh - 2)),
+                        0.15, math.pi - 0.15, 1)
+        # crown: a tapering straw block above the brim
+        cw = max(5, int(round(r * 1.35)))
+        ch = max(3, int(round(r * 0.92)))
+        top_y = by - ch + 1
+        pygame.draw.polygon(screen, STRAW,
+                            ((hx - cw // 2, by + 1),
+                             (hx + cw // 2, by + 1),
+                             (hx + cw // 2 - max(1, r // 4), top_y),
+                             (hx - cw // 2 + max(1, r // 4), top_y)))
+        pygame.draw.line(screen, STRAW_DARK, (hx - cw // 2, by + 1),
+                         (hx + cw // 2, by + 1), 1)
+        pygame.draw.line(screen, SOMBRERO_BAND,
+                         (hx - cw // 2 + 1, by - max(1, ch // 4)),
+                         (hx + cw // 2 - 1, by - max(1, ch // 4)), 1)
+    except Exception:
+        pass
+
+
 def tophat(screen, hx: float, hy: float, r: int) -> None:
     """A TOP HAT, worn by the mayor.
 

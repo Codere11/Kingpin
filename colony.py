@@ -369,6 +369,7 @@ def _spawn_human_baby(g, a, b) -> None:
         _t = float(_bio.temperature(mx, my, int(getattr(g.world, "seed", 1))))
         _h = float(_bio.humidity(mx, my, int(getattr(g.world, "seed", 1))))
         baby.wear = _bio.npc_wear(_t, _h)
+        baby.skills.configure_local(baby.wear)
     except Exception:
         pass
     if baby not in pc.people:
@@ -623,6 +624,7 @@ def spawn_conquered(g, farmers: int = 3, loggers: int = 2) -> None:
         n.tool_uses = 100
         n.speed = n.rng.uniform(95.0, 115.0)
         n.wear = biomes.npc_wear(temp, hum)
+        n.skills.configure_local(n.wear)
         n.home = (n.x, n.y)
         camp.workers.append(n)
         if n not in getattr(g, "_observe_npcs", ()):
@@ -650,6 +652,7 @@ def spawn_conquered(g, farmers: int = 3, loggers: int = 2) -> None:
         n.tool_uses = 100
         n.speed = n.rng.uniform(95.0, 115.0)
         n.wear = biomes.npc_wear(temp, hum)
+        n.skills.configure_local(n.wear)
         n.home = (n.x, n.y)
         camp.loggers.append(n)
         if n not in getattr(g, "_observe_npcs", ()):

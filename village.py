@@ -5480,6 +5480,12 @@ class NPC:
         if is_military(self) or getattr(self, "hide_armor", False):
             # WAR PAINT ACROSS THE EYES, for the soldiers and the armoured.
             face.war_paint(screen, hx, hy, head_r, fx, fy)
+        # LOCAL DRESS: a snow man's fur band, a desert man's sombrero. The
+        # savannah and woodland keep the ordinary head and hair.
+        if wear == "fur":
+            face.headband(screen, hx, hy, head_r)
+        elif wear == "tuareg":
+            face.sombrero(screen, hx, hy, head_r)
         if getattr(self, "asleep", False) or getattr(self, "sleep_t", 0.0) > 0.0:
             try:
                 fnt = pygame.font.SysFont("dejavusans", 12, bold=True)
