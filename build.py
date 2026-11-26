@@ -619,7 +619,8 @@ class BuildMenu:
                        "sign": sign_icon,
                        "foodbox": foodbox_icon,
                        "demolish": fence_icon,
-                       "fence": fence_icon, "gate": gate_icon}[building["id"]]
+                       "fence": fence_icon, "gate": gate_icon}.get(
+                           building["id"], fence_icon)
             icon = icon_fn(rect.height - 14)
             screen.blit(icon, (rect.left + 10, rect.centery - icon.get_height() // 2))
 
