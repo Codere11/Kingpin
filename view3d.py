@@ -206,59 +206,40 @@ def _sky_colours(g):
     return (92, 132, 172), (196, 206, 196)
 
 
-def _ground_frame(g, sampler: _GroundSampler) -> pygame.Surface:
-    """Rasterise the floor plane and sky into the internal frame."""
+def _ground_frame(g) -> pygame.Surface:
+    """Sky above the horizon and a flat distant ground base below it.
+
+    The actual near ground is block geometry in mesh3d.  This function is only
+    the backdrop: no screen-space tile sampling, so it cannot disagree with
+    the block grid when the camera turns.
+    """
     night = bool(getattr(g, "night", False))
     sky_top, sky_bottom = _sky_colours(g)
+    try:
+        cx = int(float(g.player.x) // 256)
+        cy = int(float(g.player.y) // 256)
+        base = g.ground._coarse_color(cx, cy)
+    except Exception:
+        base = (70, 104, 58)
+    if night:
+        base = tuple(int(v * 0.58) for v in base)
+    ground_near = tuple(int(v * 0.76) for v in base)
     arr = np.empty((IW, IH, 3), dtype=np.uint8)
-
     yy = np.arange(IH, dtype=np.float32)
-    xx = np.arange(IW, dtype=np.float32)
-    X, Y = np.meshgrid(xx, yy, indexing="ij")
-    sx = (X - IW * 0.5) / FOCAL
-    sy = (IH * 0.5 - Y) / FOCAL
-
-    yaw = float(getattr(g, "v3d_yaw", 0.0))
     pitch = float(getattr(g, "v3d_pitch", 0.0))
-    cp, sp = math.cos(pitch), math.sin(pitch)
-    cy_, sy_ = math.cos(yaw), math.sin(yaw)
-    fwd = np.array((cy_ * cp, sy_ * cp, sp), dtype=np.float32)
-    right = np.array((-sy_, cy_, 0.0), dtype=np.float32)
-    up = np.array((-sp * cy_, -sp * sy_, cp), dtype=np.float32)
-
-    dx = fwd[0] + right[0] * sx + up[0] * sy
-    dy = fwd[1] + right[1] * sx + up[1] * sy
-    dz = fwd[2] + right[2] * sx + up[2] * sy
-
-    # sky gradient, in screen space
-    grad = (Y / float(max(1, IH - 1)))[..., None]
-    sky = np.array(sky_top, np.float32) * (1.0 - grad) + \
-        np.array(sky_bottom, np.float32) * grad
-    arr[:] = np.clip(sky, 0, 255).astype(np.uint8)
-
-    hit = dz < -1e-4
-    if np.any(hit):
-        t = np.zeros_like(dz, dtype=np.float32)
-        np.divide(-EYE_Z, dz, out=t, where=hit)
-        # The last few degrees above the horizon give enormous hit distances;
-        # leave those to the sky/fog rather than sampling the map at infinity.
-        hit &= t < DRAW_DIST * 1.6
-        wx = float(g.player.x) + dx * t
-        wy = float(g.player.y) + dy * t
-        wx = np.nan_to_num(wx, nan=float(g.player.x), posinf=float(g.player.x),
-                           neginf=float(g.player.x))
-        wy = np.nan_to_num(wy, nan=float(g.player.y), posinf=float(g.player.y),
-                           neginf=float(g.player.y))
-        cols = sampler.at(wx, wy)
-        if cols is not None:
-            fog = np.clip((t - 1500.0) / 9000.0, 0.0, 0.72)
-            hz = np.array(sky_bottom, np.float32)
-            cols = cols.astype(np.float32) * (1.0 - fog[..., None]) + \
-                hz * fog[..., None]
-            if night:
-                cols *= 0.58
-            arr[hit] = np.clip(cols[hit], 0, 255).astype(np.uint8)
-
+    horizon = IH * 0.5 + FOCAL * math.tan(pitch)
+    horizon = max(-IH, min(IH * 2.0, horizon))
+    grad = np.clip(yy / float(max(1, IH - 1)), 0.0, 1.0)
+    sky = (np.array(sky_top, np.float32) * (1.0 - grad)[:, None]
+           + np.array(sky_bottom, np.float32) * grad[:, None])
+    # Below the horizon: a dark, foggy distant ground colour.  The block
+    # grid covers the near field; this is just what shows at the edge.
+    fog = np.clip((yy - horizon) / max(1.0, IH - horizon), 0.0, 1.0)[:, None]
+    grd = (np.array(sky_bottom, np.float32) * (1.0 - fog)
+           + np.array(ground_near, np.float32) * fog)
+    mask = (yy >= horizon)[:, None]
+    colors = np.where(mask, grd, sky)
+    arr[:] = np.clip(colors[None, :, :], 0, 255).astype(np.uint8)
     return pygame.surfarray.make_surface(arr)
 
 
@@ -501,11 +482,7 @@ def draw(g) -> None:
     """Draw the internal 3D frame and scale it to the window."""
     screen = g.screen
     w, h = screen.get_size()
-    sampler = getattr(g, "_v3_sampler", None)
-    if sampler is None:
-        sampler = g._v3_sampler = _GroundSampler()
-    sampler.ensure(g, float(getattr(g, "now", 0.0)))
-    frame = _ground_frame(g, sampler)
+    frame = _ground_frame(g)
 
     fwd, right, up = _cam(g)
     ex, ey = float(g.player.x), float(g.player.y)

@@ -189,7 +189,7 @@ class Scene:
         return (float(IW * 0.5 + FOCAL * p[0] / p[2]),
                 float(IH * 0.5 - FOCAL * p[1] / p[2]))
 
-    def add_face(self, world_pts, color, ground=False):
+    def add_face(self, world_pts, color, ground=False, outline=None):
         if len(world_pts) < 3:
             return
         # normal from the original world points
@@ -224,7 +224,7 @@ class Scene:
             return
         if max(abs(v) for v in xs + ys) > 12000.0:
             return
-        op = (cz, "face", pts, _shade(color, n, cz, self.night))
+        op = (cz, "face", pts, _shade(color, n, cz, self.night), outline)
         if ground:
             self.ground_ops.append(op)
         else:
@@ -270,13 +270,17 @@ class Scene:
         # crop/character is at almost the same depth.
         self.ground_ops.sort(key=lambda op: op[0], reverse=True)
         for op in self.ground_ops:
-            _d, _k, pts, color = op
+            _d, _k, pts, color, outline = op
             pygame.draw.polygon(screen, color, pts)
+            if outline is not None:
+                pygame.draw.polygon(screen, outline, pts, 1)
         self.ops.sort(key=lambda op: op[0], reverse=True)
         for op in self.ops:
             if op[1] == "face":
-                _d, _k, pts, color = op
+                _d, _k, pts, color, outline = op
                 pygame.draw.polygon(screen, color, pts)
+                if outline is not None:
+                    pygame.draw.polygon(screen, outline, pts, 1)
             else:
                 _d, _k, image, sx, sy, dw, dh, ax, ay = op
                 try:
@@ -542,6 +546,117 @@ def add_crops(scene, g, radius=1400.0):
 # ---------------------------------------------------------------------------
 # worked ground, built blocks, fire
 # ---------------------------------------------------------------------------
+def _tile_colour(g, tx, ty):
+    """One fixed colour per world tile, not one per screen pixel."""
+    cache = getattr(g, "_v3_tile_colours", None)
+    if not isinstance(cache, dict):
+        cache = g._v3_tile_colours = {}
+    ver = int(getattr(getattr(g, "ground", None), "_version", 0) or 0)
+    key = (ver, tx, ty)
+    got = cache.get(key)
+    if got is not None:
+        return got
+    col = None
+    try:
+        chunk = 256
+        cx, cy = int(tx * 32 // chunk), int(ty * 32 // chunk)
+        lx = int(tx * 32 - cx * chunk) & 255
+        ly = int(ty * 32 - cy * chunk) & 255
+        surf = g.ground.get(cx, cy)
+        if surf is not None:
+            col = surf.get_at((lx, ly))[:3]
+        else:
+            col = g.ground._coarse_color(cx, cy)
+    except Exception:
+        col = None
+    if col is None:
+        try:
+            import biomes
+            t = float(g.world.temperature(tx * 32 + 16, ty * 32 + 16))
+            h = float(g.world.humidity(tx * 32 + 16, ty * 32 + 16))
+            dark, lite, _spec, _dens = biomes.mix(t, h)
+            col = tuple(int((dark[i] + lite[i]) * 0.5) for i in range(3))
+        except Exception:
+            col = (70, 104, 58)
+    # a small deterministic variation per block, so a field of grass reads
+    # as blocks rather than one flat surface
+    h = ((tx * 73856093) ^ (ty * 19349663) ^ int(getattr(g.world, "seed", 1))) & 255
+    f = 0.91 + h / 255.0 * 0.16
+    col = tuple(max(0, min(255, int(v * f))) for v in col)
+    cache[key] = col
+    if len(cache) > 24000:
+        cache.clear()
+        cache[key] = col
+    return col
+
+
+def add_ground_blocks(scene, g, radius=420.0):
+    """The ground as actual square blocks, not a perspective image.
+
+    Natural ground uses 2x2-tile blocks so the first-person view does not pay
+    for four thousand tiny polygons.  Worked tiles are drawn on top as exact
+    1x1 blocks, so a tilled square is still one square and its state is
+    independent of the camera.
+    """
+    size = 64.0
+    tx0 = int(math.floor((scene.ex - radius) / size))
+    tx1 = int(math.ceil((scene.ex + radius) / size))
+    ty0 = int(math.floor((scene.ey - radius) / size))
+    ty1 = int(math.ceil((scene.ey + radius) / size))
+    for ty in range(ty0, ty1 + 1):
+        for tx in range(tx0, tx1 + 1):
+            wx, wy = tx * size + 32.0, ty * size + 32.0
+            if math.hypot(wx - scene.ex, wy - scene.ey) > radius:
+                continue
+            _dx, _dy = wx - scene.ex, wy - scene.ey
+            _cz = scene.fwd[0] * _dx + scene.fwd[1] * _dy
+            if _cz < -64.0:
+                continue
+            _side = scene.right[0] * _dx + scene.right[1] * _dy
+            if abs(_side) > max(100.0, _cz * 1.85):
+                continue
+            top = _tile_colour(g, tx * 2, ty * 2)
+            edge = tuple(int(v * 0.58) for v in top)
+            z = 0.65
+            x0, x1 = wx - 31.4, wx + 31.4
+            y0, y1 = wy - 31.4, wy + 31.4
+            scene.add_face(((x0, y0, z), (x1, y0, z),
+                            (x1, y1, z), (x0, y1, z)),
+                           top, ground=True, outline=edge)
+    # Exact worked squares on top of the coarse natural blocks.
+    try:
+        ptx0 = int((scene.ex - radius) // 32)
+        ptx1 = int((scene.ex + radius) // 32)
+        pty0 = int((scene.ey - radius) // 32)
+        pty1 = int((scene.ey + radius) // 32)
+        plots = g.world.plots_in_tile_range(ptx0, pty0, ptx1, pty1)
+    except Exception:
+        plots = ()
+    for (tx, ty), plot in plots:
+        kind = getattr(plot, "kind", "")
+        if kind in ("grass", "", None):
+            continue
+        wx, wy = tx * 32.0 + 16.0, ty * 32.0 + 16.0
+        if math.hypot(wx - scene.ex, wy - scene.ey) > radius:
+            continue
+        planted = getattr(plot, "planted_at", None) is not None
+        top = (76, 52, 32) if planted else (132, 101, 66)
+        edge = (42, 28, 18)
+        z = 0.74
+        x0, x1 = wx - 15.7, wx + 15.7
+        y0, y1 = wy - 15.7, wy + 15.7
+        scene.add_face(((x0, y0, z), (x1, y0, z),
+                        (x1, y1, z), (x0, y1, z)),
+                       top, ground=True, outline=edge)
+        for k in range(4):
+            yy = y0 + 4.0 + k * 7.0
+            scene.add_face(((x0 + 1.5, yy, z + 0.06),
+                            (x1 - 1.5, yy, z + 0.06),
+                            (x1 - 1.5, yy + 1.2, z + 0.06),
+                            (x0 + 1.5, yy + 1.2, z + 0.06)),
+                           (52, 34, 20), ground=True)
+
+
 def add_plot_tiles(scene, g, radius=1300.0):
     """Draw the actual worked squares as fixed world quads.
 
@@ -704,7 +819,7 @@ def build_scene(g, fwd, right, up, ex, ey):
         add_workplace(scene, g, wp)
         if getattr(wp, "kind", "") == "fireplace":
             add_fire(scene, wp, float(getattr(g, "now", 0.0)))
-    add_plot_tiles(scene, g)
+    add_ground_blocks(scene, g)
     add_built_blocks(scene, g)
     add_crops(scene, g)
     return scene
