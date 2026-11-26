@@ -142,10 +142,35 @@ def sand_factor_array(t, h):
     return _ssfa((t - 0.60) / 0.12) * _ssfa((0.36 - h) / 0.14)
 
 
-def biome_name(t, h) -> str:
-    r = int(round(max(0.0, min(1.0, float(t))) * 2))
-    c = int(round(max(0.0, min(1.0, float(h))) * 2))
-    return GRID[r][c]
+def _biome_four(t, h):
+    """The four beginning biomes, as masks: snow, desert, savanna, forest."""
+    tt = np.clip(np.asarray(t, np.float32), 0.0, 1.0)
+    hh = np.clip(np.asarray(h, np.float32), 0.0, 1.0)
+    snow = tt < 0.32
+    desert = (~snow) & (tt > 0.62) & (hh < 0.34)
+    # Hot, drier ground is savannah; the rest is forest.  No marsh or jungle
+    # categories: the world the game starts in has four.
+    savanna = (~snow) & (~desert) & (tt > 0.52) & (hh < 0.62)
+    return snow, desert, savanna
+
+
+def biome_name(t, h):
+    """One of the four beginning biomes (or an array of them).
+
+    The old nine-cell climate table still colours the ground, but the
+    named biomes the game talks about and the map shows are these four.
+    """
+    snow, desert, savanna = _biome_four(t, h)
+    if getattr(snow, "ndim", 0) > 0:
+        return np.where(snow, "snow", np.where(desert, "desert",
+                        np.where(savanna, "savanna", "forest")))
+    if bool(snow):
+        return "snow"
+    if bool(desert):
+        return "desert"
+    if bool(savanna):
+        return "savanna"
+    return "forest"
 
 
 def predator_kind(t, h) -> str:

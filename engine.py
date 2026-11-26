@@ -92,7 +92,8 @@ def _test_teleport_biome(g) -> None:
     import math
     import biomes
     import native as _native
-    names = tuple(biomes.BIOMES)
+    # The four beginning biomes, plus the second-ring country.
+    names = ("forest", "savanna", "desert", "snow", "barren")
     if not names:
         return
     i = (int(getattr(g, "_test_biome_i", -1)) + 1) % len(names)
@@ -102,12 +103,30 @@ def _test_teleport_biome(g) -> None:
     if camp is None:
         g.toast("No settlement found in %s" % target)
         return
-    # JUST OUTSIDE, not in the bedroll ring or the fields.
-    dx = -900.0
-    px, py = float(camp.x) + dx, float(camp.y)
-    coast = float(_native.coast_x(py, int(getattr(g.world, "seed", 1))))
-    if px > coast - 80.0:
-        px, py = float(camp.x), float(camp.y) + 900.0
+    # JUST OUTSIDE, not in the bedroll ring or the fields.  Try several
+    # sides at several distances and take one that is STILL IN THE TARGET
+    # BIOME -- a settlement on a patch edge must not drop the player into a
+    # neighbouring biome.
+    seed = int(getattr(g.world, "seed", 1))
+    px, py = float(camp.x) - 900.0, float(camp.y)
+    _spot = None
+    for dist in (900.0, 700.0, 500.0, 1200.0):
+        for dx, dy in ((-dist, 0.0), (dist, 0.0), (0.0, -dist),
+                       (0.0, dist), (-dist, -dist), (-dist, dist),
+                       (dist, -dist), (dist, dist)):
+            tx, ty = float(camp.x) + dx, float(camp.y) + dy
+            if tx > float(_native.coast_x(ty, seed)) - 80.0:
+                continue
+            if _biome_at_point(g, tx, ty) != target:
+                continue
+            _spot = (tx, ty)
+            break
+        if _spot is not None:
+            break
+    if _spot is None:
+        g.toast("No %s-side spot beside %s" % (target, getattr(camp, "name", "settlement")))
+        return
+    px, py = _spot
     g.inside_house = None
     g.inside_mine = None
     g.player.x, g.player.y = px, py
