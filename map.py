@@ -64,10 +64,12 @@ CHART_SAMPLES = 1         # one sample per cell: the chart classifies, not blend
 CHART_KEEP = 12           # charts remembered, then the oldest is dropped
 
 # biome surface classes
-CLS_SNOW, CLS_DESERT, CLS_FOREST, CLS_OCEAN = 0, 1, 2, 3
+CLS_SNOW, CLS_DESERT, CLS_FOREST, CLS_OCEAN, CLS_BARREN = 0, 1, 2, 3, 4
 OCEAN_RGB = (16, 38, 74)
 PAPER_RGB = (47, 45, 41)
+BARREN_RGB = (112, 112, 110)
 BORDER_RGB = (8, 8, 10)
+RING_COLOUR = (232, 196, 92)
 
 
 def _tree_icon(surf: pygame.Surface, x: int, y: int, snow: bool = False) -> None:
@@ -76,6 +78,14 @@ def _tree_icon(surf: pygame.Surface, x: int, y: int, snow: bool = False) -> None
     pygame.draw.rect(surf, (96, 76, 58), (x, y + 1, 2, 3))
     pygame.draw.polygon(surf, canopy, [(x - 3, y + 1), (x + 4, y + 1),
                                        (x, y - 3)])
+
+
+def _ironwood_icon(surf: pygame.Surface, x: int, y: int) -> None:
+    """A tiny grey ironwood: the same tree, in the second ring's colours."""
+    pygame.draw.rect(surf, (92, 92, 88), (x, y + 1, 2, 3))
+    pygame.draw.polygon(surf, (146, 146, 142), [(x - 3, y + 1), (x + 4, y + 1),
+                                                (x, y - 3)])
+    pygame.draw.line(surf, (190, 190, 184), (x - 2, y), (x + 3, y), 1)
 
 
 def _cactus_icon(surf: pygame.Surface, x: int, y: int) -> None:
@@ -169,14 +179,23 @@ def _chart(world, cx: float, cy: float, half: float):
     import world as _world
     _coast = _world.coast_x(gy, seed)
     _ocean = gx > _coast
+    _sx, _sy = biomes.spawn_point()
+    _barren = (~_ocean) & (np.hypot(gx - _sx, gy - _sy) >= biomes.RING1_RADIUS)
     cls = np.where(_ocean, CLS_OCEAN,
-                   np.where(temps < 0.32, CLS_SNOW,
-                            np.where((temps > 0.62) & (hums < 0.34), CLS_DESERT,
-                                     CLS_FOREST))).astype(np.int8)
+                   np.where(_barren, CLS_BARREN,
+                            np.where(temps < 0.32, CLS_SNOW,
+                                     np.where((temps > 0.62) & (hums < 0.34),
+                                              CLS_DESERT, CLS_FOREST)))).astype(np.int8)
     surf = pygame.Surface((n, n))
     for j in range(n):
         for i in range(n):
-            surf.set_at((i, j), OCEAN_RGB if cls[j, i] == CLS_OCEAN else PAPER_RGB)
+            if cls[j, i] == CLS_OCEAN:
+                c = OCEAN_RGB
+            elif cls[j, i] == CLS_BARREN:
+                c = BARREN_RGB
+            else:
+                c = PAPER_RGB
+            surf.set_at((i, j), c)
     # BOLD BLACK BORDERS where one biome meets another (and at the shore).
     for j in range(n):
         for i in range(n):
@@ -197,7 +216,9 @@ def _chart(world, cx: float, cy: float, half: float):
                 pygame.draw.line(surf, (222, 196, 120), (i, j), (i + 2, j), 1)
             elif k == CLS_FOREST:
                 pygame.draw.line(surf, (110, 168, 92), (i, j), (i + 2, j), 1)
-    # AND THE SPARSER ICONS: tree, cactus, snow tree.
+            elif k == CLS_BARREN:
+                pygame.draw.line(surf, (166, 166, 160), (i, j), (i + 2, j), 1)
+    # AND THE SPARSER ICONS: tree, cactus, snow tree, ironwood.
     for j in range(4, n, 9):
         for i in range(4, n, 9):
             k = cls[j, i]
@@ -207,6 +228,8 @@ def _chart(world, cx: float, cy: float, half: float):
                 _cactus_icon(surf, i, j)
             elif k == CLS_FOREST:
                 _tree_icon(surf, i, j, snow=False)
+            elif k == CLS_BARREN:
+                _ironwood_icon(surf, i, j)
     # CAMP MARKERS ARE BAKED INTO THE SAME SURFACE AS THE TERRAIN, so a camp
     # and the tree behind it are one image and can never drift apart.
     try:
@@ -268,18 +291,25 @@ def _paper(world, seed: int):
         _coast = np.full((SN, SN), half + 1.0, np.float32)
     _ocean = gx > _coast
     _land = ~_ocean
-    _snow = _land & (temps < 0.32)
-    _desert = _land & (temps > 0.62) & (hums < 0.34)
-    _forest = _land & ~_snow & ~_desert
+    _sx, _sy = biomes.spawn_point()
+    _barren = _land & (np.hypot(gx - _sx, gy - _sy) >= biomes.RING1_RADIUS)
+    _snow = _land & ~_barren & (temps < 0.32)
+    _desert = _land & ~_barren & (temps > 0.62) & (hums < 0.34)
+    _forest = _land & ~_barren & ~_snow & ~_desert
     # THE OLD-SCHOOL CHART LOOK: dark paper land, blue sea, black borders,
     # and the biomes told apart by their sparse lines and little icons.
-    cls_s = np.where(_ocean, 3,
-                     np.where(_snow, 0, np.where(_desert, 1, 2))).astype(np.int8)
+    cls_s = np.where(_ocean, CLS_OCEAN,
+                     np.where(_barren, CLS_BARREN,
+                              np.where(_snow, CLS_SNOW,
+                                       np.where(_desert, CLS_DESERT,
+                                                CLS_FOREST)))).astype(np.int8)
     cls = np.repeat(np.repeat(cls_s, 2, axis=0), 2, axis=1)
-    _ocean_f = cls == 3
+    _ocean_f = cls == CLS_OCEAN
+    _barren_f = cls == CLS_BARREN
     rgb = np.empty((N, N, 3), np.uint8)
     rgb[:] = PAPER_RGB
     rgb[_ocean_f] = OCEAN_RGB
+    rgb[_barren_f] = BARREN_RGB
     # black borders where one class meets another (the shore included).
     _bx = cls[:, 1:] != cls[:, :-1]
     _by = cls[1:, :] != cls[:-1, :]
@@ -300,7 +330,9 @@ def _paper(world, seed: int):
                 pygame.draw.line(surf, (222, 196, 120), (i, j), (i + 2, j), 1)
             elif k == 2:
                 pygame.draw.line(surf, (110, 168, 92), (i, j), (i + 2, j), 1)
-    # AND THE SPARSER ICONS: tree, cactus, snow tree.
+            elif k == 4:
+                pygame.draw.line(surf, (166, 166, 160), (i, j), (i + 2, j), 1)
+    # AND THE SPARSER ICONS: tree, cactus, snow tree, ironwood.
     for j in range(4, N, 9):
         for i in range(4, N, 9):
             k = cls[j, i]
@@ -310,6 +342,8 @@ def _paper(world, seed: int):
                 _cactus_icon(surf, i, j)
             elif k == 2:
                 _tree_icon(surf, i, j, snow=False)
+            elif k == 4:
+                _ironwood_icon(surf, i, j)
     _PAPER = (_key, surf)
     return surf
 
@@ -511,6 +545,17 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
         _spx, _spy = w2s(float(ship[0]), float(ship[1]))
         if x0 - 2 <= _spx <= x0 + size + 2 and y0 - 2 <= _spy <= y0 + size + 2:
             _ship_icon(screen, int(_spx), int(_spy))
+    # THE RING BOUNDARY, ON THE REAL MAP, around the actual ship/spawn.
+    try:
+        _sx, _sy = biomes.spawn_point()
+        _spx, _spy = w2s(_sx, _sy)
+        _rx, _ry = w2s(_sx + biomes.RING1_RADIUS, _sy)
+        _rr = int(abs(_rx - _spx))
+        if _rr > 3:
+            pygame.draw.circle(screen, RING_COLOUR, (int(_spx), int(_spy)),
+                               _rr, 2)
+    except Exception:
+        pass
 
     font = pygame.font.SysFont("dejavusansmono", max(11, vh // 46), bold=True)
     small = pygame.font.SysFont("dejavusansmono", max(9, vh // 60))
@@ -521,3 +566,6 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
     hint = small.render("%d km across   -   WASD pan,  Q/E zoom,  C centre,  M close"
                         % km, True, (196, 190, 176))
     screen.blit(hint, (x0 + size - hint.get_width(), y0 + size + 14))
+    legend = small.render("grey land = Barren Rocks   gold ring = 55,000 from spawn",
+                          True, (196, 190, 176))
+    screen.blit(legend, (x0, y0 + size + 14))

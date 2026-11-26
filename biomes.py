@@ -57,6 +57,11 @@ def set_spawn(x: float, y: float) -> None:
     _SPAWN[0], _SPAWN[1] = float(x), float(y)
 
 
+def spawn_point():
+    """The ship/spawn point the rings are measured from."""
+    return (_SPAWN[0], _SPAWN[1])
+
+
 def ring(x: float, y: float) -> int:
     d = math.hypot(float(x) - _SPAWN[0], float(y) - _SPAWN[1])
     return 1 if d < RING1_RADIUS else 2
