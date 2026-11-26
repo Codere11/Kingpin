@@ -27,6 +27,96 @@ def _bench_products(g, wp):
     return [(leaf_item, product)] if leaf_item and product else []
 
 
+def _biome_at_point(g, x: float, y: float) -> str:
+    """The cycling biome name for a world point (barren wins over climate)."""
+    import biomes
+    if biomes.is_barren(x, y):
+        return "barren"
+    return biomes.biome_name(float(g.world.temperature(x, y)),
+                             float(g.world.humidity(x, y)))
+
+
+def _test_find_biome_settlement(g, target: str):
+    """Find a native settlement in `target`, building one if needed.
+
+    Returns the settlement.  Existing camps are preferred; otherwise a camp
+    is placed on the first land point of that biome found on widening rings
+    from the ship/spawn, and registered like any other native settlement.
+    """
+    import math
+    import biomes
+    import native as _native
+    reg = getattr(g, "native_settlements", None)
+    if not isinstance(reg, dict):
+        reg = g.native_settlements = {}
+    for camp in reg.values():
+        if _biome_at_point(g, getattr(camp, "x", 0.0),
+                           getattr(camp, "y", 0.0)) == target:
+            return camp
+    sx, sy = getattr(g, "_spawn", (float(g.player.x), float(g.player.y)))
+    seed = int(getattr(g.world, "seed", 1))
+    found = None
+    for radius in (0.0, 30000.0, 60000.0, 90000.0, 120000.0,
+                   180000.0, 240000.0, 320000.0, 420000.0, 540000.0,
+                   700000.0):
+        n = 1 if radius <= 0.0 else 48
+        for k in range(n):
+            ang = 2.0 * math.pi * k / n
+            x = sx + math.cos(ang) * radius
+            y = sy + math.sin(ang) * radius
+            if x > _native.coast_x(y, seed):       # ocean holds no camp
+                continue
+            if _biome_at_point(g, x, y) != target:
+                continue
+            if any(math.hypot(x - getattr(c, "x", 0.0),
+                              y - getattr(c, "y", 0.0)) < 12000.0
+                   for c in reg.values()):
+                continue
+            found = (x, y)
+            break
+        if found is not None:
+            break
+    if found is None:
+        return None
+    x, y = found
+    _seed = ((int(x) * 73856093) ^ (int(y) * 19349663)
+             ^ (seed * 2654435761)) & 0xFFFFFFFF
+    camp = _native.build(g, x, y, _seed)
+    camp.cell = None
+    reg[("test", target, len(reg))] = camp
+    return camp
+
+
+def _test_teleport_biome(g) -> None:
+    """F3 TEST MODE: cycle the world's biomes, landing outside a settlement."""
+    import math
+    import biomes
+    import native as _native
+    names = tuple(biomes.BIOMES)
+    if not names:
+        return
+    i = (int(getattr(g, "_test_biome_i", -1)) + 1) % len(names)
+    g._test_biome_i = i
+    target = names[i]
+    camp = _test_find_biome_settlement(g, target)
+    if camp is None:
+        g.toast("No settlement found in %s" % target)
+        return
+    # JUST OUTSIDE, not in the bedroll ring or the fields.
+    dx = -900.0
+    px, py = float(camp.x) + dx, float(camp.y)
+    coast = float(_native.coast_x(py, int(getattr(g.world, "seed", 1))))
+    if px > coast - 80.0:
+        px, py = float(camp.x), float(camp.y) + 900.0
+    g.inside_house = None
+    g.inside_mine = None
+    g.player.x, g.player.y = px, py
+    g.player.dead = False
+    g.cam_x = px - getattr(g, "vw", 1280) / (2.0 * getattr(g, "zoom", 1.0))
+    g.cam_y = py - getattr(g, "vh", 720) / (2.0 * getattr(g, "zoom", 1.0))
+    g.toast("Teleported: %s   outside %s" % (target, getattr(camp, "name", "a settlement")))
+
+
 def _set_bench_default(g, wp) -> None:
     prods = _bench_products(g, wp)
     if prods:
@@ -379,15 +469,15 @@ def run(g):
             elif (g.test_mode and event.type == pygame.KEYDOWN
                   and event.key in (pygame.K_F2, pygame.K_F3)):
                 # TEST MODE.  The old NPC-lab controls and the wolf-pack event
-                # are gone.  F3 puts a few horses just west of the player so
-                # the trot and coat can be watched.
+                # are gone.  F2 spawns a rogue; F3 cycles biomes and lands
+                # just outside a settlement in the target biome.
                 try:
                     import events as _events
                     if event.key == pygame.K_F2:
                         _events.spawn_test_kind(g, "rogue")
                         g.toast("Rogue test")
                     elif event.key == pygame.K_F3:
-                        _events.spawn_test_horses(g)
+                        _test_teleport_biome(g)
                 except Exception as _ev_exc:
                     g.toast("Event test: %s" % _ev_exc)
                     try:
