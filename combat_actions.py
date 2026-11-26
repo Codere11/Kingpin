@@ -383,6 +383,14 @@ def resolve_swing(g, kills) -> int:
         sound.play("hit_tree")
         g.combat.spawn_impact(struck.x, struck.y, (120, 90, 50))
         _need = int(getattr(struck, "strikes_needed", _m.AXE_STRIKES))
+        # THE CHOP BAR, not a debug toast.  It belongs to the tree being hit
+        # and runs down in the HUD while the player keeps swinging.
+        try:
+            g.chop_bar = {"n": int(struck.strikes), "need": int(_need),
+                          "x": float(struck.x), "y": float(struck.y),
+                          "t": float(getattr(g, "now", 0.0))}
+        except Exception:
+            pass
         if struck.strikes >= _need:
             _hits.pop(_tkey, None)
             g.trees.fell(struck, g.now)
@@ -414,8 +422,13 @@ def resolve_swing(g, kills) -> int:
                     pass
             g.combat.spawn_impact(struck.x, struck.y - 20, (86, 140, 64))
             g.toast(f"Felled a tree   +{amount} {_drop}{_extra}")
+            try:
+                g.chop_bar = None
+            except Exception:
+                pass
         else:
-            g.toast(f"Chopping…  {struck.strikes}/{_need}")
+            if not getattr(g, "view3d", False):
+                g.toast(f"Chopping…  {struck.strikes}/{_need}")
 
     # Chop down a fence or gate you built yourself.
     for lst in (g.built_fences, g.built_gates):

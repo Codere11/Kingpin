@@ -386,7 +386,31 @@ def add_tree(scene, g, t):
     if faces is None:
         faces = _tree_faces(t)
         c[key] = faces
-    _add_faces(scene, faces)
+    now = float(getattr(g, "now", 0.0))
+    if getattr(t, "felled", False):
+        _add_faces(scene, faces)
+        return
+    # The canopy bends with the local breeze and shakes when the axe lands.
+    # Only the upper part moves; the trunk stays planted.
+    try:
+        import wind
+        sx, sy = wind.sway(float(t.x), float(t.y), 1.0)
+    except Exception:
+        sx = sy = 0.0
+    hit = float(getattr(t, "hit_until", 0.0)) - now
+    hit = max(0.0, min(1.0, hit / 0.5))
+    height = max(42.0, float(getattr(t, "canopy_r", 20.0)) * 2.15)
+    for pts, color in faces:
+        moved = []
+        for (x, y, z) in pts:
+            f = max(0.0, min(1.0, z / height))
+            dx = sx * f * 1.5
+            dy = sy * f * 1.5
+            if hit > 0.0:
+                dx += math.sin(now * 72.0 + z * 0.11) * 11.0 * hit * f
+                dy += math.sin(now * 91.0 + z * 0.07) * 4.0 * hit * f
+            moved.append((x + dx, y + dy, z))
+        scene.add_face(moved, color)
 
 
 def _house_faces(h):
@@ -1090,6 +1114,11 @@ def draw_viewmodel(g, screen) -> None:
             ca, sa = math.cos(-0.34), math.sin(-0.34)
         proj = []
         for (x, y, _z) in pts:
+            if item_id == "axe":
+                # Minecraft holds the axe across the body with the head to
+                # the left of the grip; mirror the model so ours reads the
+                # same way instead of sticking its blade out to the right.
+                x = -x
             if ca or sa:
                 qx = x * ca - y * sa
                 qy = x * sa + y * ca

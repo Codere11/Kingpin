@@ -289,10 +289,11 @@ def _npc_sprite(npc, back: bool) -> pygame.Surface:
     if got is not None:
         return got
 
-    w, h = 40, 72
+    # A tall card so the swing can actually leave the shoulder.  The body is
+    # not a separate overlay: the arm is part of this figure.
+    w, h = 100, 140
     s = pygame.Surface((w, h), pygame.SRCALPHA)
     cx = w // 2
-    # shadow in the sprite is left to the ground; feet meet the anchor
     body = (74, 78, 76) if stalin else clothing
     if armor == "hide":
         body = (120, 82, 46)
@@ -303,55 +304,74 @@ def _npc_sprite(npc, back: bool) -> pygame.Surface:
     if flash:
         body = (238, 226, 226)
     # legs
-    pygame.draw.rect(s, (44, 38, 32), (cx - 10, 50, 7, 20), border_radius=2)
-    pygame.draw.rect(s, (44, 38, 32), (cx + 3, 50, 7, 20), border_radius=2)
+    pygame.draw.rect(s, (44, 38, 32), (cx - 13, 102, 9, 34), border_radius=3)
+    pygame.draw.rect(s, (44, 38, 32), (cx + 4, 102, 9, 34), border_radius=3)
     # torso
-    pygame.draw.ellipse(s, body, (cx - 14, 26, 28, 32))
-    pygame.draw.ellipse(s, (30, 26, 22), (cx - 14, 26, 28, 32), 2)
-    # arms
-    pygame.draw.line(s, body, (cx - 13, 32), (cx - 18, 51), 6)
-    pygame.draw.line(s, body, (cx + 13, 32), (cx + 18, 51), 6)
-    # armour bands
+    pygame.draw.ellipse(s, body, (cx - 20, 62, 40, 56))
+    pygame.draw.ellipse(s, (30, 26, 22), (cx - 20, 62, 40, 56), 2)
     if armor:
         col = (70, 46, 28) if armor == "hide" else (64, 68, 76)
-        pygame.draw.line(s, col, (cx - 12, 38), (cx + 12, 38), 3)
-        pygame.draw.line(s, col, (cx - 11, 45), (cx + 11, 45), 2)
-    # A WEAPON SWEEP, drawn in the card so every NPC fight reads at a glance.
-    if (not back) and swing_bucket >= 0:
-        _p = swing_bucket / 8.0
-        _ang = math.radians(-105.0 + 210.0 * _p)
-        _hx, _hy = cx + 11, 38
-        _ex = _hx + math.cos(_ang) * 24.0
-        _ey = _hy + math.sin(_ang) * 24.0
-        pygame.draw.line(s, (116, 82, 46), (_hx, _hy), (_ex, _ey), 3)
-        _px, _py = -math.sin(_ang), math.cos(_ang)
-        pygame.draw.line(s, (208, 208, 214),
-                         (_ex - _px * 6, _ey - _py * 6),
-                         (_ex + _px * 6, _ey + _py * 6), 3)
+        pygame.draw.line(s, col, (cx - 17, 78), (cx + 17, 78), 4)
+        pygame.draw.line(s, (min(255, col[0] + 18), min(255, col[1] + 12),
+                             min(255, col[2] + 8)),
+                         (cx - 16, 89), (cx + 16, 89), 2)
+    # left arm always; right arm only when not swinging
+    pygame.draw.line(s, body, (cx - 18, 74), (cx - 26, 102), 9)
+    if swing_bucket < 0:
+        pygame.draw.line(s, body, (cx + 18, 74), (cx + 26, 102), 9)
     # head
     if not back:
         try:
-            face.hair(s, cx, 18, 10)
+            face.hair(s, cx, 45, 15)
         except Exception:
             pass
-    pygame.draw.circle(s, skin, (cx, 18), 10)
-    pygame.draw.circle(s, (150, 108, 78), (cx, 18), 10, 1)
+    pygame.draw.circle(s, skin, (cx, 45), 15)
+    pygame.draw.circle(s, (150, 108, 78), (cx, 45), 15, 2)
     if back or stalin:
-        pygame.draw.arc(s, (34, 26, 20), (cx - 10, 8, 20, 18), 0.15, math.pi - 0.15, 3)
+        pygame.draw.arc(s, (34, 26, 20), (cx - 15, 30, 30, 28), 0.15, math.pi - 0.15, 4)
     if not back:
         try:
-            face.draw(s, cx, 18, 9, 0.0, 1.0, mood, skin, vet)
+            face.draw(s, cx, 45, 13, 0.0, 1.0, mood, skin, vet)
         except Exception:
-            pygame.draw.circle(s, (46, 34, 28), (cx - 4, 17), 1)
-            pygame.draw.circle(s, (46, 34, 28), (cx + 4, 17), 1)
+            pygame.draw.circle(s, (46, 34, 28), (cx - 5, 43), 2)
+            pygame.draw.circle(s, (46, 34, 28), (cx + 5, 43), 2)
         try:
             if getattr(npc, "iron_helmet", False) or getattr(npc, "iron_armor", False):
-                face.iron_helmet(s, cx, 18, 10)
-            face.feather(s, cx, 18, 10)
+                face.iron_helmet(s, cx, 45, 15)
+            face.feather(s, cx, 45, 15)
             if getattr(npc, "kind", "") == "soldier":
-                face.war_paint(s, cx, 18, 10)
+                face.war_paint(s, cx, 45, 15)
         except Exception:
             pass
+    # THE SWING IS HIS OWN RIGHT ARM.  Shoulder, hand and weapon are one
+    # connected figure, not a third arm floating beside the body.
+    if (not back) and swing_bucket >= 0:
+        p = swing_bucket / 8.0
+        ang = math.radians(-150.0 + 290.0 * p)
+        shoulder = (cx + 18, 74)
+        hand = (shoulder[0] + math.cos(ang) * 34.0,
+                shoulder[1] + math.sin(ang) * 34.0)
+        pygame.draw.line(s, body, shoulder, hand, 12)
+        pygame.draw.circle(s, body, shoulder, 7)
+        pygame.draw.circle(s, skin, (int(hand[0]), int(hand[1])), 7)
+        hx, hy = shoulder[0] + math.cos(ang) * 62.0, shoulder[1] + math.sin(ang) * 62.0
+        pygame.draw.line(s, (110, 72, 40), hand, (hx, hy), 7)
+        px, py = -math.sin(ang), math.cos(ang)
+        blade = [(hx - px * 12, hy - py * 12),
+                 (hx + px * 12, hy + py * 12),
+                 (hx + math.cos(ang) * 18 - px * 8,
+                  hy + math.sin(ang) * 18 - py * 8),
+                 (hx + math.cos(ang) * 18 + px * 8,
+                  hy + math.sin(ang) * 18 + py * 8)]
+        pygame.draw.polygon(s, (205, 211, 220), blade)
+        pygame.draw.polygon(s, (245, 246, 250), blade, 2)
+        for i in range(1, 7):
+            a = ang - i * 0.13
+            tx = shoulder[0] + math.cos(a) * 52.0
+            ty = shoulder[1] + math.sin(a) * 52.0
+            pygame.draw.line(s, (238, 226, 170, max(6, 38 - i * 5)),
+                             (shoulder[0], shoulder[1]),
+                             (int(tx), int(ty)), 1)
     _NPC_CACHE[key] = s
     return s
 
@@ -432,66 +452,6 @@ def _project(fwd, right, up, ex, ey, px, py, pz):
             IH * 0.5 - FOCAL * cy / cz, cz)
 
 
-_NPC_ATTACK_CACHE: dict = {}
-
-
-def _npc_attack_sprite(npc) -> pygame.Surface:
-    """A big, unmistakable over-the-shoulder weapon sweep.
-
-    The NPC body card is deliberately small; this card is the action, drawn
-    outside the body silhouette so a swing cannot be mistaken for a twitch.
-    """
-    sw = float(getattr(npc, "swing_anim", 0.0))
-    p = max(0.0, min(1.0, 1.0 - sw / 0.45))
-    bucket = int(p * 8.0)
-    cloth = tuple(getattr(npc, "clothing", (88, 76, 62)) or (88, 76, 62))
-    skin = tuple(getattr(npc, "skin", (216, 172, 132)) or (216, 172, 132))
-    armor = ("hide" if getattr(npc, "hide_armor", False) else
-             "iron" if getattr(npc, "iron_armor", False) else
-             "reinforced" if getattr(npc, "reinforced_armor", False) else "")
-    key = (cloth, skin, armor, bucket)
-    got = _NPC_ATTACK_CACHE.get(key)
-    if got is not None:
-        return got
-    surf = pygame.Surface((180, 180), pygame.SRCALPHA)
-    piv = (78, 108)
-    ang = math.radians(-155.0 + 285.0 * (bucket / 8.0))
-    hx = piv[0] + math.cos(ang) * 46.0
-    hy = piv[1] + math.sin(ang) * 46.0
-    # a sweeping arc trail, behind the arm
-    for i in range(8):
-        a = ang - (i + 1) * 0.16
-        tx = piv[0] + math.cos(a) * 58.0
-        ty = piv[1] + math.sin(a) * 58.0
-        px = piv[0] + math.cos(a + 0.08) * 72.0
-        py = piv[1] + math.sin(a + 0.08) * 72.0
-        pygame.draw.line(surf, (238, 226, 170, max(8, 60 - i * 7)),
-                         (int(tx), int(ty)), (int(px), int(py)), 2)
-    # shoulder and a thick arm
-    pygame.draw.circle(surf, cloth, (piv[0] - 10, piv[1] + 4), 13)
-    pygame.draw.line(surf, cloth, (piv[0] - 8, piv[1] + 4), (int(hx), int(hy)), 15)
-    pygame.draw.circle(surf, skin, (int(hx), int(hy)), 7)
-    # a long axe, oversized so the sweep reads at a glance
-    ax = math.cos(ang + 0.20) * 54.0
-    ay = math.sin(ang + 0.20) * 54.0
-    ex, ey = hx + ax, hy + ay
-    pygame.draw.line(surf, (110, 72, 40), (int(hx), int(hy)),
-                     (int(ex), int(ey)), 7)
-    # axe head at the far end
-    hxp, hyp = ex, ey
-    perp = (-math.sin(ang + 0.20), math.cos(ang + 0.20))
-    blade = [(hxp - perp[0] * 13, hyp - perp[1] * 13),
-             (hxp + perp[0] * 13, hyp + perp[1] * 13),
-             (hxp + math.cos(ang + 0.20) * 17 - perp[0] * 8,
-              hyp + math.sin(ang + 0.20) * 17 - perp[1] * 8),
-             (hxp + math.cos(ang + 0.20) * 17 + perp[0] * 8,
-              hyp + math.sin(ang + 0.20) * 17 + perp[1] * 8)]
-    pygame.draw.polygon(surf, (205, 211, 220), blade)
-    pygame.draw.polygon(surf, (245, 246, 250), blade, 1)
-    _NPC_ATTACK_CACHE[key] = surf
-    return surf
-
-
 def _collect(g, yaw: float):
     """Return actor billboards only; the world above ground is mesh3d now."""
     out = []
@@ -513,12 +473,10 @@ def _collect(g, yaw: float):
         tfx, tfy = ex - float(npc.x), ey - float(npc.y)
         ffx, ffy = getattr(npc, "facing", (0.0, 1.0))
         front = (ffx * tfx + ffy * tfy) >= -0.01
-        card = _npc_sprite(npc, back=not front)
-        out.append((card, float(npc.x), float(npc.y), 68.0, 20.0, 72.0,
+        swinging = float(getattr(npc, "swing_anim", 0.0)) > 0.0
+        card = _npc_sprite(npc, back=(not front) and not swinging)
+        out.append((card, float(npc.x), float(npc.y), 82.0, 50.0, 138.0,
                     getattr(npc, "name", "")))
-        if float(getattr(npc, "swing_anim", 0.0)) > 0.0:
-            out.append((_npc_attack_sprite(npc), float(npc.x), float(npc.y),
-                        126.0, 90.0, 174.0, ""))
     for e in list(getattr(g, "enemies", ()) or ()):
         if not getattr(e, "alive", True):
             continue
@@ -615,6 +573,52 @@ def _viewmodel(g, screen) -> None:
         pass
 
 
+def _draw_chop_bar(g, screen) -> None:
+    b = getattr(g, "chop_bar", None)
+    if not isinstance(b, dict):
+        return
+    try:
+        age = float(getattr(g, "now", 0.0)) - float(b.get("t", 0.0))
+        if age < 0.0 or age > 4.0:
+            return
+        need = max(1, int(b.get("need", 3)))
+        n = max(0, min(need, int(b.get("n", 0))))
+        vw, vh = screen.get_width(), screen.get_height()
+        bw = min(420, max(220, vw // 3))
+        bh = 18
+        x = (vw - bw) // 2
+        y = int(vh * 0.80)
+        fade = 1.0 if age < 2.8 else max(0.0, 1.0 - (age - 2.8) / 1.2)
+        plate = pygame.Surface((bw + 26, 52), pygame.SRCALPHA)
+        pygame.draw.rect(plate, (18, 18, 22, int(210 * fade)),
+                         plate.get_rect(), border_radius=7)
+        pygame.draw.rect(plate, (150, 112, 62, int(220 * fade)),
+                         plate.get_rect(), 2, border_radius=7)
+        try:
+            lab = g.font.render("CHOPPING WOOD", True, (242, 222, 168))
+            lab.set_alpha(int(255 * fade))
+            plate.blit(lab, (13, 4))
+        except Exception:
+            pass
+        bx, by = 12, 29
+        pygame.draw.rect(plate, (42, 34, 26, int(230 * fade)),
+                         (bx, by, bw, bh), border_radius=4)
+        fill = int(round(bw * (n / float(need))))
+        if fill > 0:
+            pygame.draw.rect(plate, (198, 112, 54, int(245 * fade)),
+                             (bx, by, fill, bh), border_radius=4)
+            pygame.draw.rect(plate, (250, 180, 92, int(245 * fade)),
+                             (bx, by, fill, 3), border_radius=4)
+        for k in range(1, need):
+            tx = bx + int(round(bw * k / float(need)))
+            pygame.draw.line(plate, (32, 26, 20, int(220 * fade)),
+                             (tx, by), (tx, by + bh), 2)
+        plate.set_alpha(int(255 * fade))
+        screen.blit(plate, (x - 13, y - 3))
+    except Exception:
+        pass
+
+
 def draw_hud(g) -> None:
     screen = g.screen
     if not getattr(g, "hud_hidden", False) and not getattr(g.player, "dead", False):
@@ -642,6 +646,8 @@ def draw_hud(g) -> None:
         except Exception:
             pass
     _draw_toast(g, screen)
+    if not getattr(g, "hud_hidden", False):
+        _draw_chop_bar(g, screen)
 
     # The existing panels are screen-space; keep them as they are.
     try:
