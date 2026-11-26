@@ -2373,6 +2373,38 @@ def run(g):
                         enemy.x, enemy.y, enemy.radius, g.e_colliders)
                     g.world.keep_on_land(enemy, enemy.radius + 1.0)
 
+            # A BODY IS SOLID.  The first-person view exposed an old
+            # abstraction: the player could walk through a wolf because
+            # nothing separated the two circles.  Resolve contact by moving
+            # the beast, not the player, so an attack stops at the shoulder
+            # instead of shoving the camera.
+            if getattr(g, "view3d", False) and not getattr(g.player, "dead", False):
+                for _e in g.enemies:
+                    if not getattr(_e, "alive", True):
+                        continue
+                    _dx = _e.x - g.player.x
+                    _dy = _e.y - g.player.y
+                    _dd = math.hypot(_dx, _dy)
+                    _rr = g.player.radius + getattr(_e, "radius", 12) + 3.0
+                    if _dd < _rr:
+                        if _dd < 1e-5:
+                            _ux, _uy = getattr(_e, "facing", (1.0, 0.0))
+                            if abs(_ux) + abs(_uy) < 1e-6:
+                                _ux, _uy = 1.0, 0.0
+                        else:
+                            _ux, _uy = _dx / _dd, _dy / _dd
+                        _push = _rr - _dd
+                        _e.x += _ux * _push
+                        _e.y += _uy * _push
+                        try:
+                            _e.x, _e.y = resolve_circle_rects(
+                                _e.x, _e.y, getattr(_e, "radius", 12),
+                                list(g.grid.near(_e.x, _e.y,
+                                                 getattr(_e, "radius", 12) + 6.0)))
+                        except Exception:
+                            pass
+                        g.world.keep_on_land(_e, getattr(_e, "radius", 12) + 1.0)
+
             for village in g.visible_villages:
                 for npc in village.npcs:
                     npc._soldiers = g.enemies

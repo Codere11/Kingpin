@@ -630,6 +630,35 @@ def add_ground_target(scene, g):
                  z, (255, 235, 142), 1.4)
 
 
+def _add_natural_layer(scene, g, size, min_dist, max_dist):
+    """A coarse block layer for the middle/far ground, so the horizon is
+    ground rather than a fog wall, without four thousand tiny near blocks."""
+    tx0 = int(math.floor((scene.ex - max_dist) / size))
+    tx1 = int(math.ceil((scene.ex + max_dist) / size))
+    ty0 = int(math.floor((scene.ey - max_dist) / size))
+    ty1 = int(math.ceil((scene.ey + max_dist) / size))
+    half = size * 0.5
+    for ty in range(ty0, ty1 + 1):
+        for tx in range(tx0, tx1 + 1):
+            wx, wy = tx * size + half, ty * size + half
+            d = math.hypot(wx - scene.ex, wy - scene.ey)
+            if d < min_dist or d > max_dist:
+                continue
+            _dx, _dy = wx - scene.ex, wy - scene.ey
+            cz = scene.fwd[0] * _dx + scene.fwd[1] * _dy
+            if cz < -half * 2.0:
+                continue
+            side = scene.right[0] * _dx + scene.right[1] * _dy
+            if abs(side) > max(half * 1.6, cz * 2.3):
+                continue
+            top = _tile_colour(g, int(wx // 32), int(wy // 32))
+            x0, x1 = wx - half, wx + half
+            y0, y1 = wy - half, wy + half
+            scene.add_face(((x0, y0, 0.58), (x1, y0, 0.58),
+                            (x1, y1, 0.58), (x0, y1, 0.58)),
+                           top, ground=True)
+
+
 def add_ground_blocks(scene, g, radius=420.0):
     """The ground as actual square blocks, not a perspective image.
 
@@ -638,6 +667,9 @@ def add_ground_blocks(scene, g, radius=420.0):
     1x1 blocks, so a tilled square is still one square and its state is
     independent of the camera.
     """
+    # A wide coarse layer first; the near 64-block layer and exact worked
+    # tiles are drawn over it.
+    _add_natural_layer(scene, g, 256.0, 350.0, 3000.0)
     size = 64.0
     tx0 = int(math.floor((scene.ex - radius) / size))
     tx1 = int(math.ceil((scene.ex + radius) / size))

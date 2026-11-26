@@ -578,7 +578,7 @@ class Wolf(Enemy):
         self.view_range = WOLF_VIEW
         self.view_angle = WOLF_ANGLE
         self.speed = WOLF_SPEED
-        self.preferred = 32.0
+        self.preferred = 44.0
         self.patrol_speed = 72.0
         self.melee_damage = WOLF_BITE
         self.hit_flash = 0.0
@@ -630,11 +630,16 @@ class Wolf(Enemy):
                 self.lunging = 0.45 * self.lunge_scale   # throw himself at the man
                 self.lunge_cd = random.uniform(2.5, 5.5)
         lunging = self.lunging > 0.0
-        speed = self.speed * speed_scale * (
-            (1.9 + 0.25 * (self.lunge_scale - 1.0)) if lunging else 1.0)
-        self.x += ux * speed * dt
-        self.y += uy * speed * dt
-        reach = 30.0 + (6.0 * self.lunge_scale if lunging else 0.0)
+        # A WOLF BITES FROM OUTSIDE THE BODY.  It used to keep walking into
+        # the target while its bite timer decided whether it had arrived,
+        # which read as a beast pushing straight through a person.
+        stop = max(36.0, self.radius + getattr(target, "radius", 12) + 10.0)
+        if distance > stop:
+            speed = self.speed * speed_scale * (
+                (1.9 + 0.25 * (self.lunge_scale - 1.0)) if lunging else 1.0)
+            self.x += ux * speed * dt
+            self.y += uy * speed * dt
+        reach = max(44.0, stop + 4.0) + (6.0 * self.lunge_scale if lunging else 0.0)
         if distance <= reach and self.fire_cd <= 0.0:
             self.fire_cd = 1.0
             if hasattr(target, "take_damage"):
@@ -1290,9 +1295,12 @@ class Bison(Enemy):
         d = math.hypot(dx, dy) or 1.0
         ux, uy = dx / d, dy / d
         self.facing = (ux, uy)
-        self._move(ux, uy, self.speed, dt)
+        # Stop at the shoulder, not inside the target; hit from there.
+        stop = max(38.0, self.radius + getattr(target, "radius", 12) + 12.0)
+        if d > stop:
+            self._move(ux, uy, self.speed, dt)
         self.fire_cd -= dt
-        if d <= 44.0 and self.fire_cd <= 0.0:
+        if d <= max(50.0, stop + 4.0) and self.fire_cd <= 0.0:
             self.fire_cd = 1.0
             if hasattr(target, "take_damage"):
                 if hasattr(target, "wake_and_flee"):
