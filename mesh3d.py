@@ -1,0 +1,697 @@
+"""mesh3d.py -- a tiny low-poly software renderer for the first-person view.
+
+It is deliberately small: enough geometry to make trees, houses, workbenches
+and held items read as objects in space, not painted cards.  It does not own
+game state and it does not decide what is solid.
+
+The near ground is still a textured image from view3d; this module adds the
+world above it, depth-sorted far-to-near, with simple sun shading and fog.
+"""
+
+from __future__ import annotations
+
+import math
+import random
+
+import pygame
+
+# Keep in step with view3d.  The internal frame is small; scaling up is the
+# point.
+IW, IH = 280, 158
+FOCAL = IW / (2.0 * math.tan(math.radians(78.0) * 0.5))
+NEAR = 18.0
+DRAW_DIST = 5200.0
+EYE_Z = 56.0
+
+_LIGHT = (-0.38, -0.42, 0.82)
+_LLEN = math.sqrt(sum(v * v for v in _LIGHT))
+_LIGHT = tuple(v / _LLEN for v in _LIGHT)
+
+
+def _sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0])
+
+
+def _dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _norm(v):
+    n = math.sqrt(_dot(v, v))
+    if n < 1e-8:
+        return (0.0, 0.0, 1.0)
+    return (v[0] / n, v[1] / n, v[2] / n)
+
+
+def _rot_z(p, cx, cy, a):
+    c, s = math.cos(a), math.sin(a)
+    x, y = p[0] - cx, p[1] - cy
+    return (cx + x * c - y * s, cy + x * s + y * c, p[2])
+
+
+def _shade(color, normal, depth, night=False):
+    d = abs(_dot(normal, _LIGHT))
+    f = 0.48 + 0.62 * d
+    r, g, b = color[:3]
+    r, g, b = r * f, g * f, b * f
+    if night:
+        r, g, b = r * 0.58, g * 0.62, b * 0.72
+    fog = max(0.0, min(0.66, (depth - 1200.0) / 5200.0))
+    fr, fg, fb = (42, 48, 62) if night else (188, 194, 186)
+    r = r * (1.0 - fog) + fr * fog
+    g = g * (1.0 - fog) + fg * fog
+    b = b * (1.0 - fog) + fb * fog
+    return (max(0, min(255, int(r))),
+            max(0, min(255, int(g))),
+            max(0, min(255, int(b))))
+
+
+def _box(cx, cy, z, w, d, h, color, rot=0.0):
+    """Six quads, in world coordinates, with the base at z."""
+    hw, hd = w * 0.5, d * 0.5
+    b = [(-hw, -hd, 0.0), (hw, -hd, 0.0), (hw, hd, 0.0), (-hw, hd, 0.0)]
+    t = [(x, y, h) for (x, y, _z) in b]
+    pts = [(cx + x, cy + y, z + zz) for (x, y, zz) in b + t]
+    if rot:
+        pts = [_rot_z(p, cx, cy, rot) for p in pts]
+    quads = [
+        (0, 1, 2, 3), (7, 6, 5, 4),
+        (0, 4, 5, 1), (1, 5, 6, 2),
+        (2, 6, 7, 3), (3, 7, 4, 0),
+    ]
+    return [(tuple(pts[i] for i in q), color) for q in quads]
+
+
+def _cylinder(cx, cy, z, r, h, sides, color, rot=0.0, top=True):
+    out = []
+    a0 = rot
+    ring0 = []
+    ring1 = []
+    for i in range(sides):
+        a = a0 + i * (2.0 * math.pi / sides)
+        x, y = math.cos(a) * r, math.sin(a) * r
+        ring0.append((cx + x, cy + y, z))
+        ring1.append((cx + x, cy + y, z + h))
+    for i in range(sides):
+        j = (i + 1) % sides
+        out.append(((ring0[i], ring0[j], ring1[j], ring1[i]), color))
+    if top:
+        out.append((tuple(reversed(ring1)), color))
+    return out
+
+
+def _octa(cx, cy, cz, rx, ry, rz, color):
+    p = [(cx, cy, cz + rz), (cx + rx, cy, cz), (cx, cy + ry, cz),
+         (cx - rx, cy, cz), (cx, cy - ry, cz), (cx, cy, cz - rz)]
+    # 0 top, 1 east, 2 south, 3 west, 4 north, 5 bottom
+    faces = ((0, 1, 2), (0, 2, 3), (0, 3, 4), (0, 4, 1),
+             (5, 2, 1), (5, 3, 2), (5, 4, 3), (5, 1, 4))
+    return [(tuple(p[i] for i in f), color) for f in faces]
+
+
+def _cone(cx, cy, z, r, h, sides, color, rot=0.0):
+    apex = (cx, cy, z + h)
+    base = []
+    for i in range(sides):
+        a = rot + i * (2.0 * math.pi / sides)
+        base.append((cx + math.cos(a) * r, cy + math.sin(a) * r, z))
+    out = []
+    for i in range(sides):
+        out.append(((base[i], base[(i + 1) % sides], apex), color))
+    out.append((tuple(reversed(base)), color))
+    return out
+
+
+def _roof(cx, cy, z, w, d, h, color, rot=0.0):
+    hw, hd = w * 0.5, d * 0.5
+    b = [(-hw, -hd, 0.0), (hw, -hd, 0.0), (hw, hd, 0.0), (-hw, hd, 0.0)]
+    # a simple gabled roof: ridge runs along x
+    ridge0 = (0.0, -hd, h)
+    ridge1 = (0.0, hd, h)
+    pts = [(cx + x, cy + y, z + zz) for (x, y, zz) in b]
+    r0 = (cx + ridge0[0], cy + ridge0[1], z + ridge0[2])
+    r1 = (cx + ridge1[0], cy + ridge1[1], z + ridge1[2])
+    if rot:
+        pts = [_rot_z(p, cx, cy, rot) for p in pts]
+        r0 = _rot_z(r0, cx, cy, rot)
+        r1 = _rot_z(r1, cx, cy, rot)
+    return [
+        ((pts[0], pts[1], r0), color),
+        ((pts[2], pts[3], r1), color),
+        ((pts[1], pts[2], r1, r0), color),
+        ((pts[3], pts[0], r0, r1), color),
+    ]
+
+
+class Scene:
+    """Projected geometry plus billboards, sorted far-to-near."""
+
+    def __init__(self, fwd, right, up, ex, ey, night=False):
+        self.fwd = fwd
+        self.right = right
+        self.up = up
+        self.ex = float(ex)
+        self.ey = float(ey)
+        self.night = bool(night)
+        self.ops = []
+
+    def _cam(self, p):
+        dx, dy, dz = p[0] - self.ex, p[1] - self.ey, p[2] - EYE_Z
+        return (self.right[0] * dx + self.right[1] * dy + self.right[2] * dz,
+                self.up[0] * dx + self.up[1] * dy + self.up[2] * dz,
+                self.fwd[0] * dx + self.fwd[1] * dy + self.fwd[2] * dz)
+
+    def _clip(self, pts):
+        out = []
+        for i in range(len(pts)):
+            a, b = pts[i], pts[(i + 1) % len(pts)]
+            ina, inb = a[2] >= NEAR, b[2] >= NEAR
+            if ina:
+                out.append(a)
+            if ina != inb:
+                t = (NEAR - a[2]) / (b[2] - a[2])
+                out.append((a[0] + (b[0] - a[0]) * t,
+                            a[1] + (b[1] - a[1]) * t, NEAR))
+        return out
+
+    def _project(self, p):
+        if p[2] <= 0.01:
+            return None
+        # pygame's polygon path is unhappy with numpy scalars; keep the
+        # projection in plain Python floats.
+        return (float(IW * 0.5 + FOCAL * p[0] / p[2]),
+                float(IH * 0.5 - FOCAL * p[1] / p[2]))
+
+    def add_face(self, world_pts, color):
+        if len(world_pts) < 3:
+            return
+        # normal from the original world points
+        n = _norm(_cross(_sub(world_pts[1], world_pts[0]),
+                         _sub(world_pts[2], world_pts[0])))
+        cam = [self._cam(p) for p in world_pts]
+        cz = sum(p[2] for p in cam) / len(cam)
+        if cz > DRAW_DIST or max(p[2] for p in cam) < NEAR:
+            return
+        cl = self._clip(cam)
+        if len(cl) < 3:
+            return
+        pts = [self._project(p) for p in cl]
+        pts = [p for p in pts if p is not None]
+        if len(pts) < 3:
+            return
+        # skip degenerate slivers
+        area = 0.0
+        for i in range(len(pts)):
+            x0, y0 = pts[i]
+            x1, y1 = pts[(i + 1) % len(pts)]
+            area += x0 * y1 - x1 * y0
+        if abs(area) < 1.5:
+            return
+        # A face very close to the eye can project to enormous screen
+        # coordinates.  pygame will grind on those; the visible part is just
+        # a wall filling the frame, which the sky/ground already supplies.
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        if min(xs) > IW + 60 or max(xs) < -60 or \
+                min(ys) > IH + 60 or max(ys) < -60:
+            return
+        if max(abs(v) for v in xs + ys) > 12000.0:
+            return
+        self.ops.append((cz, "face", pts, _shade(color, n, cz, self.night)))
+
+    def add_sprite(self, image, x, y, world_h=50.0, ax=None, ay=None):
+        base = self._cam((x, y, 0.0))
+        top = self._cam((x, y, world_h))
+        if base[2] <= NEAR or top[2] <= NEAR:
+            return
+        sx = float(IW * 0.5 + FOCAL * base[0] / base[2])
+        sy = float(IH * 0.5 - FOCAL * base[1] / base[2])
+        tx = float(IW * 0.5 + FOCAL * top[0] / top[2])
+        ty = float(IH * 0.5 - FOCAL * top[1] / top[2])
+        sh = abs(sy - ty)
+        if sh < 1.0 or base[2] > DRAW_DIST:
+            return
+        if ax is None:
+            ax = image.get_width() * 0.5
+        if ay is None:
+            ay = image.get_height()
+        scale = sh / float(max(1, image.get_height()))
+        dw = max(1, int(image.get_width() * scale))
+        dh = max(1, int(image.get_height() * scale))
+        if sx < -dw or sx > IW + dw or sy < -dh or sy > IH + 80:
+            return
+        self.ops.append((base[2], "sprite", image, sx, sy, dw, dh,
+                         ax * scale, ay * scale))
+
+    def draw(self, screen):
+        self.ops.sort(key=lambda op: op[0], reverse=True)
+        for op in self.ops:
+            if op[1] == "face":
+                _d, _k, pts, color = op
+                pygame.draw.polygon(screen, color, pts)
+            else:
+                _d, _k, image, sx, sy, dw, dh, ax, ay = op
+                try:
+                    pic = pygame.transform.scale(image, (dw, dh))
+                    screen.blit(pic, (int(sx - ax), int(sy - ay)))
+                except Exception:
+                    pass
+
+
+# ---------------------------------------------------------------------------
+# world geometry
+# ---------------------------------------------------------------------------
+def _cache(g):
+    c = getattr(g, "_v3_mesh_cache", None)
+    if not isinstance(c, dict):
+        c = g._v3_mesh_cache = {}
+    return c
+
+
+def _add_faces(scene, faces):
+    for pts, color in faces:
+        scene.add_face(pts, color)
+
+
+def _tree_faces(t):
+    x, y = float(t.x), float(t.y)
+    if getattr(t, "felled", False):
+        return _cylinder(x, y, 0.0, max(3.0, t.canopy_r * 0.10),
+                          max(8.0, t.canopy_r * 0.25), 6, (112, 82, 52))
+    r = max(8.0, float(getattr(t, "canopy_r", 20.0)))
+    h = max(42.0, r * 2.15)
+    species = getattr(t, "species", "broadleaf")
+    rng = random.Random(int(x * 17 + y * 31) & 0xFFFFFFFF)
+    trunk_r = max(2.8, r * 0.075)
+    trunk_h = h * 0.62
+    if species == "cactus":
+        green = (46, 112, 58)
+        dark = (28, 74, 42)
+        faces = _box(x, y, 0.0, trunk_r * 1.8, trunk_r * 1.8, trunk_h * 1.10, green)
+        for k in range(3):
+            ang = k * 2.0 * math.pi / 3.0 + 0.4
+            ox, oy = math.cos(ang) * trunk_r * 1.7, math.sin(ang) * trunk_r * 1.7
+            faces += _box(x + ox, y + oy, trunk_h * 0.35,
+                          trunk_r * 0.9, trunk_r * 0.9, trunk_h * 0.55, dark, ang)
+        return faces
+    if species in ("palm", "banana_palm", "cocoa_palm"):
+        wood = (112, 82, 52) if species != "blackwood" else (50, 40, 34)
+        faces = _cylinder(x, y, 0.0, trunk_r, h * 0.86, 6, wood)
+        leaf = (50, 118, 54) if species != "cocoa_palm" else (62, 88, 46)
+        for k in range(7):
+            a = k * (2.0 * math.pi / 7.0) + 0.3
+            lx, ly = x + math.cos(a) * r * 0.45, y + math.sin(a) * r * 0.45
+            ex_, ey_ = x + math.cos(a) * r * 1.15, y + math.sin(a) * r * 1.15
+            faces.append((((x, y, h * 0.80), (lx, ly, h * 0.94),
+                           (ex_, ey_, h * 0.55), (x + math.cos(a) * 3,
+                                                  y + math.sin(a) * 3,
+                                                  h * 0.72)), leaf))
+            # a second leaf surface gives the frond volume
+            faces.append((((x, y, h * 0.78), (ex_, ey_, h * 0.53),
+                           (lx, ly, h * 0.86)), leaf))
+        if species == "cocoa_palm":
+            for k in range(3):
+                a = k * 2.0 + 1.0
+                faces += _octa(x + math.cos(a) * 5, y + math.sin(a) * 5,
+                               h * 0.62, 4, 4, 5, (128, 74, 38))
+        return faces
+    if species in ("conifer",):
+        faces = _cylinder(x, y, 0.0, trunk_r, h * 0.72, 6, (92, 66, 42))
+        for k, (rr, zz, hh) in enumerate(((r * 0.86, 0.20, 0.50),
+                                          (r * 0.68, 0.42, 0.43),
+                                          (r * 0.48, 0.62, 0.34))):
+            faces += _cone(x, y, h * zz, rr, h * hh, 7, (34, 86, 48))
+        return faces
+    # broadleaf / blackwood / ironwood
+    if species == "blackwood":
+        wood, leaf = (36, 30, 28), (34, 44, 38)
+        leaf2 = (46, 58, 46)
+    elif species == "ironwood":
+        wood, leaf = (94, 84, 74), (54, 82, 60)
+        leaf2 = (70, 96, 72)
+    else:
+        wood, leaf = (104, 72, 44), (44, 100, 50)
+        leaf2 = (64, 126, 58)
+    faces = _cylinder(x, y, 0.0, trunk_r, trunk_h, 6, wood)
+    # a few low-poly crowns, not one perfect ball
+    for k in range(4):
+        a = k * 1.7 + rng.uniform(-0.25, 0.25)
+        rr = r * rng.uniform(0.44, 0.64)
+        ox = math.cos(a) * r * rng.uniform(0.18, 0.42)
+        oy = math.sin(a) * r * rng.uniform(0.18, 0.42)
+        cz = h * (0.62 + 0.12 * k)
+        faces += _octa(x + ox, y + oy, cz, rr, rr * 0.86, rr * 0.93,
+                       leaf if k % 2 == 0 else leaf2)
+    return faces
+
+
+def add_tree(scene, g, t):
+    if math.hypot(float(t.x) - scene.ex, float(t.y) - scene.ey) > DRAW_DIST:
+        return
+    key = ("tree", id(t), bool(getattr(t, "felled", False)))
+    c = _cache(g)
+    faces = c.get(key)
+    if faces is None:
+        faces = _tree_faces(t)
+        c[key] = faces
+    _add_faces(scene, faces)
+
+
+def _house_faces(h):
+    x, y = float(h.x), float(h.y)
+    w = float(getattr(h, "rect", None).w if getattr(h, "rect", None) is not None
+              else getattr(h, "w", 100))
+    d = float(getattr(h, "rect", None).h if getattr(h, "rect", None) is not None
+              else getattr(h, "h", 90))
+    fx, fy = getattr(h, "facing", (0.0, 1.0))
+    rot = math.atan2(fy, fx) - math.pi / 2.0
+    wall_h = max(36.0, min(76.0, 0.42 * min(w, d) + 28.0))
+    wall = (196, 174, 138)
+    trim = (112, 88, 62)
+    roof = (132, 66, 52)
+    if getattr(h, "government", False):
+        wall = (174, 174, 166)
+        roof = (86, 92, 102)
+    faces = []
+    # walls: four thin slabs around a hollow footprint
+    t = 6.0
+    faces += _box(x, y - d * 0.5 + t * 0.5, 0, w, t, wall_h, wall, rot)
+    faces += _box(x, y + d * 0.5 - t * 0.5, 0, w, t, wall_h, wall, rot)
+    faces += _box(x - w * 0.5 + t * 0.5, y, 0, t, d, wall_h, wall, rot)
+    faces += _box(x + w * 0.5 - t * 0.5, y, 0, t, d, wall_h, wall, rot)
+    # floor band / trim
+    faces += _box(x, y, 0, w + 2, d + 2, 4, trim, rot)
+    # roof
+    faces += _roof(x, y, wall_h, w + 12, d + 12, max(18.0, wall_h * 0.55),
+                   roof, rot)
+    # door and windows are shallow dark faces on the front
+    front_y = y + d * 0.5 + 0.8
+    faces += _box(x, front_y, 2, max(10.0, w * 0.14), 1.5,
+                  min(30.0, wall_h * 0.58), (62, 44, 30), rot)
+    for sx, sz in ((-0.30, 0.48), (0.30, 0.48)):
+        wx = x + sx * w
+        faces += _box(wx, front_y, wall_h * sz, max(8.0, w * 0.12), 1.5,
+                      max(7.0, wall_h * 0.18), (92, 120, 132), rot)
+    return faces
+
+
+def add_house(scene, g, h):
+    if math.hypot(float(h.x) - scene.ex, float(h.y) - scene.ey) > DRAW_DIST:
+        return
+    key = ("house", id(h), getattr(h, "w", 0), getattr(h, "h", 0),
+           getattr(h, "facing", (0, 1)), getattr(h, "government", False))
+    c = _cache(g)
+    faces = c.get(key)
+    if faces is None:
+        faces = _house_faces(h)
+        c[key] = faces
+    _add_faces(scene, faces)
+
+
+def _work_faces(wp):
+    x, y = float(wp.x), float(wp.y)
+    w = float(getattr(wp, "w", 64))
+    d = float(getattr(wp, "h", 64))
+    kind = getattr(wp, "kind", "workshop")
+    wood = (134, 92, 56)
+    wood_d = (72, 48, 30)
+    metal = (104, 108, 116)
+    faces = []
+    top_h = 24.0
+    # legs and table, small enough to read from a first-person distance
+    lw = max(3.0, w * 0.08)
+    for ox in (-0.36, 0.36):
+        for oy in (-0.36, 0.36):
+            faces += _box(x + ox * w, y + oy * d, 0, lw, lw, top_h, wood_d)
+    faces += _box(x, y, top_h - 4, w * 0.78, d * 0.72, 5, wood)
+    if kind in ("lab", "brewery", "research", "smith"):
+        # bottles / barrels / a heavy anvil
+        if kind in ("lab", "research"):
+            faces += _cylinder(x - w * 0.18, y, top_h, 4, 13, 6, (150, 196, 176))
+            faces += _cylinder(x + w * 0.10, y + 3, top_h, 4, 9, 6, (186, 148, 82))
+        elif kind == "brewery":
+            faces += _cylinder(x, y, 0, w * 0.22, top_h * 0.9, 8, (108, 72, 42))
+            faces += _cylinder(x, y, top_h * 0.9, w * 0.22, 4, 8, (70, 48, 30))
+        else:
+            faces += _box(x, y, top_h, w * 0.26, d * 0.18, 9, metal)
+    elif kind in ("fireplace",):
+        for k in range(8):
+            a = k * math.pi / 4.0
+            faces += _box(x + math.cos(a) * w * 0.30, y + math.sin(a) * d * 0.30,
+                          0, 7, 7, 9, (104, 100, 94), a)
+    elif kind in ("dummy", "target"):
+        faces += _box(x, y, top_h, 6, 6, max(28.0, d * 0.65), wood_d)
+        faces += _box(x, y, top_h + 18, w * 0.42, 5, 5, wood)
+    elif kind in ("barracks", "mine", "medicine_hut"):
+        faces += _box(x, y, 0, w * 0.72, d * 0.72, 34, wood_d)
+        faces += _roof(x, y, 34, w * 0.86, d * 0.86, 17,
+                       (90, 66, 48) if kind != "medicine_hut" else (132, 108, 74))
+    elif kind in ("weaver", "spice"):
+        faces += _box(x, y, top_h, w * 0.42, 3, 16, wood_d)
+        faces += _box(x, y, top_h + 8, w * 0.36, 3, 3, (198, 184, 152))
+    return faces
+
+
+def add_workplace(scene, g, wp):
+    if math.hypot(float(wp.x) - scene.ex, float(wp.y) - scene.ey) > DRAW_DIST:
+        return
+    key = ("work", id(wp), getattr(wp, "kind", ""), getattr(wp, "w", 0),
+           getattr(wp, "h", 0))
+    c = _cache(g)
+    faces = c.get(key)
+    if faces is None:
+        faces = _work_faces(wp)
+        c[key] = faces
+    _add_faces(scene, faces)
+
+
+# ---------------------------------------------------------------------------
+# crops
+# ---------------------------------------------------------------------------
+def _crop_sprite(g, kind, elapsed, biome, blight):
+    import crop
+    stage = crop.stage(max(0.0, elapsed))
+    key = (kind, stage, biome, bool(blight))
+    cache = getattr(g, "_v3_crop_cache", None)
+    if not isinstance(cache, dict):
+        cache = g._v3_crop_cache = {}
+    got = cache.get(key)
+    if got is not None:
+        return got
+    surf = pygame.Surface((64, 92), pygame.SRCALPHA)
+    t = stage * crop.PHASE_SECONDS + 0.01
+    try:
+        crop.draw_crop(surf, 32, 84, kind, t, 0.0, 0.0, biome, blight)
+    except Exception:
+        # A crop whose art failed must still be visible as a small green card.
+        pygame.draw.rect(surf, (60, 110, 54), (26, 40, 12, 44), border_radius=4)
+    cache[key] = surf
+    return surf
+
+
+def add_crops(scene, g, radius=1400.0):
+    try:
+        import crop
+        plants = crop.visible_plants(g.world, scene.ex - radius, scene.ey - radius,
+                                     radius * 2.0, radius * 2.0, pad=120)
+    except Exception:
+        return
+    for x, y, planted_at, kind, biome, blight in plants:
+        if math.hypot(x - scene.ex, y - scene.ey) > radius:
+            continue
+        elapsed = float(getattr(g, "now", 0.0)) - float(planted_at or g.now)
+        img = _crop_sprite(g, kind, elapsed, biome, blight)
+        # The crop card is small and anchored at the soil.
+        scene.add_sprite(img, x, y, 44.0, ax=32.0, ay=84.0)
+
+
+# ---------------------------------------------------------------------------
+# scene assembly
+# ---------------------------------------------------------------------------
+def build_scene(g, fwd, right, up, ex, ey):
+    scene = Scene(fwd, right, up, ex, ey, bool(getattr(g, "night", False)))
+    # trees -- nearest first, with a cap; the wider list is for collision too
+    trees = list(getattr(g, "view3d_trees", ()) or getattr(g, "view_trees", ()) or ())
+    trees = [t for t in trees
+             if not getattr(t, "felled", False)
+             or True]                        # stumps are visible too
+    trees.sort(key=lambda t: (float(t.x) - ex) ** 2 + (float(t.y) - ey) ** 2)
+    for t in trees[:140]:
+        d = math.hypot(float(t.x) - ex, float(t.y) - ey)
+        # DETAIL NEAR, A CHEAP CARD FAR AWAY.  Full low-poly trees are
+        # expensive; a distant tree is two dozen pixels tall, so its old
+        # sprite is both faster and just as readable.
+        if d <= 700.0:
+            add_tree(scene, g, t)
+        elif d <= 2200.0:
+            try:
+                img, _at = t.blit_world()
+                scene.add_sprite(img, float(t.x), float(t.y),
+                                 float(img.get_height()),
+                                 ax=float(getattr(t, "sx", img.get_width() / 2)),
+                                 ay=float(getattr(t, "sy", img.get_height())))
+            except Exception:
+                pass
+    houses = []
+    for v in getattr(g, "visible_villages", ()) or ():
+        houses.extend(getattr(v, "houses", ()) or ())
+    houses.extend(getattr(g, "built_houses", ()) or ())
+    for h in houses:
+        add_house(scene, g, h)
+    works = []
+    for v in getattr(g, "visible_villages", ()) or ():
+        works.extend(getattr(v, "workplaces", ()) or ())
+    works.extend(getattr(g, "placed_work", ()) or ())
+    for wp in works:
+        add_workplace(scene, g, wp)
+    add_crops(scene, g)
+    return scene
+
+
+# ---------------------------------------------------------------------------
+# first-person hands / held item, in camera space
+# ---------------------------------------------------------------------------
+def _vm_box(cx, cy, cz, w, h, d, color):
+    hw, hh, hd = w * 0.5, h * 0.5, d * 0.5
+    b = [(cx - hw, cy - hh, cz - hd), (cx + hw, cy - hh, cz - hd),
+         (cx + hw, cy - hh, cz + hd), (cx - hw, cy - hh, cz + hd)]
+    t = [(x, cy + hh, z) for (x, _y, z) in b]
+    p = b + t
+    faces = [(p[0], p[1], p[2], p[3]), (p[7], p[6], p[5], p[4]),
+             (p[0], p[4], p[5], p[1]), (p[1], p[5], p[6], p[2]),
+             (p[2], p[6], p[7], p[3]), (p[3], p[7], p[4], p[0])]
+    return [(f, color) for f in faces]
+
+
+def _vm_cyl(cx, cy, cz, r, h, sides, color):
+    out = []
+    ring0, ring1 = [], []
+    for i in range(sides):
+        a = i * 2.0 * math.pi / sides
+        x, y = math.cos(a) * r, math.sin(a) * r
+        ring0.append((cx + x, cy + y, cz))
+        ring1.append((cx + x, cy + y, cz + h))
+    for i in range(sides):
+        j = (i + 1) % sides
+        out.append(((ring0[i], ring0[j], ring1[j], ring1[i]), color))
+    out.append((tuple(reversed(ring1)), color))
+    return out
+
+
+def _rot_x(p, cy, cz, a):
+    c, s = math.cos(a), math.sin(a)
+    y, z = p[1] - cy, p[2] - cz
+    return (p[0], cy + y * c - z * s, cz + y * s + z * c)
+
+
+def _rot_z(p, cx, cy, a):
+    c, s = math.cos(a), math.sin(a)
+    x, y = p[0] - cx, p[1] - cy
+    return (cx + x * c - y * s, cy + x * s + y * c, p[2])
+
+
+def _item_faces(item_id, empty=False):
+    if empty or not item_id:
+        return _vm_box(14, -24, 55, 10, 16, 10, (184, 132, 94)) + \
+               _vm_box(-2, -29, 55, 8, 13, 10, (174, 122, 86))
+    if item_id in ("axe", "pickaxe", "shovel"):
+        wood, metal = (124, 82, 46), (176, 182, 190)
+        out = _vm_box(0, -18, 55, 3.5, 40, 3.5, wood)
+        out += _vm_box(0, -2, 55, 9, 10, 9, (190, 132, 92))
+        if item_id == "axe":
+            out += _vm_box(-5, -39, 55, 18, 6, 4, metal)
+            out += _vm_box(4, -42, 55, 5, 12, 4, metal)
+        elif item_id == "pickaxe":
+            out += _vm_box(0, -40, 55, 25, 4, 4, metal)
+            out += _vm_box(-11, -38, 55, 4, 8, 4, metal)
+            out += _vm_box(11, -38, 55, 4, 8, 4, metal)
+        else:
+            out += _vm_box(0, -40, 55, 13, 10, 3, metal)
+        return out
+    if item_id in ("musket", "rifle", "double_shot", "shotgun"):
+        wood, metal = (98, 62, 36), (142, 146, 154)
+        out = _vm_box(0, -14, 56, 7, 8, 26, wood)
+        out += _vm_box(0, -15, 72, 4, 4, 34, metal)
+        out += _vm_box(0, -21, 62, 2, 3, 7, metal)
+        out += _vm_box(0, -3, 57, 8, 9, 8, (176, 120, 82))
+        return out
+    if item_id in ("bottle", "beer", "liqueur", "mezcal", "steelka",
+                   "banana_liqueur", "braggot", "chocolate_stout",
+                   "steel_ale", "steelworm", "bananale", "melomel",
+                   "cactus_mead"):
+        col = (124, 74, 46)
+        if item_id in ("liqueur", "banana_liqueur"):
+            col = (126, 50, 78)
+        return _vm_cyl(0, -16, 56, 7, 22, 8, col) + \
+               _vm_box(0, -2, 56, 10, 10, 10, (186, 130, 90))
+    # A generic object: still a solid, shaded object in the hand.
+    return _vm_box(0, -20, 56, 15, 22, 12, (128, 112, 82)) + \
+           _vm_box(0, -2, 56, 9, 10, 9, (190, 132, 92))
+
+
+def draw_viewmodel(g, screen) -> None:
+    stack = None
+    try:
+        stack = g.inventory.selected_stack()
+    except Exception:
+        pass
+    item_id = stack.defn.id if stack is not None else ""
+    faces = _item_faces(item_id, empty=stack is None)
+    p = g.player
+    try:
+        swing = float(getattr(p, "swing_progress", 0.0) or 0.0)
+    except Exception:
+        swing = 0.0
+    moving = bool(getattr(p, "moving", False))
+    now = pygame.time.get_ticks() / 1000.0
+    bobx = math.sin(now * 8.0) * (2.5 if moving else 0.8)
+    boby = abs(math.cos(now * 8.0)) * (3.0 if moving else 1.0)
+    ang = (-0.38 + 1.75 * swing) if swing > 0.0 else 0.0
+    if item_id in ("musket", "rifle", "double_shot", "shotgun"):
+        try:
+            if float(getattr(p, "gun_cd", 0.0)) > 0.0:
+                boby += 4.0
+        except Exception:
+            pass
+    piv_y, piv_z = -14.0, 55.0
+    transformed = []
+    for pts, color in faces:
+        q = []
+        for (x, y, z) in pts:
+            y += boby
+            x += bobx
+            if ang:
+                y, z = (piv_y + (y - piv_y) * math.cos(ang)
+                        - (z - piv_z) * math.sin(ang),
+                        piv_z + (y - piv_y) * math.sin(ang)
+                        + (z - piv_z) * math.cos(ang))
+            q.append((x, y, z))
+        transformed.append((q, color))
+    w, h = screen.get_size()
+    # A readable first-person model: local 3D coordinates, large in the
+    # lower-right, with the same flat-shaded lighting as the world.  This is
+    # not a perspective camera of its own; it is a presentation space whose
+    # only job is to keep the object in frame and in the hand.
+    scale = min(w, h) / 180.0
+    cx = w * 0.72
+    cy = h * 0.80
+    ops = []
+    for pts, color in transformed:
+        n = _norm(_cross(_sub(pts[1], pts[0]), _sub(pts[2], pts[0])))
+        d = abs(_dot(n, _LIGHT))
+        f = 0.48 + 0.64 * d
+        c = tuple(max(0, min(255, int(v * f))) for v in color[:3])
+        proj = [(cx + x * scale, cy + (y + 20.0) * scale) for (x, y, _z) in pts]
+        z = sum(v[2] for v in pts) / len(pts)
+        ops.append((z, proj, c))
+    ops.sort(key=lambda op: op[0], reverse=True)
+    for _z, pts, color in ops:
+        pygame.draw.polygon(screen, color, pts)
+        if _z > 53:                         # a faint rim on the closest faces
+            pygame.draw.polygon(screen, (34, 28, 22), pts, 1)

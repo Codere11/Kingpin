@@ -1947,10 +1947,18 @@ def run(g):
             # Keep a wider tree set for the 3D card pass and its collision;
             # the top-down renderer keeps its own tight list.
             if getattr(g, "view3d", False):
-                try:
-                    g.view3d_trees = g.trees.near(g.player.x, g.player.y, 3600.0)
-                except Exception:
-                    g.view3d_trees = g.view_trees
+                # The 3D tree set is a collision/render set, not the whole
+                # woods.  Re-cutting it a few times a second is enough; doing
+                # it every frame walked thousands of tree cells for no gain.
+                g._v3_tree_timer = getattr(g, "_v3_tree_timer", 0.0) - g.dt
+                if (not getattr(g, "view3d_trees", None)
+                        or g._v3_tree_timer <= 0.0):
+                    g._v3_tree_timer = 0.35
+                    try:
+                        g.view3d_trees = g.trees.near(g.player.x, g.player.y,
+                                                      1200.0)
+                    except Exception:
+                        g.view3d_trees = g.view_trees
             else:
                 g.view3d_trees = ()
             g.view_ore = g.ore_field.visible(g.cam_x, g.cam_y, g.vw, g.vh)

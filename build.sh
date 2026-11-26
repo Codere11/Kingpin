@@ -107,6 +107,7 @@ done
     --hidden-import cropgenetics \
     --hidden-import bisonart \
     --hidden-import view3d \
+    --hidden-import mesh3d \
     "${DATA_ARGS[@]}" \
     main.py 2>&1 | tail -1
 

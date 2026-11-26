@@ -25,11 +25,11 @@ import numpy as np
 import pygame
 
 import face
-import items
+import mesh3d
 
 # Internal frame.  The window is filled by scaling this up, so the first
-# version pays for 480x270 rays rather than 1280x720 ones.
-IW, IH = 480, 270
+# version pays for a small ray/raster frame rather than 1280x720 ones.
+IW, IH = 280, 158
 FOV = math.radians(78.0)
 FOCAL = IW / (2.0 * math.tan(FOV * 0.5))
 EYE_Z = 56.0                 # 1.75 m if a tile (32 px) is one metre
@@ -145,20 +145,21 @@ class _GroundSampler:
     avoids per-pixel chunk lookups in the frame.
     """
 
-    N = 96
-    SPAN = 8192.0
+    N = 56
+    SPAN = 3600.0
 
     def __init__(self) -> None:
         self.grid = None
         self.cx = 0.0
         self.cy = 0.0
         self.t = -1e9
+        self._coarse = {}
 
     def ensure(self, g, now: float) -> None:
         px, py = float(g.player.x), float(g.player.y)
         if (self.grid is not None
                 and math.hypot(px - self.cx, py - self.cy) < self.SPAN * 0.18
-                and now - self.t < 0.75):
+                and now - self.t < 1.25):
             return
         n = self.N
         span = self.SPAN
@@ -179,7 +180,10 @@ class _GroundSampler:
                         continue
                     except Exception:
                         pass
-                col = g.ground._coarse_color(cx, cy)
+                col = self._coarse.get((cx, cy))
+                if col is None:
+                    col = g.ground._coarse_color(cx, cy)
+                    self._coarse[(cx, cy)] = col
                 grid[iy, ix] = col
         self.grid = grid
         self.cx, self.cy, self.t = px, py, now
@@ -443,12 +447,10 @@ def _project(fwd, right, up, ex, ey, px, py, pz):
 
 
 def _collect(g, yaw: float):
-    """Return (sprite, x, y, world_h, anchor_x, anchor_y, label) cards."""
+    """Return actor billboards only; the world above ground is mesh3d now."""
     out = []
     ex, ey = float(g.player.x), float(g.player.y)
-    px, py = ex, ey
     lim = DRAW_DIST
-    # People -- one flat register, not every town's list.
     try:
         import village as _village
         people = list(getattr(_village, "PEOPLE", ()))
@@ -462,72 +464,30 @@ def _collect(g, yaw: float):
         d = math.hypot(float(npc.x) - ex, float(npc.y) - ey)
         if d > lim:
             continue
-        # Front when the man faces the camera, back when he walks away.
         tfx, tfy = ex - float(npc.x), ey - float(npc.y)
         ffx, ffy = getattr(npc, "facing", (0.0, 1.0))
         front = (ffx * tfx + ffy * tfy) >= -0.01
-        walking = getattr(npc, "activity", "") == "walk" or getattr(npc, "moving", False)
         card = _npc_sprite(npc, back=not front)
         out.append((card, float(npc.x), float(npc.y), 68.0, 20.0, 72.0,
                     getattr(npc, "name", "")))
-    # Wild things and soldiers.
     for e in list(getattr(g, "enemies", ()) or ()):
         if not getattr(e, "alive", True):
             continue
-        d = math.hypot(float(e.x) - ex, float(e.y) - ey)
-        if d > lim:
+        if math.hypot(float(e.x) - ex, float(e.y) - ey) > lim:
             continue
         card, ax, ay, wh = _animal_sprite(e, yaw)
         out.append((card, float(e.x), float(e.y), wh, ax, ay, ""))
     for e in list(getattr(g, "rabbits", ()) or ()):
-        d = math.hypot(float(e.x) - ex, float(e.y) - ey)
-        if d > lim:
+        if math.hypot(float(e.x) - ex, float(e.y) - ey) > lim:
             continue
         card, ax, ay, wh = _animal_sprite(e, yaw)
         out.append((card, float(e.x), float(e.y), wh, ax, ay, ""))
     for e in list(getattr(g, "horses", ()) or ()):
-        d = math.hypot(float(e.x) - ex, float(e.y) - ey)
-        if d > lim:
+        if math.hypot(float(e.x) - ex, float(e.y) - ey) > lim:
             continue
         card, ax, ay, wh = _animal_sprite(e, yaw)
         out.append((card, float(e.x), float(e.y), wh, ax, ay, ""))
-    # Trees.
-    trees = (getattr(g, "view3d_trees", None)
-             or getattr(g, "view_trees", ())
-             or getattr(g, "draw_trees", ()) or ())
-    for t in list(trees):
-        if math.hypot(float(t.x) - ex, float(t.y) - ey) > lim:
-            continue
-        try:
-            img, _at = t.blit_world()
-            out.append((img, float(t.x), float(t.y), float(img.get_height()),
-                        float(getattr(t, "sx", img.get_width() / 2)),
-                        float(getattr(t, "sy", img.get_height())), ""))
-        except Exception:
-            pass
-    # Houses and workplaces.
-    houses = []
-    for v in getattr(g, "visible_villages", ()) or ():
-        houses.extend(getattr(v, "houses", ()) or ())
-    houses.extend(getattr(g, "built_houses", ()) or ())
-    for h in houses:
-        if math.hypot(float(h.x) - ex, float(h.y) - ey) > lim:
-            continue
-        img = getattr(h, "image", None)
-        if img is None:
-            continue
-        out.append((img, float(h.x), float(h.y), float(img.get_height()),
-                    img.get_width() / 2.0, float(img.get_height()), ""))
-    for wp in list(getattr(g, "placed_work", ()) or ()):
-        if math.hypot(float(wp.x) - ex, float(wp.y) - ey) > lim:
-            continue
-        img = getattr(wp, "image", None)
-        if img is None:
-            continue
-        out.append((img, float(wp.x), float(wp.y), float(img.get_height()),
-                    img.get_width() / 2.0, float(img.get_height()), ""))
     return out
-
 
 def draw(g) -> None:
     """Draw the internal 3D frame and scale it to the window."""
@@ -542,44 +502,15 @@ def draw(g) -> None:
     fwd, right, up = _cam(g)
     ex, ey = float(g.player.x), float(g.player.y)
     yaw = float(getattr(g, "v3d_yaw", 0.0))
-    cards = _collect(g, yaw)
-
-    drawables = []
-    for img, wx, wy, wh, ax, ay, label in cards:
-        base = _project(fwd, right, up, ex, ey, wx, wy, 0.0)
-        top = _project(fwd, right, up, ex, ey, wx, wy, wh)
-        if base is None or top is None:
-            continue
-        bx, by, cz = base
-        _tx, ty, _tz = top
-        if cz > DRAW_DIST:
-            continue
-        sh = abs(by - ty)
-        if sh < 1.0:
-            continue
-        sh = min(sh, MAX_SPRITE_PX)
-        scale = sh / float(max(1, img.get_height()))
-        dw = max(1, int(round(img.get_width() * scale)))
-        dh = max(1, int(round(img.get_height() * scale)))
-        if bx < -dw or bx > IW + dw or by < -dh or by > IH + 64:
-            continue
-        drawables.append((cz, img, bx, by, dw, dh, ax * scale, ay * scale, label))
-
-    # Painter's order: far first.  No z-buffer, but at this scale a simple
-    # depth sort is enough and keeps the first pass understandable.
-    drawables.sort(key=lambda d: d[0], reverse=True)
-    for cz, img, bx, by, dw, dh, ax, ay, label in drawables:
-        try:
-            pic = pygame.transform.scale(img, (dw, dh))
-            frame.blit(pic, (int(bx - ax), int(by - ay)))
-        except Exception:
-            pass
+    scene = mesh3d.build_scene(g, fwd, right, up, ex, ey)
+    for img, wx, wy, wh, ax, ay, label in _collect(g, yaw):
+        scene.add_sprite(img, wx, wy, wh, ax=ax, ay=ay)
+    scene.draw(frame)
 
     # A little vignette makes the flat plane read as a view rather than a
     # diagram, and softens the edges at close range.
     try:
         shade = pygame.Surface((IW, IH), pygame.SRCALPHA)
-        pygame.draw.rect(shade, (0, 0, 0, 0), (0, 0, IW, IH))
         for i in range(18):
             a = int(5 + i * 2.2)
             pygame.draw.rect(shade, (0, 0, 0, a), (i, i, IW - 2 * i, IH - 2 * i), 1)
@@ -629,36 +560,8 @@ def _draw_toast(g, screen) -> None:
 
 
 def _viewmodel(g, screen) -> None:
-    """The held thing, first-person: a readable weapon/tool card at the edge."""
-    stack = getattr(g, "inventory", None).selected_stack() if getattr(g, "inventory", None) else None
-    if stack is None:
-        return
     try:
-        size = 150
-        icon = items.icon_for(stack, size)
-        p = g.player
-        now = pygame.time.get_ticks() / 1000.0
-        moving = bool(getattr(p, "moving", False))
-        bob_x = math.sin(now * 8.0) * (3.0 if moving else 1.2)
-        bob_y = abs(math.cos(now * 8.0)) * (4.0 if moving else 1.5)
-        swing = float(getattr(p, "swing_progress", 0.0) or 0.0)
-        # Swing down and inward, then recover.  It is a card, not a rig yet,
-        # but the motion is the same motion the top-down hand uses.
-        swing_x = -74.0 * math.sin(swing * math.pi)
-        swing_y = 116.0 * math.sin(swing * math.pi)
-        reloading = float(getattr(p, "reloading", 0.0) or 0.0)
-        if reloading > 0.0:
-            bob_y += 10.0
-        if stack.defn.id in ("axe", "pickaxe", "shovel"):
-            icon = pygame.transform.rotate(icon, -18.0 + 96.0 * swing)
-        # A hand behind the card, so the object reads as held.
-        hx = screen.get_width() - 150 + bob_x + swing_x
-        hy = screen.get_height() - 80 + bob_y + swing_y
-        pygame.draw.ellipse(screen, (126, 86, 54),
-                            (int(hx) - 28, int(hy) + 24, 56, 30))
-        pygame.draw.ellipse(screen, (74, 48, 30),
-                            (int(hx) - 28, int(hy) + 24, 56, 30), 2)
-        screen.blit(icon, icon.get_rect(center=(int(hx), int(hy))))
+        mesh3d.draw_viewmodel(g, screen)
     except Exception:
         pass
 
