@@ -1230,6 +1230,12 @@ def run(g):
                 # nearest town -- was a debug tool.
                 g.map_open = not g.map_open
                 pygame.mouse.set_visible(g.map_open)
+                if g.map_open:
+                    try:
+                        import map as _mapmod
+                        _mapmod.focus(g.player)
+                    except Exception:
+                        pass
             elif (g.dialogue_panel.open_
                   and ((event.type == pygame.KEYDOWN
                         and event.key in (pygame.K_1, pygame.K_2, pygame.K_3,

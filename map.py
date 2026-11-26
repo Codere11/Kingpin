@@ -50,7 +50,10 @@ DARK = (18, 16, 14)
 # so a map "of every town" quietly left two in five of them off the paper.
 WORLD_HALF = 1200000.0
 MIN_HALF = 1200.0        # the closest you may zoom: about two villages wide
-MAX_HALF = WORLD_HALF * 1.35
+# THE MAP IS A LOCAL CHART, NOT THE WHOLE PLANET.  It follows the player and
+# never zooms far enough out to remove the need to travel.
+MAP_START_HALF = 120000.0
+MAX_HALF = 120000.0
 
 ZOOM_STEP = 1.16         # per notch: smooth, and you can always get back
 PAN_RATE = 0.25          # a full screen in about four seconds, at any zoom
@@ -465,10 +468,16 @@ def prewarm(world) -> None:
         pass
 
 
+def focus(player) -> None:
+    """Open the chart on the player, at the local survey scale."""
+    _VIEW["cx"] = float(getattr(player, "x", 0.0))
+    _VIEW["cy"] = float(getattr(player, "y", 0.0))
+    _VIEW["half"] = MAP_START_HALF
+
+
 def reset() -> None:
-    """Back to the whole world, centred on the land (the sea is a sliver east)."""
-    _VIEW["cx"], _VIEW["cy"] = -WORLD_HALF / 2.0, 0.0
-    _VIEW["half"] = WORLD_HALF
+    """A local chart; the caller supplies the player with focus()."""
+    _VIEW["half"] = MAP_START_HALF
 
 
 def _clamp_view() -> None:
@@ -513,8 +522,10 @@ def handle_input(dt: float, player, mouse_pos=None, wheel: int = 0) -> None:
         dy -= speed
     if keys[pygame.K_s] or keys[pygame.K_DOWN]:
         dy += speed
-    _VIEW["cx"] += dx
-    _VIEW["cy"] += dy
+    # The chart tracks the player; panning away would reveal places he has
+    # not travelled to.  Movement keys are intentionally ignored here.
+    _VIEW["cx"] = float(getattr(player, "x", _VIEW["cx"]))
+    _VIEW["cy"] = float(getattr(player, "y", _VIEW["cy"]))
     if keys[pygame.K_q] or keys[pygame.K_MINUS] or keys[pygame.K_KP_MINUS]:
         _zoom(1.0 / ZOOM_STEP ** (dt * 60.0 / 6.0))
     if keys[pygame.K_e] or keys[pygame.K_EQUALS] or keys[pygame.K_KP_PLUS]:
@@ -659,7 +670,7 @@ def draw(screen, world, player, home, hub_list, half: float = WORLD_HALF,
     screen.blit(title, (x0, y0 - title.get_height() - 12))
     # HOW CLOSE YOU ARE, in kilometres, and the keys
     km = int(round(view_half / 100.0))
-    hint = small.render("%d km across   -   WASD pan,  Q/E zoom,  C centre,  M close"
+    hint = small.render("%d km across   -   Q/E zoom,  M close   (the chart follows you)"
                         % km, True, (196, 190, 176))
     screen.blit(hint, (x0 + size - hint.get_width(), y0 + size + 14))
     legend = small.render("grey land = Barren Rocks",
