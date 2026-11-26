@@ -73,6 +73,12 @@ REGISTRY: dict[str, ItemDef] = {
     "pipeleaf_seed": ItemDef("pipeleaf_seed", "Pipeleaf Seeds",
                              "Plant in barren soil; grows pipeleaf.",
                              stackable=True, max_stack=100),
+    "banana_seed": ItemDef("banana_seed", "Banana Seeds",
+                           "Plant in tropical soil; grows bananas.",
+                           stackable=True, max_stack=100),
+    "cocoa_seed": ItemDef("cocoa_seed", "Cocoa Seeds",
+                          "Plant in tropical soil; grows cocoa.",
+                          stackable=True, max_stack=100),
     "tobacco": ItemDef("tobacco", "Tobacco", "Cured leaf. The whole point of all this.",
                        stackable=True, max_stack=100, quality=True),
     "wheat": ItemDef("wheat", "Wheat",
@@ -176,6 +182,24 @@ REGISTRY: dict[str, ItemDef] = {
     "ironwood": ItemDef("ironwood", "Ironwood",
                         "Grey, dense timber. Hard to cut, harder to break.",
                         stackable=True, max_stack=100),
+    "tropical_wood": ItemDef("tropical_wood", "Tropical Wood",
+                             "Pale white palm timber. Light, strong, and clean.",
+                             stackable=True, max_stack=100),
+    "bananas": ItemDef("bananas", "Bananas",
+                       "Sweet yellow fruit from a tropical palm.",
+                       stackable=True, max_stack=20),
+    "cocoa": ItemDef("cocoa", "Cocoa",
+                     "Bitter beans from a cocoa palm. The artisan turns them into chocolate.",
+                     stackable=True, max_stack=100, quality=True),
+    "banana_wort": ItemDef("banana_wort", "Banana Wort",
+                           "Mashed bananas, ready for the still.",
+                           stackable=True, max_stack=100, quality=True),
+    "banana_liqueur": ItemDef("banana_liqueur", "Banana Liqueur",
+                              "A yellow tropical spirit. Sometimes it quickens the blood.",
+                              stackable=True, max_stack=100, quality=True),
+    "chocolate": ItemDef("chocolate", "Chocolate",
+                         "Dark, rich chocolate. The first taste can change a body.",
+                         stackable=True, max_stack=100, quality=True),
     "bed": ItemDef("bed", "Bedroll", "A white cotton bedroll. Place it and sleep.",
                    stackable=True, max_stack=10),
     "door": ItemDef("door", "Door", "A wooden door for a camp wall. Walk through it.",
@@ -905,6 +929,65 @@ def _draw_chili_seed(s: int) -> pygame.Surface:
     return _draw_seeds(s, (200, 120, 90), (150, 70, 50))
 
 
+def _draw_banana_seed(s: int) -> pygame.Surface:
+    return _draw_seeds(s, (222, 190, 74), (150, 112, 36))
+
+
+def _draw_cocoa_seed(s: int) -> pygame.Surface:
+    return _draw_seeds(s, (146, 86, 52), (92, 50, 30))
+
+
+def _draw_tropical_wood(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    bark, bark_d = (220, 216, 202), (156, 150, 136)
+    ring, ring_d = (242, 238, 224), (186, 180, 164)
+    for x, y, w in ((0.10, 0.60, 0.78), (0.16, 0.42, 0.72), (0.22, 0.24, 0.64)):
+        rect = pygame.Rect(x * s, y * s, w * s, 0.17 * s)
+        pygame.draw.rect(surf, bark, rect, border_radius=int(0.085 * s))
+        pygame.draw.rect(surf, bark_d, rect, 2, border_radius=int(0.085 * s))
+        ex, ey = int((x + 0.085) * s), int((y + 0.085) * s)
+        pygame.draw.circle(surf, ring, (ex, ey), int(0.085 * s))
+        pygame.draw.circle(surf, ring_d, (ex, ey), int(0.085 * s), 1)
+    return surf
+
+
+def _draw_bananas(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    gold, shade = (244, 206, 58), (172, 126, 30)
+    for dx, dy in ((-0.18, 0.00), (0.02, -0.06), (0.20, 0.02)):
+        rect = pygame.Rect((0.50 + dx) * s, (0.52 + dy) * s, 0.12 * s, 0.36 * s)
+        pygame.draw.ellipse(surf, gold, rect)
+        pygame.draw.arc(surf, shade, rect, math.pi * 0.45, math.pi * 1.45, 2)
+    pygame.draw.line(surf, (92, 66, 28), (0.42 * s, 0.25 * s), (0.66 * s, 0.25 * s), 2)
+    return surf
+
+
+def _draw_cocoa(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    pod, dark, light = (142, 82, 44), (86, 46, 26), (196, 132, 72)
+    pygame.draw.ellipse(surf, pod, (0.28 * s, 0.18 * s, 0.44 * s, 0.66 * s))
+    pygame.draw.ellipse(surf, dark, (0.28 * s, 0.18 * s, 0.44 * s, 0.66 * s), 2)
+    for i in range(3):
+        yy = (0.30 + i * 0.16) * s
+        pygame.draw.arc(surf, light, (0.32 * s, yy, 0.36 * s, 0.24 * s), 0.2, 2.9, 1)
+    return surf
+
+
+def _draw_banana_liqueur(s: int) -> pygame.Surface:
+    return _draw_drink(s, (238, 206, 58))
+
+
+def _draw_chocolate(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    brown, dark, light = (96, 58, 38), (58, 32, 22), (150, 98, 62)
+    pygame.draw.rect(surf, brown, (0.16 * s, 0.28 * s, 0.68 * s, 0.48 * s), border_radius=int(0.04 * s))
+    pygame.draw.rect(surf, dark, (0.16 * s, 0.28 * s, 0.68 * s, 0.48 * s), 2, border_radius=int(0.04 * s))
+    for i in range(3):
+        yy = (0.34 + i * 0.13) * s
+        pygame.draw.line(surf, light, (0.22 * s, yy), (0.78 * s, yy), 1)
+    return surf
+
+
 def _draw_hardberry_seed(s: int) -> pygame.Surface:
     return _draw_seeds(s, (180, 112, 106), (112, 70, 68))
 
@@ -1142,8 +1225,16 @@ _DRAWERS = {
     "chili_seed": _draw_chili_seed,
     "hardberry_seed": _draw_hardberry_seed,
     "pipeleaf_seed": _draw_pipeleaf_seed,
+    "banana_seed": _draw_banana_seed,
+    "cocoa_seed": _draw_cocoa_seed,
     "hardberries": _draw_hardberries,
     "pipeleaf": _draw_pipeleaf,
+    "tropical_wood": _draw_tropical_wood,
+    "bananas": _draw_bananas,
+    "cocoa": _draw_cocoa,
+    "banana_wort": _draw_wort,
+    "banana_liqueur": _draw_banana_liqueur,
+    "chocolate": _draw_chocolate,
     "crushed_pipeleaf": _draw_crushed_pipeleaf,
     "steelka": _draw_steelka,
     "ironwood": _draw_ironwood,

@@ -546,6 +546,8 @@ class NPC:
     _seller_of: Any = None        # luxury -> the man who sold it to him
     iron_armor: Any = False       # second-ring warrior plate
     iron_helmet: Any = False      # the local iron cap
+    speed_boost_t: Any = 0.0      # banana-liqueur quickening
+    cocoa_tasted: Any = False     # first chocolate stamina boost
 
     # -- WHAT A MAN IS, WRITTEN DOWN --------------------------------------
     # One plain dict: every compiled field and everything in __dict__. The
@@ -611,6 +613,8 @@ class NPC:
         self.base_speed = self.speed
         self.max_stamina = 100.0
         self.stamina = 100.0
+        self.speed_boost_t = 0.0
+        self.cocoa_tasted = False
         self._market_spot = None
         self.skills = skills.Skills()      # the same skills the player has
         self.target = (x, y)
@@ -3477,7 +3481,10 @@ class NPC:
             pass
         if self.known_since:              # ONLY A MAN WHO HAS BEEN TOLD
             self.forget(now)              # anything has anything to forget.
-        self.speed = self.base_speed * self.skills.move_scale()   # practice tells
+        if self.speed_boost_t > 0.0:
+            self.speed_boost_t = max(0.0, self.speed_boost_t - dt)
+        _boost = 1.5 if self.speed_boost_t > 0.0 else 1.0
+        self.speed = self.base_speed * self.skills.move_scale() * _boost
         # GET TO SAFETY. A refugee has exactly one mission and it outranks
         # his trade: a man running for his life does not stop to run a caravan.
         if getattr(self, "refuge", None) is not None and not self.in_interior:
@@ -4278,8 +4285,11 @@ class NPC:
             if _FOREST is not None:
                 _FOREST.fell(target, now)
             _amt = self.rng.randint(FELL_LOGS_MIN, FELL_LOGS_MAX)
-            if getattr(target, "species", "") == "ironwood":
+            _sp = getattr(target, "species", "")
+            if _sp == "ironwood":
                 economy.store_or_carry(self.village, self, "ironwood", _amt)
+            elif _sp in ("palm", "banana_palm", "cocoa_palm"):
+                economy.store_or_carry(self.village, self, "tropical_wood", _amt)
             else:
                 economy.cut_wood(self.village, self, _amt)
             # A TREE DOWN IS THE ACT, not the swing that happened to land on

@@ -387,11 +387,33 @@ def resolve_swing(g, kills) -> int:
             _hits.pop(_tkey, None)
             g.trees.fell(struck, g.now)
             amount = random.randint(10, 30)
-            _drop = "ironwood" if getattr(struck, "species", "") == "ironwood" else "wood"
+            _species = getattr(struck, "species", "")
+            if _species in ("palm", "banana_palm", "cocoa_palm"):
+                _drop = "tropical_wood"
+            elif _species == "ironwood":
+                _drop = "ironwood"
+            else:
+                _drop = "wood"
             g.inventory.add(_drop, amount)
             g.pay_share(_drop, amount)
+            _extra = ""
+            if _species in ("banana_palm", "cocoa_palm"):
+                try:
+                    import cropgenetics as _cg
+                    _kind = "banana" if _species == "banana_palm" else "cocoa"
+                    _fruit = "bananas" if _kind == "banana" else "cocoa"
+                    _n = (random.randint(2, 5) if _kind == "banana"
+                          else random.randint(2, 4))
+                    _fg = _cg.tree_genetics(_kind, struck.x, struck.y,
+                                            int(getattr(g.world, "seed", 1)))
+                    g.inventory.add(_fruit, _n, quality=(4 if _kind == "cocoa" else None),
+                                    genetics=_fg)
+                    g.pay_share(_fruit, _n)
+                    _extra = "   +%d %s" % (_n, _fruit)
+                except Exception:
+                    pass
             g.combat.spawn_impact(struck.x, struck.y - 20, (86, 140, 64))
-            g.toast(f"Felled a tree   +{amount} {_drop}")
+            g.toast(f"Felled a tree   +{amount} {_drop}{_extra}")
         else:
             g.toast(f"Chopping…  {struck.strikes}/{_need}")
 
@@ -739,6 +761,32 @@ def on_click(g):
                 g.toast("No raw meat")
         else:
             g.toast("Cook raw meat at a fireplace")
+        return
+    if item_id == "banana_liqueur":
+        _gen = getattr(stack, "genetics", None)
+        _b = (_gen.get("bonuses") or {}) if isinstance(_gen, dict) else {}
+        if g.inventory.consume("banana_liqueur", 1):
+            if float(_b.get("speed", 0.0)) > 0.0:
+                g.player.quicken(180.0)
+                g.toast("Banana liqueur   -   speed +50% for 3 minutes")
+            else:
+                g.toast("Drank the banana liqueur")
+        else:
+            g.toast("No banana liqueur left")
+        return
+    if item_id == "chocolate":
+        _gen = getattr(stack, "genetics", None)
+        _b = (_gen.get("bonuses") or {}) if isinstance(_gen, dict) else {}
+        if g.inventory.consume("chocolate", 1):
+            _bonus = float(_b.get("stamina", 0.0))
+            if _bonus > 0.0 and g.player.taste_chocolate(_bonus):
+                g.toast("Chocolate   -   maximum stamina +%d%%" % int(round(_bonus * 100)))
+            elif getattr(g.player, "cocoa_tasted", False):
+                g.toast("The chocolate can't change your body again")
+            else:
+                g.toast("Ate the chocolate")
+        else:
+            g.toast("No chocolate left")
         return
     if item_id == "chili_mezcal":
         # THE SECOND BREWER'S SECRET: a permanent +35% body, once.

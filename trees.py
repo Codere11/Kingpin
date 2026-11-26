@@ -51,6 +51,8 @@ ACACIA = [(104, 124, 58), (118, 138, 66), (92, 112, 50)]
 CACTUS = [(74, 124, 66), (88, 142, 76), (62, 108, 56)]
 IRONWOOD = [(92, 92, 90), (112, 112, 108), (76, 76, 74), (128, 126, 120),
             (100, 100, 96), (84, 84, 82)]
+PALM = [(44, 112, 54), (58, 132, 62), (36, 96, 48), (70, 144, 68),
+        (50, 120, 58), (62, 138, 66)]
 
 
 def _smoothstep(x, a, b):
@@ -279,6 +281,8 @@ class TreeSprites:
         if species == "ironwood":
             return self._broadleaf(radius, rng, variant, IRONWOOD, 1.0,
                                    snowy, "ironwood")
+        if species in ("palm", "banana_palm", "cocoa_palm"):
+            return self._palm(radius, rng, variant, species)
         return self._broadleaf(radius, rng, variant, PALETTE, 1.0, snowy,
                                "broadleaf")
 
@@ -466,6 +470,70 @@ class TreeSprites:
         return combined, surf, canopy, ax, ay
 
     # -- other species ------------------------------------------------------
+    def _palm(self, radius, rng, variant, species="palm"):
+        """A white-trunked tropical palm with a crown of long fronds."""
+        trunk_h = radius * 1.85
+        pad = 10
+        w = int(radius * 2.0 + pad * 2)
+        h = int(trunk_h + radius * 0.85) + pad * 2
+        ax = w / 2.0
+        ay = h - pad
+        cx = ax
+        surf = pygame.Surface((w, h), pygame.SRCALPHA)
+        pygame.draw.ellipse(surf, (12, 24, 12, 65),
+                            (cx - radius * 0.55, ay - radius * 0.18,
+                             radius * 1.1, radius * 0.36))
+        # pale tropical trunk, gently curved
+        steps = 8
+        pts_l, pts_r = [], []
+        for i in range(steps + 1):
+            t = i / float(steps)
+            yy = ay + (ay - trunk_h - ay) * t
+            xx = cx + math.sin(t * 2.4 + variant) * radius * 0.10 * t
+            tw = max(2.0, radius * 0.16 * (1.0 - 0.45 * t))
+            pts_l.append((xx - tw, yy))
+            pts_r.append((xx + tw, yy))
+        pygame.draw.polygon(surf, (222, 216, 198), pts_l + list(reversed(pts_r)))
+        pygame.draw.lines(surf, (150, 144, 126), False, pts_l, 1)
+        pygame.draw.lines(surf, (246, 242, 226), False, pts_r, 1)
+        topx = cx + math.sin(2.4 + variant) * radius * 0.10
+        topy = ay - trunk_h
+        base = PALM[variant % len(PALM)]
+        for i in range(7):
+            ang = -math.pi * 0.92 + i * math.pi * 0.30 + rng.uniform(-0.08, 0.08)
+            length = radius * rng.uniform(0.68, 1.05)
+            ex = topx + math.cos(ang) * length
+            ey = topy + math.sin(ang) * length * 0.58 + radius * 0.12
+            midx = (topx + ex) * 0.5
+            midy = (topy + ey) * 0.5 - radius * 0.10
+            pygame.draw.line(surf, _darken(base, 24), (topx, topy), (midx, midy), 2)
+            pygame.draw.line(surf, base, (midx, midy), (ex, ey), 3)
+            for j in range(3):
+                t = 0.45 + j * 0.20
+                lx = topx + (ex - topx) * t
+                ly = topy + (ey - topy) * t
+                pygame.draw.line(surf, _lighten(base, 16),
+                                 (lx, ly), (lx + math.cos(ang + 0.8) * radius * 0.16,
+                                             ly + math.sin(ang + 0.8) * radius * 0.10), 1)
+        if species == "banana_palm":
+            for i in range(3):
+                bx = topx + (i - 1) * radius * 0.14
+                by = topy + radius * 0.24 + i * radius * 0.05
+                pygame.draw.ellipse(surf, (244, 206, 58),
+                                    (bx - radius * 0.08, by, radius * 0.16,
+                                     radius * 0.07))
+        elif species == "cocoa_palm":
+            for i in range(2):
+                bx = topx + (i - 0.5) * radius * 0.18
+                by = topy + radius * 0.26 + i * radius * 0.10
+                pygame.draw.ellipse(surf, (142, 82, 44),
+                                    (bx - radius * 0.06, by, radius * 0.12,
+                                     radius * 0.16))
+                pygame.draw.ellipse(surf, (86, 46, 26),
+                                    (bx - radius * 0.06, by, radius * 0.12,
+                                     radius * 0.16), 1)
+        return surf, ax, ay
+
     def _conifer(self, radius, rng, variant, snowy=False):
         trunk_h = radius * 1.9
         pad = 10
@@ -865,6 +933,19 @@ class Trees:
                     self._presence[(ix, iy)] = None
                     continue
                 self._presence[(ix, iy)] = (x, y, code, "ironwood", False)
+                continue
+            if biomes.is_tropics(x, y):
+                # TROPICS: palms at twice the usual density.  A few carry
+                # bananas; fewer still are cocoa palms.
+                _dark, _lite, _spec, dens = biomes.mix(t, h)
+                density = dens * (0.45 + 0.75 * float(clumps[k])) * 2.0
+                if rng.random() >= min(0.82, density * SPAWN):
+                    self._presence[(ix, iy)] = None
+                    continue
+                roll = rng.random()
+                species = ("cocoa_palm" if roll < 0.05 else
+                           ("banana_palm" if roll < 0.20 else "palm"))
+                self._presence[(ix, iy)] = (x, y, code, species, False)
                 continue
             _dark, _lite, spec, dens = biomes.mix(t, h)
             density = dens * (0.45 + 0.75 * float(clumps[k]))

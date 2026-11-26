@@ -90,9 +90,11 @@ def coast_x(y, seed):
 
 # plot kinds that count as worked / planted soil (must match crop.py)
 _WORKED = ("dirt", "fertile", "plant", "wheat", "berries", "mushroom",
-           "agave", "cactus", "cotton", "chili", "hardberry", "pipeleaf")
+           "agave", "cactus", "cotton", "chili", "hardberry", "pipeleaf",
+           "banana", "cocoa")
 _PLANTED = ("fertile", "plant", "wheat", "berries", "mushroom", "agave",
-            "cactus", "cotton", "chili", "hardberry", "pipeleaf")
+            "cactus", "cotton", "chili", "hardberry", "pipeleaf", "banana",
+            "cocoa")
 
 
 def _smoothstep(x, a, b):
@@ -349,6 +351,13 @@ class GroundRenderer:
             _bl = np.array(_bl, np.float32)
             dark = dark * (1.0 - _barren) + _bd * _barren
             lite = lite * (1.0 - _barren) + _bl * _barren
+        _trop = biomes.tropics_factor_array(X, Y)[..., None]
+        if float(np.max(_trop)) > 0.0:
+            _td, _tl = biomes.tropics_colors()
+            _td = np.array(_td, np.float32)
+            _tl = np.array(_tl, np.float32)
+            dark = dark * (1.0 - _trop) + _td * _trop
+            lite = lite * (1.0 - _trop) + _tl * _trop
         mixv = np.clip(0.44 + 0.56 * clump, 0.0, 1.0)[..., None]
         col = dark * (1.0 - mixv) + lite * mixv
         col = col * (0.90 + 0.18 * clump)[..., None]
@@ -515,6 +524,8 @@ class GroundRenderer:
             dark, lite, _spec, _dens = biomes.mix(t, h)
             if biomes.is_barren(mx, my):
                 dark, lite = biomes.barren_colors()
+            elif biomes.is_tropics(mx, my):
+                dark, lite = biomes.tropics_colors()
             col = (int((dark[0] + lite[0]) * 0.5),
                    int((dark[1] + lite[1]) * 0.5),
                    int((dark[2] + lite[2]) * 0.5))

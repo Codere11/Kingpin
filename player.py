@@ -78,6 +78,8 @@ class Player:
     wanted: bool = False
     chili_mezcal_used: bool = False
     health_mult: float = 1.0
+    cocoa_tasted: bool = False
+    speed_boost_t: float = 0.0
     # A CLASS ATTRIBUTE, NOT A MODULE ONE. main() has a LOCAL called `player`
     # -- the Player instance -- which SHADOWS the `player` module for the whole
     # of main(). So `player.LEVEL_FLASH` reached the instance, and the module's
@@ -135,6 +137,8 @@ class Player:
         self.max_stamina = 30.0        # seconds of sprinting (base)
         self.base_stamina = 30.0
         self.stamina = 30.0
+        self.cocoa_tasted = False
+        self.speed_boost_t = 0.0
         self.exhausted = False
         self.sprinting = False
         self.swing_cd = 0.0
@@ -277,8 +281,25 @@ class Player:
             self.dead = True
             self.death_timer = 1.8
 
+    def taste_chocolate(self, bonus: float = 0.0) -> bool:
+        """The first chocolate can permanently enlarge the stamina tank."""
+        if getattr(self, "cocoa_tasted", False):
+            return False
+        self.cocoa_tasted = True
+        mult = 1.0 + max(0.0, min(0.50, float(bonus or 0.0)))
+        self.base_stamina *= mult
+        self.max_stamina = self.base_stamina * self.skill_stamina
+        self.stamina = self.max_stamina
+        return True
+
+    def quicken(self, seconds: float = 180.0) -> None:
+        self.speed_boost_t = max(float(getattr(self, "speed_boost_t", 0.0)),
+                                 float(seconds))
+
     def update(self, dt: float, keys, aim: tuple[float, float] | None = None,
                speed_scale: float = 1.0) -> None:
+        if self.speed_boost_t > 0.0:
+            self.speed_boost_t = max(0.0, self.speed_boost_t - dt)
         if self.hit_flash > 0.0:
             self.hit_flash = max(0.0, self.hit_flash - dt)
         if self.bleed > 0.0:
@@ -323,6 +344,8 @@ class Player:
                 self.dead = True
                 self.death_timer = 1.8
         speed_scale *= self.hunger_factor * self.skill_speed
+        if self.speed_boost_t > 0.0:
+            speed_scale *= 1.5
         self.max_stamina = self.base_stamina * self.skill_stamina
         if self.stamina > self.max_stamina:
             self.stamina = self.max_stamina

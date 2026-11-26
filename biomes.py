@@ -40,6 +40,7 @@ BIOMES = {
     # THE SECOND RING: bare grey rock, ironwood, and the works of tribes who
     # learned metallurgy before they learned to be friendly.
     "barren":   {"dark": rich((88, 88, 86)),    "lite": rich((142, 142, 138))},
+    "tropics":  {"dark": rich((46, 104, 64)),   "lite": rich((98, 156, 82))},
 }
 
 # THE RINGS. The first ring around the ship is the country the game already
@@ -48,8 +49,11 @@ BIOMES = {
 RING1_RADIUS = 55000.0
 RING2_RADIUS = 110000.0
 _SPAWN = [0.0, 0.0]
+_SEED = [20240501]
 _BARREN_DARK = rich((88, 88, 86))
 _BARREN_LITE = rich((142, 142, 138))
+_TROPICS_DARK = rich((46, 104, 64))
+_TROPICS_LITE = rich((98, 156, 82))
 _BARREN_NOISE_SCALE = 0.000014
 _BARREN_NOISE_SEED = 90210
 
@@ -57,6 +61,10 @@ _BARREN_NOISE_SEED = 90210
 def set_spawn(x: float, y: float) -> None:
     """The ship/spawn point the rings are measured from."""
     _SPAWN[0], _SPAWN[1] = float(x), float(y)
+
+
+def set_seed(seed: int) -> None:
+    _SEED[0] = int(seed)
 
 
 def spawn_point():
@@ -107,6 +115,36 @@ def is_barren(x: float, y: float) -> bool:
         return bool(m.item())
     except Exception:
         return bool(m)
+
+
+def tropics_mask(x, y):
+    """Hot, wet country in the second ring and beyond."""
+    xs = np.asarray(x, np.float32)
+    ys = np.asarray(y, np.float32)
+    d = np.hypot(xs - _SPAWN[0], ys - _SPAWN[1])
+    t = np.asarray(temperature(x, y, _SEED[0]), np.float32)
+    h = np.asarray(humidity(x, y, _SEED[0]), np.float32)
+    return (d >= RING1_RADIUS) & (t > 0.54) & (h > 0.55) & (~barren_mask(x, y))
+
+
+def is_tropics(x: float, y: float) -> bool:
+    m = tropics_mask(x, y)
+    try:
+        return bool(m.item())
+    except Exception:
+        return bool(m)
+
+
+def tropics_factor_array(x, y):
+    return np.asarray(tropics_mask(x, y), np.float32)
+
+
+def tropics_colors():
+    return _TROPICS_DARK, _TROPICS_LITE
+
+
+def npc_speed_mult(x: float, y: float) -> float:
+    return 1.35 if is_tropics(x, y) else 1.0
 
 
 def barren_colors():
@@ -218,6 +256,8 @@ def crop_kinds(t, h, x=None, y=None):
     second ring grows its own metal-red berries and pipeleaf."""
     if x is not None and y is not None and is_barren(x, y):
         return "hardberry", "pipeleaf"
+    if x is not None and y is not None and is_tropics(x, y):
+        return "banana", "cocoa"
     if surface(t, h) == "snow":
         return "berries", "mushroom"
     if biome_name(t, h) == "desert":
@@ -230,6 +270,8 @@ def can_plant(t, h, kind: str, x=None, y=None) -> bool:
     and snow crops won't take in the desert."""
     if x is not None and y is not None and is_barren(x, y):
         return kind in ("hardberry", "pipeleaf")
+    if x is not None and y is not None and is_tropics(x, y):
+        return kind in ("banana", "cocoa")
     if surface(t, h) == "snow" and kind in ("cactus", "agave"):
         return False
     if biome_name(t, h) == "desert" and kind in ("berries", "mushroom"):

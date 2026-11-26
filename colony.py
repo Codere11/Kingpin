@@ -636,6 +636,9 @@ def spawn_conquered(g, farmers: int = 3, loggers: int = 2) -> None:
         n.stock["wheat_seed"] = 5        # to sow his first field
         n.tool_uses = 100
         n.speed = n.rng.uniform(95.0, 115.0)
+        if biomes.is_tropics(n.x, n.y):
+            n.speed *= 1.35
+            n.base_speed = n.speed
         n.wear = biomes.npc_wear(temp, hum)
         n.skills.configure_local(n.wear)
         if biomes.is_barren(n.x, n.y):
@@ -666,6 +669,9 @@ def spawn_conquered(g, farmers: int = 3, loggers: int = 2) -> None:
         n.stock["axe"] = 1
         n.tool_uses = 100
         n.speed = n.rng.uniform(95.0, 115.0)
+        if biomes.is_tropics(n.x, n.y):
+            n.speed *= 1.35
+            n.base_speed = n.speed
         n.wear = biomes.npc_wear(temp, hum)
         n.skills.configure_local(n.wear)
         if biomes.is_barren(n.x, n.y):

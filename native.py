@@ -345,6 +345,9 @@ def build(g, cx: float, cy: float, seed: int,
         n.tool_uses = 100
         n.home = (n.x, n.y)
         n.speed = rng.uniform(95.0, 115.0)
+        if biomes.is_tropics(n.x, n.y):
+            n.speed *= 1.35
+            n.base_speed = n.speed
         n.wear = biomes.npc_wear(temp, hum)
         n.skills.configure_local(n.wear)
         if _barren:
@@ -376,6 +379,9 @@ def build(g, cx: float, cy: float, seed: int,
             _max_out(n)
         n.home = (n.x, n.y)
         n.speed = rng.uniform(60.0, 90.0)
+        if biomes.is_tropics(n.x, n.y):
+            n.speed *= 1.35
+            n.base_speed = n.speed
         n._orbit = ang
         n.wear = biomes.npc_wear(temp, hum)
         n.skills.configure_local(n.wear)
@@ -473,6 +479,9 @@ def build(g, cx: float, cy: float, seed: int,
         hn.stock[food_item] = 60
         hn.home = (hn.x, hn.y)
         hn.speed = rng.uniform(95.0, 115.0)
+        if biomes.is_tropics(hn.x, hn.y):
+            hn.speed *= 1.35
+            hn.base_speed = hn.speed
         hn.wear = biomes.npc_wear(temp, hum)
         hn.skills.configure_local(hn.wear)
         if _barren:

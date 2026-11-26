@@ -64,11 +64,12 @@ CHART_SAMPLES = 1         # one sample per cell: the chart classifies, not blend
 CHART_KEEP = 12           # charts remembered, then the oldest is dropped
 
 # biome surface classes
-CLS_SNOW, CLS_DESERT, CLS_FOREST, CLS_SAVANNA, CLS_OCEAN, CLS_BARREN = 0, 1, 2, 3, 4, 5
+CLS_SNOW, CLS_DESERT, CLS_FOREST, CLS_SAVANNA, CLS_OCEAN, CLS_BARREN, CLS_TROPICS = 0, 1, 2, 3, 4, 5, 6
 OCEAN_RGB = (16, 38, 74)
 PAPER_RGB = (47, 45, 41)
 SAVANNA_RGB = (176, 158, 92)
 BARREN_RGB = (112, 112, 110)
+TROPICS_RGB = (58, 132, 70)
 BORDER_RGB = (8, 8, 10)
 
 
@@ -78,6 +79,15 @@ def _tree_icon(surf: pygame.Surface, x: int, y: int, snow: bool = False) -> None
     pygame.draw.rect(surf, (96, 76, 58), (x, y + 1, 2, 3))
     pygame.draw.polygon(surf, canopy, [(x - 3, y + 1), (x + 4, y + 1),
                                        (x, y - 3)])
+
+
+def _banana_icon(surf: pygame.Surface, x: int, y: int) -> None:
+    """Two little bananas: the Tropics mark."""
+    pygame.draw.arc(surf, (246, 210, 62), (x - 4, y - 3, 7, 6),
+                    0.1, 2.8, 2)
+    pygame.draw.arc(surf, (246, 210, 62), (x, y - 2, 6, 5),
+                    0.5, 3.1, 2)
+    pygame.draw.line(surf, (154, 112, 26), (x - 3, y + 1), (x - 1, y - 2), 1)
 
 
 def _rock_icon(surf: pygame.Surface, x: int, y: int) -> None:
@@ -198,14 +208,16 @@ def _chart(world, cx: float, cy: float, half: float):
     _coast = _world.coast_x(gy, seed)
     _ocean = gx > _coast
     _barren = (~_ocean) & (biomes.barren_factor_array(gx, gy) > 0.5)
+    _tropics = (~_ocean) & (biomes.tropics_factor_array(gx, gy) > 0.5)
     _names = biomes.biome_name(temps, hums)
     cls = np.where(_ocean, CLS_OCEAN,
                    np.where(_barren, CLS_BARREN,
-                            np.where(_names == "snow", CLS_SNOW,
-                                     np.where(_names == "desert", CLS_DESERT,
-                                              np.where(_names == "savanna",
-                                                       CLS_SAVANNA,
-                                                       CLS_FOREST))))).astype(np.int8)
+                            np.where(_tropics, CLS_TROPICS,
+                                     np.where(_names == "snow", CLS_SNOW,
+                                              np.where(_names == "desert", CLS_DESERT,
+                                                       np.where(_names == "savanna",
+                                                                CLS_SAVANNA,
+                                                                CLS_FOREST)))))).astype(np.int8)
     surf = pygame.Surface((n, n))
     for j in range(n):
         for i in range(n):
@@ -213,6 +225,8 @@ def _chart(world, cx: float, cy: float, half: float):
                 c = OCEAN_RGB
             elif cls[j, i] == CLS_BARREN:
                 c = BARREN_RGB
+            elif cls[j, i] == CLS_TROPICS:
+                c = TROPICS_RGB
             else:
                 c = PAPER_RGB
             surf.set_at((i, j), c)
@@ -240,6 +254,8 @@ def _chart(world, cx: float, cy: float, half: float):
                 pygame.draw.line(surf, (224, 202, 112), (i, j), (i + 2, j), 1)
             elif k == CLS_BARREN:
                 pygame.draw.line(surf, (166, 166, 160), (i, j), (i + 2, j), 1)
+            elif k == CLS_TROPICS:
+                pygame.draw.line(surf, (116, 190, 84), (i, j), (i + 2, j), 1)
     # AND THE SPARSER ICONS: tree, cactus, snow tree, rock.
     for j in range(4, n, 9):
         for i in range(4, n, 9):
@@ -254,6 +270,8 @@ def _chart(world, cx: float, cy: float, half: float):
                 _acacia_icon(surf, i, j)
             elif k == CLS_BARREN:
                 _rock_icon(surf, i, j)
+            elif k == CLS_TROPICS:
+                _banana_icon(surf, i, j)
     # CAMP MARKERS ARE BAKED INTO THE SAME SURFACE AS THE TERRAIN, so a camp
     # and the tree behind it are one image and can never drift apart.
     try:
@@ -316,25 +334,29 @@ def _paper(world, seed: int):
     _ocean = gx > _coast
     _land = ~_ocean
     _barren = _land & (biomes.barren_factor_array(gx, gy) > 0.5)
+    _tropics = _land & (biomes.tropics_factor_array(gx, gy) > 0.5)
     _names = biomes.biome_name(temps, hums)
     # THE OLD-SCHOOL CHART LOOK: dark paper land, blue sea, black borders,
-    # and the four beginning biomes told apart by sparse lines and icons.
+    # and the four beginning biomes plus the tropical second-ring country.
     cls_s = np.where(_ocean, CLS_OCEAN,
                      np.where(_barren, CLS_BARREN,
-                              np.where(_names == "snow", CLS_SNOW,
-                                       np.where(_names == "desert", CLS_DESERT,
-                                                np.where(_names == "savanna",
-                                                         CLS_SAVANNA,
-                                                         CLS_FOREST))))).astype(np.int8)
+                              np.where(_tropics, CLS_TROPICS,
+                                       np.where(_names == "snow", CLS_SNOW,
+                                                np.where(_names == "desert", CLS_DESERT,
+                                                         np.where(_names == "savanna",
+                                                                  CLS_SAVANNA,
+                                                                  CLS_FOREST)))))).astype(np.int8)
     cls = np.repeat(np.repeat(cls_s, 2, axis=0), 2, axis=1)
     _ocean_f = cls == CLS_OCEAN
     _barren_f = cls == CLS_BARREN
     _savanna_f = cls == CLS_SAVANNA
+    _tropics_f = cls == CLS_TROPICS
     rgb = np.empty((N, N, 3), np.uint8)
     rgb[:] = PAPER_RGB
     rgb[_ocean_f] = OCEAN_RGB
     rgb[_barren_f] = BARREN_RGB
     rgb[_savanna_f] = SAVANNA_RGB
+    rgb[_tropics_f] = TROPICS_RGB
     # black borders where one class meets another (the shore included).
     _bx = cls[:, 1:] != cls[:, :-1]
     _by = cls[1:, :] != cls[:-1, :]
@@ -359,6 +381,8 @@ def _paper(world, seed: int):
                 pygame.draw.line(surf, (224, 202, 112), (i, j), (i + 2, j), 1)
             elif k == 5:
                 pygame.draw.line(surf, (166, 166, 160), (i, j), (i + 2, j), 1)
+            elif k == 6:
+                pygame.draw.line(surf, (116, 190, 84), (i, j), (i + 2, j), 1)
     # AND THE SPARSER ICONS: tree, cactus, snow tree, rock.
     for j in range(4, N, 9):
         for i in range(4, N, 9):
@@ -373,6 +397,8 @@ def _paper(world, seed: int):
                 _acacia_icon(surf, i, j)
             elif k == 5:
                 _rock_icon(surf, i, j)
+            elif k == 6:
+                _banana_icon(surf, i, j)
     _PAPER = (_key, surf)
     return surf
 

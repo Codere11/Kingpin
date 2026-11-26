@@ -67,12 +67,30 @@ def consume(npc, item, now, genetics=None):
                 npc.chili_mezcal_used = True
             except Exception:
                 pass
+    if isinstance(genetics, dict):
+        _b = genetics.get("bonuses") or {}
+        if item == "banana_liqueur":
+            try:
+                if float(_b.get("speed", 0.0)) > 0.0:
+                    npc.speed_boost_t = max(
+                        float(getattr(npc, "speed_boost_t", 0.0)), 180.0)
+            except Exception:
+                pass
+        if item == "chocolate" and not getattr(npc, "cocoa_tasted", False):
+            try:
+                _bonus = max(0.0, min(0.50, float(_b.get("stamina", 0.0))))
+                if _bonus > 0.0:
+                    npc.max_stamina = float(npc.max_stamina) * (1.0 + _bonus)
+                    npc.stamina = npc.max_stamina
+                    npc.cocoa_tasted = True
+            except Exception:
+                pass
     new = float(getattr(npc, "mood", 50.0))
     # remember exactly how much mood the fix actually added, so the expiry
     # removes exactly that (clamping at 100 cannot leak a phantom 10).
     npc._consume_mood_off = float(getattr(npc, "_consume_mood_off", 0.0)) + (new - old)
     if item in ("beer", "liqueur", "mezcal", "govbeer",
-                "chili_beer", "chili_mezcal"):
+                "chili_beer", "chili_mezcal", "banana_liqueur"):
         npc.drunk_level = float(getattr(npc, "drunk_level", 0.0) or 0.0) + 1.0
     elif item == "dried_mushroom":
         npc.high_level = float(getattr(npc, "high_level", 0.0) or 0.0) + 1.0

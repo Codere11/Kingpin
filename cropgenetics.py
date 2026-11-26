@@ -21,6 +21,8 @@ COMMON_TARGETS = (
     ("sell", 0.50, "Local value"),
     ("seeds", 0.35, "Seed yield"),
     ("mood", 2.00, "Mood"),
+    ("speed", 0.50, "Speed boost"),
+    ("stamina", 0.50, "Max stamina"),
     ("drought", 0.50, "Drought resistance"),
     ("rain", 0.50, "Rain resistance"),
 )
@@ -30,12 +32,12 @@ QUALITY_TARGETS = (
     ("quality_sss", 8, "Quality SSS"),
 )
 
-QUALITY_CROPS = ("plant", "mushroom", "agave", "chili", "pipeleaf")
+QUALITY_CROPS = ("plant", "mushroom", "agave", "chili", "pipeleaf", "cocoa")
 CROP_NAMES = {
     "wheat": "Wheat", "berries": "Berries", "cactus": "Cactus",
     "plant": "Tobacco", "mushroom": "Red Mushroom", "agave": "Agave",
     "cotton": "Cotton", "chili": "Chili", "hardberry": "Hardberry",
-    "pipeleaf": "Pipeleaf",
+    "pipeleaf": "Pipeleaf", "banana": "Banana", "cocoa": "Cocoa",
 }
 
 STEP = 0.02                  # one harvest, 2% of the target per trait
@@ -188,6 +190,39 @@ def artisan_mult(skill: float) -> float:
 def brewer_mult(skill: float) -> float:
     """Kept as the alcohol name; the mathematics is the same."""
     return artisan_mult(skill)
+
+
+def tree_genetics(kind: str, x: float, y: float, seed: int = 1) -> dict:
+    """A portable local strain for fruit taken from a tropical palm.
+
+    Bananas can carry the speed target; cocoa can carry the stamina target.
+    Whether the target is actually unlocked is deterministic in the tree's
+    position, so the same palm always gives the same lot.
+    """
+    raw = ("palm|%s|%.1f|%.1f|%s" % (kind, x, y, seed)).encode("utf-8")
+    code = int.from_bytes(hashlib.blake2b(raw, digest_size=8).digest(), "big")
+    rng = random.Random(code)
+    target = "speed" if kind == "banana" else "stamina"
+    label = "Banana" if kind == "banana" else "Cocoa"
+    caps = {row[0]: row[1] for row in COMMON_TARGETS}
+    targets = []
+    progress = {}
+    if rng.random() < 0.62:
+        targets = [target]
+        progress[target] = rng.uniform(0.05, 1.0)
+    return {
+        "crop": kind,
+        "settlement": "Tropics",
+        "source_name": "Tropics %s" % label,
+        "name": "Tropics %s" % label,
+        "targets": targets,
+        "progress": progress,
+        "harvests": 0,
+        "generation": 1,
+        "quality_cap": 5,
+        "bonuses": {k: caps.get(k, 0.0) * progress.get(k, 0.0)
+                    for k in progress},
+    }
 
 
 def extract(source, skill: float, product_name: str = "",
