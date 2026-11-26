@@ -2,6 +2,7 @@
 """SettleWest -- top-down open-world game prototype.
 
 WASD / arrows move, SHIFT sprints (limited stamina), the mouse aims, Esc quits.
+V toggles the experimental first-person view (M0: flat ground, billboards).
 
 Left click uses the selected item:
     Rifle                      fire a bullet
@@ -503,6 +504,13 @@ def main() -> None:
 
     g._TRUTH = [None]      # the man who is always beside the player, if any
     g.player = Player(g._hx, g._hy)
+    # M0 3D VIEW: a read-only first-person presentation of the same world.
+    # It changes no save and no simulation state except the player's facing
+    # and movement basis, which are ordinary gameplay state.
+    g.view3d = bool(os.environ.get("KINGPIN_VIEW3D"))
+    g.v3d_yaw = math.atan2(g.player.facing[1], g.player.facing[0])
+    g.v3d_pitch = 0.0
+    g._v3_grab = False
     # HE WAKES UP INSIDE THE TOWN, not climbing into it (see the wall-crossing
     # check further down): the first frame must not read as an unsearched
     # entry, or the whole square is at his throat before he takes a step.

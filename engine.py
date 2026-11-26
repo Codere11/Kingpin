@@ -11,6 +11,7 @@ import village as village_mod
 import work
 import corpse as corpse_mod
 import creatures
+import view3d
 
 
 def _bench_products(g, wp):
@@ -377,6 +378,10 @@ def run(g):
         g.dt = min(g.clock.tick(FPS) / 1000.0, 0.05)
         g._PH["f"] += 1
         g.dt = min(g.dt * g.time_scale, 0.5)          # test-mode speed-up
+        try:
+            view3d.tick(g, g.dt)
+        except Exception as _v3t:
+            plog.log("VIEW3D-TICK", repr(_v3t)[:160])
         try:
             import player_mind
             player_mind.tick(g, g.dt)
@@ -1275,6 +1280,12 @@ def run(g):
             elif (event.type == pygame.KEYDOWN and event.key == pygame.K_F11
                   and hasattr(g, "toggle_fullscreen")):
                 g.toggle_fullscreen()
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_v:
+                try:
+                    view3d.toggle(g)
+                except Exception as _v3e:
+                    g.toast("3D view: %s" % _v3e)
+                    plog.log("VIEW3D-TOGGLE", repr(_v3e)[:200])
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_p:
                 g.hud_hidden = not g.hud_hidden
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -1708,8 +1719,16 @@ def run(g):
             g.keys = pygame.key.get_pressed()
             if g.board_open or g.field_design:      # reading the board / designating: stand still
                 g.keys = _NO_KEYS
-            g.aim = (g.wmouse_x - (g.player.x - g.cam_x),
-                   g.wmouse_y - (g.player.y - g.cam_y))   # the world mouse, not the window's
+            _v3_on = view3d.active(g)
+            if _v3_on:
+                # THE CAMERA IS THE EYES.  WASD follows the look direction,
+                # and the mouse is no longer a world cursor.
+                g.aim = (math.cos(float(g.v3d_yaw)), math.sin(float(g.v3d_yaw)))
+                g.cam_x = g.player.x - g.vw / 2.0
+                g.cam_y = g.player.y - g.vh / 2.0
+            else:
+                g.aim = (g.wmouse_x - (g.player.x - g.cam_x),
+                       g.wmouse_y - (g.player.y - g.cam_y))   # the world mouse, not the window's
             g.foliage = g.trees.foliage(g.player.x, g.player.y)
             g.player.skill_speed = g.skills.move_scale()
             g.award_levels()
@@ -1737,12 +1756,32 @@ def run(g):
                 _ps, _pss = g.player.speed, g.player.sprint_speed
                 g.player.speed = _riding.speed
                 g.player.sprint_speed = _riding.speed * 2.2
-                g.player.update(g.dt, g.keys, g.aim, 1.0 - 0.25 * g.foliage)
+                _v3move = None
+                if _v3_on:
+                    _f, _r = view3d.move_basis(g)
+                    _dx = (float(any(g.keys[k] for k in (pygame.K_d, pygame.K_RIGHT)))
+                           - float(any(g.keys[k] for k in (pygame.K_a, pygame.K_LEFT))))
+                    _dy = (float(any(g.keys[k] for k in (pygame.K_w, pygame.K_UP)))
+                           - float(any(g.keys[k] for k in (pygame.K_s, pygame.K_DOWN))))
+                    _v3move = (_f[0] * _dy + _r[0] * _dx,
+                               _f[1] * _dy + _r[1] * _dx)
+                g.player.update(g.dt, g.keys, g.aim, 1.0 - 0.25 * g.foliage,
+                                move_dir=_v3move)
                 g.player.speed, g.player.sprint_speed = _ps, _pss
                 _riding.x, _riding.y = g.player.x, g.player.y
                 _riding.facing = g.player.facing
             else:
-                g.player.update(g.dt, g.keys, g.aim, 1.0 - 0.25 * g.foliage)
+                _v3move = None
+                if _v3_on:
+                    _f, _r = view3d.move_basis(g)
+                    _dx = (float(any(g.keys[k] for k in (pygame.K_d, pygame.K_RIGHT)))
+                           - float(any(g.keys[k] for k in (pygame.K_a, pygame.K_LEFT))))
+                    _dy = (float(any(g.keys[k] for k in (pygame.K_w, pygame.K_UP)))
+                           - float(any(g.keys[k] for k in (pygame.K_s, pygame.K_DOWN))))
+                    _v3move = (_f[0] * _dy + _r[0] * _dx,
+                               _f[1] * _dy + _r[1] * _dx)
+                g.player.update(g.dt, g.keys, g.aim, 1.0 - 0.25 * g.foliage,
+                                move_dir=_v3move)
             if getattr(g.player, "sleep_t", 0.0) > 0.0:
                 try:
                     g._z = g.font.render("Zzz", True, (232, 232, 240))
@@ -3397,6 +3436,23 @@ def run(g):
         # -- draw world ------------------------------------------------------
         g.tick_conquest(g.dt)
         g.update_hud()
+        if (getattr(g, "view3d", False)
+                and not getattr(g, "game_over", False)
+                and g.inside_house is None and g.inside_mine is None):
+            # M0: the same simulation, presented in first person.  The 2D
+            # world below is deliberately skipped; the HUD and panels are
+            # drawn on top of the 3D frame.
+            try:
+                view3d.draw(g)
+                view3d.draw_hud(g)
+            except Exception as _v3d:
+                plog.log("VIEW3D-DRAW", repr(_v3d)[:200])
+                g.view3d = False
+                view3d._release_mouse(g)
+                g.toast("3D view failed: %s" % _v3d)
+            else:
+                pygame.display.flip()
+                continue
         if g.inside_house is not None and g.inside_mine is None:
             g.interior = g.inside_house.interior
             # THE INTERIOR IS DRAWN AT THE SAME ZOOM AS THE WORLD. It was still
@@ -3675,6 +3731,9 @@ def run(g):
         g._look = g.observer_.target
         if g._inside_now:
             pass                      # the room's own branch sets the camera
+        elif getattr(g, "view3d", False):
+            g.cam_x = g.player.x - g.vw / 2.0
+            g.cam_y = g.player.y - g.vh / 2.0
         elif g.field_design:
             # SETTLEMENT MODE: the player is parked; the camera pans freely.
             _ks = pygame.key.get_pressed()

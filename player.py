@@ -332,7 +332,8 @@ class Player:
             self.poison_next = 10.0
 
     def update(self, dt: float, keys, aim: tuple[float, float] | None = None,
-               speed_scale: float = 1.0) -> None:
+               speed_scale: float = 1.0,
+               move_dir: tuple[float, float] | None = None) -> None:
         if self.speed_boost_t > 0.0:
             self.speed_boost_t = max(0.0, self.speed_boost_t - dt)
         if self.damage_resist_t > 0.0:
@@ -406,8 +407,11 @@ class Player:
         if self.dead:
             return
 
-        dx = float(any(keys[k] for k in KEY_RIGHT)) - float(any(keys[k] for k in KEY_LEFT))
-        dy = float(any(keys[k] for k in KEY_DOWN)) - float(any(keys[k] for k in KEY_UP))
+        if move_dir is None:
+            dx = float(any(keys[k] for k in KEY_RIGHT)) - float(any(keys[k] for k in KEY_LEFT))
+            dy = float(any(keys[k] for k in KEY_DOWN)) - float(any(keys[k] for k in KEY_UP))
+        else:
+            dx, dy = float(move_dir[0]), float(move_dir[1])
         self.moving = bool(dx or dy)
         self.move_dir = (0.0, 0.0)
 
