@@ -375,14 +375,19 @@ def _npc_sprite(npc, back: bool) -> pygame.Surface:
     return s
 
 
-def _animal_sprite(e, yaw: float):
+def _animal_sprite(e, yaw: float, force_front: bool = False):
     kind = getattr(e, "kind", "")
     fx, fy = getattr(e, "facing", (0.0, 1.0))
     if abs(fx) + abs(fy) < 0.01:
         fx, fy = 0.0, 1.0
-    # The animal art is already eight pre-rendered directions.  Pick the
-    # direction relative to the camera, as a billboard should.
-    d = int(round((math.atan2(fy, fx) - yaw) / (math.pi / 4.0))) % 8
+    # EIGHT PRE-RENDERED VIEWS, BILLBOARD-CORRECTED.
+    # The art is authored in screen directions (2 = toward the viewer,
+    # 6 = away).  Convert the animal's world facing into that space instead
+    # of using the raw top-down direction.
+    rel = math.atan2(fy, fx) - yaw
+    d = int(round(rel / (math.pi / 4.0) + 6.0)) % 8
+    if force_front:
+        d = 2
     hit = float(getattr(e, "hit_flash", 0.0)) > 0.0
     try:
         if kind == "wolf":
@@ -392,23 +397,23 @@ def _animal_sprite(e, yaw: float):
                 species = "wolf"
             img = wolfart.frame(species, d, 0, 0.92, hit=hit,
                                 lunge=bool(getattr(e, "lunging", 0.0)))
-            return img, wolfart.AX, wolfart.AY, float(img.get_height())
+            return img, wolfart.AX, wolfart.AY, float(img.get_height()) * 1.38
         if kind == "rabbit":
             import rabbitart
             img = rabbitart.frame(getattr(e, "fur", "brown"), d, 0, 0.92, hit=hit)
-            return img, rabbitart.AX, rabbitart.AY, float(img.get_height())
+            return img, rabbitart.AX, rabbitart.AY, float(img.get_height()) * 1.18
         if kind == "horse":
             import horseart
             zoom = 0.64 if getattr(e, "baby", False) else 0.90
             img = horseart.frame(getattr(e, "coat", "brown"), d, 0, zoom, hit=hit)
-            return img, horseart.AX, horseart.AY, float(img.get_height())
+            return img, horseart.AX, horseart.AY, float(img.get_height()) * 1.28
         if kind == "bison":
             import bisonart
             zoom = 0.64 if getattr(e, "baby", False) else 1.0
             img = bisonart.frame(d, 0, zoom, hit=hit,
                                  charge=bool(getattr(e, "aggro", False)),
                                  baby=bool(getattr(e, "baby", False)))
-            return img, bisonart.AX, bisonart.AY, float(img.get_height())
+            return img, bisonart.AX, bisonart.AY, float(img.get_height()) * 1.30
     except Exception:
         pass
     # Soldiers and other simple enemies: use their existing top-down art on a
@@ -418,7 +423,7 @@ def _animal_sprite(e, yaw: float):
         e.draw(s, float(e.x) - 36.0, float(e.y) - 70.0)
     except Exception:
         pass
-    return s, 36.0, 84.0, 80.0
+    return s, 36.0, 84.0, 98.0
 
 
 # ---------------------------------------------------------------------------
@@ -475,7 +480,10 @@ def _collect(g, yaw: float):
             continue
         if math.hypot(float(e.x) - ex, float(e.y) - ey) > lim:
             continue
-        card, ax, ay, wh = _animal_sprite(e, yaw)
+        _atk = (float(getattr(e, "attack_flash", 0.0)) > 0.0
+                or float(getattr(e, "lunging", 0.0)) > 0.0
+                or bool(getattr(e, "aggro", False)))
+        card, ax, ay, wh = _animal_sprite(e, yaw, force_front=_atk)
         out.append((card, float(e.x), float(e.y), wh, ax, ay, ""))
     for e in list(getattr(g, "rabbits", ()) or ()):
         if math.hypot(float(e.x) - ex, float(e.y) - ey) > lim:
@@ -504,6 +512,7 @@ def draw(g) -> None:
     yaw = float(getattr(g, "v3d_yaw", 0.0))
     scene = mesh3d.build_scene(g, fwd, right, up, ex, ey)
     for img, wx, wy, wh, ax, ay, label in _collect(g, yaw):
+        scene.add_shadow(wx, wy, max(7.0, wh * 0.22))
         scene.add_sprite(img, wx, wy, wh, ax=ax, ay=ay)
     scene.draw(frame)
 

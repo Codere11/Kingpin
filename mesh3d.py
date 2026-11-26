@@ -230,6 +230,17 @@ class Scene:
         else:
             self.ops.append(op)
 
+    def add_shadow(self, x, y, rx, ry=None):
+        """A soft flat footprint, so a billboard actor sits on the ground."""
+        if ry is None:
+            ry = rx * 0.52
+        n = 10
+        pts = []
+        for i in range(n):
+            a = i * (2.0 * math.pi / n)
+            pts.append((x + math.cos(a) * rx, y + math.sin(a) * ry, 0.32))
+        self.add_face(pts, (34, 47, 32), ground=True)
+
     def add_sprite(self, image, x, y, world_h=50.0, ax=None, ay=None):
         base = self._cam((x, y, 0.0))
         top = self._cam((x, y, world_h))
