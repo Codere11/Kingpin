@@ -46,6 +46,12 @@ def consume(npc, item, now, genetics=None):
         except Exception:
             _extra = 0.0
     apply_mood(npc, _base + _extra, reason="consumed %s" % item)
+    if item == "chili_beer" or (isinstance(genetics, dict)
+                                and genetics.get("full_heal")):
+        try:
+            npc.health = npc.max_health
+        except Exception:
+            pass
     new = float(getattr(npc, "mood", 50.0))
     # remember exactly how much mood the fix actually added, so the expiry
     # removes exactly that (clamping at 100 cannot leak a phantom 10).

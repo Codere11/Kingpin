@@ -718,6 +718,14 @@ def on_click(g):
         else:
             g.toast("Cook raw meat at a fireplace")
         return
+    if item_id == "chili_beer":
+        # THE BREWER'S SECRET, DRUNK BY THE PLAYER: equip it and click.
+        if g.inventory.consume("chili_beer", 1):
+            g.player.health = g.player.max_health
+            g.toast("Drank the chili beer   -   health restored")
+        else:
+            g.toast("No chili beer left")
+        return
     if item_id == "compass":
         if g.compass_state.mode == "village":
             g.toast(compass.village_report(g.player.x, g.player.y, g.world.seed))

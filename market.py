@@ -26,6 +26,7 @@ GOODS = {
     "cigar": (0.1, 0.03, 0.3),
     "dried_mushroom": (0.1, 0.03, 0.3),
     "beer": (0.1, 0.03, 0.3),
+    "chili_beer": (0.4, 0.12, 0.9),
     "liqueur": (0.1, 0.03, 0.3),
     "mezcal": (0.1, 0.03, 0.3),
     "hide": (0.3, 0.15, 0.5),
@@ -54,7 +55,8 @@ def per_ten(base: float) -> int:
 def sellable(g):
     """What the homeland will buy right now: hide once Animals is done, iron
     bars once Ironworking is done."""
-    out = ["cigar", "dried_mushroom", "beer", "liqueur", "mezcal", "chili"]
+    out = ["cigar", "dried_mushroom", "beer", "chili_beer", "liqueur",
+           "mezcal", "chili"]
     try:
         import research
         if research.state(g, "animals") == "done":

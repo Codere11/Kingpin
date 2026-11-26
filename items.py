@@ -84,6 +84,10 @@ REGISTRY: dict[str, ItemDef] = {
     "beer": ItemDef("beer", "Beer",
                     "Dark, honest and strong. Worth far more than the grain it came from.",
                     stackable=True, max_stack=100, quality=True),
+    "chili_beer": ItemDef("chili_beer", "Chili Beer",
+                          "A brewer's secret: beer steeped with red chili. "
+                          "One bottle puts a body back on its feet.",
+                          stackable=True, max_stack=100, quality=True),
     "govbeer": ItemDef("govbeer", "Govermentskoye",
                        "State beer, E-grade, and none of the state's business. "
                        "Cheap, brown, and on every table in the republic.",
@@ -635,6 +639,11 @@ def _draw_beer(s: int) -> pygame.Surface:
     return _draw_drink(s, (168, 112, 40))
 
 
+def _draw_chili_beer(s: int) -> pygame.Surface:
+    """A ruddy bottle; the chili label is stamped on by icon_for()."""
+    return _draw_drink(s, (154, 76, 34))
+
+
 def _draw_liqueur(s: int) -> pygame.Surface:
     return _draw_drink(s, (150, 60, 96))
 
@@ -971,6 +980,7 @@ _DRAWERS = {
     "berry_wort": _draw_wort,
     "agave_wort": _draw_wort,
     "beer": _draw_beer,
+    "chili_beer": _draw_chili_beer,
     "liqueur": _draw_liqueur,
     "mezcal": _draw_mezcal,
     "cigar": _draw_cigar,
@@ -1043,30 +1053,42 @@ def icon(item_id: str, size: int = 48) -> pygame.Surface:
     return surf
 
 
-_special_cache: dict[tuple[str, int], pygame.Surface] = {}
+_special_cache: dict[tuple[str, int, bool], pygame.Surface] = {}
 
 
 def icon_for(stack, size: int = 48) -> pygame.Surface:
-    """The item icon, plus the blank white label for any special local good."""
+    """The item icon, plus the white label for any special local good.
+
+    A chili-beer label is not blank: it carries the chili mark that tells the
+    brewer's secret apart from every ordinary blank-label bottle.
+    """
     if stack is None:
         return icon("unknown", size)
     base = icon(stack.defn.id, size)
     gen = getattr(stack, "genetics", None)
     if not (isinstance(gen, dict) and gen.get("special")):
         return base
-    key = (stack.defn.id, size)
+    chili = bool(gen.get("chili"))
+    key = (stack.defn.id, size, chili)
     got = _special_cache.get(key)
     if got is not None:
         return got
     s = base.copy()
-    # A small blank white label stitched onto the bottle/cask.  It stays empty
-    # until the player writes on it; this is the physical marker of a special
-    # local brew, cigar, or dried mushroom.
+    # A small label stitched onto the bottle/cask.  It stays empty until the
+    # player writes on it; the chili batch stamps its own mark instead.
     w = max(8, int(size * 0.46))
     h = max(5, int(size * 0.17))
     x = max(2, size - w - 3)
     y = max(2, int(size * 0.12))
     pygame.draw.rect(s, (238, 236, 224), (x, y, w, h), border_radius=2)
     pygame.draw.rect(s, (72, 64, 52), (x, y, w, h), 1, border_radius=2)
+    if chili:
+        try:
+            mark = _draw_chili(max(4, int(min(w - 4, h - 2))))
+            mark = pygame.transform.smoothscale(mark, (max(4, w - 4), max(3, h - 2)))
+            s.blit(mark, (x + 2, y + 1))
+        except Exception:
+            pygame.draw.line(s, (196, 38, 32), (x + 3, y + h - 3),
+                             (x + w - 3, y + 3), 2)
     _special_cache[key] = s
     return s

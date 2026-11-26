@@ -182,7 +182,9 @@ def describe(stack) -> list[str]:
                         lines.append("%s target  %d%%" % (_label, _pct))
                     else:
                         lines.append("%s  %d%%" % (_tag, int(math.floor(_prog * 100.0 + 0.5))))
-                if _gen.get("special"):
+                if _gen.get("chili"):
+                    lines.append("Chili beer — drinking it restores all health")
+                elif _gen.get("special"):
                     if _gen.get("kind", "alcohol") == "alcohol":
                         lines.append("Special local brew — blank label")
                     else:

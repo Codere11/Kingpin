@@ -470,6 +470,12 @@ class NPC:
     consumed_items: Any = None    # item -> times he has actually tried it
     known_items: Any = None       # item uid -> what this man knows about it
     stock_genetics: Any = None    # item id -> local lot genetics in his stock
+    # A brewer's secret recipe.  Only one living brewer may hold the chili-beer
+    # recipe at a time; the others cannot discover it while he lives.
+    chili_recipe: Any = False
+    chili_timer: Any = 180.0
+    chili_trip: Any = False
+    _chili_ready: Any = False
     use_fx: Any = None
     activity: Any = ""            # dance / chase, for the social antics
     _antic_active: Any = False
@@ -1575,7 +1581,7 @@ class NPC:
             return None
         return min(ok, key=lambda c: (c.x - self.x) ** 2 + (c.y - self.y) ** 2)
 
-    def _chest_with(self, item: str, n: int):
+    def _chest_with(self, item: str, n: int, max_dist: float | None = None):
         """The nearest chest that takes `item` and holds at least n of it.
         Searches EVERY chest, not just the first one in the list -- a worker
         used to idle beside an empty 'Any' chest while a full one stood ten
@@ -1594,6 +1600,8 @@ class NPC:
             if inv is None or inv.count_of(item) < n:
                 continue
             d = (c.x - self.x) ** 2 + (c.y - self.y) ** 2
+            if max_dist is not None and d > float(max_dist) ** 2:
+                continue
             if best is None or d < best[0]:
                 best = (d, c)
         return best[1] if best else None
@@ -1845,6 +1853,73 @@ class NPC:
         except Exception:
             pass
 
+    def _chili_rival_alive(self) -> bool:
+        """Is another living brewer already holding the chili-beer secret?"""
+        seen = set()
+        camp = getattr(self, "native_camp", None)
+        pools = []
+        if camp is not None:
+            for attr in ("npcs", "workers", "farmers", "loggers", "artisans",
+                         "researchers", "doctors", "traders", "miners",
+                         "smiths", "spicemen", "brewers", "people"):
+                pools.append(getattr(camp, attr, ()) or ())
+        village = getattr(self, "village", None)
+        if village is not None:
+            pools.append(getattr(village, "npcs", ()) or ())
+        g = getattr(camp, "g", None) if camp is not None else None
+        if g is not None:
+            pools.append(getattr(g, "_native_people", ()) or ())
+        for pool in pools:
+            for n in pool:
+                if n is self or id(n) in seen:
+                    continue
+                seen.add(id(n))
+                if (getattr(n, "alive", True)
+                        and getattr(n, "chili_recipe", False)):
+                    return True
+        return False
+
+    def _chili_errand(self, dt: float) -> None:
+        """Walk to the nearby chili chest and learn the new recipe."""
+        chest = self._chest_with("chili", 1, max_dist=240.0)
+        if chest is None:
+            self.chili_trip = False
+            return
+        if math.hypot(chest.x - self.x, chest.y - self.y) > 22.0:
+            self._step_toward(chest.x, chest.y, dt)
+            return
+        taken, _grade = self._take_from_chest(chest, "chili", 1)
+        if taken <= 0:
+            self.chili_trip = False
+            return
+        self.chili_recipe = True
+        self.chili_trip = False
+        self._chili_ready = False
+        self.chili_timer = 180.0
+        self._snd("bench", min_gap=0.8)
+
+    def _maybe_chili_discovery(self, dt: float) -> None:
+        """Once every three minutes, a beer with an empty label may teach him."""
+        _timer = getattr(self, "chili_timer", 180.0)
+        if _timer is None:
+            _timer = 180.0
+        self.chili_timer = float(_timer) - dt
+        if self.chili_timer > 0.0:
+            return
+        self.chili_timer = 180.0
+        if getattr(self, "chili_recipe", False):
+            return
+        if not getattr(self, "_chili_ready", False):
+            return
+        if float(getattr(getattr(self, "skills", None), "farming", 0.0) or 0.0) < 6.4:
+            return
+        if self._chili_rival_alive():
+            return
+        if self._chest_with("chili", 1, max_dist=240.0) is None:
+            return
+        if random.random() < 0.10:
+            self.chili_trip = True
+
     def _work_brewery(self, dt: float) -> None:
         """A brewer takes local mash to the brewhouse and makes local drink.
 
@@ -1857,13 +1932,19 @@ class NPC:
         if g is None:
             self._native_idle(dt)
             return
+        if getattr(self, "chili_trip", False):
+            self._chili_errand(dt)
+            return
+        self._maybe_chili_discovery(dt)
+        if getattr(self, "chili_trip", False):
+            return
         bench = self._nearest_workplace(g, "brewery")
         if bench is None:
             bench = self._nearest_workplace(g, "brew_table")
         if bench is None or getattr(bench, "broken", False):
             self._native_idle(dt)
             return
-        drinks = ("beer", "liqueur", "mezcal")
+        drinks = ("beer", "liqueur", "mezcal", "chili_beer")
         # Deliver finished drink before starting another batch.
         if any(int(self.carry.get(i, 0) or 0) > 0 for i in drinks):
             if self._deposit_to_chest(dt):
@@ -1901,10 +1982,13 @@ class NPC:
         if self.carry.get(mash, 0) <= 0:
             self.carry.pop(mash, None)
             self.carry_grade.pop(mash, None)
-        drink = {"wheat": "beer", "berries": "liqueur",
-                 "agave": "mezcal"}.get(mash)
-        if drink is None:
+        base_drink = {"wheat": "beer", "berries": "liqueur",
+                      "agave": "mezcal"}.get(mash)
+        if base_drink is None:
             return
+        drink = base_drink
+        if getattr(self, "chili_recipe", False) and base_drink == "beer":
+            drink = "chili_beer"
         self.carry[drink] = int(self.carry.get(drink, 0) or 0) + 5
         # LOCAL ALE INHERITS THE CROP STRAIN.  The brewer's skill decides how
         # much of the field bonus survives the ferment.
@@ -1913,6 +1997,26 @@ class NPC:
             _src = cropgenetics.genetics(camp, mash)
             _gen = cropgenetics.extract(_src, getattr(self.skills, "farming", 0.0),
                                         items.get(drink).name)
+            if drink == "chili_beer":
+                # THE CHILI MARK IS THE RECIPE.  The label is no longer
+                # blank, and every bottle from this brewer heals completely.
+                if _gen is None:
+                    _gen = {
+                        "crop": "wheat",
+                        "settlement": getattr(camp, "name", "Settlement"),
+                        "source_name": getattr(camp, "name", "Settlement"),
+                        "name": "%s Chili Beer" % getattr(camp, "name", "Settlement"),
+                        "targets": [], "progress": {}, "bonuses": {},
+                        "kind": "alcohol", "extraction": 1.0,
+                        "maker_skill": float(getattr(self.skills, "farming", 0.0)),
+                    }
+                _gen = dict(_gen)
+                _gen["kind"] = "alcohol"
+                _gen["product"] = items.get(drink).name
+                _gen["chili"] = True
+                _gen["recipe"] = "chili"
+                _gen["special"] = True
+                _gen["full_heal"] = True
             if _gen is not None:
                 cg = getattr(self, "carry_genetics", None)
                 if not isinstance(cg, dict):
@@ -1922,6 +2026,10 @@ class NPC:
                 if not isinstance(sg, dict):
                     sg = self.stock_genetics = {}
                 sg[drink] = _gen
+            # Only a special-label ordinary beer can teach the chili recipe.
+            self._chili_ready = bool(
+                base_drink == "beer" and isinstance(_gen, dict)
+                and _gen.get("special"))
         except Exception:
             pass
         self._snd("bench", min_gap=0.8)
