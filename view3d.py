@@ -25,6 +25,7 @@ import numpy as np
 import pygame
 
 import face
+import items
 
 # Internal frame.  The window is filled by scaling this up, so the first
 # version pays for 480x270 rays rather than 1280x720 ones.
@@ -264,6 +265,23 @@ _NPC_CACHE: dict = {}
 _ANIMAL_CACHE: dict = {}
 
 
+def _npc_mood(npc) -> str:
+    try:
+        mood = face.mood_of(
+            float(getattr(npc, "hurt_flash", 0.0)),
+            float(getattr(npc, "attack_flash", 0.0)),
+            float(getattr(npc, "work_flash", 0.0)),
+            float(getattr(npc, "sly_flash", 0.0)),
+            float(getattr(npc, "hunger", 0.0)) >= face.STARVED_HUNGER)
+    except Exception:
+        mood = "normal"
+    if getattr(npc, "break_state", "normal") == "depression":
+        mood = "sad"
+    if getattr(npc, "asleep", False) or getattr(npc, "sleep_t", 0.0) > 0.0:
+        mood = "sleep"
+    return mood
+
+
 def _npc_sprite(npc, back: bool) -> pygame.Surface:
     clothing = tuple(getattr(npc, "clothing", (88, 76, 62)) or (88, 76, 62))
     skin = tuple(getattr(npc, "skin", (216, 172, 132)) or (216, 172, 132))
@@ -272,7 +290,16 @@ def _npc_sprite(npc, back: bool) -> pygame.Surface:
              "reinforced" if getattr(npc, "reinforced_armor", False) else
              "")
     stalin = bool(getattr(npc, "is_stalin", False))
-    key = (clothing, skin, armor, stalin, bool(back))
+    flash = float(getattr(npc, "hit_flash", 0.0)) > 0.0
+    mood = "normal" if back else _npc_mood(npc)
+    try:
+        vet = face.vet_tier(getattr(npc.skills, "axe", 0.0),
+                            getattr(npc.skills, "shooting", 0.0))
+    except Exception:
+        vet = 0
+    swing = float(getattr(npc, "swing_anim", 0.0))
+    swing_bucket = int(max(0.0, min(1.0, 1.0 - swing / 0.45)) * 8.0) if swing > 0.0 else -1
+    key = (clothing, skin, armor, stalin, bool(back), mood, vet, flash, swing_bucket)
     got = _NPC_CACHE.get(key)
     if got is not None:
         return got
@@ -288,6 +315,8 @@ def _npc_sprite(npc, back: bool) -> pygame.Surface:
         body = (132, 138, 146)
     elif armor == "reinforced":
         body = (176, 180, 190)
+    if flash:
+        body = (238, 226, 226)
     # legs
     pygame.draw.rect(s, (44, 38, 32), (cx - 10, 50, 7, 20), border_radius=2)
     pygame.draw.rect(s, (44, 38, 32), (cx + 3, 50, 7, 20), border_radius=2)
@@ -302,17 +331,42 @@ def _npc_sprite(npc, back: bool) -> pygame.Surface:
         col = (70, 46, 28) if armor == "hide" else (64, 68, 76)
         pygame.draw.line(s, col, (cx - 12, 38), (cx + 12, 38), 3)
         pygame.draw.line(s, col, (cx - 11, 45), (cx + 11, 45), 2)
+    # A WEAPON SWEEP, drawn in the card so every NPC fight reads at a glance.
+    if (not back) and swing_bucket >= 0:
+        _p = swing_bucket / 8.0
+        _ang = math.radians(-105.0 + 210.0 * _p)
+        _hx, _hy = cx + 11, 38
+        _ex = _hx + math.cos(_ang) * 24.0
+        _ey = _hy + math.sin(_ang) * 24.0
+        pygame.draw.line(s, (116, 82, 46), (_hx, _hy), (_ex, _ey), 3)
+        _px, _py = -math.sin(_ang), math.cos(_ang)
+        pygame.draw.line(s, (208, 208, 214),
+                         (_ex - _px * 6, _ey - _py * 6),
+                         (_ex + _px * 6, _ey + _py * 6), 3)
     # head
+    if not back:
+        try:
+            face.hair(s, cx, 18, 10)
+        except Exception:
+            pass
     pygame.draw.circle(s, skin, (cx, 18), 10)
     pygame.draw.circle(s, (150, 108, 78), (cx, 18), 10, 1)
     if back or stalin:
         pygame.draw.arc(s, (34, 26, 20), (cx - 10, 8, 20, 18), 0.15, math.pi - 0.15, 3)
     if not back:
         try:
-            face.draw(s, cx, 18, 9, 0.0, 1.0, "normal", skin)
+            face.draw(s, cx, 18, 9, 0.0, 1.0, mood, skin, vet)
         except Exception:
             pygame.draw.circle(s, (46, 34, 28), (cx - 4, 17), 1)
             pygame.draw.circle(s, (46, 34, 28), (cx + 4, 17), 1)
+        try:
+            if getattr(npc, "iron_helmet", False) or getattr(npc, "iron_armor", False):
+                face.iron_helmet(s, cx, 18, 10)
+            face.feather(s, cx, 18, 10)
+            if getattr(npc, "kind", "") == "soldier":
+                face.war_paint(s, cx, 18, 10)
+        except Exception:
+            pass
     _NPC_CACHE[key] = s
     return s
 
@@ -438,7 +492,10 @@ def _collect(g, yaw: float):
         card, ax, ay, wh = _animal_sprite(e, yaw)
         out.append((card, float(e.x), float(e.y), wh, ax, ay, ""))
     # Trees.
-    for t in list(getattr(g, "view_trees", ()) or getattr(g, "draw_trees", ()) or ()):
+    trees = (getattr(g, "view3d_trees", None)
+             or getattr(g, "view_trees", ())
+             or getattr(g, "draw_trees", ()) or ())
+    for t in list(trees):
         if math.hypot(float(t.x) - ex, float(t.y) - ey) > lim:
             continue
         try:
@@ -571,8 +628,52 @@ def _draw_toast(g, screen) -> None:
         pass
 
 
+def _viewmodel(g, screen) -> None:
+    """The held thing, first-person: a readable weapon/tool card at the edge."""
+    stack = getattr(g, "inventory", None).selected_stack() if getattr(g, "inventory", None) else None
+    if stack is None:
+        return
+    try:
+        size = 150
+        icon = items.icon_for(stack, size)
+        p = g.player
+        now = pygame.time.get_ticks() / 1000.0
+        moving = bool(getattr(p, "moving", False))
+        bob_x = math.sin(now * 8.0) * (3.0 if moving else 1.2)
+        bob_y = abs(math.cos(now * 8.0)) * (4.0 if moving else 1.5)
+        swing = float(getattr(p, "swing_progress", 0.0) or 0.0)
+        # Swing down and inward, then recover.  It is a card, not a rig yet,
+        # but the motion is the same motion the top-down hand uses.
+        swing_x = -74.0 * math.sin(swing * math.pi)
+        swing_y = 116.0 * math.sin(swing * math.pi)
+        reloading = float(getattr(p, "reloading", 0.0) or 0.0)
+        if reloading > 0.0:
+            bob_y += 10.0
+        if stack.defn.id in ("axe", "pickaxe", "shovel"):
+            icon = pygame.transform.rotate(icon, -18.0 + 96.0 * swing)
+        # A hand behind the card, so the object reads as held.
+        hx = screen.get_width() - 150 + bob_x + swing_x
+        hy = screen.get_height() - 80 + bob_y + swing_y
+        pygame.draw.ellipse(screen, (126, 86, 54),
+                            (int(hx) - 28, int(hy) + 24, 56, 30))
+        pygame.draw.ellipse(screen, (74, 48, 30),
+                            (int(hx) - 28, int(hy) + 24, 56, 30), 2)
+        screen.blit(icon, icon.get_rect(center=(int(hx), int(hy))))
+    except Exception:
+        pass
+
+
 def draw_hud(g) -> None:
     screen = g.screen
+    if not getattr(g, "hud_hidden", False) and not getattr(g.player, "dead", False):
+        _viewmodel(g, screen)
+    if not getattr(g, "hud_hidden", False) and not getattr(g.player, "dead", False):
+        try:
+            g.damage = 1.0 - g.player.health / g.player.max_health
+            g.vignette.draw(screen, g.damage, g.now,
+                            getattr(g.player, "hit_flash", 0.0) / 0.15)
+        except Exception:
+            pass
     if not getattr(g, "hud_hidden", False):
         _crosshair(screen)
         try:

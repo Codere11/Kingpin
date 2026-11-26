@@ -1943,6 +1943,16 @@ def run(g):
             g._LANE_TOWNS = []
             g._LANE_PEOPLE = list(getattr(village_mod, "PEOPLE", ()))
             g.view_trees = g.trees.visible(g.cam_x, g.cam_y, g.vw, g.vh)
+            # THE FIRST-PERSON VIEW SEES FURTHER THAN THE TOP-DOWN FRAME.
+            # Keep a wider tree set for the 3D card pass and its collision;
+            # the top-down renderer keeps its own tight list.
+            if getattr(g, "view3d", False):
+                try:
+                    g.view3d_trees = g.trees.near(g.player.x, g.player.y, 3600.0)
+                except Exception:
+                    g.view3d_trees = g.view_trees
+            else:
+                g.view3d_trees = ()
             g.view_ore = g.ore_field.visible(g.cam_x, g.cam_y, g.vw, g.vh)
             for village in g.visible_villages:        # 5 border guards per village
                 # A HUB IS NOT A TOWN AND GETS NO GARRISON. `visible()` now
@@ -2014,8 +2024,13 @@ def run(g):
                                 for wp in v.workplaces]
             g.house_colliders += [wp.rect for wp in g.placed_work]
             g.house_colliders += [c.rect for c in g.view_ore]
-            g.colliders = g.house_colliders + [tree.trunk_rect for tree in g.view_trees
-                                           if not tree.felled]
+            _tree_cols = [tree.trunk_rect for tree in g.view_trees
+                          if not tree.felled]
+            if getattr(g, "view3d", False):
+                _tree_cols += [tree.trunk_rect.inflate(14, 14)
+                               for tree in getattr(g, "view3d_trees", ()) or ()
+                               if not tree.felled]
+            g.colliders = g.house_colliders + _tree_cols
             # THE CARTS, EVERY FRAME AND AT THE FRAME'S OWN PACE. A cart is a
             # vehicle: at 240 px/s it moves four pixels a frame, which is
             # smooth; on the 20 Hz world tick it would move twelve at a time --
@@ -2060,6 +2075,16 @@ def run(g):
                 for tree in g.view_trees:
                     if not tree.felled:
                         g.grid.add(tree.trunk_rect)
+                if getattr(g, "view3d", False):
+                    # A TREE IS A TRUNK, NOT A PAINTED CANOPY.  The 3D view sees
+                    # farther than the top-down frame, so the near list alone
+                    # left visible trunks without collision.  Give the 3D
+                    # trunks a little body as well; walking through a tree
+                    # reads as a bug even when the old top-down rule said only
+                    # the trunk was solid.
+                    for tree in getattr(g, "view3d_trees", ()) or ():
+                        if not tree.felled:
+                            g.grid.add(tree.trunk_rect.inflate(14, 14))
                 for c in g.view_ore:
                     g.grid.add(c.rect)
             g.solids = [(house.rect, (150, 140, 120)) for village in g.visible_villages
