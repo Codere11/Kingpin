@@ -173,6 +173,25 @@ class Hotbar:
             pygame.draw.rect(screen, color, (x, y, fill, bar_h), border_radius=3)
         pygame.draw.rect(screen, (70, 70, 78), (x, y, bar_w, bar_h), 1, border_radius=3)
 
+    def draw_swing(self, screen: pygame.Surface, ratio: float,
+                   ready: bool = False) -> None:
+        """The axe recharge, same width as stamina, one row above it."""
+        sw, sh = screen.get_size()
+        panel, _ = self._layout(sw, sh)
+        bar_w, bar_h = 210, 8
+        x = panel.centerx - bar_w // 2
+        y = panel.top - 76
+        pygame.draw.rect(screen, (22, 22, 26),
+                         (x - 1, y - 1, bar_w + 2, bar_h + 2), border_radius=3)
+        fill = int(bar_w * max(0.0, min(1.0, ratio)))
+        color = (112, 190, 100) if ready else (198, 112, 54)
+        if fill > 0:
+            pygame.draw.rect(screen, color, (x, y, fill, bar_h), border_radius=3)
+            pygame.draw.rect(screen, (250, 214, 138), (x, y, fill, 2),
+                             border_radius=3)
+        pygame.draw.rect(screen, (70, 70, 78), (x, y, bar_w, bar_h), 1,
+                         border_radius=3)
+
     def draw_hunger(self, screen: pygame.Surface, ratio: float) -> None:
         sw, sh = screen.get_size()
         panel, _ = self._layout(sw, sh)

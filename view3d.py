@@ -499,6 +499,123 @@ def _collect(g, yaw: float):
         out.append((card, float(e.x), float(e.y), wh, ax, ay, ""))
     return out
 
+def _candidate_people(g):
+    seen = set()
+    out = []
+    pools = []
+    try:
+        import village
+        pools.append(getattr(village, "PEOPLE", ()))
+    except Exception:
+        pass
+    for v in getattr(g, "visible_villages", ()) or ():
+        pools.append(getattr(v, "npcs", ()))
+    pools.append(getattr(g, "_native_people", ()) or ())
+    try:
+        pools.append([g._TRUTH[0]] if g._TRUTH[0] is not None else [])
+    except Exception:
+        pass
+    for pool in pools:
+        for n in pool or ():
+            if n is None or id(n) in seen:
+                continue
+            seen.add(id(n))
+            if not getattr(n, "alive", True) or getattr(n, "in_interior", False):
+                continue
+            out.append(n)
+    return out
+
+
+def _aim_npc(g):
+    fwd, right, up = _cam(g)
+    ex, ey = float(g.player.x), float(g.player.y)
+    best = None
+    best_score = 1e9
+    for n in _candidate_people(g):
+        d = math.hypot(float(n.x) - ex, float(n.y) - ey)
+        if d > 170.0:
+            continue
+        p = _project(fwd, right, up, ex, ey, float(n.x), float(n.y), 55.0)
+        if p is None:
+            continue
+        sx, sy, _cz = p
+        off = math.hypot(sx - IW * 0.5, sy - IH * 0.5)
+        if off > 105.0:
+            continue
+        score = d + off * 0.7
+        if score < best_score:
+            best, best_score = n, score
+    return best
+
+
+def _aim_tile(g):
+    fwd, _right, _up = _cam(g)
+    if fwd[2] >= -1e-4:
+        return None
+    t = -EYE_Z / fwd[2]
+    wx = float(g.player.x) + fwd[0] * t
+    wy = float(g.player.y) + fwd[1] * t
+    if math.hypot(wx - float(g.player.x), wy - float(g.player.y)) > 240.0:
+        return None
+    return int(wx // 32), int(wy // 32)
+
+
+def _open_npc_card(g, npc) -> bool:
+    try:
+        import work
+        from ui import ChestPanel
+        g.persona = npc
+        g.npc_card_open = True
+        g._wn = npc
+        try:
+            if g.worker_panel is not None:
+                g.worker_panel.close()
+        except Exception:
+            pass
+        g.worker_panel = ChestPanel(g.inventory, work.bag(npc), top_rows=4,
+                                    top_label=getattr(npc, "name", "PACK"))
+        g.worker_panel_open = True
+        g.npc_tab = "inventory"
+        pygame.mouse.set_visible(True)
+        _release_mouse(g)
+        try:
+            import player_mind as _pm
+            _pm.observe(g, "initiated")
+        except Exception:
+            pass
+        return True
+    except Exception:
+        return False
+
+
+def interact(g) -> bool:
+    """Crosshair click: card first, then block placement."""
+    npc = _aim_npc(g)
+    if npc is not None:
+        return _open_npc_card(g, npc)
+    try:
+        stack = g.inventory.selected_stack()
+    except Exception:
+        stack = None
+    if stack is not None:
+        item_id = stack.defn.id
+        try:
+            import block
+            if item_id in block.BUILDABLE:
+                tile = _aim_tile(g)
+                if tile is None:
+                    _toast(g, "Nothing in reach to build on")
+                    return True
+                if block.place_block(g, tile[0], tile[1], item_id):
+                    _toast(g, "Placed %s" % item_id.replace("_", " "))
+                else:
+                    _toast(g, "No room or none left")
+                return True
+        except Exception:
+            pass
+    return False
+
+
 def draw(g) -> None:
     """Draw the internal 3D frame and scale it to the window."""
     screen = g.screen
@@ -627,8 +744,60 @@ def _draw_chop_bar(g, screen) -> None:
         pass
 
 
+_CHAT_FONT = None
+
+
+def _draw_chat_cloud(g, screen) -> None:
+    """One nearby speaker, one cloud, above their head, for at least 5 s."""
+    global _CHAT_FONT
+    try:
+        import comm
+        clouds = list(getattr(comm, "_clouds", ()) or ())
+    except Exception:
+        return
+    if not clouds:
+        return
+    fwd, right, up = _cam(g)
+    ex, ey = float(g.player.x), float(g.player.y)
+    best = None
+    best_d = 240.0
+    for (x, y, kind, text, ttl) in clouds:
+        d = math.hypot(float(x) - ex, float(y) - ey)
+        if d > best_d:
+            continue
+        p = _project(fwd, right, up, ex, ey, float(x), float(y), 76.0)
+        if p is None:
+            continue
+        sx, sy, _cz = p
+        if sx < -160 or sx > screen.get_width() + 160:
+            continue
+        best = (x, y, kind, text, ttl, sx, sy)
+        best_d = d
+    if best is None:
+        return
+    try:
+        import comm
+        if _CHAT_FONT is None:
+            _CHAT_FONT = pygame.font.SysFont("dejavusans", 18, bold=True)
+        surf, rect = comm._cloud_surf(_CHAT_FONT, best[2], best[3], best[4])
+        scale = 1.25
+        surf = pygame.transform.smoothscale(
+            surf, (max(1, int(surf.get_width() * scale)),
+                   max(1, int(surf.get_height() * scale))))
+        rect = surf.get_rect()
+        rect.center = (int(best[5]), int(best[6]) - 24)
+        screen.blit(surf, rect)
+    except Exception:
+        pass
+
+
 def draw_hud(g) -> None:
     screen = g.screen
+    try:
+        # Keep the persona card's subject/margins in step with the 2D HUD.
+        g.draw_persona()
+    except Exception:
+        pass
     if not getattr(g, "hud_hidden", False) and not getattr(g.player, "dead", False):
         _viewmodel(g, screen)
     if not getattr(g, "hud_hidden", False) and not getattr(g.player, "dead", False):
@@ -642,6 +811,10 @@ def draw_hud(g) -> None:
         _crosshair(screen)
         try:
             g.hotbar.draw(screen)
+            _cd = max(0.0, float(getattr(g.player, "swing_cd", 0.0)))
+            _tot = max(0.001, float(getattr(g.player, "skill_axe_cd", 1.0)))
+            _ready = _cd <= 0.001
+            g.hotbar.draw_swing(screen, 1.0 - min(1.0, _cd / _tot), _ready)
             g.hotbar.draw_stamina(screen, g.player.stamina / g.player.max_stamina,
                                   getattr(g.player, "exhausted", False))
             g.hotbar.draw_hunger(screen, g.player.hunger / g.player.max_hunger)
@@ -654,10 +827,22 @@ def draw_hud(g) -> None:
         except Exception:
             pass
     _draw_toast(g, screen)
-    if not getattr(g, "hud_hidden", False):
-        _draw_chop_bar(g, screen)
+    _draw_chat_cloud(g, screen)
+    # The recharge bar now lives in the hotbar stack, above stamina.
 
     # The existing panels are screen-space; keep them as they are.
+    if getattr(g, "worker_panel_open", False) and getattr(g, "worker_panel", None) is not None:
+        try:
+            _tab = getattr(g, "npc_tab", "inventory")
+            if _tab == "mind":
+                g.draw_mind_panel()
+            elif _tab == "relations":
+                g.draw_relations_panel()
+            else:
+                g.worker_panel.draw(screen)
+                g.draw_npc_tabs()
+        except Exception:
+            pass
     try:
         if getattr(g, "dialogue_panel", None) is not None and g.dialogue_panel.open_:
             g.dialogue_panel.draw(screen)

@@ -482,6 +482,15 @@ def run(g):
                 g.save_now()
                 g.running = False
             elif (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                  and view3d.active(g)):
+                # 3D CLICK = CROSSHAIR INTERACTION.  Open a nearby person's
+                # card, or place the held block at the aimed tile.
+                try:
+                    view3d.interact(g)
+                except Exception as _v3i:
+                    plog.log("VIEW3D-INTERACT", repr(_v3i)[:160])
+                g.consumed = True
+            elif (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
                   and _world_click_allowed(g)
                   and not (getattr(g, "worker_panel_open", False)
                            or getattr(g, "npc_card_open", False))
@@ -3486,6 +3495,9 @@ def run(g):
             except Exception as _pe2:
                 plog.log("ROOM-PANEL-ERR", repr(_pe2)[:120])
             g.hotbar.draw(g.screen)
+            _cd = max(0.0, float(getattr(g.player, "swing_cd", 0.0)))
+            _tot = max(0.001, float(getattr(g.player, "skill_axe_cd", 1.0)))
+            g.hotbar.draw_swing(g.screen, 1.0 - min(1.0, _cd / _tot), _cd <= 0.001)
             g.hotbar.draw_stamina(g.screen, g.player.stamina / g.player.max_stamina,
                                 g.player.exhausted)
             g.hotbar.draw_hunger(g.screen, g.player.hunger / g.player.max_hunger)
@@ -3599,6 +3611,9 @@ def run(g):
             if not g.inventory_open:
                 draw_crosshair(g.screen, g.mouse_x, g.mouse_y)
             g.hotbar.draw(g.screen)
+            _cd = max(0.0, float(getattr(g.player, "swing_cd", 0.0)))
+            _tot = max(0.001, float(getattr(g.player, "skill_axe_cd", 1.0)))
+            g.hotbar.draw_swing(g.screen, 1.0 - min(1.0, _cd / _tot), _cd <= 0.001)
             g.hotbar.draw_stamina(g.screen, g.player.stamina / g.player.max_stamina,
                                 g.player.exhausted)
             g.hotbar.draw_hunger(g.screen, g.player.hunger / g.player.max_hunger)
@@ -4110,8 +4125,11 @@ def run(g):
             # you it worked three times on that basis. State is not a picture.
             g.observer_.draw(g.screen)
             if not g.hud_hidden:
+                _cd = max(0.0, float(getattr(g.player, "swing_cd", 0.0)))
+                _tot = max(0.001, float(getattr(g.player, "skill_axe_cd", 1.0)))
+                g.hotbar.draw_swing(g.screen, 1.0 - min(1.0, _cd / _tot), _cd <= 0.001)
                 g.hotbar.draw_stamina(g.screen, g.player.stamina / g.player.max_stamina,
-                                    g.player.exhausted)
+                                      g.player.exhausted)
                 g.hotbar.draw_hunger(g.screen, g.player.hunger / g.player.max_hunger)
 
             if g.toast_time > 0.0:

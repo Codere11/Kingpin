@@ -166,7 +166,7 @@ def draw_bar(screen, font, vw, vh, selected):
 
 
 _clouds = []          # [world_x, world_y, kind, text, seconds_left]
-CLOUD_SECONDS = 3.0
+CLOUD_SECONDS = 5.0
 
 MESSAGES = {
     "insult": ("F#!K", "Scum!", "Idiot!", "Fool!"),
