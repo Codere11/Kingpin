@@ -36,6 +36,8 @@ def _biome_at_point(g, x: float, y: float) -> str:
         return "tropics"
     if biomes.is_flower_flats(x, y):
         return "flower"
+    if biomes.is_black_forest(x, y):
+        return "black"
     return biomes.biome_name(float(g.world.temperature(x, y)),
                              float(g.world.humidity(x, y)))
 
@@ -98,7 +100,7 @@ def _test_teleport_biome(g) -> None:
     import native as _native
     # The four beginning biomes, plus the second-ring country.
     names = ("forest", "savanna", "desert", "snow", "barren", "tropics",
-             "flower")
+             "flower", "black")
     if not names:
         return
     i = (int(getattr(g, "_test_biome_i", -1)) + 1) % len(names)

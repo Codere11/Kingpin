@@ -48,7 +48,8 @@ BIOMES = {
 # had. Past its edge the ground turns to Barren Rocks; the further out you go,
 # the more of that hard country there is.
 RING1_RADIUS = 165000.0
-RING2_RADIUS = 330000.0
+RING2_RADIUS = 495000.0
+RING3_RADIUS = 990000.0
 _SPAWN = [0.0, 0.0]
 _SEED = [20240501]
 _BARREN_DARK = rich((88, 88, 86))
@@ -59,6 +60,8 @@ _FLOWER_DARK = rich((92, 116, 68))
 _FLOWER_LITE = rich((164, 176, 98))
 _FLOWER_NOISE_SEED = 71113
 _OUTER_CELL = 11000.0
+_BLACK_DARK = rich((18, 18, 20))
+_BLACK_LITE = rich((46, 44, 48))
 _BARREN_NOISE_SCALE = 0.000014
 _BARREN_NOISE_SEED = 90210
 
@@ -111,7 +114,11 @@ def spawn_point():
 
 def ring(x: float, y: float) -> int:
     d = math.hypot(float(x) - _SPAWN[0], float(y) - _SPAWN[1])
-    return 1 if d < RING1_RADIUS else 2
+    if d < RING1_RADIUS:
+        return 1
+    if d < RING2_RADIUS:
+        return 2
+    return 3
 
 
 def _barren_noise(x, y, salt: int = 0):
@@ -122,15 +129,9 @@ def _barren_noise(x, y, salt: int = 0):
 
 
 def _outer_categories(x, y):
-    """Equal-sized coarse chunks in the outer country.
-
-    A jittered lattice gives three special biomes and the regular biomes
-    equal shares by construction, while the wavy boundaries keep the chunks
-    from looking like a spreadsheet.
-    """
+    """Coarse equal chunks plus a second choice used for third-ring echoes."""
     xs = np.asarray(x, np.float32)
     ys = np.asarray(y, np.float32)
-    # warp the lattice boundaries so they are not straight cell walls
     w = fbm(xs * 0.000018, ys * 0.000018, _FLOWER_NOISE_SEED, octaves=2)
     gx = np.floor((xs + (w - 0.5) * 18000.0) / _OUTER_CELL).astype(np.int64)
     gy = np.floor((ys + (w - 0.5) * 18000.0) / _OUTER_CELL).astype(np.int64)
@@ -138,19 +139,32 @@ def _outer_categories(x, y):
     h &= 0xFFFFFFFF
     h = ((h ^ (h >> 13)) * 1274126177) & 0xFFFFFFFF
     h ^= h >> 16
-    return ((h >> 24) & 3).astype(np.int8)
+    return ((h >> 24) & 3).astype(np.int8), ((h >> 16) & 3).astype(np.int8)
 
 
-def _outer_masks(x, y):
-    """Return (barren, tropics) masks from the equal outer chunks."""
+def _outer_parts(x, y):
+    """(ring, category, old-category, echo, black) masks for the outer world."""
     xs = np.asarray(x, np.float32)
     ys = np.asarray(y, np.float32)
     d = np.hypot(xs - _SPAWN[0], ys - _SPAWN[1])
-    cat = _outer_categories(x, y)
-    outside = d >= RING1_RADIUS
-    barren = outside & (cat == 0)
-    tropics = outside & (cat == 1)
+    cat, old = _outer_categories(x, y)
+    ring2 = (d >= RING1_RADIUS) & (d < RING2_RADIUS)
+    ring3 = d >= RING2_RADIUS
+    echo = ring3 & (cat == 3)
+    black = ring3 & ~echo
+    return ring2, cat, old, echo, black
+
+
+def _outer_masks(x, y):
+    ring2, cat, old, echo, black = _outer_parts(x, y)
+    barren = (ring2 & (cat == 0)) | (echo & (old == 0))
+    tropics = (ring2 & (cat == 1)) | (echo & (old == 1))
     return barren, tropics
+
+
+def _flower_mask(x, y):
+    ring2, cat, old, echo, black = _outer_parts(x, y)
+    return (ring2 & (cat == 2)) | (echo & (old == 2))
 
 def barren_mask(x, y):
     return _outer_masks(x, y)[0]
@@ -165,11 +179,8 @@ def tropics_mask(x, y):
 
 
 def flower_flats_mask(x, y):
-    """Flower Flats: one of the equal second-ring outer chunks."""
-    xs = np.asarray(x, np.float32)
-    ys = np.asarray(y, np.float32)
-    d = np.hypot(xs - _SPAWN[0], ys - _SPAWN[1])
-    return (d >= RING1_RADIUS) & (_outer_categories(x, y) == 2)
+    """Flower Flats: second-ring chunk, or its echo in the third ring."""
+    return _flower_mask(x, y)
 
 def is_barren(x: float, y: float) -> bool:
     m = barren_mask(x, y)
@@ -195,6 +206,22 @@ def flower_flats_factor_array(x, y):
     return np.asarray(flower_flats_mask(x, y), np.float32)
 
 
+def black_forest_mask(x, y):
+    return _outer_parts(x, y)[4]
+
+
+def black_forest_factor_array(x, y):
+    return np.asarray(black_forest_mask(x, y), np.float32)
+
+
+def is_black_forest(x: float, y: float) -> bool:
+    m = black_forest_mask(x, y)
+    try:
+        return bool(m.item())
+    except Exception:
+        return bool(m)
+
+
 def is_flower_flats(x: float, y: float) -> bool:
     m = flower_flats_mask(x, y)
     try:
@@ -209,6 +236,10 @@ def tropics_colors():
 
 def flower_colors():
     return _FLOWER_DARK, _FLOWER_LITE
+
+
+def black_colors():
+    return _BLACK_DARK, _BLACK_LITE
 
 
 def npc_speed_mult(x: float, y: float) -> float:

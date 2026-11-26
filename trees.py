@@ -53,6 +53,8 @@ IRONWOOD = [(92, 92, 90), (112, 112, 108), (76, 76, 74), (128, 126, 120),
             (100, 100, 96), (84, 84, 82)]
 PALM = [(44, 112, 54), (58, 132, 62), (36, 96, 48), (70, 144, 68),
         (50, 120, 58), (62, 138, 66)]
+BLACKWOOD = [(22, 20, 24), (34, 30, 36), (16, 14, 18), (42, 36, 44),
+             (27, 24, 30), (38, 33, 40)]
 
 
 def _smoothstep(x, a, b):
@@ -281,6 +283,9 @@ class TreeSprites:
         if species == "ironwood":
             return self._broadleaf(radius, rng, variant, IRONWOOD, 1.0,
                                    snowy, "ironwood")
+        if species == "blackwood":
+            return self._broadleaf(radius, rng, variant, BLACKWOOD, 1.0,
+                                   snowy, "blackwood")
         if species in ("palm", "banana_palm", "cocoa_palm"):
             return self._palm(radius, rng, variant, species)
         return self._broadleaf(radius, rng, variant, PALETTE, 1.0, snowy,
@@ -926,6 +931,15 @@ class Trees:
             h = float(hums[k])
             if x > float(coasts[k]):
                 self._presence[(ix, iy)] = None
+                continue
+            if biomes.is_black_forest(x, y):
+                # BLACK FOREST: normal tree density, all blackwood.
+                _dark, _lite, _spec, dens = biomes.mix(t, h)
+                density = dens * (0.45 + 0.75 * float(clumps[k]))*1.25
+                if rng.random() >= min(0.8, density * SPAWN):
+                    self._presence[(ix, iy)] = None
+                    continue
+                self._presence[(ix, iy)] = (x, y, code, "blackwood", False)
                 continue
             if biomes.is_flower_flats(x, y):
                 # FLOWER FLATS: no trees at all.

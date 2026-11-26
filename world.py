@@ -173,6 +173,11 @@ class World:
             with self._lock:
                 self._kind_cache[key] = got
             return got
+        if biomes.is_black_forest(_wx_c, _wy_c):
+            got = "dry"                            # black forest floor
+            with self._lock:
+                self._kind_cache[key] = got
+            return got
         h = float(biomes.humidity(np.float32(_wx_c),
                                   np.float32(_wy_c), self.seed))
         got = "dry" if h < 0.24 else "grass"       # bare sand in the desert
@@ -370,6 +375,13 @@ class GroundRenderer:
             _fl = np.array(_fl, np.float32)
             dark = dark * (1.0 - _flower) + _fd * _flower
             lite = lite * (1.0 - _flower) + _fl * _flower
+        _black = biomes.black_forest_factor_array(X, Y)[..., None]
+        if float(np.max(_black)) > 0.0:
+            _kd, _kl = biomes.black_colors()
+            _kd = np.array(_kd, np.float32)
+            _kl = np.array(_kl, np.float32)
+            dark = dark * (1.0 - _black) + _kd * _black
+            lite = lite * (1.0 - _black) + _kl * _black
         mixv = np.clip(0.44 + 0.56 * clump, 0.0, 1.0)[..., None]
         col = dark * (1.0 - mixv) + lite * mixv
         col = col * (0.90 + 0.18 * clump)[..., None]
@@ -540,6 +552,8 @@ class GroundRenderer:
                 dark, lite = biomes.tropics_colors()
             elif biomes.is_flower_flats(mx, my):
                 dark, lite = biomes.flower_colors()
+            elif biomes.is_black_forest(mx, my):
+                dark, lite = biomes.black_colors()
             col = (int((dark[0] + lite[0]) * 0.5),
                    int((dark[1] + lite[1]) * 0.5),
                    int((dark[2] + lite[2]) * 0.5))
@@ -771,6 +785,7 @@ class Scatter:
         self.snow: list[pygame.Surface] = []
         self.sand: list[pygame.Surface] = []
         self.rocks: list[pygame.Surface] = []
+        self.black: list[pygame.Surface] = []
         self._surf: dict = {}          # scatter cell -> (snow factor, sand factor)
         self._chunks: dict = {}
         self._order: list = []
@@ -839,6 +854,16 @@ class Scatter:
             pygame.draw.line(surf, (min(255, base + 30),) * 3,
                              (w * 0.24, h * 0.36), (w * 0.52, h * 0.24), 1)
             self.rocks.append(surf)
+        for _ in range(8):                         # black-forest litter
+            w, h = rng.randint(5, 14), rng.randint(4, 10)
+            surf = pygame.Surface((w, h), pygame.SRCALPHA)
+            shade = rng.randint(28, 54)
+            pygame.draw.ellipse(surf, (shade, shade - 2, shade + 2),
+                                (0, h * 0.35, w, h * 0.65))
+            pygame.draw.polygon(surf, (shade + 14, shade + 10, shade + 18),
+                                [(1, h * 0.7), (w * 0.25, h * 0.15),
+                                 (w * 0.75, h * 0.25), (w - 1, h * 0.7)])
+            self.black.append(surf)
 
     def _rand(self, cx: int, cy: int, i: int, salt: int) -> float:
         h = (cx * 73856093) ^ (cy * 19349663) ^ (i * 83492791) \
@@ -875,8 +900,10 @@ class Scatter:
                 sf = biomes.snow_factor_array(tt, hh)
                 df = biomes.sand_factor_array(tt, hh)
                 bf = biomes.barren_factor_array(cxs, cys)
+                kf = biomes.black_forest_factor_array(cxs, cys)
                 for i, key in enumerate(need):
-                    self._surf[key] = (float(sf[i]), float(df[i]), float(bf[i]))
+                    self._surf[key] = (float(sf[i]), float(df[i]), float(bf[i]),
+                                       float(kf[i]))
         tilled: set = set()
         if self.world is not None:
             # ONLY THE TILES THIS CHUNK CAN TOUCH. This walked EVERY PLOT IN
@@ -900,7 +927,8 @@ class Scatter:
         blit = surf.blit
         for cy in range(y0, y1 + 1):
             for cx in range(x0, x1 + 1):
-                snowf, sandf, barrenf = self._surf.get((cx, cy), (0.0, 0.0, 0.0))
+                snowf, sandf, barrenf, blackf = self._surf.get(
+                    (cx, cy), (0.0, 0.0, 0.0, 0.0))
                 count = 1 + int(self._rand(cx, cy, 0, 1) * 2.6)
                 for i in range(count):
                     wx = (cx + self._rand(cx, cy, i, 2)) * cell
@@ -913,7 +941,10 @@ class Scatter:
                         if (ttx, tty) in tilled:
                             continue
                     pick = self._rand(cx, cy, i, 4)
-                    if barrenf > 0.5:
+                    if blackf > 0.5:
+                        sprite = self.black[int(self._rand(cx, cy, i, 5)
+                                                * len(self.black))]
+                    elif barrenf > 0.5:
                         # BARREN ROCKS: rubble and boulders, not a blade of grass.
                         sprite = self.rocks[int(self._rand(cx, cy, i, 5)
                                                 * len(self.rocks))]
