@@ -275,6 +275,9 @@ def _npc_sprite(npc, back: bool) -> pygame.Surface:
              "reinforced" if getattr(npc, "reinforced_armor", False) else
              "")
     stalin = bool(getattr(npc, "is_stalin", False))
+    wear = str(getattr(npc, "wear", "normal") or "normal")
+    mayor = bool(getattr(npc, "is_mayor", False))
+    king = bool(getattr(npc, "is_king", False))
     flash = float(getattr(npc, "hit_flash", 0.0)) > 0.0
     mood = "normal" if back else _npc_mood(npc)
     try:
@@ -284,7 +287,8 @@ def _npc_sprite(npc, back: bool) -> pygame.Surface:
         vet = 0
     swing = float(getattr(npc, "swing_anim", 0.0))
     swing_bucket = int(max(0.0, min(1.0, 1.0 - swing / 0.45)) * 8.0) if swing > 0.0 else -1
-    key = (clothing, skin, armor, stalin, bool(back), mood, vet, flash, swing_bucket)
+    key = (clothing, skin, armor, stalin, wear, mayor, king, bool(back),
+           mood, vet, flash, swing_bucket)
     got = _NPC_CACHE.get(key)
     if got is not None:
         return got
@@ -336,11 +340,26 @@ def _npc_sprite(npc, back: bool) -> pygame.Surface:
             pygame.draw.circle(s, (46, 34, 28), (cx - 5, 43), 2)
             pygame.draw.circle(s, (46, 34, 28), (cx + 5, 43), 2)
         try:
+            # The same local dress the 2D figure carries: snow fur bands,
+            # desert sombreros, the mayor's top hat, the king's crown, iron
+            # helmets, feathers and war paint.
             if getattr(npc, "iron_helmet", False) or getattr(npc, "iron_armor", False):
                 face.iron_helmet(s, cx, 45, 15)
             face.feather(s, cx, 45, 15)
-            if getattr(npc, "kind", "") == "soldier":
+            if wear == "fur":
+                face.headband(s, cx, 45, 15)
+            elif wear == "tuareg":
+                face.sombrero(s, cx, 45, 15)
+            if (getattr(npc, "kind", "") in ("soldier", "warrior")
+                    or getattr(npc, "hide_armor", False)
+                    or getattr(npc, "iron_armor", False)):
                 face.war_paint(s, cx, 45, 15)
+            if mayor:
+                face.tophat(s, cx, 45, 15)
+            if king:
+                face.crown(s, cx, 45, 15)
+            if stalin:
+                face.moustache(s, cx, 45, 15)
         except Exception:
             pass
     # THE SWING IS HIS OWN RIGHT ARM.  Shoulder, hand and weapon are one
@@ -589,14 +608,31 @@ def _open_npc_card(g, npc) -> bool:
 
 
 def interact(g) -> bool:
-    """Crosshair click: card first, then block placement."""
-    npc = _aim_npc(g)
-    if npc is not None:
-        return _open_npc_card(g, npc)
+    """Crosshair click: axe attack, NPC card, or block placement."""
     try:
         stack = g.inventory.selected_stack()
     except Exception:
         stack = None
+    held = stack.defn.id if stack is not None else ""
+    # A HELD AXE IS A WEAPON, NOT A CONVERSATION.  Clicking a person swings
+    # even if the crosshair happens to be on them.
+    if held == "axe":
+        try:
+            import combat_actions
+            combat_actions.use_axe(g, 0)
+        except Exception:
+            pass
+        return True
+    npc = _aim_npc(g)
+    if npc is not None:
+        return _open_npc_card(g, npc)
+    if stack is not None and held in ("pickaxe", "shovel"):
+        try:
+            import combat_actions
+            combat_actions.use_axe(g, 0)
+        except Exception:
+            pass
+        return True
     if stack is not None:
         item_id = stack.defn.id
         try:
