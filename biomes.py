@@ -47,8 +47,8 @@ BIOMES = {
 # THE RINGS. The first ring around the ship is the country the game already
 # had. Past its edge the ground turns to Barren Rocks; the further out you go,
 # the more of that hard country there is.
-RING1_RADIUS = 55000.0
-RING2_RADIUS = 110000.0
+RING1_RADIUS = 165000.0
+RING2_RADIUS = 330000.0
 _SPAWN = [0.0, 0.0]
 _SEED = [20240501]
 _BARREN_DARK = rich((88, 88, 86))
@@ -70,6 +70,38 @@ def set_spawn(x: float, y: float) -> None:
 
 def set_seed(seed: int) -> None:
     _SEED[0] = int(seed)
+
+
+def _first_ring_override(x, y, t, h):
+    """Guarantee the four first-tier biomes inside the enlarged first ring.
+
+    The first ring is now three times as wide.  A wavy north-south band
+    division puts snow, forest, savanna and desert in large natural regions
+    around the ship instead of leaving the spawn climate to decide which one
+    the player ever sees.  Outside the ring the real climate resumes.
+    """
+    xs = np.asarray(x, np.float32)
+    ys = np.asarray(y, np.float32)
+    d = np.hypot(xs - _SPAWN[0], ys - _SPAWN[1])
+    if bool(np.all(d >= RING1_RADIUS)):
+        return t, h
+    # wavy bands, not ruler-straight latitude lines
+    warp = (12000.0 * np.sin(xs * 0.000017 + ys * 0.000011)
+            + 4500.0 * np.sin(ys * 0.000031 - xs * 0.000007))
+    band = np.floor((ys - _SPAWN[1] + warp) / (RING1_RADIUS * 0.5)).astype(np.int32) % 4
+    target_t = np.array((0.15, 0.44, 0.60, 0.85), np.float32)[band]
+    target_h = np.array((0.55, 0.66, 0.45, 0.20), np.float32)[band]
+    # fade into the real climate at the ring edge
+    edge = np.clip((d - RING1_RADIUS * 0.88) / (RING1_RADIUS * 0.12), 0.0, 1.0)
+    w = (1.0 - edge * edge * (3.0 - 2.0 * edge))
+    out_t = np.asarray(t, np.float32) * (1.0 - w) + target_t * w
+    out_h = np.asarray(h, np.float32) * (1.0 - w) + target_h * w
+    inside = d < RING1_RADIUS
+    out_t = np.where(inside, out_t, t)
+    out_h = np.where(inside, out_h, h)
+    if getattr(out_t, "ndim", 0) == 0:
+        return float(out_t), float(out_h)
+    return out_t, out_h
 
 
 def spawn_point():
@@ -418,7 +450,7 @@ def temperature(x, y, seed: int):
         ys = np.asarray(y, np.float32)
         v = fbm(xs * TEMP_SCALE, ys * TEMP_SCALE, seed + 71, octaves=3)
         t = np.clip((v - 0.5) * 2.15 + 0.5, 0.0, 1.0)
-        return t
+        return _first_ring_override(x, y, t, t)[0]
     key = (float(x), float(y), seed)
     got = _TEMP_MEMO.get(key)
     if got is None:
@@ -427,14 +459,17 @@ def temperature(x, y, seed: int):
         got = float(np.clip((float(v) - 0.5) * 2.15 + 0.5, 0.0, 1.0))
         if len(_TEMP_MEMO) < _MEMO_CAP:
             _TEMP_MEMO[key] = got
-    return got
+    return _first_ring_override(x, y, got, got)[0]
 
 
 def humidity(x, y, seed: int):
     if isinstance(x, np.ndarray) or isinstance(y, np.ndarray):
-        v = fbm(np.asarray(x, np.float32) * HUM_SCALE + 1731.0,
-                np.asarray(y, np.float32) * HUM_SCALE - 921.0, seed + 29, octaves=2)
-        return np.clip((v - 0.5) * 1.9 + 0.5, 0.0, 1.0)
+        xs = np.asarray(x, np.float32)
+        ys = np.asarray(y, np.float32)
+        v = fbm(xs * HUM_SCALE + 1731.0, ys * HUM_SCALE - 921.0,
+                seed + 29, octaves=2)
+        h = np.clip((v - 0.5) * 1.9 + 0.5, 0.0, 1.0)
+        return _first_ring_override(x, y, h, h)[1]
     key = (float(x), float(y), seed)
     got = _HUM_MEMO.get(key)
     if got is None:
@@ -443,7 +478,7 @@ def humidity(x, y, seed: int):
         got = float(np.clip((float(v) - 0.5) * 1.9 + 0.5, 0.0, 1.0))
         if len(_HUM_MEMO) < _MEMO_CAP:
             _HUM_MEMO[key] = got
-    return got
+    return _first_ring_override(x, y, got, got)[1]
 
 
 def _cell(t, h):
