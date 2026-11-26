@@ -1605,6 +1605,8 @@ class NPC:
             return 0, 3
         remaining = n
         grades = []
+        last_gen = None
+        _seen_gen = False
         for i, stack in enumerate(inv.slots):
             if stack is None or stack.defn.id != item:
                 continue
@@ -1624,6 +1626,10 @@ class NPC:
                         sg[item] = None           # two local lots mixed
                     elif old is None:
                         sg[item] = _sg
+                    if not _seen_gen:
+                        last_gen, _seen_gen = _sg, True
+                    elif last_gen != _sg:
+                        last_gen = None
             except Exception:
                 pass
             grades.append((q, take))
@@ -1638,6 +1644,7 @@ class NPC:
             return 0, 3
         tot = sum(c for _, c in grades)
         grade = int(round(sum(q * c for q, c in grades) / max(1, tot)))
+        self._last_take_genetics = last_gen
         return taken, grade
 
     def _food_chest(self):
@@ -1746,7 +1753,13 @@ class NPC:
             if inv is not None:
                 n = int(self.carry.get(product, 0))
                 g = self.carry_grade.get(product)
-                if getattr(items.get(product), "quality", False) and g is not None:
+                cg = getattr(self, "carry_genetics", None)
+                gen = cg.pop(product, None) if isinstance(cg, dict) else None
+                if gen is not None:
+                    inv.add(product, n,
+                            quality=(int(g) if g is not None else None),
+                            genetics=gen)
+                elif getattr(items.get(product), "quality", False) and g is not None:
                     inv.add(product, n, quality=int(g))
                 else:
                     inv.add(product, n)
@@ -1761,15 +1774,42 @@ class NPC:
             if self.produce_acc >= ARTISAN_BATCH_SECONDS:
                 self.produce_acc = 0.0
                 self._snd("bench", min_gap=0.8)
+                given = self.carry_grade.get(leaf, 3)
                 self.carry[leaf] = self.carry.get(leaf, 0) - 10
                 if self.carry.get(leaf, 0) <= 0:
                     self.carry.pop(leaf, None)
                     self.carry_grade.pop(leaf, None)
                 hands = self.skills.leaf_grade()
-                given = self.carry_grade.get(leaf, 3)
                 g = quality.clamp(int(round((hands + given) / 2.0)))
                 self.carry[product] = self.carry.get(product, 0) + 10
                 self.carry_grade[product] = g
+                # THE ARTISAN'S HANDS DECIDE HOW MUCH LOCAL LEAF SURVIVES.
+                try:
+                    import cropgenetics as _cg
+                    cg = getattr(self, "carry_genetics", None)
+                    if not isinstance(cg, dict):
+                        cg = self.carry_genetics = {}
+                    src_gen = cg.get(leaf)
+                    if int(self.carry.get(leaf, 0) or 0) <= 0:
+                        cg.pop(leaf, None)
+                    gen = _cg.extract(
+                        src_gen, getattr(self.skills, "farming", 0.0),
+                        items.get(product).name, kind="artisan")
+                    old_out = cg.get(product)
+                    if product not in cg or old_out == gen:
+                        cg[product] = gen
+                    else:
+                        cg[product] = None
+                    sg = getattr(self, "stock_genetics", None)
+                    if not isinstance(sg, dict):
+                        sg = self.stock_genetics = {}
+                    prev = sg.get(product)
+                    if product not in sg or prev == gen:
+                        sg[product] = gen
+                    else:
+                        sg[product] = None
+                except Exception:
+                    pass
                 self._did_work()
                 self.skills.gain_farming(0.05)
             return
@@ -1793,6 +1833,17 @@ class NPC:
         else:
             self.carry_grade[leaf] = quality.merge(
                 self.carry_grade.get(leaf, 3), old_n, g, taken)
+        try:
+            src_gen = getattr(self, "_last_take_genetics", None)
+            cg = getattr(self, "carry_genetics", None)
+            if not isinstance(cg, dict):
+                cg = self.carry_genetics = {}
+            if old_n == 0:
+                cg[leaf] = src_gen
+            elif cg.get(leaf) != src_gen:
+                cg[leaf] = None       # two leaf lots are not one strain
+        except Exception:
+            pass
 
     def _work_brewery(self, dt: float) -> None:
         """A brewer takes local mash to the brewhouse and makes local drink.
@@ -2156,9 +2207,14 @@ class NPC:
                     load.pop(item, None)
                     continue
                 grade = int((getattr(self, "carry_grade", {}) or {}).get(item, 4) or 4)
-                coin += market.sell_value(g, item, qty, grade) * 0.80
+                gen = None
                 if inv is not None:
-                    inv.consume(item, qty)
+                    try:
+                        taken, gen = inv.take_lot(item, qty)
+                        qty = taken
+                    except Exception:
+                        inv.consume(item, qty)
+                coin += market.sell_value(g, item, qty, grade, genetics=gen) * 0.80
                 load.pop(item, None)
         except Exception:
             pass

@@ -2310,7 +2310,9 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
             npc.use_fx = (want, USE_FX_SECONDS)
             try:
                 import mind as _mind
-                _mind.consume(npc, want, now)
+                _sg = getattr(npc, "stock_genetics", None)
+                _gen = _sg.get(want) if isinstance(_sg, dict) else None
+                _mind.consume(npc, want, now, genetics=_gen)
             except Exception:
                 pass
         else:
@@ -2333,7 +2335,9 @@ def needs(npc, dt: float, now: float = 0.0) -> bool:
                 npc.use_fx = ("govbeer", USE_FX_SECONDS)
                 try:
                     import mind as _mind
-                    _mind.consume(npc, "govbeer", now)
+                    _sg = getattr(npc, "stock_genetics", None)
+                    _gen = _sg.get("govbeer") if isinstance(_sg, dict) else None
+                    _mind.consume(npc, "govbeer", now, genetics=_gen)
                 except Exception:
                     pass
     fx = npc.use_fx

@@ -161,9 +161,9 @@ def describe(stack) -> list[str]:
                 _cap = int(_gen.get("quality_cap", 5) or 5)
                 if _cap > 5:
                     lines.append("Quality cap: %s" % quality.letter(_cap))
-                # Alcohol carries a scaled copy of the crop bonuses.  Do not
-                # recompute those from the field progress: the brewer's hand
-                # has already transformed them.
+                # A made article carries a scaled copy of the crop bonuses.
+                # Do not recompute those from field progress: the maker's
+                # hands have already transformed them.
                 _scaled = _gen.get("bonuses") if _gen.get("extraction") is not None else None
                 for _tag in _t:
                     if isinstance(_scaled, dict) and _tag in _scaled and _tag not in _quality:
@@ -183,7 +183,10 @@ def describe(stack) -> list[str]:
                     else:
                         lines.append("%s  %d%%" % (_tag, int(math.floor(_prog * 100.0 + 0.5))))
                 if _gen.get("special"):
-                    lines.append("Special local brew — blank label")
+                    if _gen.get("kind", "alcohol") == "alcohol":
+                        lines.append("Special local brew — blank label")
+                    else:
+                        lines.append("Special local batch — blank label")
             else:
                 lines.append("Genetics: %s" % _gen)
     except Exception:

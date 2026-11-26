@@ -1047,7 +1047,7 @@ _special_cache: dict[tuple[str, int], pygame.Surface] = {}
 
 
 def icon_for(stack, size: int = 48) -> pygame.Surface:
-    """The item icon, plus the blank white label for special alcohol."""
+    """The item icon, plus the blank white label for any special local good."""
     if stack is None:
         return icon("unknown", size)
     base = icon(stack.defn.id, size)
@@ -1061,7 +1061,7 @@ def icon_for(stack, size: int = 48) -> pygame.Surface:
     s = base.copy()
     # A small blank white label stitched onto the bottle/cask.  It stays empty
     # until the player writes on it; this is the physical marker of a special
-    # local brew.
+    # local brew, cigar, or dried mushroom.
     w = max(8, int(size * 0.46))
     h = max(5, int(size * 0.17))
     x = max(2, size - w - 3)

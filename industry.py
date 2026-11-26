@@ -15,7 +15,9 @@ import random
 
 import pygame
 
+import cropgenetics
 import economy
+import items
 import quality
 
 DAY_LENGTH = 600.0
@@ -414,6 +416,22 @@ def produce(npc, dt: float, now: float) -> None:
             held = npc.stock.get(out, 0)
             npc.grade[out] = quality.merge(npc.grade.get(out, g), held, g, 1)
             npc.stock[out] = held + economy.take_fifth(npc.village, npc, out, 1)
+            # THE LOCAL STRAIN FOLLOWS THE LEAF INTO THE FINISHED ARTICLE.
+            try:
+                _sg = getattr(npc, "stock_genetics", None)
+                _src = _sg.get(leaf) if isinstance(_sg, dict) else None
+                _gen = cropgenetics.extract(
+                    _src, getattr(npc.skills, "farming", 0.0),
+                    items.get(out).name, kind="artisan")
+                if not isinstance(_sg, dict):
+                    _sg = npc.stock_genetics = {}
+                _old = _sg.get(out)
+                if out not in _sg or _old == _gen:
+                    _sg[out] = _gen
+                else:
+                    _sg[out] = None
+            except Exception:
+                pass
             made += 1
             npc._did_work()                    # a cigar rolled
             npc.skills.gain_farming(0.02)      # a slow trade, like the others

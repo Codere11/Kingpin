@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 
+import cropgenetics
 import economy
 import items
 import quality
@@ -109,10 +110,12 @@ def craft_at_table(player, inventory, skills, toast) -> None:
         given = stack.quality if stack.quality is not None else 0
         hands = skills.leaf_grade()
         g = quality.clamp(int(round((hands + given) / 2.0)))
-        stack.count -= 1
-        if stack.count <= 0:
-            inventory.slots[idx] = None
-        inventory.add(out, 1, g)
+        _taken, src_gen = inventory.take_lot(leaf, 1)
+        if _taken <= 0:
+            continue
+        gen = cropgenetics.extract(src_gen, getattr(skills, "farming", 0.0),
+                                   items.get(out).name, kind="artisan")
+        inventory.add(out, 1, g, genetics=gen)
         skills.gain_farming(0.02)          # you learn at the bench too
         toast("Made a %s  (%s)" % (items.get(out).name, quality.letter(g)))
         return
@@ -174,9 +177,15 @@ def work_action(key, smith_shop, player, now, economy, inventory, skills,
         if leaf is None:
             return 0.0, "No leaf"
         out = economy.PROCESS[leaf]
-        inventory.consume(leaf, economy.CRAFT_CONSUME)
+        _taken, src_gen = inventory.take_lot(leaf, economy.CRAFT_CONSUME)
+        if _taken < economy.CRAFT_CONSUME:
+            if _taken > 0:
+                inventory.add(leaf, _taken, genetics=src_gen)
+            return 0.0, "Not enough leaf"
         g = skills.leaf_grade()
-        inventory.add(out, 1, g)
+        gen = cropgenetics.extract(src_gen, getattr(skills, "farming", 0.0),
+                                   items.get(out).name, kind="artisan")
+        inventory.add(out, 1, g, genetics=gen)
         return 2.0, "Made one %s   (%s)" % (out, quality.letter(g))
     if kind == "mine":
         _dug = random.randint(3, 7)
