@@ -9,7 +9,7 @@ import math
 
 
 # what counts as a block you can place in the hand
-BUILDABLE = ("wood", "hide", "bed", "door")
+BUILDABLE = ("wood", "ironwood", "hide", "bed", "door")
 
 
 # colours: fill, light bevel, dark shadow, grain/edge
@@ -20,6 +20,8 @@ _COLORS = {
              "dark": (66, 42, 26), "edge": (82, 54, 34)},
     "door": {"fill": (126, 82, 46), "light": (176, 126, 72),
              "dark": (66, 40, 24), "edge": (86, 54, 30)},
+    "ironwood": {"fill": (104, 106, 106), "light": (152, 154, 152),
+                 "dark": (56, 58, 60), "edge": (70, 72, 74)},
 }
 
 
@@ -37,7 +39,7 @@ def _fill_block(screen, x, y, kind):
         pygame.draw.circle(screen, (216, 190, 100),
                            (x + TILE // 2 + 4, y + TILE // 2), 2)
         return
-    if kind == "wood":
+    if kind in ("wood", "ironwood"):
         for i in range(2):
             yy = y + 9 + i * 12
             pygame.draw.line(screen, c["edge"], (x + 3, yy), (x + TILE - 3, yy), 1)
@@ -152,6 +154,10 @@ def place_block(g, tx, ty, kind):
         return False
     g.inventory.consume(kind, 1)
     g.built_blocks[(tx, ty)] = kind
+    try:
+        g.built_block_hits.pop((tx, ty), None)
+    except Exception:
+        pass
     try:
         g._BUILD_VER[0] += 1
     except Exception:

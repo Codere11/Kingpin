@@ -53,27 +53,30 @@ def _note(text: str) -> None:
     except Exception:
         pass
 
-FOOD = ("bread", "berries", "cactus_fruit")
-LEAF = ("tobacco", "red_mushroom", "agave", "chili")
+FOOD = ("bread", "berries", "cactus_fruit", "hardberries")
+LEAF = ("tobacco", "red_mushroom", "agave", "chili", "pipeleaf")
 # The artisan's trade: what a laboratory turns leaf INTO. Nobody craves the raw
 # leaf any more -- the craving is for the finished article.
-PROCESS = {"tobacco": "cigar", "red_mushroom": "dried_mushroom"}
+PROCESS = {"tobacco": "cigar", "red_mushroom": "dried_mushroom",
+           "pipeleaf": "crushed_pipeleaf"}
 FINISHED = tuple(PROCESS.values())
 LEAF_STOCK = 24            # leaf an artisan keeps on the bench to work with
 CRAFT_CONSUME = 1          # leaf per finished good
 
 # The brewery: mash first, then ferment. Two steps, two waits, two grades.
-MASH = ("wheat", "berries", "agave")             # what goes into the brewing table
-WORT = {"wheat": "wheat_wort", "berries": "berry_wort", "agave": "agave_wort"}
-BREW = {"wheat_wort": "beer", "berry_wort": "liqueur", "agave_wort": "mezcal"}
+MASH = ("wheat", "berries", "agave", "hardberries")  # what goes into the table
+WORT = {"wheat": "wheat_wort", "berries": "berry_wort",
+        "agave": "agave_wort", "hardberries": "hardberry_wort"}
+BREW = {"wheat_wort": "beer", "berry_wort": "liqueur",
+        "agave_wort": "mezcal", "hardberry_wort": "steelka"}
 LUXURY = FINISHED + tuple(BREW.values()) + (
     "govbeer", "chili_beer", "chili_mezcal")
 DRINKS = set(BREW.values()) | {
-    "govbeer", "chili_beer", "chili_mezcal"}  # made, not grown
+    "govbeer", "chili_beer", "chili_mezcal", "steelka"}  # made, not grown
 WORT_BATCH = 50            # fifty at a time through the table, and the barrel
 WORT_STOCK = 40            # mash a brewer keeps on hand
 BREW_SECONDS = 300.0       # five minutes in the barrel
-SEEDS = ("wheat_seed", "seed_bag")
+SEEDS = ("wheat_seed", "seed_bag", "hardberry_seed", "pipeleaf_seed")
 TOOLS = ("shovel", "pickaxe", "axe")
 # ARMS ARE GOODS. A rifle is 1,050 coin: a HUNDRED AND FIVE DAYS of a
 # labourer's wage at WAGE = 10, or thirty-five days of a rifleman's PAY_RIFLE
@@ -84,17 +87,19 @@ TOOLS = ("shovel", "pickaxe", "axe")
 # this from arming the whole countryside by accident.
 ARMS = ("rifle", "shotgun", "ammo")
 GOODS = (FOOD + LEAF + FINISHED + SEEDS + TOOLS + ARMS
-         + ("iron", "wood", "wheat") + tuple(WORT.values())
+         + ("iron", "wood", "ironwood", "wheat") + tuple(WORT.values())
          + tuple(BREW.values()) + ("govbeer",))
 WAGE_GOODS = FOOD + LEAF + SEEDS
 
 ITEM_VALUE = {
     # Base prices, by how hard a thing is to produce: tools > iron > food.
     # Each village skews these by what it actually grows -- see Village.prices.
-    "bread": 4, "berries": 3, "cactus_fruit": 4,
-    "tobacco": 7, "red_mushroom": 8, "agave": 7, "chili": 7,
-    "cigar": 20, "dried_mushroom": 22,          # leaf is the input; this is the good
+    "bread": 4, "berries": 3, "cactus_fruit": 4, "hardberries": 5,
+    "tobacco": 7, "red_mushroom": 8, "agave": 7, "chili": 7, "pipeleaf": 8,
+    "cigar": 20, "dried_mushroom": 22, "crushed_pipeleaf": 30,
+    "steelka": 30, "ironwood": 5,     # leaf is the input; this is the good
     "wheat": 3, "wheat_wort": 4, "berry_wort": 4, "agave_wort": 4,
+    "hardberry_wort": 4,
     "beer": 22, "liqueur": 26, "mezcal": 24,
     # GOVERNMENT BEER IS SOLD AS E-GRADE BEER: 22 x 0.5 = 11 a bottle.
     "govbeer": 11,    # luxuries: worth many times the mash
@@ -295,6 +300,10 @@ def crop_yield(kind: str, rng) -> tuple[str, int]:
         return "cotton", rng.randint(5, 10)
     if kind == "chili":
         return "chili", rng.randint(4, 8)
+    if kind == "hardberry":
+        return "hardberries", rng.randint(2, 4)
+    if kind == "pipeleaf":
+        return "pipeleaf", rng.randint(2, 4)
     return "", 0
 
 
@@ -688,6 +697,13 @@ def harvest(village, npc, kind: str, rng) -> None:
     item, count = crop_yield(kind, rng)
     if not item or count <= 0:
         return
+    # BARREN ROCKS: half the yield of the easy country.
+    try:
+        import biomes as _bio
+        if _bio.is_barren(getattr(npc, "x", 0.0), getattr(npc, "y", 0.0)):
+            count = max(1, int(round(count * 0.5)))
+    except Exception:
+        pass
     # SETTLEMENT STRAIN: every harvest advances every local target.  The
     # native camp's stock is a shared lot, so the strain lives on the camp
     # and is copied into the next batch that reaches a real ItemStack.

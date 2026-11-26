@@ -49,6 +49,8 @@ CONIFER = [(34, 66, 44), (42, 78, 50), (28, 58, 38), (48, 86, 54)]
 BARE = [(104, 84, 62), (120, 98, 74), (88, 70, 52)]
 ACACIA = [(104, 124, 58), (118, 138, 66), (92, 112, 50)]
 CACTUS = [(74, 124, 66), (88, 142, 76), (62, 108, 56)]
+IRONWOOD = [(92, 92, 90), (112, 112, 108), (76, 76, 74), (128, 126, 120),
+            (100, 100, 96), (84, 84, 82)]
 
 
 def _smoothstep(x, a, b):
@@ -274,6 +276,9 @@ class TreeSprites:
         if species == "jungle":
             return self._broadleaf(radius, rng, variant, JUNGLE_PALETTE, 1.45,
                                    snowy, "jungle")
+        if species == "ironwood":
+            return self._broadleaf(radius, rng, variant, IRONWOOD, 1.0,
+                                   snowy, "ironwood")
         return self._broadleaf(radius, rng, variant, PALETTE, 1.0, snowy,
                                "broadleaf")
 
@@ -632,7 +637,8 @@ class Tree:
     # actually looking at it. Seventeen thousand trees used to hold seventeen
     # thousand sprites between them.
     __slots__ = ("x", "y", "canopy_r", "trunk_rect", "sx", "sy",
-                 "strikes", "felled", "felled_at", "species", "size_class",
+                 "strikes", "strikes_needed", "felled", "felled_at",
+                 "species", "size_class",
                  "variant", "flip", "snowy", "_atlas", "_save_uid",
                  "hit_until")
 
@@ -657,6 +663,8 @@ class Tree:
         self.flip = flip
         self.snowy = snowy
         self.size_class = min(range(len(SIZES)), key=lambda i: abs(SIZES[i] - radius))
+        # IRONWOOD IS TWICE THE TREE: the same axe takes twice the swings.
+        self.strikes_needed = 6 if species == "ironwood" else 3
         _img, ax, ay = atlas.get(species, self.size_class, variant, flip, snowy)
         self.sx, self.sy = ax, ay
 
@@ -850,6 +858,13 @@ class Trees:
             h = float(hums[k])
             if x > float(coasts[k]):
                 self._presence[(ix, iy)] = None
+                continue
+            if biomes.is_barren(x, y):
+                # BARREN ROCKS: thin, hard ironwood.  No climate forest here.
+                if rng.random() >= 0.14:
+                    self._presence[(ix, iy)] = None
+                    continue
+                self._presence[(ix, iy)] = (x, y, code, "ironwood", False)
                 continue
             _dark, _lite, spec, dens = biomes.mix(t, h)
             density = dens * (0.45 + 0.75 * float(clumps[k]))

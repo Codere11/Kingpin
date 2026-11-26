@@ -449,6 +449,7 @@ def main() -> None:
         if _found:
             break
     g._spawn = (_sx, _sy)
+    biomes.set_spawn(_sx, _sy)
     # THE SHIP IS A FIXED, INVINCIBLE MAN: it lives in the click-a-man list
     # like any NPC, so clicking it works through the SAME path that opens
     # every other person -- no separate ship-click coordinate math that can
@@ -1847,6 +1848,7 @@ def main() -> None:
         _spawn = _man.get("spawn")
         if _spawn and len(_spawn) >= 2:
             g._spawn = (float(_spawn[0]), float(_spawn[1]))
+            biomes.set_spawn(*g._spawn)
         _ship = _man.get("ship")
         if _ship and len(_ship) >= 2 and getattr(g, "ship_npc", None) is not None:
             g.ship_npc.x, g.ship_npc.y = float(_ship[0]), float(_ship[1])

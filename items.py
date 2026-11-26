@@ -67,6 +67,12 @@ REGISTRY: dict[str, ItemDef] = {
     "agave_seed": ItemDef("agave_seed", "Agave Seeds",
                           "Plant in fertile soil; grows agave.",
                           stackable=True, max_stack=100),
+    "hardberry_seed": ItemDef("hardberry_seed", "Hardberry Seeds",
+                              "Plant in barren soil; grows hardberries.",
+                              stackable=True, max_stack=100),
+    "pipeleaf_seed": ItemDef("pipeleaf_seed", "Pipeleaf Seeds",
+                             "Plant in barren soil; grows pipeleaf.",
+                             stackable=True, max_stack=100),
     "tobacco": ItemDef("tobacco", "Tobacco", "Cured leaf. The whole point of all this.",
                        stackable=True, max_stack=100, quality=True),
     "wheat": ItemDef("wheat", "Wheat",
@@ -81,6 +87,9 @@ REGISTRY: dict[str, ItemDef] = {
     "agave_wort": ItemDef("agave_wort", "Agave Wort",
                           "Roasted agave, mashed. The desert's whole future.",
                           stackable=True, max_stack=100, quality=True),
+    "hardberry_wort": ItemDef("hardberry_wort", "Hardberry Wort",
+                              "Crushed metal-red berries, waiting for the still.",
+                              stackable=True, max_stack=100, quality=True),
     "beer": ItemDef("beer", "Beer",
                     "Dark, honest and strong. Worth far more than the grain it came from.",
                     stackable=True, max_stack=100, quality=True),
@@ -152,6 +161,21 @@ REGISTRY: dict[str, ItemDef] = {
     "chili_seed": ItemDef("chili_seed", "Chili Seeds",
                           "Plant in warm soil; grows chili peppers.",
                           stackable=True, max_stack=100),
+    "hardberries": ItemDef("hardberries", "Hardberries",
+                           "Metallic-red berries from a grey bush. Food for hard country.",
+                           stackable=True, max_stack=20),
+    "pipeleaf": ItemDef("pipeleaf", "Pipeleaf",
+                        "A steel-stemmed leaf. The artisan crushes it into dust.",
+                        stackable=True, max_stack=100, quality=True),
+    "crushed_pipeleaf": ItemDef("crushed_pipeleaf", "Crushed Pipeleaf",
+                                "A fine grey dust with a metallic bite. The ship pays well.",
+                                stackable=True, max_stack=100, quality=True),
+    "steelka": ItemDef("steelka", "Steelka",
+                       "White, faintly grey hardberry spirit. The ship pays well.",
+                       stackable=True, max_stack=100, quality=True),
+    "ironwood": ItemDef("ironwood", "Ironwood",
+                        "Grey, dense timber. Hard to cut, harder to break.",
+                        stackable=True, max_stack=100),
     "bed": ItemDef("bed", "Bedroll", "A white cotton bedroll. Place it and sleep.",
                    stackable=True, max_stack=10),
     "door": ItemDef("door", "Door", "A wooden door for a camp wall. Walk through it.",
@@ -881,6 +905,81 @@ def _draw_chili_seed(s: int) -> pygame.Surface:
     return _draw_seeds(s, (200, 120, 90), (150, 70, 50))
 
 
+def _draw_hardberry_seed(s: int) -> pygame.Surface:
+    return _draw_seeds(s, (180, 112, 106), (112, 70, 68))
+
+
+def _draw_pipeleaf_seed(s: int) -> pygame.Surface:
+    return _draw_seeds(s, (152, 154, 150), (92, 94, 92))
+
+
+def _draw_hardberries(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    bush = (96, 96, 92)
+    for dx, dy, r in ((-0.18, 0.58, 0.20), (0.17, 0.61, 0.19),
+                      (0.0, 0.44, 0.22), (-0.05, 0.70, 0.16)):
+        pygame.draw.circle(surf, bush, (int((0.5 + dx) * s), int((dy) * s)),
+                           max(2, int(r * s)))
+        pygame.draw.circle(surf, (70, 70, 68),
+                           (int((0.5 + dx) * s), int((dy) * s)),
+                           max(2, int(r * s)), 1)
+    for dx, dy in ((-0.20, 0.55), (0.15, 0.60), (0.03, 0.43), (-0.02, 0.69)):
+        pygame.draw.circle(surf, (170, 64, 58), (int((0.5 + dx) * s), int(dy * s)),
+                           max(2, int(0.06 * s)))
+        pygame.draw.circle(surf, (212, 112, 92), (int((0.5 + dx) * s),
+                           int(dy * s)), max(1, int(0.03 * s)))
+    return surf
+
+
+def _draw_pipeleaf(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    steel, dark, leaf = (168, 172, 176), (88, 92, 98), (78, 112, 68)
+    # a steel stem with short pipe branches
+    pygame.draw.line(surf, dark, _pt((0.28, 0.86), s), _pt((0.62, 0.18), s),
+                     max(2, int(0.10 * s)))
+    pygame.draw.line(surf, steel, _pt((0.30, 0.84), s), _pt((0.62, 0.20), s),
+                     max(1, int(0.055 * s)))
+    for bx, by, ex, ey in ((0.42, 0.62, 0.18, 0.48), (0.48, 0.50, 0.78, 0.36),
+                           (0.54, 0.38, 0.30, 0.22)):
+        pygame.draw.line(surf, dark, _pt((bx, by), s), _pt((ex, ey), s),
+                         max(2, int(0.075 * s)))
+        pygame.draw.line(surf, steel, _pt((bx, by), s), _pt((ex, ey), s),
+                         max(1, int(0.04 * s)))
+        pygame.draw.ellipse(surf, leaf, (ex * s - 0.10 * s, ey * s - 0.045 * s,
+                                         0.20 * s, 0.09 * s))
+    return surf
+
+
+def _draw_crushed_pipeleaf(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    pygame.draw.ellipse(surf, (86, 88, 88), (0.14 * s, 0.58 * s, 0.72 * s, 0.28 * s))
+    pygame.draw.ellipse(surf, (148, 152, 154), (0.20 * s, 0.48 * s, 0.60 * s, 0.30 * s))
+    pygame.draw.ellipse(surf, (186, 190, 192), (0.28 * s, 0.43 * s, 0.44 * s, 0.22 * s))
+    for dx, dy in ((0.32, 0.52), (0.58, 0.47), (0.48, 0.62), (0.68, 0.65)):
+        pygame.draw.circle(surf, (116, 120, 122), (int(dx * s), int(dy * s)),
+                           max(1, int(0.025 * s)))
+    return surf
+
+
+def _draw_steelka(s: int) -> pygame.Surface:
+    return _draw_drink(s, (218, 218, 210))
+
+
+def _draw_ironwood(s: int) -> pygame.Surface:
+    surf = _canvas(s)
+    bark, bark_d = (104, 106, 106), (62, 64, 66)
+    ring, ring_d = (168, 170, 168), (112, 114, 114)
+    for x, y, w in ((0.10, 0.60, 0.78), (0.16, 0.42, 0.72), (0.22, 0.24, 0.64)):
+        rect = pygame.Rect(x * s, y * s, w * s, 0.17 * s)
+        pygame.draw.rect(surf, bark, rect, border_radius=int(0.085 * s))
+        pygame.draw.rect(surf, bark_d, rect, 2, border_radius=int(0.085 * s))
+        ex, ey = int((x + 0.085) * s), int((y + 0.085) * s)
+        pygame.draw.circle(surf, ring, (ex, ey), int(0.085 * s))
+        pygame.draw.circle(surf, ring_d, (ex, ey), int(0.085 * s), 1)
+        pygame.draw.circle(surf, ring_d, (ex, ey), int(0.035 * s), 1)
+    return surf
+
+
 def _draw_chili(s: int) -> pygame.Surface:
     """The chili item: the bundled chili.png, scaled to the icon grid."""
     import os
@@ -988,6 +1087,7 @@ _DRAWERS = {
     "wheat_wort": _draw_wort,
     "berry_wort": _draw_wort,
     "agave_wort": _draw_wort,
+    "hardberry_wort": _draw_wort,
     "beer": _draw_beer,
     "chili_beer": _draw_chili_beer,
     "liqueur": _draw_liqueur,
@@ -1038,6 +1138,13 @@ _DRAWERS = {
     "cotton_seed": _draw_cotton_seed,
     "chili": _draw_chili,
     "chili_seed": _draw_chili_seed,
+    "hardberry_seed": _draw_hardberry_seed,
+    "pipeleaf_seed": _draw_pipeleaf_seed,
+    "hardberries": _draw_hardberries,
+    "pipeleaf": _draw_pipeleaf,
+    "crushed_pipeleaf": _draw_crushed_pipeleaf,
+    "steelka": _draw_steelka,
+    "ironwood": _draw_ironwood,
     "bed": _draw_bed,
     "door": _draw_door,
 }

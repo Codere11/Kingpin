@@ -21,7 +21,7 @@ def _bench_products(g, wp):
     import biomes
     t = g.world.temperature(wp.x, wp.y)
     h = g.world.humidity(wp.x, wp.y)
-    leaf_crop = biomes.crop_kinds(t, h)[1]
+    leaf_crop = biomes.crop_kinds(t, h, wp.x, wp.y)[1]
     leaf_item = crop.LEAF_ITEM.get(leaf_crop)
     product = crop.LEAF_PRODUCT.get(leaf_crop)
     return [(leaf_item, product)] if leaf_item and product else []
@@ -871,7 +871,8 @@ def run(g):
                                     _cy = fd["rect"].centery
                                     _t = g.world.temperature(_cx, _cy)
                                     _h = g.world.humidity(_cx, _cy)
-                                    fd["kind"] = (g.next_field_kind(fd["kind"], _t, _h)
+                                    fd["kind"] = (g.next_field_kind(fd["kind"], _t, _h,
+                                                                    _cx, _cy)
                                                    if g.next_field_kind else "wheat")
                                     g.toast("Field grows: %s" % fd["kind"])
                                     if g.sync_player_camp:
@@ -896,7 +897,9 @@ def run(g):
                                 # a fresh field starts on the biome's food crop
                                 _t = g.world.temperature(_r.centerx, _r.centery)
                                 _h = g.world.humidity(_r.centerx, _r.centery)
-                                _base = g.first_field_kind(_t, _h) if g.first_field_kind else "wheat"
+                                _base = (g.first_field_kind(_t, _h, _r.centerx,
+                                                            _r.centery)
+                                         if g.first_field_kind else "wheat")
                                 g.field_designations.append({"rect": _r, "type": "field", "kind": _base})
                                 g.toast("Field designated  (%d x %d)" % (_r.w, _r.h))
                             if g.sync_player_camp:
@@ -1015,7 +1018,7 @@ def run(g):
                         import crop as _crop
                         _t = g.world.temperature(_ch.x, _ch.y)
                         _h = g.world.humidity(_ch.x, _ch.y)
-                        _fitems = _crop.chest_filter_items(_t, _h)
+                        _fitems = _crop.chest_filter_items(_t, _h, _ch.x, _ch.y)
                     except Exception:
                         _fitems = None
                     g.chest_panel = ChestPanel(g.inventory, _ch.inventory,
@@ -2421,7 +2424,8 @@ def run(g):
                     g.seeded_villages.add(g.key)
                     g._vt = float(biomes.temperature(village.x, village.y, g.world.seed))
                     g._vh = float(biomes.humidity(village.x, village.y, g.world.seed))
-                    g.food, g.leaf = biomes.crop_kinds(g._vt, g._vh)
+                    g.food, g.leaf = biomes.crop_kinds(g._vt, g._vh,
+                                                        village.x, village.y)
                     for house in village.houses:
                         for tx, ty in house.garden:
                             # FOOD AND NOTHING ELSE. A backyard used to be an

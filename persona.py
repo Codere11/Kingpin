@@ -62,12 +62,28 @@ def _key(npc) -> str:
     return "where:%s|%s|%s" % (name, x, y)
 
 
-def assign_from_key(key: str) -> str:
-    """Weighted draw from the table, deterministic in `key`."""
+def assign_from_key(key: str, t_bias: float = 1.0) -> str:
+    """Weighted draw from the table, deterministic in `key`.
+
+    `t_bias` makes a culture's Thinking types more common without changing
+    the underlying person: the same id still draws the same number, it is the
+    table that leans.
+    """
     digest = hashlib.blake2b(str(key).encode("utf-8"), digest_size=8).digest()
     roll = (int.from_bytes(digest, "big") % 10000) / 100.0
+    bias = max(1.0, float(t_bias or 1.0))
+    # The parameter is a RELATIVE change in the Thinking share, not a raw
+    # table multiplier: t_bias=1.5 means half again as many T people.
+    _t = sum(w for n, w in TYPE_WEIGHTS.items() if len(n) > 2 and n[2] == "T")
+    _f = sum(w for n, w in TYPE_WEIGHTS.items() if not (len(n) > 2 and n[2] == "T"))
+    _den = _f - (bias - 1.0) * _t
+    _k = (bias * _f / _den) if _den > 0.0 else 99.0
+    weights = [(name, weight * (_k if len(name) > 2 and name[2] == "T" else 1.0))
+               for name, weight in TYPE_WEIGHTS.items()]
+    total = sum(w for _n, w in weights)
+    roll = roll * total / 100.0
     acc = 0.0
-    for name, weight in TYPE_WEIGHTS.items():
+    for name, weight in weights:
         acc += weight
         if roll < acc:
             return name
@@ -79,7 +95,7 @@ def assign(npc, force: bool = False) -> str:
     current = getattr(npc, "mbti", "") or ""
     if current and not force:
         return current
-    got = assign_from_key(_key(npc))
+    got = assign_from_key(_key(npc), getattr(npc, "mbti_t_bias", 1.0))
     try:
         npc.mbti = got
     except Exception:

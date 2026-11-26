@@ -30,11 +30,12 @@ QUALITY_TARGETS = (
     ("quality_sss", 8, "Quality SSS"),
 )
 
-QUALITY_CROPS = ("plant", "mushroom", "agave", "chili")
+QUALITY_CROPS = ("plant", "mushroom", "agave", "chili", "pipeleaf")
 CROP_NAMES = {
     "wheat": "Wheat", "berries": "Berries", "cactus": "Cactus",
     "plant": "Tobacco", "mushroom": "Red Mushroom", "agave": "Agave",
-    "cotton": "Cotton", "chili": "Chili",
+    "cotton": "Cotton", "chili": "Chili", "hardberry": "Hardberry",
+    "pipeleaf": "Pipeleaf",
 }
 
 STEP = 0.02                  # one harvest, 2% of the target per trait

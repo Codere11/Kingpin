@@ -47,6 +47,17 @@ _NAMES = ("Awan", "Kiona", "Takoda", "Yuma", "Nashoba", "Chenoa",
           "Mona", "Nodin", "Ojinjintka", "Paytah", "Sahale", "Tahatan")
 
 
+def _barren_persona(n) -> None:
+    """The second ring's people lean Thinking; assign it after NPC.__init__."""
+    try:
+        import persona as _persona
+        n.mbti_t_bias = 1.5
+        n.mbti = ""
+        _persona.assign(n, force=True)
+    except Exception:
+        pass
+
+
 def spawn_starter_camps(g) -> list:
     """The first four camps, scattered at random around the spawn in its
     biome -- not on a ring."""
@@ -209,8 +220,9 @@ def build(g, cx: float, cy: float, seed: int,
 
     temp = float(biomes.temperature(cx, cy, world.seed))
     hum = float(biomes.humidity(cx, cy, world.seed))
-    food_kind, leaf_kind = biomes.crop_kinds(temp, hum)
+    food_kind, leaf_kind = biomes.crop_kinds(temp, hum, cx, cy)
     food_item = crop.FOOD_ITEM.get(food_kind, "bread")
+    _barren = biomes.is_barren(cx, cy)
 
     people = rng.randint(10, 15)
     # THE TWO SOLDIERS: one stays with the axe, the other takes the bow once
@@ -334,6 +346,8 @@ def build(g, cx: float, cy: float, seed: int,
         n.speed = rng.uniform(95.0, 115.0)
         n.wear = biomes.npc_wear(temp, hum)
         n.skills.configure_local(n.wear)
+        if _barren:
+            _barren_persona(n)
         farmers.append(n)
         g._observe_npcs.append(n)             # drawn with the natives
     for i in range(n_warriors):
@@ -364,6 +378,9 @@ def build(g, cx: float, cy: float, seed: int,
         n._orbit = ang
         n.wear = biomes.npc_wear(temp, hum)
         n.skills.configure_local(n.wear)
+        if _barren:
+            _barren_persona(n)
+            n.iron_armor = True
         warriors.append(n)
         g._observe_npcs.append(n)
 
@@ -457,6 +474,8 @@ def build(g, cx: float, cy: float, seed: int,
         hn.speed = rng.uniform(95.0, 115.0)
         hn.wear = biomes.npc_wear(temp, hum)
         hn.skills.configure_local(hn.wear)
+        if _barren:
+            _barren_persona(hn)
         settlement.handlers.append(hn)
         g._observe_npcs.append(hn)
     # The frame owns these people and walks them itself, whatever the worker

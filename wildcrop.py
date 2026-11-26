@@ -101,7 +101,7 @@ def _plant(world, tx: int, ty: int):
     if h % 1000 < density_at(x, y) and world.tile_kind(tx, ty) == "grass":
         _t = float(biomes.temperature(x, y, world.seed))
         _h = float(biomes.humidity(x, y, world.seed))
-        food, leaf = biomes.crop_kinds(_t, _h)
+        food, leaf = biomes.crop_kinds(_t, _h, x, y)
         _kind = leaf if (h >> 8) & 1 else food
         # COTTON grows wild in the savanna, one tile in four there.
         if biomes.biome_name(_t, _h) == "savanna" and (h >> 4) % 4 == 0:
@@ -148,7 +148,7 @@ def _cell(world, cx: int, cy: int):
             wy = ty * TILE + TILE / 2.0
             _t = float(biomes.temperature(wx, wy, world.seed))
             _h = float(biomes.humidity(wx, wy, world.seed))
-            food, leaf = biomes.crop_kinds(_t, _h)
+            food, leaf = biomes.crop_kinds(_t, _h, wx, wy)
             kind = leaf if (h >> 8) & 1 else food
             if biomes.biome_name(_t, _h) == "savanna" and (h >> 4) % 4 == 0:
                 kind = "cotton"

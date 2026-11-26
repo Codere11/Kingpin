@@ -37,13 +37,14 @@ def yield_scale(skill: float) -> float:
     return 1.0 + 2.0 * k
 PHASE_SECONDS = GROW_SECONDS / 4.0        # 3 growth phases, then ripe
 
-LEAF_KINDS = ("plant", "mushroom", "agave", "chili")
-FOOD_KINDS = ("wheat", "berries", "cactus")
+LEAF_KINDS = ("plant", "mushroom", "agave", "chili", "pipeleaf")
+FOOD_KINDS = ("wheat", "berries", "cactus", "hardberry")
 FIBRE_KINDS = ("cotton",)      # neither food nor leaf: cotton, spun into cloth
 
 # EVERY CROP A FIELD CAN GROW, in the order a field's type cycles. Bread is
 # the base: a fresh field is wheat, and each click moves on to the next crop.
-FIELD_KINDS = ("wheat", "berries", "cactus", "plant", "mushroom", "agave", "cotton", "chili")
+FIELD_KINDS = ("wheat", "berries", "cactus", "plant", "mushroom", "agave",
+               "cotton", "chili", "hardberry", "pipeleaf")
 
 # the item whose icon sits on a field of each crop (bread for wheat, the
 # boll for cotton, and so on)
@@ -52,15 +53,19 @@ FIELD_SYMBOL = {
     "plant": "tobacco", "mushroom": "red_mushroom", "agave": "agave",
     "cotton": "cotton",
     "chili": "chili",
+    "hardberry": "hardberries",
+    "pipeleaf": "pipeleaf",
 }
 
 # what each crop yields
 LEAF_ITEM = {"plant": "tobacco", "mushroom": "red_mushroom", "agave": "agave",
-             "chili": "chili"}
-FOOD_ITEM = {"wheat": "bread", "berries": "berries", "cactus": "cactus_fruit"}
+             "chili": "chili", "pipeleaf": "pipeleaf"}
+FOOD_ITEM = {"wheat": "bread", "berries": "berries", "cactus": "cactus_fruit",
+             "hardberry": "hardberries"}
 
 # what an artisan's bench turns each leaf crop into -- the finished article
-LEAF_PRODUCT = {"plant": "cigar", "mushroom": "dried_mushroom", "agave": "mezcal"}
+LEAF_PRODUCT = {"plant": "cigar", "mushroom": "dried_mushroom",
+                "agave": "mezcal", "pipeleaf": "crushed_pipeleaf"}
 LEAF_OF_PRODUCT = {v: k for k, v in LEAF_PRODUCT.items()}
 
 # every crop has its own seed, and every seed grows exactly one crop
@@ -70,17 +75,22 @@ SEED_CROP = {
     "cactus_seed": "cactus", "agave_seed": "agave",
     "cotton_seed": "cotton",
     "chili_seed": "chili",
+    "hardberry_seed": "hardberry",
+    "pipeleaf_seed": "pipeleaf",
 }
 CROP_SEED = {crop: seed for seed, crop in SEED_CROP.items()}
 
 
-def growable_kinds(t, h):
+def growable_kinds(t, h, x=None, y=None):
     """The crops a field in this biome can grow, in the order they cycle on a
     click. Snow keeps berries and mushrooms, the desert keeps cactus and agave,
-    everywhere else wheat and tobacco -- and cotton only on the savanna."""
+    everywhere else wheat and tobacco -- and cotton only on the savanna.  The
+    second ring's barren ground grows hardberries and pipeleaf instead."""
     import biomes
-    food, leaf = biomes.crop_kinds(t, h)
+    food, leaf = biomes.crop_kinds(t, h, x, y)
     kinds = [food, leaf]
+    if x is not None and y is not None and biomes.is_barren(x, y):
+        return kinds
     name = biomes.biome_name(t, h)
     if name == "savanna":
         kinds.append("cotton")
@@ -89,13 +99,13 @@ def growable_kinds(t, h):
     return kinds
 
 
-def chest_filter_items(t, h):
+def chest_filter_items(t, h, x=None, y=None):
     """The chest lid's choosable types for a settlement in this biome: Any,
     its own food, its own leaf, its own finished product, and wood. Nothing
     else -- no seeds, tools, arms or oddments. Iron ore is added in the snow,
     where it is mined."""
     import biomes
-    food_crop, leaf_crop = biomes.crop_kinds(t, h)
+    food_crop, leaf_crop = biomes.crop_kinds(t, h, x, y)
     out = [None]
     for item in (FOOD_ITEM.get(food_crop), LEAF_ITEM.get(leaf_crop),
                  LEAF_PRODUCT.get(leaf_crop), "wood", "horse"):
@@ -122,9 +132,10 @@ def chest_filter_items(t, h):
     # separate instead of dumping everything into one undifferentiated bin.
     try:
         import economy as _eco
-        for _item in ("wheat", "berries", "agave",
+        for _item in ("wheat", "berries", "agave", "hardberries",
                       "wheat_wort", "berry_wort", "agave_wort",
-                      "beer", "liqueur", "mezcal"):
+                      "hardberry_wort", "beer", "liqueur", "mezcal",
+                      "steelka", "pipeleaf", "crushed_pipeleaf"):
             if _item not in out:
                 out.append(_item)
     except Exception:
@@ -436,6 +447,53 @@ def draw_chili(screen, x, y, elapsed, cam_x, cam_y, biome=None):
         screen.blit(img, (sx - h / 2, sy - h * 0.88))
 
 
+def draw_hardberry(screen, x, y, elapsed, cam_x, cam_y, biome=None):
+    """A grey bush with metallic-red berries."""
+    sx = x - cam_x
+    sy = y - cam_y
+    p = min(1.0, max(0.0, elapsed / GROW_SECONDS))
+    st = stage(elapsed)
+    pygame.draw.ellipse(screen, (48, 48, 48), (sx - 10, sy - 3, 20, 7))
+    bush = 0.55 + 0.45 * p
+    wx, wy = wind.sway(x, y, 0.75)
+    for dx, dy, r, col in ((-6, -1, 8, (104, 104, 100)), (6, 0, 8, (86, 86, 84)),
+                           (0, -6, 9, (116, 116, 112)), (0, 3, 7, (78, 78, 76))):
+        pygame.draw.circle(screen, col, (int(sx + dx + wx), int(sy + dy + wy)),
+                           max(2, int(r * bush)))
+    if st >= 3:
+        for dx, dy in ((-6, -3), (5, -1), (0, 4), (-2, -9), (7, -8)):
+            pygame.draw.circle(screen, (174, 62, 56),
+                               (int(sx + dx + wx), int(sy + dy + wy)), 3)
+            pygame.draw.circle(screen, (220, 116, 96),
+                               (int(sx + dx + wx), int(sy + dy + wy)), 1)
+
+
+def draw_pipeleaf(screen, x, y, elapsed, cam_x, cam_y, biome=None):
+    """A steel stem that grows more short pipes as it matures."""
+    sx = x - cam_x
+    sy = y - cam_y
+    p = min(1.0, max(0.0, elapsed / GROW_SECONDS))
+    st = stage(elapsed)
+    pygame.draw.ellipse(screen, (48, 48, 48), (sx - 10, sy - 3, 20, 7))
+    height = 10.0 + 34.0 * p
+    wx, wy = wind.sway(x, y, 0.45)
+    dark, steel = (78, 82, 86), (164, 168, 172)
+    pygame.draw.line(screen, dark, (sx, sy), (sx + wx, sy - height + wy), 3)
+    pygame.draw.line(screen, steel, (sx, sy), (sx + wx, sy - height + wy), 1)
+    pipes = 1 + st
+    for i in range(pipes):
+        t = (i + 1) / (pipes + 0.4)
+        py = sy - height * t + wy * t
+        side = -1 if i % 2 else 1
+        ex = sx + side * (8 + 4 * p) + wx * t
+        pygame.draw.line(screen, dark, (sx + wx * t, py), (ex, py - 4), 2)
+        pygame.draw.line(screen, steel, (sx + wx * t, py), (ex, py - 4), 1)
+        pygame.draw.ellipse(screen, (74, 108, 64), (ex - 3, py - 7, 8, 5))
+    if st >= 3:
+        pygame.draw.ellipse(screen, (196, 198, 196),
+                            (sx + wx - 4, sy - height + wy - 8, 8, 6))
+
+
 _DRAWERS = {
     "plant": draw_plant,
     "mushroom": draw_mushroom,
@@ -445,4 +503,6 @@ _DRAWERS = {
     "cactus": draw_cactus,
     "cotton": draw_cotton,
     "chili": draw_chili,
+    "hardberry": draw_hardberry,
+    "pipeleaf": draw_pipeleaf,
 }

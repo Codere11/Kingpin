@@ -544,6 +544,7 @@ class NPC:
     _break_off_until: Any = 0.0   # ...and it wears off three minutes later
     _consume_mood_off: Any = 0.0  # the mood the fix added, to remove on expiry
     _seller_of: Any = None        # luxury -> the man who sold it to him
+    iron_armor: Any = False       # second-ring warrior plate
 
     # -- WHAT A MAN IS, WRITTEN DOWN --------------------------------------
     # One plain dict: every compiled field and everything in __dict__. The
@@ -693,6 +694,7 @@ class NPC:
         self.smith_product = None      # what this smith makes (set by the player)
         self.mounted = False           # a native warrior riding a horse (4th alarm)
         self.reinforced_armor = False  # a bought soldier in reinforced armor
+        self.iron_armor = False        # a second-ring warrior's iron plates
         self.raiding = False           # a native warrior marching on a raid
         self.raid_target = None        # (x, y) the raid is heading for
         self.escort_horse = None       # the cargo horse a soldier rides escort for
@@ -895,6 +897,14 @@ class NPC:
         # then take the wound, then run in the opposite direction.
         if getattr(self, "asleep", False):
             self.wake_and_flee(attacker)
+        # SECOND-RING IRON: a third of blows ring off the plate.
+        if getattr(self, "iron_armor", False) and random.random() < 0.35:
+            self.hit_flash = 0.08
+            try:
+                self._snd("npc_hurt")
+            except Exception:
+                pass
+            return False
         self.health -= amount
         try:
             persona.add_trauma(self, amount)
@@ -1731,7 +1741,7 @@ class NPC:
                                 _world = getattr(g, "world", None)
                                 _t = float(_world.temperature(wp.x, wp.y))
                                 _h = float(_world.humidity(wp.x, wp.y))
-                                _leaf_crop = _biomes.crop_kinds(_t, _h)[1]
+                                _leaf_crop = _biomes.crop_kinds(_t, _h, wp.x, wp.y)[1]
                                 _leaf = _crop.LEAF_ITEM.get(_leaf_crop)
                                 _prod = _crop.LEAF_PRODUCT.get(_leaf_crop)
                                 if _leaf and _prod:
@@ -1996,7 +2006,7 @@ class NPC:
         if bench is None or getattr(bench, "broken", False):
             self._native_idle(dt)
             return
-        drinks = ("beer", "liqueur", "mezcal", "chili_beer",
+        drinks = ("beer", "liqueur", "mezcal", "steelka", "chili_beer",
                   "chili_mezcal")
         # Deliver finished drink before starting another batch.
         if any(int(self.carry.get(i, 0) or 0) > 0 for i in drinks):
@@ -2036,7 +2046,7 @@ class NPC:
             self.carry.pop(mash, None)
             self.carry_grade.pop(mash, None)
         base_drink = {"wheat": "beer", "berries": "liqueur",
-                      "agave": "mezcal"}.get(mash)
+                      "agave": "mezcal", "hardberries": "steelka"}.get(mash)
         if base_drink is None:
             return
         drink = base_drink
@@ -4265,8 +4275,11 @@ class NPC:
             # main works and `import trees; trees.fell(...)` here does not.
             if _FOREST is not None:
                 _FOREST.fell(target, now)
-            economy.cut_wood(self.village, self,
-                             self.rng.randint(FELL_LOGS_MIN, FELL_LOGS_MAX))
+            _amt = self.rng.randint(FELL_LOGS_MIN, FELL_LOGS_MAX)
+            if getattr(target, "species", "") == "ironwood":
+                economy.store_or_carry(self.village, self, "ironwood", _amt)
+            else:
+                economy.cut_wood(self.village, self, _amt)
             # A TREE DOWN IS THE ACT, not the swing that happened to land on
             # this frame. Raising the face in _swing_tool pinned it on: the
             # pit swings once per FRAME, so a miner would have worn the
@@ -5415,6 +5428,15 @@ class NPC:
             for _px in (int(sx) - 8, int(sx) + 6):
                 pygame.draw.circle(screen, (96, 66, 38), (_px, int(sy) - 5), 4)
                 pygame.draw.circle(screen, (52, 36, 24), (_px, int(sy) - 5), 4, 1)
+        elif getattr(self, "iron_armor", False):
+            # IRONWOOD-COUNTRY IRON: darker, heavier plates.
+            pygame.draw.circle(screen, (242, 232, 232) if flash else (132, 138, 146),
+                               (int(sx), int(sy)), 11)
+            pygame.draw.circle(screen, (54, 58, 64), (int(sx), int(sy)), 11, 2)
+            pygame.draw.line(screen, (74, 78, 84), (int(sx) - 8, int(sy) - 3),
+                             (int(sx) + 8, int(sy) - 3), 2)
+            pygame.draw.line(screen, (74, 78, 84), (int(sx) - 7, int(sy) + 3),
+                             (int(sx) + 7, int(sy) + 3), 2)
         elif getattr(self, "reinforced_armor", False):
             # REINFORCED ARMOR: grey iron plates bolted over a cloth body.
             pygame.draw.circle(screen, (242, 232, 232) if flash else (176, 180, 190),
@@ -5477,7 +5499,8 @@ class NPC:
         if getattr(self, "is_stalin", False):
             # THE OLD MAN keeps the moustache; his cap is gone with the republic.
             face.moustache(screen, hx, hy, head_r)
-        if is_military(self) or getattr(self, "hide_armor", False):
+        if (is_military(self) or getattr(self, "hide_armor", False)
+                or getattr(self, "iron_armor", False)):
             # WAR PAINT ACROSS THE EYES, for the soldiers and the armoured.
             face.war_paint(screen, hx, hy, head_r, fx, fy)
         # LOCAL DRESS: a snow man's fur band, a desert man's sombrero. The

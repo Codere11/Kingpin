@@ -9,6 +9,8 @@ tree species/density blend the same way.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 from palette import rich
 
@@ -35,7 +37,51 @@ BIOMES = {
     "desert":   {"dark": rich((206, 184, 128)), "lite": rich((240, 224, 168))},
     "savanna":  {"dark": rich((150, 138, 72)),  "lite": rich((198, 184, 108))},
     "jungle":   {"dark": rich((44, 90, 52)),    "lite": rich((96, 152, 72))},
+    # THE SECOND RING: bare grey rock, ironwood, and the works of tribes who
+    # learned metallurgy before they learned to be friendly.
+    "barren":   {"dark": rich((88, 88, 86)),    "lite": rich((142, 142, 138))},
 }
+
+# THE RINGS. The first ring around the ship is the country the game already
+# had. Past its edge the ground turns to Barren Rocks; the further out you go,
+# the more of that hard country there is.
+RING1_RADIUS = 55000.0
+RING2_RADIUS = 110000.0
+_SPAWN = [0.0, 0.0]
+_BARREN_DARK = rich((88, 88, 86))
+_BARREN_LITE = rich((142, 142, 138))
+
+
+def set_spawn(x: float, y: float) -> None:
+    """The ship/spawn point the rings are measured from."""
+    _SPAWN[0], _SPAWN[1] = float(x), float(y)
+
+
+def ring(x: float, y: float) -> int:
+    d = math.hypot(float(x) - _SPAWN[0], float(y) - _SPAWN[1])
+    return 1 if d < RING1_RADIUS else 2
+
+
+def barren_factor(x, y):
+    """0 in the first ring, 1 in the Barren Rocks, smooth at the border."""
+    if isinstance(x, np.ndarray) or isinstance(y, np.ndarray):
+        d = np.hypot(np.asarray(x, np.float32) - _SPAWN[0],
+                     np.asarray(y, np.float32) - _SPAWN[1])
+        return _ssfa((d - RING1_RADIUS) / 5000.0)
+    d = math.hypot(float(x) - _SPAWN[0], float(y) - _SPAWN[1])
+    return _ssf((d - RING1_RADIUS) / 5000.0)
+
+
+def barren_factor_array(x, y):
+    return barren_factor(x, y)
+
+
+def is_barren(x: float, y: float) -> bool:
+    return barren_factor(x, y) >= 0.5
+
+
+def barren_colors():
+    return _BARREN_DARK, _BARREN_LITE
 
 
 def surface(t, h) -> str:
@@ -112,9 +158,12 @@ def npc_wear(t, h) -> str:
     return "normal"
 
 
-def crop_kinds(t, h):
+def crop_kinds(t, h, x=None, y=None):
     """(food crop, leaf crop) grown in this biome. The two crop slots stay the
-    same everywhere -- only what grows in them changes."""
+    same everywhere -- only what grows in them changes.  Give x,y and the
+    second ring grows its own metal-red berries and pipeleaf."""
+    if x is not None and y is not None and is_barren(x, y):
+        return "hardberry", "pipeleaf"
     if surface(t, h) == "snow":
         return "berries", "mushroom"
     if biome_name(t, h) == "desert":
@@ -122,9 +171,11 @@ def crop_kinds(t, h):
     return "wheat", "plant"
 
 
-def can_plant(t, h, kind: str) -> bool:
+def can_plant(t, h, kind: str, x=None, y=None) -> bool:
     """Whether a crop can be grown here. Desert crops won't take in the snow,
     and snow crops won't take in the desert."""
+    if x is not None and y is not None and is_barren(x, y):
+        return kind in ("hardberry", "pipeleaf")
     if surface(t, h) == "snow" and kind in ("cactus", "agave"):
         return False
     if biome_name(t, h) == "desert" and kind in ("berries", "mushroom"):
@@ -183,6 +234,7 @@ TREES = {
     "woodland": {"broadleaf": 1.0},
     "marsh":    {"broadleaf": 1.0},
     "desert":   {"cactus": 1.0},
+    "barren":   {"ironwood": 1.0},
     "savanna":  {"acacia": 1.0},
     "jungle":   {"jungle": 1.0},
 }

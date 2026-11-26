@@ -20,11 +20,21 @@ import crop
 import economy
 
 
-def next_kind(kind: str, t: float, h: float) -> str:
+def _barren_persona(n) -> None:
+    try:
+        import persona as _persona
+        n.mbti_t_bias = 1.5
+        n.mbti = ""
+        _persona.assign(n, force=True)
+    except Exception:
+        pass
+
+
+def next_kind(kind: str, t: float, h: float, x=None, y=None) -> str:
     """The crop a field cycles to on the next click. Only what actually grows
     in that biome is offered -- no tobacco out of the snow, no agave in the
     temperate lands."""
-    ks = crop.growable_kinds(t, h)
+    ks = crop.growable_kinds(t, h, x, y)
     if not ks:
         return "wheat"
     try:
@@ -34,9 +44,9 @@ def next_kind(kind: str, t: float, h: float) -> str:
     return ks[(i + 1) % len(ks)]
 
 
-def first_kind(t: float, h: float) -> str:
+def first_kind(t: float, h: float, x=None, y=None) -> str:
     """The crop a brand-new field starts on: the biome's food crop."""
-    ks = crop.growable_kinds(t, h)
+    ks = crop.growable_kinds(t, h, x, y)
     return ks[0] if ks else "wheat"
 
 
@@ -370,6 +380,8 @@ def _spawn_human_baby(g, a, b) -> None:
         _h = float(_bio.humidity(mx, my, int(getattr(g.world, "seed", 1))))
         baby.wear = _bio.npc_wear(_t, _h)
         baby.skills.configure_local(baby.wear)
+        if _bio.is_barren(mx, my):
+            _barren_persona(baby)
     except Exception:
         pass
     if baby not in pc.people:
@@ -411,7 +423,7 @@ def conquer_camp(g, native_camp) -> None:
             _seed0 = int(getattr(g.world, "seed", 1))
             _t = float(_biomes.temperature(native_camp.x, native_camp.y, _seed0))
             _h = float(_biomes.humidity(native_camp.x, native_camp.y, _seed0))
-            for _k in crop.growable_kinds(_t, _h):
+            for _k in crop.growable_kinds(_t, _h, native_camp.x, native_camp.y):
                 _s = crop.CROP_SEED.get(_k)
                 if _s:
                     n.stock[_s] = int(n.stock.get(_s, 0)) + 3
@@ -549,7 +561,7 @@ def sync_artisans(g) -> None:
                 _world = getattr(g, "world", None)
                 _t = float(_world.temperature(wp.x, wp.y))
                 _h = float(_world.humidity(wp.x, wp.y))
-                _leaf_crop = _biomes.crop_kinds(_t, _h)[1]
+                _leaf_crop = _biomes.crop_kinds(_t, _h, wp.x, wp.y)[1]
                 _leaf = _crop.LEAF_ITEM.get(_leaf_crop)
                 _prod = _crop.LEAF_PRODUCT.get(_leaf_crop)
                 if _leaf and _prod:
@@ -625,6 +637,8 @@ def spawn_conquered(g, farmers: int = 3, loggers: int = 2) -> None:
         n.speed = n.rng.uniform(95.0, 115.0)
         n.wear = biomes.npc_wear(temp, hum)
         n.skills.configure_local(n.wear)
+        if biomes.is_barren(n.x, n.y):
+            _barren_persona(n)
         n.home = (n.x, n.y)
         camp.workers.append(n)
         if n not in getattr(g, "_observe_npcs", ()):
@@ -653,6 +667,8 @@ def spawn_conquered(g, farmers: int = 3, loggers: int = 2) -> None:
         n.speed = n.rng.uniform(95.0, 115.0)
         n.wear = biomes.npc_wear(temp, hum)
         n.skills.configure_local(n.wear)
+        if biomes.is_barren(n.x, n.y):
+            _barren_persona(n)
         n.home = (n.x, n.y)
         camp.loggers.append(n)
         if n not in getattr(g, "_observe_npcs", ()):
@@ -687,6 +703,11 @@ def spawn_soldier(g, x: float, y: float):
     n.mag = _guns.MAG[_guns.RIFLE]
     n.skills.shooting = 0.5
     n.reinforced_armor = True
+    try:
+        if biomes.is_barren(n.x, n.y):
+            _barren_persona(n)
+    except Exception:
+        pass
     n.max_health = int(round(_stats.body_for(n) * 4.0))
     n.health = n.max_health
     n.home = (float(x), float(y))

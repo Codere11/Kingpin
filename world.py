@@ -90,9 +90,9 @@ def coast_x(y, seed):
 
 # plot kinds that count as worked / planted soil (must match crop.py)
 _WORKED = ("dirt", "fertile", "plant", "wheat", "berries", "mushroom",
-           "agave", "cactus", "cotton")
+           "agave", "cactus", "cotton", "chili", "hardberry", "pipeleaf")
 _PLANTED = ("fertile", "plant", "wheat", "berries", "mushroom", "agave",
-            "cactus", "cotton")
+            "cactus", "cotton", "chili", "hardberry", "pipeleaf")
 
 
 def _smoothstep(x, a, b):
@@ -159,8 +159,15 @@ class World:
             got = self._kind_cache.get(key)
             if got is not None:
                 return got
-        h = float(biomes.humidity(np.float32(tx * TILE + TILE / 2),
-                                  np.float32(ty * TILE + TILE / 2), self.seed))
+        _wx_c = tx * TILE + TILE / 2.0
+        _wy_c = ty * TILE + TILE / 2.0
+        if biomes.is_barren(_wx_c, _wy_c):
+            got = "dry"                            # bare rock country
+            with self._lock:
+                self._kind_cache[key] = got
+            return got
+        h = float(biomes.humidity(np.float32(_wx_c),
+                                  np.float32(_wy_c), self.seed))
         got = "dry" if h < 0.24 else "grass"       # bare sand in the desert
         with self._lock:
             self._kind_cache[key] = got
@@ -332,6 +339,16 @@ class GroundRenderer:
 
         dark = biomes.blend_array("dark", climate, hum)
         lite = biomes.blend_array("lite", climate, hum)
+        # THE SECOND RING: bare grey rock over what the climate would have
+        # painted.  The blend is smooth at the border, so the first ring keeps
+        # exactly the country it always had.
+        _barren = biomes.barren_factor_array(X, Y)[..., None]
+        if float(np.max(_barren)) > 0.0:
+            _bd, _bl = biomes.barren_colors()
+            _bd = np.array(_bd, np.float32)
+            _bl = np.array(_bl, np.float32)
+            dark = dark * (1.0 - _barren) + _bd * _barren
+            lite = lite * (1.0 - _barren) + _bl * _barren
         mixv = np.clip(0.44 + 0.56 * clump, 0.0, 1.0)[..., None]
         col = dark * (1.0 - mixv) + lite * mixv
         col = col * (0.90 + 0.18 * clump)[..., None]
@@ -496,6 +513,8 @@ class GroundRenderer:
             t = float(self.world.temperature(np.float32(mx), np.float32(my)))
             h = float(self.world.humidity(np.float32(mx), np.float32(my)))
             dark, lite, _spec, _dens = biomes.mix(t, h)
+            if biomes.is_barren(mx, my):
+                dark, lite = biomes.barren_colors()
             col = (int((dark[0] + lite[0]) * 0.5),
                    int((dark[1] + lite[1]) * 0.5),
                    int((dark[2] + lite[2]) * 0.5))

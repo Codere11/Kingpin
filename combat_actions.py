@@ -374,15 +374,17 @@ def resolve_swing(g, kills) -> int:
         struck.hit_until = float(getattr(g, "now", 0.0)) + 0.5
         sound.play("hit_tree")
         g.combat.spawn_impact(struck.x, struck.y, (120, 90, 50))
-        if struck.strikes >= _m.AXE_STRIKES:
+        _need = int(getattr(struck, "strikes_needed", _m.AXE_STRIKES))
+        if struck.strikes >= _need:
             g.trees.fell(struck, g.now)
             amount = random.randint(10, 30)
-            g.inventory.add("wood", amount)
-            g.pay_share("wood", amount)
+            _drop = "ironwood" if getattr(struck, "species", "") == "ironwood" else "wood"
+            g.inventory.add(_drop, amount)
+            g.pay_share(_drop, amount)
             g.combat.spawn_impact(struck.x, struck.y - 20, (86, 140, 64))
-            g.toast(f"Felled a tree   +{amount} wood")
+            g.toast(f"Felled a tree   +{amount} {_drop}")
         else:
-            g.toast(f"Chopping…  {struck.strikes}/{_m.AXE_STRIKES}")
+            g.toast(f"Chopping…  {struck.strikes}/{_need}")
 
     # Chop down a fence or gate you built yourself.
     for lst in (g.built_fences, g.built_gates):
@@ -407,7 +409,18 @@ def resolve_swing(g, kills) -> int:
         _cx = min(max(g.player.x, _r.left), _r.right)
         _cy = min(max(g.player.y, _r.top), _r.bottom)
         if math.hypot(g.player.x - _cx, g.player.y - _cy) <= _m.AXE_REACH:
-            _bk = g.built_blocks.pop((_tx, _ty), "wood")
+            _bk = g.built_blocks.get((_tx, _ty), "wood")
+            if _bk == "ironwood":
+                _hits = getattr(g, "built_block_hits", None)
+                if _hits is None:
+                    _hits = g.built_block_hits = {}
+                _hits[(_tx, _ty)] = int(_hits.get((_tx, _ty), 0)) + 1
+                if _hits[(_tx, _ty)] < 3:
+                    g.combat.spawn_impact(_r.centerx, _r.centery, (140, 140, 136))
+                    g.toast("Chopping ironwood…  %d/3" % _hits[(_tx, _ty)])
+                    return kills
+                _hits.pop((_tx, _ty), None)
+            g.built_blocks.pop((_tx, _ty), "wood")
             g.inventory.add(_bk, 1)
             g.combat.spawn_impact(_r.centerx, _r.centery, (140, 100, 56))
             g.toast("Chopped it up  +1 %s" % _bk)

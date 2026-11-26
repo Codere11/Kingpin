@@ -28,6 +28,8 @@ GOODS = {
     "beer": (0.1, 0.03, 0.3),
     "chili_beer": (0.4, 0.12, 0.9),
     "chili_mezcal": (0.5, 0.15, 1.1),
+    "steelka": (0.1, 0.03, 0.3),
+    "crushed_pipeleaf": (0.1, 0.03, 0.3),
     "liqueur": (0.1, 0.03, 0.3),
     "mezcal": (0.1, 0.03, 0.3),
     "hide": (0.3, 0.15, 0.5),
@@ -38,6 +40,8 @@ GOODS = {
 }
 
 MID_GRADE = 4          # B, the middle of F..SSS (0..8)
+# HARD-COUNTRY GOODS: the ship pays a premium for the second ring's wares.
+PREMIUM = {"steelka": 1.35, "crushed_pipeleaf": 1.35}
 GRADE_STEP = 0.05      # +-5% per grade off B
 THRESHOLD = 100        # units a day that keep the price still
 HISTORY = 40           # how many daily prices the chart remembers
@@ -57,7 +61,7 @@ def sellable(g):
     """What the homeland will buy right now: hide once Animals is done, iron
     bars once Ironworking is done."""
     out = ["cigar", "dried_mushroom", "beer", "chili_beer", "liqueur",
-           "mezcal", "chili_mezcal", "chili"]
+           "mezcal", "chili_mezcal", "steelka", "crushed_pipeleaf", "chili"]
     try:
         import research
         if research.state(g, "animals") == "done":
@@ -112,6 +116,10 @@ def sell_value(g, good: str, count: int, grade: int,
     record_sale(g, good, count)
     base = getattr(g, "market", {}).get("base", {}).get(good, spec(good)[0])
     mult = 1.0
+    try:
+        mult *= float(PREMIUM.get(good, 1.0))
+    except Exception:
+        pass
     if isinstance(genetics, dict):
         try:
             mult += float((genetics.get("bonuses") or {}).get("sell", 0.0))

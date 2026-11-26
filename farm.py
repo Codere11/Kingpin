@@ -66,7 +66,7 @@ def plant(world, ground, inventory, tx: int, ty: int, now: float, toast,
     x = tx * TILE + TILE / 2.0
     y = ty * TILE + TILE / 2.0
     if not biomes.can_plant(float(world.temperature(x, y)),
-                            float(world.humidity(x, y)), kind):
+                            float(world.humidity(x, y)), kind, x, y):
         toast("That won't grow in this ground")
         return False
     if not inventory.consume(seed, 1):
@@ -115,6 +115,16 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
     kind = plot.kind
     seed = crop.CROP_SEED.get(kind)
     _scale = crop.yield_scale(skill)
+    # BARREN ROCKS: the same field gives about half.  The ground is hard and
+    # the crops are stubborn, which is why a local bushel is worth carrying.
+    _barren_mult = 1.0
+    if tx is not None and ty is not None:
+        try:
+            import biomes as _bio
+            if _bio.is_barren(tx * TILE, ty * TILE):
+                _barren_mult = 0.5
+        except Exception:
+            pass
     # LOCAL STRAIN: every harvest advances every target of this settlement's
     # crop, and the bonus belongs to this lot, not to the whole world.
     _gen = None
@@ -140,7 +150,8 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
             pass
     if kind in crop.LEAF_KINDS:
         item = crop.LEAF_ITEM[kind]
-        amount = max(1, int(round(random.randint(3, 6) * _scale * _ymult)))
+        amount = max(1, int(round(random.randint(3, 6) * _scale * _ymult
+                                  * _barren_mult)))
         seeds = max(1, int(round(random.randint(2, 5) * _smult)))
         inventory.add(item, amount, quality, plant_kind=kind, genetics=_gen)
         if share is not None:
@@ -148,7 +159,8 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
     elif kind in crop.FIBRE_KINDS:
         # COTTON: 5-10 cotton, 1-3 cotton seeds. No quality system.
         item = "cotton"
-        amount = max(1, int(round(random.randint(5, 10) * _ymult)))
+        amount = max(1, int(round(random.randint(5, 10) * _ymult
+                                  * _barren_mult)))
         seeds = max(1, int(round(random.randint(1, 3) * _smult)))
         inventory.add(item, amount, plant_kind=kind, genetics=_gen)
         if share is not None:
@@ -157,8 +169,10 @@ def harvest(world, inventory, plot, now: float, toast, quality: int = 0,
         item = crop.FOOD_ITEM[kind]
         amount = max(1, int(round({"wheat": random.randint(1, 3),
                                    "berries": random.randint(2, 5),
-                                   "cactus": random.randint(1, 2)}.get(kind, 1)
-                                  * _scale * _ymult)))
+                                   "cactus": random.randint(1, 2),
+                                   "hardberry": random.randint(2, 4)}
+                                  .get(kind, 1)
+                                  * _scale * _ymult * _barren_mult)))
         seeds = max(1, int(round(random.randint(1, 3) * _smult)))
         inventory.add(item, amount, plant_kind=kind, genetics=_gen)
         if share is not None:
