@@ -578,11 +578,9 @@ def _tile_colour(g, tx, ty):
             col = tuple(int((dark[i] + lite[i]) * 0.5) for i in range(3))
         except Exception:
             col = (70, 104, 58)
-    # a small deterministic variation per block, so a field of grass reads
-    # as blocks rather than one flat surface
-    h = ((tx * 73856093) ^ (ty * 19349663) ^ int(getattr(g.world, "seed", 1))) & 255
-    f = 0.91 + h / 255.0 * 0.16
-    col = tuple(max(0, min(255, int(v * f))) for v in col)
+    # NO PER-BLOCK COLOUR JITTER.  The variation was reading as a dark grid
+    # line between every natural block; the ground colour should come from
+    # the world and neighbouring blocks should be allowed to blend.
     cache[key] = col
     if len(cache) > 24000:
         cache.clear()
@@ -660,8 +658,8 @@ def add_ground_blocks(scene, g, radius=420.0):
             top = _tile_colour(g, tx * 2, ty * 2)
             edge = tuple(int(v * 0.58) for v in top)
             z = 0.65
-            x0, x1 = wx - 31.4, wx + 31.4
-            y0, y1 = wy - 31.4, wy + 31.4
+            x0, x1 = wx - 32.0, wx + 32.0
+            y0, y1 = wy - 32.0, wy + 32.0
             scene.add_face(((x0, y0, z), (x1, y0, z),
                             (x1, y1, z), (x0, y1, z)),
                            top, ground=True)
@@ -685,8 +683,8 @@ def add_ground_blocks(scene, g, radius=420.0):
         top = (76, 52, 32) if planted else (132, 101, 66)
         edge = (42, 28, 18)
         z = 0.74
-        x0, x1 = wx - 15.7, wx + 15.7
-        y0, y1 = wy - 15.7, wy + 15.7
+        x0, x1 = wx - 16.0, wx + 16.0
+        y0, y1 = wy - 16.0, wy + 16.0
         scene.add_face(((x0, y0, z), (x1, y0, z),
                         (x1, y1, z), (x0, y1, z)),
                        top, ground=True)
