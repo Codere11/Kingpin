@@ -1158,83 +1158,70 @@ def _item_faces(item_id, empty=False, bow_charge=0.0):
 
 
 def _draw_bow_viewmodel(g, screen) -> None:
-    """A real 3D first-person bow: curved limbs, depth, string and nocked arrow."""
+    """The Minecraft-style side view: a curved stick, a string, and an arrow.
+
+    It is presented on the right, side-on to the player, not built out of
+    boxes pretending to be a bow.  The limb is a curve; the string runs from
+    tip to nock to tip; the nock is pulled back while charging.
+    """
     w, h = screen.get_size()
-    focal = min(w, h) * 1.08
     p = g.player
     now = pygame.time.get_ticks() / 1000.0
     moving = bool(getattr(p, "moving", False))
-    bobx = math.sin(now * 8.0) * (2.5 if moving else 0.8)
-    boby = abs(math.cos(now * 8.0)) * (3.0 if moving else 1.0)
-    try:
-        boby += float(getattr(g, "v3d_pitch", 0.0)) * 15.0
-    except Exception:
-        pass
+    bobx = math.sin(now * 7.0) * (2.0 if moving else 0.5)
+    boby = abs(math.cos(now * 7.0)) * (2.0 if moving else 0.7)
     pull = max(0.0, min(1.0, float(getattr(g, "_v3_bow_charge", 0.0)) / 1.1))
-    base = (15.0 + bobx, 14.0 - boby, 90.0)
-    def tr(points):
-        return [(base[0] + x, base[1] + y, base[2] + z) for (x, y, z) in points]
-    def box(cx, cy, cz, bw, bh, bd, col):
-        return [(tr(q), col) for q, _c in _vm_box(cx, cy, cz, bw, bh, bd, col)]
-    def prism(outline, z0, z1, col):
-        return [(tr(q), col) for q, _c in _vm_prism(outline, z0, z1, col)]
-    wood = (124, 82, 46)
-    wood_l = (172, 120, 66)
-    wood_d = (68, 42, 24)
-    string = (225, 225, 210)
-    faces = []
-    # upper and lower curved limbs, with a real front-to-back thickness
-    right = [(0, -38), (8, -35), (13, -26), (14, -15), (12, -4),
-             (7, 4), (0, 7)]
-    left = [(-x, y) for (x, y) in reversed(right)]
-    faces += prism(right, -3.5, 3.5, wood)
-    faces += prism(left, -3.5, 3.5, wood)
-    faces += prism([(x + 1, y) for (x, y) in right], 2.0, 4.0, wood_l)
-    faces += prism([(x - 1, y) for (x, y) in left], -4.0, -2.0, wood_l)
-    # grip and wrapping
-    faces += box(0, 0, 0, 8, 19, 7, wood)
-    for gy in (-7, -2, 3):
-        faces += box(0, gy, 0, 9, 2, 8, wood_d)
-    # the string runs from limb tip to nock to limb tip; draw it pulled in
-    nx = -1.5 - 9.0 * pull
-    ny = -17.0
-    string_l = [(0.0, -55.0, 0.0), (nx, ny, 0.0), (0.0, 24.0, 0.0)]
-    for a, b in ((string_l[0], string_l[1]), (string_l[1], string_l[2])):
-        quad = ((base[0] + a[0], base[1] + a[1], base[2] + a[2]),
-                (base[0] + b[0], base[1] + b[1], base[2] + b[2]),
-                (base[0] + b[0] + 1.2, base[1] + b[1], base[2] + b[2]),
-                (base[0] + a[0] + 1.2, base[1] + a[1], base[2] + a[2]))
-        faces.append((quad, string))
-    # the nocked arrow points down the camera's forward axis; its nock moves
-    # back visibly as the bow is drawn
-    ax = 0.0
-    az = 8.0 - 11.0 * pull
-    faces += box(ax, ny, az, 1.4, 1.4, 42.0, (122, 78, 42))
-    faces += box(ax, ny, az + 22.0, 4.8, 4.8, 5.0, (206, 212, 220))
-    faces += box(ax, ny, az - 11.0, 4.0, 5.0, 4.0, (214, 214, 202))
-    # a hand at the grip
-    faces += box(2.0, 1.0, -1.0, 9.0, 10.0, 9.0, (190, 132, 92))
-    ops = []
-    for pts, col in faces:
-        n = _norm(_cross(_sub(pts[1], pts[0]), _sub(pts[2], pts[0])))
-        d = abs(_dot(n, _LIGHT))
-        f = 0.48 + 0.62 * d
-        c = tuple(max(0, min(255, int(v * f))) for v in col[:3])
-        proj = []
-        zsum = 0.0
-        for (x, y, z) in pts:
-            if z <= 1.0:
-                proj = []
-                break
-            proj.append((w * 0.5 + focal * x / z,
-                         h * 0.5 - focal * y / z))
-            zsum += z
-        if len(proj) >= 3:
-            ops.append((zsum / len(pts), proj, c))
-    ops.sort(key=lambda op: op[0], reverse=True)
-    for _z, pts, col in ops:
-        pygame.draw.polygon(screen, col, pts)
-        pygame.draw.polygon(screen, (38, 28, 20), pts, 1)
+    surf = pygame.Surface((360, 480), pygame.SRCALPHA)
+    # Bow limb: a right-bulging arc, outlined darkly and then in warm wood.
+    rect = pygame.Rect(58, 30, 250, 420)
+    pygame.draw.arc(surf, (60, 38, 22), rect, -math.pi / 2.0,
+                    math.pi / 2.0, 25)
+    pygame.draw.arc(surf, (104, 68, 38), rect, -math.pi / 2.0,
+                    math.pi / 2.0, 18)
+    pygame.draw.arc(surf, (154, 102, 54), rect, -math.pi / 2.0,
+                    math.pi / 2.0, 7)
+    # limb tips and a wrapped grip at the middle
+    top = (183, 30)
+    bottom = (183, 450)
+    pygame.draw.circle(surf, (72, 46, 26), top, 11)
+    pygame.draw.circle(surf, (148, 96, 52), top, 8)
+    pygame.draw.circle(surf, (72, 46, 26), bottom, 11)
+    pygame.draw.circle(surf, (148, 96, 52), bottom, 8)
+    pygame.draw.rect(surf, (62, 40, 24), (272, 208, 38, 64), border_radius=8)
+    pygame.draw.rect(surf, (142, 92, 50), (278, 214, 28, 52), border_radius=6)
+    for yy in (220, 232, 244):
+        pygame.draw.line(surf, (74, 46, 28), (278, yy), (306, yy), 2)
+    # nock point: straight string when relaxed, pulled back while charging
+    nx = 183.0 - 64.0 * pull
+    ny = 240.0
+    pygame.draw.line(surf, (226, 222, 202), top, (int(nx), int(ny)), 3)
+    pygame.draw.line(surf, (226, 222, 202), (int(nx), int(ny)), bottom, 3)
+    # arrow nocked at the string, pointing out past the bow
+    if pull > 0.01:
+        ax0, ay0 = int(nx), int(ny)
+        ax1, ay1 = 318, int(ny - 8 * pull)
+        pygame.draw.line(surf, (104, 70, 40), (ax0, ay0), (ax1, ay1), 5)
+        pygame.draw.line(surf, (168, 122, 70), (ax0, ay0), (ax1, ay1), 2)
+        pygame.draw.polygon(surf, (220, 226, 234),
+                            [(ax1, ay1), (ax1 - 13, ay1 - 7),
+                             (ax1 - 13, ay1 + 7)])
+        pygame.draw.line(surf, (230, 226, 210),
+                         (ax0, ay0), (ax0 - 10, ay0 - 5), 2)
+        pygame.draw.line(surf, (230, 226, 210),
+                         (ax0, ay0), (ax0 - 10, ay0 + 5), 2)
+    # hand at the grip
+    pygame.draw.ellipse(surf, (188, 130, 90), (278, 248, 44, 36))
+    pygame.draw.ellipse(surf, (120, 78, 50), (278, 248, 44, 36), 2)
+    # place it large on the right, slightly angled, like a held item
+    sc = min(w, h) / 480.0
+    if sc < 0.72:
+        sc = 0.72
+    surf = pygame.transform.smoothscale(
+        surf, (max(1, int(360 * sc)), max(1, int(480 * sc))))
+    surf = pygame.transform.rotate(surf, -8)
+    rect = surf.get_rect()
+    rect.midright = (w - 8 + int(bobx), int(h * 0.56) + int(boby))
+    screen.blit(surf, rect)
 
 
 def draw_viewmodel(g, screen) -> None:
