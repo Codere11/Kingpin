@@ -190,6 +190,19 @@ def place_block(g, tx, ty, kind):
     return True
 
 
+def column_height(g, tx, ty) -> float:
+    """Total height of the placed block column at a tile, in world pixels."""
+    key = (tx, ty)
+    base = getattr(g, "built_blocks", {}).get(key)
+    if base is None:
+        return 0.0
+    total = 48.0 if base == "door" else (8.0 if base == "bed" else
+                                          (20.0 if base == "hide" else 30.0))
+    for kind in _stacks(g).get(key, ()):
+        total += 48.0 if kind == "door" else (20.0 if kind == "hide" else 30.0)
+    return total
+
+
 def top_block_kind(g, tx, ty):
     key = (tx, ty)
     extra = _stacks(g).get(key)

@@ -2153,6 +2153,15 @@ def run(g):
                 for (btx, bty), _kind in getattr(g, "built_blocks", {}).items():
                     if _kind == "door":
                         continue          # a door is deliberately walk-through
+                    # A block whose top is below the player's feet is a
+                    # surface, not a wall: this is what lets a one-block jump
+                    # land on the stack while a taller stack still blocks.
+                    try:
+                        if _block.column_height(g, btx, bty) <= float(
+                                getattr(g.player, "z", 0.0)) + 2.0:
+                            continue
+                    except Exception:
+                        pass
                     _br = pygame.Rect(btx * _block.TILE, bty * _block.TILE,
                                       _block.TILE, _block.TILE)
                     if _br.inflate(60, 60).collidepoint(g.player.x, g.player.y):

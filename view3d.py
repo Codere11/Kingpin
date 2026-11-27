@@ -33,6 +33,7 @@ IW, IH = 280, 158
 FOV = math.radians(78.0)
 FOCAL = IW / (2.0 * math.tan(FOV * 0.5))
 EYE_Z = 56.0                 # 1.75 m if a tile (32 px) is one metre
+EYE_Z_BASE = EYE_Z
 DRAW_DIST = 9000.0
 NEAR = 24.0
 MAX_SPRITE_PX = 900
@@ -203,8 +204,15 @@ def tick(g, dt: float) -> None:
     """Mouse look.  Called once at the top of the frame, before movement."""
     if not active(g):
         _release_mouse(g)
+        try:
+            global EYE_Z
+            EYE_Z = EYE_Z_BASE
+            mesh3d.EYE_Z = EYE_Z
+        except Exception:
+            pass
         return
     _grab_mouse(g)
+    _update_vertical(g, dt)
     try:
         _update_shots(g, dt)
     except Exception:
@@ -607,6 +615,43 @@ def _eye_xy(g, update: bool = True):
     if update:
         g._v3_cam_x, g._v3_cam_y = cx, cy
     return cx, cy
+
+
+def _sync_eye(g) -> None:
+    """Lift the camera by the player's block-standing/jump height."""
+    global EYE_Z
+    EYE_Z = EYE_Z_BASE + max(0.0, float(getattr(g.player, "z", 0.0) or 0.0))
+    try:
+        mesh3d.EYE_Z = EYE_Z
+    except Exception:
+        pass
+
+
+def _update_vertical(g, dt: float) -> None:
+    """One-block jump, gravity, and standing on the block under the feet."""
+    try:
+        import block as _block
+        p = g.player
+        tx = int(float(p.x) // _block.TILE)
+        ty = int(float(p.y) // _block.TILE)
+        ground = float(_block.column_height(g, tx, ty))
+        keys = pygame.key.get_pressed()
+        jump = bool(keys[pygame.K_SPACE])
+        if jump and p.on_ground and not getattr(g, "_v3_jump_latch", False):
+            p.vz = 134.0          # reaches one 30-unit block
+            p.on_ground = False
+        g._v3_jump_latch = jump
+        p.vz -= 300.0 * dt
+        p.z += p.vz * dt
+        if p.z <= ground:
+            p.z = ground
+            p.vz = 0.0
+            p.on_ground = True
+        else:
+            p.on_ground = False
+        _sync_eye(g)
+    except Exception:
+        pass
 
 
 def _project(fwd, right, up, ex, ey, px, py, pz):
@@ -1435,6 +1480,7 @@ def draw(g) -> None:
     """Draw the internal 3D frame and scale it to the window."""
     screen = g.screen
     w, h = screen.get_size()
+    _sync_eye(g)
     frame = _ground_frame(g)
     fwd, right, up = _cam(g)
     ex, ey = _eye_xy(g)

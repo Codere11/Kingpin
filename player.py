@@ -101,6 +101,9 @@ class Player:
 
     # A class attribute answers to both spellings and cannot be shadowed.
     LEVEL_FLASH = 1.6              # how long the level-up shine lasts
+    z = 0.0
+    vz = 0.0
+    on_ground = True
     # WHO HE IS AND WHAT HE OWES. Class defaults as well as instance fields:
     # an unpickled save written before they existed never runs __init__.
     origin = "idle"
@@ -125,6 +128,11 @@ class Player:
     def __init__(self, x: float, y: float, speed: float = 240.0) -> None:
         self.x = x
         self.y = y
+        # First-person vertical body.  The top-down simulation still works in
+        # x/y; z is the block-standing/jump layer used by the 3D view.
+        self.z = 0.0
+        self.vz = 0.0
+        self.on_ground = True
         self.speed = speed
         self.facing = (0.0, 1.0)
         self.moving = False

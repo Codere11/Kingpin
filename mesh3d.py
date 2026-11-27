@@ -482,6 +482,19 @@ def _work_faces(wp):
     # A FIREPLACE IS A FIRE, NOT A BENCH.  The generic work table used to be
     # built before the kind-specific parts, which put a brown wooden slab and
     # legs on top of every campfire.
+    if kind == "stall":
+        cream, red = (196, 176, 140), (168, 78, 62)
+        wood = (118, 78, 44)
+        for ox, oy in ((-0.38, -0.35), (0.38, -0.35),
+                       (-0.38, 0.35), (0.38, 0.35)):
+            faces += _box(x + ox * w, y + oy * d, 0, 5, 5, 44, wood)
+        faces += _box(x, y + d * 0.24, 26, w * 0.82, d * 0.34, 7, (150, 104, 62))
+        for i in range(5):
+            sx = x - w * 0.42 + i * (w * 0.84 / 5.0)
+            faces += _box(sx, y - d * 0.05, 42, w * 0.84 / 5.0,
+                          d * 0.82, 5, cream if i % 2 == 0 else red)
+        faces += _box(x, y, 0, w * 0.78, d * 0.62, 5, (72, 48, 30))
+        return faces
     if kind == "fireplace":
         for k in range(9):
             a = k * math.pi * 2.0 / 9.0
