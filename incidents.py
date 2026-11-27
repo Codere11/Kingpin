@@ -47,7 +47,7 @@ def _nearby_target(actor, g, reach=200.0):
 def _say(who, kind, text=None):
     try:
         import comm
-        comm.spawn_cloud(who.x, who.y, kind, text=text)
+        comm.spawn_cloud(who.x, who.y, kind, text=text, speaker=who)
     except Exception:
         pass
 

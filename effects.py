@@ -94,8 +94,8 @@ class DamageVignette:
         # The low-health state is a persistent screen condition, not a
         # flash.  Keep a solid red floor under the heartbeat; only its
         # thickness/brightness may breathe.
-        low = max(0.0, damage - 0.22)
-        strength = max(strength, low * 1.65)
+        low = max(0.0, damage - 0.08)
+        strength = max(strength, low * 1.80)
         strength = max(0.0, min(1.0, strength))
         if strength > 0.002:
             alpha = (self._alpha.astype(np.float32) * strength).astype(np.uint8)
@@ -112,8 +112,8 @@ class DamageVignette:
 
     def _draw_veins(self, screen: pygame.Surface, damage: float,
                     now: float, hit_flash: float) -> None:
-        low = max(0.0, damage - 0.22)
-        intensity = min(1.0, max(damage, low * 1.65) + 0.5 * hit_flash)
+        low = max(0.0, damage - 0.08)
+        intensity = min(1.0, max(damage, low * 1.80) + 0.5 * hit_flash)
         if intensity <= 0.02:
             return
         phase = now * (4.0 + 13.0 * intensity)     # pumps faster when worse

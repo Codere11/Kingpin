@@ -45,7 +45,7 @@ def _near(a, b, reach=260.0):
 def _bubble(who, kind, text=None):
     try:
         import comm
-        comm.spawn_cloud(who.x, who.y, kind, text=text)
+        comm.spawn_cloud(who.x, who.y, kind, text=text, speaker=who)
     except Exception:
         pass
 

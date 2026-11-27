@@ -178,10 +178,10 @@ TEXT_COLOR = {"insult": (12, 12, 12), "praise": (90, 128, 48),
 _cloud_font = None
 
 
-def spawn_cloud(x, y, kind, text=None):
+def spawn_cloud(x, y, kind, text=None, speaker=None):
     """A chat cloud over the speaker. For the three comm kinds a None text
     means: draw the SYMBOL (the G-hotbar icon), not words."""
-    _clouds.append([float(x), float(y), kind, text, CLOUD_SECONDS])
+    _clouds.append([float(x), float(y), kind, text, CLOUD_SECONDS, speaker])
 
 
 def tick_clouds(dt):
@@ -199,7 +199,11 @@ def draw_clouds(screen, cam_x, cam_y):
     sw, sh = screen.get_size()
     m = 24
     placed = []          # screen rects already taken: never overlap
-    for x, y, kind, text, ttl in list(_clouds):
+    for _c in list(_clouds):
+        x, y, kind, text, ttl = _c[:5]
+        _speaker = _c[5] if len(_c) > 5 else None
+        if _speaker is not None and getattr(_speaker, "alive", True):
+            x, y = _speaker.x, _speaker.y
         sx = x - cam_x
         sy = y - cam_y
         surf, rect = _cloud_surf(_cloud_font, kind, text, ttl)
@@ -402,7 +406,7 @@ def npc_to_player(npc, now):
     # A NEED ANNOUNCED: 80% of the time he says what he is craving.
     need = need_line(npc)
     if need is not None and rng.random() < 0.80:
-        spawn_cloud(npc.x, npc.y, "need", text=need)
+        spawn_cloud(npc.x, npc.y, "need", text=need, speaker=npc)
         try:
             g = getattr(getattr(npc, "native_camp", None), "g", None)
             if g is not None:
@@ -425,7 +429,7 @@ def npc_to_player(npc, now):
         return None
     opd = economy.opinion_of(npc, "player")
     opd["player"] = max(-100.0, min(100.0, op + EFFECT[kind][0]))
-    spawn_cloud(npc.x, npc.y, kind)
+    spawn_cloud(npc.x, npc.y, kind, speaker=npc)
     try:
         g = getattr(getattr(npc, "native_camp", None), "g", None)
         if g is not None:

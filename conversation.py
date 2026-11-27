@@ -366,7 +366,7 @@ def tick(g, dt):
             try:
                 import comm
                 comm.spawn_cloud(speaker.x, speaker.y, act["kind"],
-                                 text=act["text"])
+                                 text=act["text"], speaker=speaker)
             except Exception:
                 pass
             try:
@@ -390,7 +390,7 @@ def tick(g, dt):
                 try:
                     import comm
                     comm.spawn_cloud(target.x, target.y, "talk",
-                                     text=act.get("reply"))
+                                     text=act.get("reply"), speaker=target)
                     g.toast("%s: %s" % (getattr(target, "name", "Someone"),
                                         act.get("reply")))
                 except Exception:

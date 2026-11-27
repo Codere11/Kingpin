@@ -265,7 +265,8 @@ def share_reaction(receiver, giver, kind: str, now: float, g=None,
         _comm.spawn_cloud(receiver.x, receiver.y,
                           "praise" if receiver_positive else "insult",
                           text=("thank you" if receiver_positive else
-                                ("not enough" if accepted else "no")))
+                                ("not enough" if accepted else "no")),
+                          speaker=receiver)
     except Exception:
         pass
     return accepted

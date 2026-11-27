@@ -1540,7 +1540,14 @@ def _draw_chat_cloud(g, screen) -> None:
     sw, sh = screen.get_size()
     best = None
     best_d = 240.0
-    for (x, y, kind, text, ttl) in clouds:
+    for _cloud in clouds:
+        x, y, kind, text, ttl = _cloud[:5]
+        _speaker = _cloud[5] if len(_cloud) > 5 else None
+        # Follow the speaker's CURRENT position.  A cloud used to be pinned to
+        # the x/y sampled when the line started, so an NPC who took a step
+        # walked out from under his own sentence.
+        if _speaker is not None and getattr(_speaker, "alive", True):
+            x, y = _speaker.x, _speaker.y
         d = math.hypot(float(x) - ex, float(y) - ey)
         if d > best_d:
             continue
