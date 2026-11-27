@@ -1223,6 +1223,118 @@ def _bow_arrow_pixels():
     return s
 
 
+_AXE_TEX = None
+
+
+def _axe_texture():
+    """Low-resolution side-view axe, for a Minecraft-like 3D item plane."""
+    global _AXE_TEX
+    if _AXE_TEX is not None:
+        return _AXE_TEX
+    s = pygame.Surface((64, 96), pygame.SRCALPHA)
+    wood_d, wood, wood_l = (62, 40, 24), (122, 82, 44), (176, 118, 62)
+    steel_d, steel, edge = (78, 84, 92), (168, 176, 186), (236, 240, 244)
+    # diagonal handle (bottom-right to top-left)
+    pygame.draw.line(s, wood_d, (47, 91), (27, 26), 9)
+    pygame.draw.line(s, wood, (47, 91), (27, 26), 6)
+    pygame.draw.line(s, wood_l, (45, 88), (30, 36), 2)
+    # grip wraps
+    for k in range(3):
+        yy = 68 + k * 7
+        pygame.draw.line(s, (70, 44, 26), (42 - k * 2, yy), (50 - k * 2, yy + 1), 2)
+    # chunky eye / poll
+    pygame.draw.rect(s, steel_d, (21, 18, 18, 16), border_radius=2)
+    pygame.draw.rect(s, steel, (23, 20, 14, 12), border_radius=1)
+    # curved blade profile
+    blade = [(23, 10), (13, 13), (5, 22), (7, 33), (17, 35),
+             (27, 31), (30, 24)]
+    pygame.draw.polygon(s, steel_d, blade)
+    pygame.draw.polygon(s, steel, [(x + 1, y + 1) for (x, y) in blade])
+    pygame.draw.polygon(s, edge, [(17, 14), (8, 22), (10, 31), (17, 32)])
+    # dark outline pixels / eye hole
+    pygame.draw.polygon(s, (45, 42, 42), [(23, 10), (13, 13), (5, 22),
+                                          (7, 33), (17, 35), (27, 31),
+                                          (30, 24)], 1)
+    pygame.draw.circle(s, (36, 34, 32), (29, 25), 3)
+    _AXE_TEX = s
+    return s
+
+
+def _draw_axe_viewmodel(g, screen) -> None:
+    """Map the pixelaxe onto a forward-angled 3D item plane, with depth/shadow."""
+    w, h = screen.get_size()
+    p = g.player
+    pull = 0.0
+    tex = _axe_texture()
+    fov = math.radians(125.0)
+    focal = min(w, h) / (2.0 * math.tan(fov * 0.5))
+    # swing the item a little, like the old viewmodel
+    try:
+        swing = float(getattr(p, "swing_progress", 0.0) or 0.0)
+    except Exception:
+        swing = 0.0
+    now = pygame.time.get_ticks() / 1000.0
+    moving = bool(getattr(p, "moving", False))
+    bobx = math.sin(now * 8.0) * (1.8 if moving else 0.5)
+    boby = abs(math.cos(now * 8.0)) * (1.8 if moving else 0.5)
+    base = (20.0 + bobx, -3.0 - boby, 88.0)
+    yaw = 0.52
+    ca, sa = math.cos(yaw), math.sin(yaw)
+
+    def proj(lx, ly):
+        x, z = lx, 0.0
+        x, z = x * ca + z * sa, -x * sa + z * ca
+        x += base[0]
+        y = base[1] + ly
+        z += base[2]
+        return (w * 0.5 + focal * x / z,
+                h * 0.5 - focal * y / z)
+
+    tl = proj(-16.0, 24.0)
+    tr = proj(16.0, 24.0)
+    br = proj(16.0, -24.0)
+    bl = proj(-16.0, -24.0)
+    # a small screen-space swing, pivoting at the right edge
+    if swing > 0.0:
+        px, py = br[0], br[1]
+        a = (-0.35 + 1.6 * swing)
+        c, sn = math.cos(a), math.sin(a)
+        def sr(q):
+            x, y = q[0] - px, q[1] - py
+            return (px + x * c - y * sn, py + x * sn + y * c)
+        tl, tr, br, bl = sr(tl), sr(tr), sr(br), sr(bl)
+    # silhouette shadow, not a rectangular box
+    sxs = [q[0] for q in (tl, tr, br, bl)]
+    sys_ = [q[1] for q in (tl, tr, br, bl)]
+    x0, x1 = int(min(sxs)) - 10, int(max(sxs)) + 18
+    y0, y1 = int(min(sys_)) - 8, int(max(sys_)) + 20
+    if x1 > x0 and y1 > y0:
+        sh = pygame.Surface((x1 - x0, y1 - y0), pygame.SRCALPHA)
+        pygame.draw.polygon(sh, (0, 0, 0, 78),
+                            [(int(q[0] + 9 - x0), int(q[1] + 11 - y0))
+                             for q in (tl, tr, br, bl)])
+        screen.blit(sh, (x0, y0))
+    # depth edge: a darker offset plane behind the textured front
+    ex = 5.0
+    ey = 4.0
+    back = [(tl[0] + ex, tl[1] + ey), (tr[0] + ex, tr[1] + ey),
+            (br[0] + ex, br[1] + ey), (bl[0] + ex, bl[1] + ey)]
+    pygame.draw.polygon(screen, (58, 39, 24), back)
+    # column texture mapping, nearest-neighbour
+    minx, maxx = int(min(sxs)), int(max(sxs))
+    if maxx > minx:
+        for x in range(max(0, minx), min(w - 1, maxx) + 1):
+            u = (x - minx) / float(maxx - minx)
+            top = tl[1] + (tr[1] - tl[1]) * u
+            bot = bl[1] + (br[1] - bl[1]) * u
+            if bot <= top:
+                continue
+            sx = min(tex.get_width() - 1, max(0, int(u * tex.get_width())))
+            strip = tex.subsurface((sx, 0, 1, tex.get_height()))
+            strip = pygame.transform.scale(strip, (1, max(1, int(bot - top))))
+            screen.blit(strip, (x, int(top)))
+
+
 def _bow_cube_faces(cx, cy, cz, sx, sy, sz, color):
     hx, hy, hz = sx * 0.5, sy * 0.5, sz * 0.5
     corners = [(-hx, -hy, -hz), (hx, -hy, -hz), (hx, hy, -hz), (-hx, hy, -hz),
@@ -1360,6 +1472,9 @@ def draw_viewmodel(g, screen) -> None:
     item_id = stack.defn.id if stack is not None else ""
     if item_id == "bow":
         _draw_bow_viewmodel(g, screen)
+        return
+    if item_id == "axe":
+        _draw_axe_viewmodel(g, screen)
         return
     faces = _item_faces(item_id, empty=stack is None,
                          bow_charge=float(getattr(g, "_v3_bow_charge", 0.0)))
