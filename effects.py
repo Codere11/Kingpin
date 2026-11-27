@@ -88,6 +88,11 @@ class DamageVignette:
 
         pulse = 0.5 + 0.5 * math.sin(now * (3.0 + 11.0 * damage))
         strength = 0.50 * damage * (0.45 + 0.55 * pulse) + 0.45 * hit_flash
+        # A LOW-HEALTH FLOOR.  The vines do not disappear between heartbeats
+        # or when the hit flash runs out; while the body is badly hurt they
+        # stay on screen and keep pumping.
+        low = max(0.0, damage - 0.30)
+        strength = max(strength, low * 1.05)
         strength = max(0.0, min(1.0, strength))
         if strength > 0.002:
             alpha = (self._alpha.astype(np.float32) * strength).astype(np.uint8)
@@ -104,7 +109,8 @@ class DamageVignette:
 
     def _draw_veins(self, screen: pygame.Surface, damage: float,
                     now: float, hit_flash: float) -> None:
-        intensity = min(1.0, damage + 0.5 * hit_flash)
+        intensity = min(1.0, max(damage, max(0.0, damage - 0.30) * 1.05)
+                        + 0.5 * hit_flash)
         if intensity <= 0.02:
             return
         phase = now * (4.0 + 13.0 * intensity)     # pumps faster when worse
@@ -206,3 +212,56 @@ def draw_alert(screen: pygame.Surface, sx: float, sy: float,
     pygame.draw.polygon(screen, (58, 40, 22), points, 2)
     pygame.draw.circle(screen, (247, 228, 164), (int(top_x), int(top_y + 19)), 2)
     pygame.draw.circle(screen, (58, 40, 22), (int(top_x), int(top_y + 19)), 2, 1)
+
+
+_LEVEL_SCREEN_CACHE: dict = {}
+
+
+def draw_level_screen(screen: pygame.Surface, t: float) -> None:
+    """A full-screen gold shine for a player level-up.
+
+    The world-space body shine remains; this is the screen-wide cue that the
+    level actually belongs to the man behind the camera.
+    """
+    w, h = screen.get_size()
+    p = max(0.0, min(1.0, float(t)))
+    fade = math.sin(min(1.0, p) * math.pi) ** 0.55
+    if fade <= 0.01:
+        return
+    overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+    # Gold edge glow, strongest at the frame.
+    for i in range(14):
+        a = int(58 * fade * (1.0 - i / 14.0))
+        if a <= 0:
+            continue
+        inset = i * 5
+        pygame.draw.rect(overlay, (246, 210, 96, a),
+                         (inset, inset, w - inset * 2, h - inset * 2), 3)
+    # A broad diagonal shine passing across the screen.
+    sweep = (p * 1.35) % 1.0
+    x = int((-0.25 + sweep * 1.5) * w)
+    width = max(40, int(w * 0.18))
+    for j in range(7):
+        a = int(20 * fade * (1.0 - j / 8.0))
+        if a <= 0:
+            continue
+        ox = x + j * 13 - width // 2
+        pygame.draw.polygon(overlay, (255, 244, 174, a),
+                            [(ox, 0), (ox + width, 0),
+                             (ox + width + int(h * 0.45), h),
+                             (ox + int(h * 0.45), h)])
+    # Sparse gold sparkles, deterministic but moving with t.
+    rng = random.Random(91827)
+    for i in range(26):
+        sx = (rng.randrange(0, max(1, w)) + int(p * w * (0.08 + i * 0.006))) % max(1, w)
+        sy = (rng.randrange(0, max(1, h)) + int(p * h * (0.04 + i * 0.004))) % max(1, h)
+        size = 1 + (i % 3)
+        a = int((95 + 110 * (i % 5) / 4.0) * fade)
+        if a <= 0:
+            continue
+        pygame.draw.rect(overlay, (255, 238, 146, a),
+                         (sx, sy, size, size))
+        if size >= 2:
+            pygame.draw.line(overlay, (255, 252, 210, min(255, a + 20)),
+                             (sx - 3, sy + size // 2), (sx + 4, sy + size // 2), 1)
+    screen.blit(overlay, (0, 0))

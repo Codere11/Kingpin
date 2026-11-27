@@ -1164,6 +1164,14 @@ def draw_hud(g) -> None:
                             getattr(g.player, "hit_flash", 0.0) / 0.15)
         except Exception:
             pass
+    try:
+        if (not getattr(g.player, "dead", False)
+                and float(getattr(g.player, "level_flash", 0.0)) > 0.0):
+            import effects as _effects
+            _effects.draw_level_screen(
+                screen, 1.0 - float(g.player.level_flash) / g.player.LEVEL_FLASH)
+    except Exception:
+        pass
     if not getattr(g, "hud_hidden", False):
         _crosshair(screen)
         try:

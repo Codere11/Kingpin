@@ -4057,6 +4057,14 @@ def run(g):
                 g.damage = 1.0 - g.player.health / g.player.max_health
                 if not g.hud_hidden:
                     g.vignette.draw(g.screen, g.damage, g.now, g.player.hit_flash / 0.15)
+                try:
+                    if float(getattr(g.player, "level_flash", 0.0)) > 0.0:
+                        import effects as _effects
+                        _effects.draw_level_screen(
+                            g.screen,
+                            1.0 - float(g.player.level_flash) / g.player.LEVEL_FLASH)
+                except Exception:
+                    pass
 
             g.eye_world_x = g.player.x + g.player.facing[0] * 5.0
             g.eye_world_y = g.player.y + g.player.facing[1] * 5.0
