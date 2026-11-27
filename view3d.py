@@ -1536,18 +1536,25 @@ def _draw_chat_cloud(g, screen) -> None:
     if not clouds:
         return
     fwd, right, up = _cam(g)
-    ex, ey = float(g.player.x), float(g.player.y)
+    ex, ey = _eye_xy(g, update=False)
+    sw, sh = screen.get_size()
     best = None
     best_d = 240.0
     for (x, y, kind, text, ttl) in clouds:
         d = math.hypot(float(x) - ex, float(y) - ey)
         if d > best_d:
             continue
-        p = _project(fwd, right, up, ex, ey, float(x), float(y), 76.0)
+        # The first-person projection is in the small internal frame's
+        # coordinates.  Chat is drawn later, on the window-sized HUD; without
+        # this conversion a 280-pixel x became a 280-pixel x on a 1280-pixel
+        # screen and every cloud floated far up/left of its speaker.
+        p = _project(fwd, right, up, ex, ey, float(x), float(y), 82.0)
         if p is None:
             continue
         sx, sy, _cz = p
-        if sx < -160 or sx > screen.get_width() + 160:
+        sx = sx * sw / float(IW)
+        sy = sy * sh / float(IH)
+        if sx < -160 or sx > sw + 160:
             continue
         best = (x, y, kind, text, ttl, sx, sy)
         best_d = d
@@ -1563,7 +1570,9 @@ def _draw_chat_cloud(g, screen) -> None:
             surf, (max(1, int(surf.get_width() * scale)),
                    max(1, int(surf.get_height() * scale))))
         rect = surf.get_rect()
-        rect.center = (int(best[5]), int(best[6]) - 24)
+        # Directly above the head: the projected point is the NPC's head
+        # height (82 world units), not an arbitrary screen-space offset.
+        rect.center = (int(best[5]), int(best[6]) - 10)
         screen.blit(surf, rect)
     except Exception:
         pass
