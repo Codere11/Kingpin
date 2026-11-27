@@ -176,6 +176,12 @@ def _draw_shots(g, frame) -> None:
                                     [(x1, y1),
                                      (x1 - dx * 7 + px * 3, y1 - dy * 7 + py * 3),
                                      (x1 - dx * 7 - px * 3, y1 - dy * 7 - py * 3)])
+                # fletching at the tail, so it reads as an arrow even in flight
+                tx, ty = x0 - dx * 4, y0 - dy * 4
+                pygame.draw.line(frame, (226, 218, 196),
+                                 (tx, ty), (tx - dx * 6 + px * 4, ty - dy * 6 + py * 4), 2)
+                pygame.draw.line(frame, (226, 218, 196),
+                                 (tx, ty), (tx - dx * 6 - px * 4, ty - dy * 6 - py * 4), 2)
             else:
                 pygame.draw.line(frame, (255, 214, 104), (x0, y0), (x1, y1), 3)
                 pygame.draw.line(frame, (255, 250, 208), (x0, y0), (x1, y1), 1)
