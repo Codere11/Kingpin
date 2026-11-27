@@ -465,7 +465,11 @@ def resolve_swing(g, kills) -> int:
         _cx = min(max(g.player.x, _r.left), _r.right)
         _cy = min(max(g.player.y, _r.top), _r.bottom)
         if math.hypot(g.player.x - _cx, g.player.y - _cy) <= _m.AXE_REACH:
-            _bk = g.built_blocks.get((_tx, _ty), "wood")
+            try:
+                import block as _blockmod
+                _bk = _blockmod.top_block_kind(g, _tx, _ty) or "wood"
+            except Exception:
+                _bk = g.built_blocks.get((_tx, _ty), "wood")
             if _bk == "ironwood":
                 _hits = getattr(g, "built_block_hits", None)
                 if _hits is None:
@@ -476,7 +480,11 @@ def resolve_swing(g, kills) -> int:
                     g.toast("Chopping ironwood…  %d/3" % _hits[(_tx, _ty)])
                     return kills
                 _hits.pop((_tx, _ty), None)
-            g.built_blocks.pop((_tx, _ty), "wood")
+            try:
+                import block as _blockmod
+                _blockmod.pop_top_block(g, _tx, _ty)
+            except Exception:
+                g.built_blocks.pop((_tx, _ty), "wood")
             g.inventory.add(_bk, 1)
             g.combat.spawn_impact(_r.centerx, _r.centery, (140, 100, 56))
             g.toast("Chopped it up  +1 %s" % _bk)

@@ -136,6 +136,9 @@ def snapshot(g) -> dict:
         "blocks": [[int(tx), int(ty), str(kind)]
                    for (tx, ty), kind in
                    (getattr(g, "built_blocks", {}) or {}).items()],
+        "block_stacks": [[int(tx), int(ty), [str(k) for k in kinds]]
+                         for (tx, ty), kinds in
+                         (getattr(g, "built_block_stacks", {}) or {}).items()],
         "designations": designs,
     }
 
@@ -155,6 +158,7 @@ def restore(g, data, ctx: "_context.Context") -> None:
     g.built_gates[:] = []
     g.built_plots[:] = []
     g.built_blocks.clear()
+    g.built_block_stacks.clear()
     g.built_chests[:] = []
     g.built_signs[:] = []
     g.built_foodboxes[:] = []
@@ -210,6 +214,14 @@ def restore(g, data, ctx: "_context.Context") -> None:
 
     for rec in data.get("blocks", ()) or ():
         g.built_blocks[(int(rec[0]), int(rec[1]))] = str(rec[2])
+    for rec in data.get("block_stacks", ()) or ():
+        try:
+            key = (int(rec[0]), int(rec[1]))
+            kinds = [str(k) for k in (rec[2] or ())]
+            if kinds:
+                g.built_block_stacks[key] = kinds
+        except Exception:
+            pass
 
     for rec in data.get("work", ()) or ():
         try:

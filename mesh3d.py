@@ -869,39 +869,49 @@ def add_built_blocks(scene, g, radius=1600.0):
         return
     tile = 32.0
     cache = _cache(g)
-    for (tx, ty), kind in list(blocks.items()):
+    stacks = getattr(g, "built_block_stacks", None) or {}
+    for (tx, ty), base_kind in list(blocks.items()):
         x = tx * tile + tile * 0.5
         y = ty * tile + tile * 0.5
         if math.hypot(x - scene.ex, y - scene.ey) > radius:
             continue
         if _behind(scene, x, y, 24.0):
             continue
-        # Placed blocks are static between placement edits; rebuild their
-        # little boxes only when the tile or kind changes, not every frame.
-        key = ("built", tx, ty, kind)
-        faces = cache.get(key)
-        if faces is None:
-            faces = []
-            if kind == "bed":
-                faces = _bed_faces(tx, ty)
-            else:
+        # A tile is a vertical column now: bottom block plus every block
+        # stacked above it.  Each level gets its own cached box at its own z.
+        extra = list(stacks.get((tx, ty), ()) or ())
+        levels = [(base_kind, 0)] + [(k, i + 1) for i, k in enumerate(extra)]
+        z = 0.0
+        for kind, level in levels:
+            key = ("built", tx, ty, kind, level)
+            faces = cache.get(key)
+            if faces is None:
+                faces = []
                 col = {"wood": (118, 78, 44), "ironwood": (104, 106, 106),
                        "tropical_wood": (218, 214, 198),
                        "hide": (124, 86, 54),
                        "door": (126, 82, 46)}.get(kind, (118, 78, 44))
-                if kind == "door":
+                if kind == "bed" and level == 0:
+                    faces = _bed_faces(tx, ty)
+                    height = 8.0
+                elif kind == "door":
                     # A thin door leaf, open enough to read as a doorway.
-                    faces += _box(x, y, 0.0, 28, 2.5, 48, col)
-                    faces += _box(x + 11.5, y - 1.0, 24, 1.5, 3.5, 3,
+                    faces += _box(x, y, z, 28, 2.5, 48, col)
+                    faces += _box(x + 11.5, y - 1.0, z + 24, 1.5, 3.5, 3,
                                   (216, 190, 100))
+                    height = 48.0
                 else:
-                    h = 30.0 if kind != "hide" else 20.0
-                    faces += _box(x, y, 0.0, 30, 30, h, col)
+                    height = 30.0 if kind != "hide" else 20.0
+                    faces += _box(x, y, z, 30, 30, height, col)
                     # a lighter top lip makes adjacent blocks read separately
-                    faces += _box(x, y, h, 30.5, 30.5, 1.5,
+                    faces += _box(x, y, z + height, 30.5, 30.5, 1.5,
                                   tuple(min(255, int(c * 1.22)) for c in col))
-            cache[key] = faces
-        _add_faces(scene, faces)
+                cache[key] = faces
+            else:
+                height = 8.0 if kind == "bed" and level == 0 else (
+                    48.0 if kind == "door" else (30.0 if kind != "hide" else 20.0))
+            _add_faces(scene, faces)
+            z += height
 
 
 def add_fire(scene, wp, now):
@@ -1401,6 +1411,39 @@ def _axe_item_surface(w: int, h: int):
 def swing_pivot(tl, tr, br, bl):
     return (br[0], br[1])
 
+
+
+_WATERING_TEX = None
+
+
+def _watering_can_texture():
+    """A real little watering can: body, handle, spout and rose."""
+    global _WATERING_TEX
+    if _WATERING_TEX is not None:
+        return _WATERING_TEX
+    s = pygame.Surface((64, 84), pygame.SRCALPHA)
+    dark, steel, hi = (56, 78, 78), (94, 150, 142), (180, 224, 208)
+    # spout
+    pygame.draw.line(s, dark, (10, 38), (2, 58), 7)
+    pygame.draw.line(s, steel, (10, 38), (2, 58), 4)
+    pygame.draw.circle(s, hi, (2, 59), 5)
+    pygame.draw.circle(s, dark, (2, 59), 5, 1)
+    # body
+    body = pygame.Rect(16, 28, 38, 38)
+    pygame.draw.rect(s, dark, body, border_radius=8)
+    pygame.draw.rect(s, steel, body.inflate(-3, -3), border_radius=7)
+    pygame.draw.rect(s, hi, (20, 33, 13, 5), border_radius=2)
+    # top handle
+    pygame.draw.arc(s, dark, (18, 8, 30, 33), 3.25, 6.2, 6)
+    pygame.draw.arc(s, hi, (20, 11, 26, 28), 3.25, 6.2, 2)
+    # rose holes and rim
+    pygame.draw.line(s, dark, (19, 24), (51, 24), 3)
+    pygame.draw.line(s, hi, (22, 23), (48, 23), 1)
+    for k in range(4):
+        pygame.draw.circle(s, (205, 238, 222), (22 + k * 7, 36), 1)
+    pygame.draw.rect(s, dark, body, 2, border_radius=8)
+    _WATERING_TEX = s
+    return s
 
 
 _PICKAXE_TEX = None
@@ -1945,6 +1988,12 @@ def draw_viewmodel(g, screen) -> None:
         return
     if item_id in _GUN_VIEW_IDS:
         _draw_gun_viewmodel(g, screen, item_id)
+        return
+    if item_id == "watering_can":
+        _draw_item_viewmodel(
+            g, screen, item_id, stack,
+            pose=((0.78, -0.25, 0.82), 0.58, 0.40, 0.58),
+            texture=_watering_can_texture())
         return
     if item_id == "pickaxe":
         # A proper double-headed pick, built at the same scale as the axe.

@@ -148,14 +148,36 @@ def draw_grid(screen, cam_x, cam_y, vw, vh, wmouse_x, wmouse_y):
     screen.blit(overlay, (0, 0))
 
 
+def _stacks(g):
+    stacks = getattr(g, "built_block_stacks", None)
+    if not isinstance(stacks, dict):
+        stacks = g.built_block_stacks = {}
+    return stacks
+
+
 def place_block(g, tx, ty, kind):
-    """Put a block down in square (tx, ty) if it is empty. Returns True."""
-    if (tx, ty) in g.built_blocks:
-        return False
+    """Place a block, stacking it on top if that square already has one."""
     if g.inventory.count_of(kind) <= 0:
         return False
+    key = (tx, ty)
+    if key in g.built_blocks:
+        extra = _stacks(g).setdefault(key, [])
+        if len(extra) >= 15:
+            return False
+        g.inventory.consume(kind, 1)
+        extra.append(kind)
+        try:
+            g.built_block_hits.pop(key, None)
+        except Exception:
+            pass
+        try:
+            g._BUILD_VER[0] += 1
+        except Exception:
+            pass
+        return True
     g.inventory.consume(kind, 1)
-    g.built_blocks[(tx, ty)] = kind
+    g.built_blocks[key] = kind
+    _stacks(g).pop(key, None)
     try:
         g.built_block_hits.pop((tx, ty), None)
     except Exception:
@@ -166,6 +188,26 @@ def place_block(g, tx, ty, kind):
         pass
     _clear_cell(g, tx, ty)
     return True
+
+
+def top_block_kind(g, tx, ty):
+    key = (tx, ty)
+    extra = _stacks(g).get(key)
+    if extra:
+        return extra[-1]
+    return g.built_blocks.get(key)
+
+
+def pop_top_block(g, tx, ty):
+    """Remove the highest placed block at a tile; return its kind or None."""
+    key = (tx, ty)
+    extra = _stacks(g).get(key)
+    if extra:
+        kind = extra.pop()
+        if not extra:
+            _stacks(g).pop(key, None)
+        return kind
+    return g.built_blocks.pop(key, None)
 
 
 def _clear_cell(g, tx, ty):
