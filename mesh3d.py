@@ -1402,6 +1402,116 @@ def swing_pivot(tl, tr, br, bl):
     return (br[0], br[1])
 
 
+
+_ITEM_SURF_CACHE: dict = {}
+
+
+def _item_view_surface(item_id: str, stack, w: int, h: int):
+    """A cached perspective-mapped pixel item plane, Minecraft-style."""
+    try:
+        quality = getattr(stack, "quality", None) if stack is not None else None
+    except Exception:
+        quality = None
+    key = (str(item_id), quality, int(w), int(h))
+    got = _ITEM_SURF_CACHE.get(key)
+    if got is not None:
+        return got
+    try:
+        import items as _items
+        tex = _items.icon_for(stack, 64)
+    except Exception:
+        tex = None
+    if tex is None:
+        return None
+    tex = tex.convert_alpha() if hasattr(tex, "convert_alpha") else tex
+    tw, th = tex.get_size()
+    focal = min(w, h) / (2.0 * math.tan(math.radians(78.0) * 0.5))
+    # Lower-right, angled inward toward the crosshair like a held item.
+    base = (0.58, -0.10, 0.78)
+    yaw = -0.38
+    ca, sa = math.cos(yaw), math.sin(yaw)
+    half_w, half_h = 0.31, 0.31
+
+    def proj(lx, ly):
+        x = base[0] + lx * ca
+        z = -lx * sa + base[2]
+        y = base[1] + ly
+        return (w * 0.5 + focal * x / z,
+                h * 0.5 - focal * y / z)
+
+    tl = proj(-half_w, half_h)
+    tr = proj(half_w, half_h)
+    br = proj(half_w, -half_h)
+    bl = proj(-half_w, -half_h)
+    minx = int(math.floor(min(q[0] for q in (tl, tr, br, bl))))
+    maxx = int(math.ceil(max(q[0] for q in (tl, tr, br, bl))))
+    miny = int(math.floor(min(q[1] for q in (tl, tr, br, bl))))
+    maxy = int(math.ceil(max(q[1] for q in (tl, tr, br, bl))))
+    dw, dh = max(1, maxx - minx + 1), max(1, maxy - miny + 1)
+    H = _homography([(0, 0), (tw, 0), (tw, th), (0, th)],
+                    [tl, tr, br, bl])
+    Hi = np.linalg.inv(H)
+    xs = np.arange(minx, maxx + 1, dtype=np.float64)
+    ys = np.arange(miny, maxy + 1, dtype=np.float64)
+    X, Y = np.meshgrid(xs, ys)
+    den = Hi[2, 0] * X + Hi[2, 1] * Y + Hi[2, 2]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        u = (Hi[0, 0] * X + Hi[0, 1] * Y + Hi[0, 2]) / den
+        v = (Hi[1, 0] * X + Hi[1, 1] * Y + Hi[1, 2]) / den
+    mask = (den > 1e-9) & (u >= 0) & (u < tw) & (v >= 0) & (v < th)
+    arr3 = pygame.surfarray.array3d(tex)
+    alpha = pygame.surfarray.array_alpha(tex)
+    rgba = np.zeros((tw, th, 4), dtype=np.uint8)
+    rgba[..., :3] = arr3
+    rgba[..., 3] = alpha
+    sx = np.clip(u.astype(np.int32), 0, tw - 1)
+    sy = np.clip(v.astype(np.int32), 0, th - 1)
+    out = np.zeros((dh, dw, 4), dtype=np.uint8)
+    vals = rgba[sx, sy]
+    out[mask] = vals[mask]
+    surf = pygame.Surface((dw, dh), pygame.SRCALPHA)
+    surfarr = pygame.surfarray.pixels3d(surf)
+    surfa = pygame.surfarray.pixels_alpha(surf)
+    surfarr[:] = out[..., :3].swapaxes(0, 1)
+    surfa[:] = out[..., 3].swapaxes(0, 1)
+    del surfarr, surfa
+    got = (surf, minx, miny, (br[0], br[1]))
+    _ITEM_SURF_CACHE[key] = got
+    if len(_ITEM_SURF_CACHE) > 48:
+        _ITEM_SURF_CACHE.clear()
+        _ITEM_SURF_CACHE[key] = got
+    return got
+
+
+def _draw_item_viewmodel(g, screen, item_id: str, stack) -> None:
+    """Draw an ordinary inventory item as a held pixel-art plane."""
+    w, h = screen.get_size()
+    got = _item_view_surface(item_id, stack, w, h)
+    if got is None:
+        return
+    surf, ox, oy, pivot = got
+    now = pygame.time.get_ticks() / 1000.0
+    try:
+        moving = bool(getattr(g.player, "moving", False))
+        bobx = math.sin(now * 8.0) * (2.2 if moving else 0.6)
+        boby = abs(math.cos(now * 8.0)) * (2.5 if moving else 0.8)
+        boby += float(getattr(g, "v3d_pitch", 0.0)) * 10.0
+    except Exception:
+        bobx = boby = 0.0
+    try:
+        swing = float(getattr(g.player, "swing_progress", 0.0) or 0.0)
+    except Exception:
+        swing = 0.0
+    if swing > 0.0:
+        ang = -0.25 + 1.45 * swing
+        surf = pygame.transform.rotate(surf, math.degrees(ang))
+        rect = surf.get_rect()
+        rect.bottomright = (int(pivot[0]) + 6, int(pivot[1]) + 10)
+        screen.blit(surf, rect)
+    else:
+        screen.blit(surf, (int(ox + bobx), int(oy + boby)))
+
+
 def _draw_axe_viewmodel(g, screen) -> None:
     """Draw a proper perspective-mapped pixel axe; no card, no shadow box."""
     w, h = screen.get_size()
@@ -1758,6 +1868,9 @@ def draw_viewmodel(g, screen) -> None:
         return
     if item_id in _GUN_VIEW_IDS:
         _draw_gun_viewmodel(g, screen, item_id)
+        return
+    if item_id:
+        _draw_item_viewmodel(g, screen, item_id, stack)
         return
     faces = _item_faces(item_id, empty=stack is None,
                          bow_charge=float(getattr(g, "_v3_bow_charge", 0.0)))
