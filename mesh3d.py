@@ -1158,100 +1158,55 @@ def _item_faces(item_id, empty=False, bow_charge=0.0):
 
 
 def _draw_bow_viewmodel(g, screen) -> None:
-    """A chunky 3D first-person bow, angled forward from the player's view.
-
-    The bow is built from small pixel-like blocks, not a flat side card.  It
-    has a curved stick on the left, a string on the right, a nocked arrow
-    pointing down the view axis, and a drop shadow.  Holding the shot pulls
-    the string and arrow back toward the player.
-    """
+    """A pixelated side-on Minecraft-style bow, with stick left of the string."""
     w, h = screen.get_size()
     p = g.player
     now = pygame.time.get_ticks() / 1000.0
     moving = bool(getattr(p, "moving", False))
-    bobx = math.sin(now * 7.0) * (1.4 if moving else 0.4)
-    boby = abs(math.cos(now * 7.0)) * (1.4 if moving else 0.5)
+    bobx = math.sin(now * 7.0) * (1.5 if moving else 0.4)
+    boby = abs(math.cos(now * 7.0)) * (1.5 if moving else 0.5)
     pull = max(0.0, min(1.0, float(getattr(g, "_v3_bow_charge", 0.0)) / 1.1))
-    focal = min(w, h) * 1.20
-    # camera-space base; local bow coordinates are small, pixel-like blocks
-    base = (24.0 + bobx, -15.0 - boby, 112.0)
-    scale = 0.82
-    yaw = 0.34
-    ca, sa = math.cos(yaw), math.sin(yaw)
-
-    def xf(p):
-        x, y, z = p[0] * scale, p[1] * scale, p[2] * scale
-        x, z = x * ca + z * sa, -x * sa + z * ca
-        return (base[0] + x, base[1] + y, base[2] + z)
-
-    def box(cx, cy, cz, bw, bh, bd, col):
-        return [([xf(q) for q in face], col) for face, _c in
-                _vm_box(cx, cy, cz, bw, bh, bd, col)]
-
-    faces = []
-    wood = (118, 78, 44)
-    wood_l = (166, 114, 64)
-    wood_d = (62, 40, 24)
-    # the curved wooden stick, made of chunky blocks on the LEFT of the string
-    steps = 11
-    for i in range(steps):
-        t = i / float(steps - 1)
-        y = -38.0 + 76.0 * t
-        x = -13.0 - 12.0 * math.sin(math.pi * t)
-        bw = 6.0 + 1.5 * math.sin(math.pi * t)
-        faces += box(x, y, 0.0, bw, 8.0, 5.5, wood)
-        faces += box(x + 1.0, y - 2.0, -2.6, bw * 0.72, 3.0, 1.2, wood_l)
-    # tips and grip
-    faces += box(-13.0, -41.0, 0.0, 9, 8, 7, wood_d)
-    faces += box(-13.0, 41.0, 0.0, 9, 8, 7, wood_d)
-    faces += box(0.0, 0.0, 0.0, 8, 14, 7, (86, 56, 32))
-    for gy in (-4, 0, 4):
-        faces += box(0.0, gy, -3.8, 10, 2, 1.5, wood_l)
-    # string: two chunky lines from tip to nock to tip
-    nz = -9.0 - 25.0 * pull
-    for y0, y1, z0, z1 in ((-41.0, 0.0, 0.0, nz), (0.0, 41.0, nz, 0.0)):
-        for k in range(8):
-            t = (k + 0.5) / 8.0
-            yy = y0 + (y1 - y0) * t
-            zz = z0 + (z1 - z0) * t
-            faces += box(0.6, yy, zz, 1.2, 5.7, 1.2, (224, 222, 204))
-    # nocked arrow, shaft pointing forward along +z
-    faces += box(0.6, 0.0, nz + 20.0, 1.5, 1.5, 40.0, (122, 78, 42))
-    faces += box(0.6, 0.0, nz + 41.0, 4.5, 4.5, 5.0, (204, 210, 218))
-    faces += box(0.6, 0.0, nz + 1.0, 5.0, 5.4, 3.0, (228, 228, 214))
+    # Draw at low resolution, then nearest-scale up: chunky, deliberate pixels.
+    ss = pygame.Surface((100, 140), pygame.SRCALPHA)
+    nock_x = 56 + 14 * pull
+    top = (52, 7)
+    bottom = (52, 133)
+    # The curved stick: left of the string, made from coarse line segments.
+    curve = [(52, 7), (29, 30), (20, 55), (20, 82), (29, 108), (52, 133)]
+    pygame.draw.lines(ss, (62, 40, 24), False, curve, 13)
+    pygame.draw.lines(ss, (120, 80, 44), False, curve, 8)
+    pygame.draw.lines(ss, (176, 118, 64), False, curve, 3)
+    pygame.draw.circle(ss, (72, 46, 26), top, 7)
+    pygame.draw.circle(ss, (72, 46, 26), bottom, 7)
+    # grip at the middle of the stick
+    pygame.draw.rect(ss, (82, 52, 30), (22, 57, 28, 15), border_radius=3)
+    pygame.draw.rect(ss, (154, 102, 54), (24, 59, 24, 11), border_radius=2)
+    # string connects the two stick tips to the nock
+    pygame.draw.line(ss, (226, 222, 202), top, (int(nock_x), 70), 2)
+    pygame.draw.line(ss, (226, 222, 202), (int(nock_x), 70), bottom, 2)
+    # nocked arrow, pointing forward/right
+    pygame.draw.line(ss, (94, 64, 36), (int(nock_x), 70), (94, 70), 4)
+    pygame.draw.line(ss, (158, 112, 64), (int(nock_x), 70), (94, 70), 2)
+    pygame.draw.polygon(ss, (218, 224, 232), [(94, 70), (85, 65), (85, 75)])
+    pygame.draw.line(ss, (226, 222, 204), (int(nock_x), 70), (int(nock_x) - 8, 65), 2)
+    pygame.draw.line(ss, (226, 222, 204), (int(nock_x), 70), (int(nock_x) - 8, 75), 2)
     # hand on the grip
-    faces += box(2.0, 7.0, -2.0, 11, 13, 10, (188, 130, 90))
-    # a Minecraft-like drop shadow behind the held object
-    try:
-        sh = pygame.Surface((int(280 * min(w, h) / 720.0) + 80,
-                             int(90 * min(w, h) / 720.0) + 32), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 75), sh.get_rect())
-        sh_rect = sh.get_rect()
-        sh_rect.midright = (w - 6, int(h * 0.86))
-        screen.blit(sh, sh_rect)
-    except Exception:
-        pass
-    ops = []
-    for pts, col in faces:
-        n = _norm(_cross(_sub(pts[1], pts[0]), _sub(pts[2], pts[0])))
-        d = abs(_dot(n, _LIGHT))
-        f = 0.47 + 0.62 * d
-        c = tuple(max(0, min(255, int(v * f))) for v in col[:3])
-        proj = []
-        zsum = 0.0
-        for (x, y, z) in pts:
-            if z <= 1.0:
-                proj = []
-                break
-            proj.append((w * 0.5 + focal * x / z,
-                         h * 0.5 - focal * y / z))
-            zsum += z
-        if len(proj) >= 3:
-            ops.append((zsum / len(pts), proj, c))
-    ops.sort(key=lambda op: op[0], reverse=True)
-    for _z, pts, col in ops:
-        pygame.draw.polygon(screen, col, pts)
-        pygame.draw.polygon(screen, (36, 26, 18), pts, 1)
+    pygame.draw.rect(ss, (190, 132, 92), (38, 63, 22, 18), border_radius=5)
+    pygame.draw.rect(ss, (122, 80, 50), (38, 63, 22, 18), 2, border_radius=5)
+    # Minecraft-like drop shadow: a dark offset silhouette behind the item.
+    sh = pygame.Surface((100, 140), pygame.SRCALPHA)
+    shadow_curve = [(x + 3, y + 5) for (x, y) in curve]
+    pygame.draw.lines(sh, (0, 0, 0, 95), False, shadow_curve, 13)
+    sc = max(1.0, min(w, h) / 240.0)
+    size = (max(1, int(100 * sc)), max(1, int(140 * sc)))
+    ss = pygame.transform.scale(ss, size)
+    sh = pygame.transform.scale(sh, size)
+    rect = ss.get_rect()
+    rect.midright = (w - 18 + int(bobx), int(h * 0.62) + int(boby))
+    sh_rect = sh.get_rect()
+    sh_rect.midright = (rect.midright[0] + 5, rect.midright[1] + 8)
+    screen.blit(sh, sh_rect)
+    screen.blit(ss, rect)
 
 
 def draw_viewmodel(g, screen) -> None:
