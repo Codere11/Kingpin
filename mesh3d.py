@@ -1403,34 +1403,73 @@ def swing_pivot(tl, tr, br, bl):
 
 
 
+_SHOVEL_TEX = None
+
+
+def _shovel_texture():
+    """A low-resolution shovel drawn as a proper held item."""
+    global _SHOVEL_TEX
+    if _SHOVEL_TEX is not None:
+        return _SHOVEL_TEX
+    s = pygame.Surface((64, 96), pygame.SRCALPHA)
+    wood_d, wood, wood_l = (62, 40, 24), (122, 82, 44), (176, 118, 62)
+    steel_d, steel, edge = (78, 84, 92), (168, 176, 186), (242, 246, 250)
+    # long handle, lower-right to upper-left
+    pygame.draw.line(s, wood_d, (50, 94), (27, 24), 10)
+    pygame.draw.line(s, wood, (50, 94), (27, 24), 7)
+    pygame.draw.line(s, wood_l, (47, 88), (30, 33), 2)
+    for k in range(3):
+        yy = 68 + k * 7
+        pygame.draw.line(s, (70, 44, 26),
+                         (44 - k * 2, yy), (52 - k * 2, yy + 1), 2)
+    # spade blade at the top
+    blade = [(19, 25), (11, 20), (8, 10), (18, 3),
+             (31, 3), (40, 10), (37, 20), (29, 26)]
+    pygame.draw.polygon(s, steel_d, blade)
+    pygame.draw.polygon(s, steel, [(x + 1, y + 1) for (x, y) in blade])
+    pygame.draw.polygon(s, edge, [(18, 4), (10, 11), (13, 19), (22, 23),
+                                  (30, 10), (30, 4)])
+    pygame.draw.polygon(s, (45, 42, 42), blade, 1)
+    pygame.draw.circle(s, (38, 36, 34), (28, 16), 2)
+    _SHOVEL_TEX = s
+    return s
+
+
 _ITEM_SURF_CACHE: dict = {}
 
 
-def _item_view_surface(item_id: str, stack, w: int, h: int):
+def _item_view_surface(item_id: str, stack, w: int, h: int,
+                       pose=None, texture=None):
     """A cached perspective-mapped pixel item plane, Minecraft-style."""
     try:
         quality = getattr(stack, "quality", None) if stack is not None else None
     except Exception:
         quality = None
-    key = (str(item_id), quality, int(w), int(h))
+    # A held item is not a picture facing the camera.  Its face is angled
+    # toward the crosshair in depth, so the texture has real perspective.
+    if pose is None:
+        pose = ((0.58, -0.10, 0.78), 0.78, 0.31, 0.31)
+    key = (str(item_id), quality, int(w), int(h), pose,
+           bool(texture is not None))
     got = _ITEM_SURF_CACHE.get(key)
     if got is not None:
         return got
-    try:
-        import items as _items
-        tex = _items.icon_for(stack, 64)
-    except Exception:
-        tex = None
+    if texture is not None:
+        tex = texture
+    else:
+        try:
+            import items as _items
+            tex = _items.icon_for(stack, 64)
+        except Exception:
+            tex = None
     if tex is None:
         return None
     tex = tex.convert_alpha() if hasattr(tex, "convert_alpha") else tex
     tw, th = tex.get_size()
     focal = min(w, h) / (2.0 * math.tan(math.radians(78.0) * 0.5))
     # Lower-right, angled inward toward the crosshair like a held item.
-    base = (0.58, -0.10, 0.78)
-    yaw = -0.38
+    base, yaw, half_w, half_h = pose
     ca, sa = math.cos(yaw), math.sin(yaw)
-    half_w, half_h = 0.31, 0.31
 
     def proj(lx, ly):
         x = base[0] + lx * ca
@@ -1483,10 +1522,11 @@ def _item_view_surface(item_id: str, stack, w: int, h: int):
     return got
 
 
-def _draw_item_viewmodel(g, screen, item_id: str, stack) -> None:
+def _draw_item_viewmodel(g, screen, item_id: str, stack,
+                        pose=None, texture=None) -> None:
     """Draw an ordinary inventory item as a held pixel-art plane."""
     w, h = screen.get_size()
-    got = _item_view_surface(item_id, stack, w, h)
+    got = _item_view_surface(item_id, stack, w, h, pose=pose, texture=texture)
     if got is None:
         return
     surf, ox, oy, pivot = got
@@ -1868,6 +1908,14 @@ def draw_viewmodel(g, screen) -> None:
         return
     if item_id in _GUN_VIEW_IDS:
         _draw_gun_viewmodel(g, screen, item_id)
+        return
+    if item_id == "shovel":
+        # The shovel is the axe's brother: a long tool angled into the lower
+        # right, with the lower handle leaving the screen.
+        _draw_item_viewmodel(
+            g, screen, item_id, stack,
+            pose=((0.90, -0.35, 0.85), 0.50, 0.50, 1.00),
+            texture=_shovel_texture())
         return
     if item_id:
         _draw_item_viewmodel(g, screen, item_id, stack)
