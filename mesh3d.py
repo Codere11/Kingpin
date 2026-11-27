@@ -1517,6 +1517,179 @@ def _draw_bow_viewmodel(g, screen) -> None:
             screen.blit(img, rect)
 
 
+
+def _gun_model_faces(kind: str):
+    """Local-space faces for a real 3D firearm.
+
+    X is right, Y is up, +Z points away from the eyes.  The barrel is the
+    centreline of the model, so with no yaw its muzzle projects exactly onto
+    the crosshair.  The stock and butt deliberately sit below and behind it.
+    """
+    wood = (91, 57, 32)
+    wood_light = (122, 79, 43)
+    wood_dark = (61, 38, 23)
+    steel = (142, 147, 155)
+    steel_light = (191, 196, 202)
+    steel_dark = (68, 72, 79)
+    brass = (166, 126, 62)
+    muzzle = (27, 28, 32)
+
+    out = []
+    if kind == "rifle":
+        z0, z1, radius = 0.62, 1.98, 0.022
+        fore_end = 1.34
+    elif kind == "musket":
+        z0, z1, radius = 0.62, 1.78, 0.031
+        fore_end = 1.20
+    elif kind in ("double_shot", "shotgun"):
+        z0, z1, radius = 0.62, 1.70, 0.027
+        fore_end = 1.18
+    else:
+        z0, z1, radius = 0.62, 1.82, 0.028
+        fore_end = 1.24
+
+    barrel_xs = (-0.030, 0.030) if kind in ("double_shot", "shotgun") else (0.0,)
+    for bx in barrel_xs:
+        out += _vm_cyl(bx, 0.0, z0, radius, z1 - z0, 10, steel)
+        # A dark bore, then the muzzle ring.  The ring is a short cylinder so
+        # its forward cap is what the player actually sees at the business end.
+        out += _vm_cyl(bx, 0.0, z1 - 0.012, radius * 0.64, 0.014, 10, muzzle)
+        out += _vm_cyl(bx, 0.0, z1 - 0.055, radius * 1.28, 0.035, 10, steel_dark)
+        out += _vm_cyl(bx, 0.0, z0 + 0.22, radius * 1.14, 0.045, 10, steel_light)
+
+    # wooden fore-end under the barrel(s)
+    out += _vm_box(0.0, -0.050, (z0 + fore_end) * 0.5,
+                  0.095 if len(barrel_xs) > 1 else 0.075,
+                  0.070, fore_end - z0, wood)
+    out += _vm_box(0.0, -0.056, fore_end - 0.035, 0.088, 0.065, 0.08, wood_dark)
+    # ramrod tucked under the fore-end
+    out += _vm_box(0.0, -0.090, (z0 + fore_end) * 0.5 + 0.10,
+                   0.014, 0.014, fore_end - z0 - 0.18, (180, 169, 142))
+
+    # receiver / lock / trigger group
+    out += _vm_box(0.0, -0.068, 0.60, 0.120 if len(barrel_xs) > 1 else 0.105,
+                   0.115, 0.34, wood_light)
+    out += _vm_box(0.0, -0.128, 0.66, 0.042, 0.026, 0.19, steel_dark)
+    out += _vm_box(0.0, -0.105, 0.62, 0.018, 0.055, 0.026, steel_dark)
+    # lock plate and hammer on the visible side
+    out += _vm_box(0.050, -0.070, 0.66, 0.022, 0.065, 0.19, steel)
+    out += _vm_box(-0.046, -0.035, 0.70, 0.034, 0.062, 0.038, steel_dark)
+    out += _vm_box(-0.046, 0.005, 0.70, 0.040, 0.018, 0.052, brass)
+    # trigger guard bow
+    out += _vm_box(0.0, -0.155, 0.64, 0.038, 0.022, 0.21, steel_dark)
+    out += _vm_box(0.0, -0.137, 0.755, 0.030, 0.024, 0.022, steel_dark)
+
+    # stock, wrist, and butt.  These extend below the camera view when aimed.
+    out += _vm_box(0.0, -0.155, 0.38, 0.095, 0.145, 0.36, wood)
+    out += _vm_box(0.0, -0.215, 0.18, 0.125, 0.235, 0.18, wood_dark)
+    out += _vm_box(0.0, -0.238, 0.54, 0.060, 0.17, 0.12, wood_light)
+    out += _vm_box(0.0, -0.275, 0.34, 0.105, 0.115, 0.13, wood_dark)
+
+    # sights, so the barrel visibly runs to the crosshair.
+    out += _vm_box(0.0, radius + 0.018, z1 - 0.12, 0.020, 0.036, 0.040, steel_dark)
+    out += _vm_box(0.0, radius + 0.014, 0.78, 0.038, 0.028, 0.030, steel_dark)
+    if kind == "rifle":
+        # a long slim rifle needs a second band and a finer front blade
+        out += _vm_box(0.0, 0.052, z1 - 0.12, 0.012, 0.028, 0.018, steel_light)
+        out += _vm_box(0.0, -0.055, 1.50, 0.060, 0.055, 0.045, steel_dark)
+    if kind in ("double_shot", "shotgun"):
+        out += _vm_box(0.0, -0.054, 1.04, 0.095, 0.060, 0.045, brass)
+    return out
+
+
+_GUN_VIEW_IDS = ("musket", "rifle", "double_shot", "shotgun")
+
+
+def _draw_gun_viewmodel(g, screen, kind: str) -> None:
+    """A perspective 3D gun, hip-held or pulled straight into the sight line."""
+    w, h = screen.get_size()
+    try:
+        aim = max(0.0, min(1.0, float(getattr(g, "_v3_gun_aim", 0.0))))
+    except Exception:
+        aim = 0.0
+    ease = aim * aim * (3.0 - 2.0 * aim)
+
+    # Rest: lower-right, canted inward.  Aim: centred, flat, closer, with the
+    # butt continuing below the bottom of the screen.
+    tx = 0.58 * (1.0 - ease)
+    ty = -0.185 * (1.0 - ease)
+    tz = 0.00 + 0.020 * ease
+    yaw = -0.35 * (1.0 - ease)
+    roll = -0.075 * (1.0 - ease)
+
+    # recoil kick while the gun is cooling down
+    try:
+        _cd = max(0.0, float(getattr(g.player, "gun_cd", 0.0)))
+        kick = min(1.0, _cd / 0.22) if _cd > 0.0 else 0.0
+    except Exception:
+        kick = 0.0
+    tz -= 0.035 * kick
+    ty -= 0.008 * kick
+
+    fov = math.radians(74.0)
+    focal = min(w, h) / (2.0 * math.tan(fov * 0.5))
+    cx, cy = w * 0.5, h * 0.5
+
+    def transform(p):
+        x, y, z = p
+        # roll around the barrel axis
+        if roll:
+            c, s = math.cos(roll), math.sin(roll)
+            x, y = x * c - y * s, x * s + y * c
+        # yaw around the vertical
+        if yaw:
+            c, s = math.cos(yaw), math.sin(yaw)
+            x, z = x * c + z * s, -x * s + z * c
+        return (x + tx, y + ty, z + tz)
+
+    def project(p):
+        x, y, z = p
+        if z <= 0.08:
+            return None
+        return (cx + focal * x / z, cy - focal * y / z)
+
+    faces = []
+    for face, base in _gun_model_faces(kind):
+        pts = [transform(q) for q in face]
+        if any(q[2] <= 0.08 for q in pts):
+            continue
+        n = _norm(_cross(_sub(pts[1], pts[0]), _sub(pts[2], pts[0])))
+        light = abs(_dot(n, _LIGHT))
+        shade = 0.44 + 0.68 * light
+        col = tuple(max(0, min(255, int(v * shade))) for v in base[:3])
+        poly = [project(q) for q in pts]
+        if any(q is None for q in poly):
+            continue
+        depth = sum(q[2] for q in pts) / len(pts)
+        faces.append((depth, poly, col))
+    faces.sort(key=lambda item: item[0], reverse=True)
+    for _depth, poly, col in faces:
+        pygame.draw.polygon(screen, col, poly)
+        pygame.draw.polygon(screen, (31, 25, 20), poly, 1)
+
+    # Muzzle flash at the actual 3D muzzle, not a fixed screen coordinate.
+    if kick > 0.0:
+        if kind in ("double_shot", "shotgun"):
+            muzzle_xs = (-0.030, 0.030)
+        else:
+            muzzle_xs = (0.0,)
+        z_muzzle = 1.98 if kind == "rifle" else (1.78 if kind == "musket" else 1.70)
+        for bx in muzzle_xs:
+            pm = project(transform((bx, 0.0, z_muzzle + 0.018)))
+            if pm is None:
+                continue
+            mx, my = int(pm[0]), int(pm[1])
+            for radius, color in ((18, (255, 174, 50, 150)),
+                                  (11, (255, 225, 120, 210)),
+                                  (5, (255, 255, 238, 255))):
+                glow = pygame.Surface((radius * 2 + 2, radius * 2 + 2),
+                                      pygame.SRCALPHA)
+                pygame.draw.circle(glow, color, (radius + 1, radius + 1), radius)
+                screen.blit(glow, (mx - radius - 1, my - radius - 1))
+            pygame.draw.line(screen, (255, 244, 190),
+                             (mx - 16, my), (mx + 16, my), 2)
+
+
 def draw_viewmodel(g, screen) -> None:
     stack = None
     try:
@@ -1529,6 +1702,9 @@ def draw_viewmodel(g, screen) -> None:
         return
     if item_id == "axe":
         _draw_axe_viewmodel(g, screen)
+        return
+    if item_id in _GUN_VIEW_IDS:
+        _draw_gun_viewmodel(g, screen, item_id)
         return
     faces = _item_faces(item_id, empty=stack is None,
                          bow_charge=float(getattr(g, "_v3_bow_charge", 0.0)))

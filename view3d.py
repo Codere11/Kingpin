@@ -213,6 +213,23 @@ def tick(g, dt: float) -> None:
         g.v3d_yaw = (float(getattr(g, "v3d_yaw", 0.0)) + dx * 0.0032) % (2.0 * math.pi)
         p = float(getattr(g, "v3d_pitch", 0.0)) - dy * 0.0028
         g.v3d_pitch = max(-1.15, min(1.15, p))
+    # RIGHT-CLICK AIM.  A gun is pulled from the hip into the sight line while
+    # the button is held; releasing it eases back.  The actual shot still uses
+    # the camera yaw/pitch, so the 3D barrel and the crosshair agree.
+    try:
+        stack = g.inventory.selected_stack()
+        kind = stack.defn.id if stack is not None else ""
+        pressed = pygame.mouse.get_pressed()
+        want = bool(kind in _GUN_IDS and len(pressed) > 2 and pressed[2])
+        aim = float(getattr(g, "_v3_gun_aim", 0.0) or 0.0)
+        if want:
+            aim = min(1.0, aim + dt * 6.8)
+        else:
+            aim = max(0.0, aim - dt * 10.0)
+        g._v3_gun_aiming = want
+        g._v3_gun_aim = aim
+    except Exception:
+        pass
 
 
 def move_basis(g):
