@@ -52,7 +52,6 @@ def _blocked(g) -> bool:
     return any(bool(getattr(g, name, False)) for name in _BLOCKERS) \
         or getattr(g, "inside_house", None) is not None \
         or getattr(g, "inside_mine", None) is not None \
-        or bool(getattr(g, "field_design", False)) \
         or bool(getattr(g, "comm_mode", False)) \
         or bool(getattr(getattr(g, "dialogue_panel", None), "open_", False))
 
@@ -212,7 +211,8 @@ def tick(g, dt: float) -> None:
         g.v3d_yaw = (float(getattr(g, "v3d_yaw", 0.0)) + dx * 0.0032) % (2.0 * math.pi)
         p = float(getattr(g, "v3d_pitch", 0.0)) - dy * 0.0028
         g.v3d_pitch = max(-1.15, min(1.15, p))
-    # Right-click cancels a placement; otherwise right-click still aims a gun.
+    # Right-click cancels a placement/designation; otherwise right-click still
+    # aims a gun.
     try:
         if getattr(g, "placing", None) is not None and pygame.mouse.get_pressed()[2]:
             g.placing = None
@@ -220,6 +220,9 @@ def tick(g, dt: float) -> None:
                 g.plot_start[0] = None
             except Exception:
                 pass
+        if getattr(g, "field_design", False) and pygame.mouse.get_pressed()[2]:
+            g.field_design = False
+            g.field_start[0] = None
     except Exception:
         pass
     # RIGHT-CLICK AIM.  A gun is pulled from the hip into the sight line while
@@ -1048,6 +1051,47 @@ def _open_npc_card(g, npc) -> bool:
         return False
 
 
+def _field_click_from_crosshair(g) -> bool:
+    """Choose field/orchard corners with the crosshair."""
+    tile = _aim_tile(g)
+    if tile is None:
+        _toast(g, "Aim at the ground to designate")
+        return True
+    wx, wy = float(tile[0] * 32), float(tile[1] * 32)
+    if not getattr(g, "field_start", None) or g.field_start[0] is None:
+        g.field_start[0] = (wx, wy)
+        g.field_raw[0] = (wx, wy)
+        g.field_del[0] = False
+        _toast(g, "First corner set")
+        return True
+    sx, sy = g.field_start[0]
+    tx0, ty0 = int(sx // 32), int(sy // 32)
+    tx1, ty1 = int(wx // 32), int(wy // 32)
+    r = pygame.Rect(min(tx0, tx1) * 32, min(ty0, ty1) * 32,
+                    (abs(tx0 - tx1) + 1) * 32,
+                    (abs(ty0 - ty1) + 1) * 32)
+    g.field_start[0] = None
+    g.field_raw[0] = None
+    try:
+        if getattr(g, "field_mode", "") == "orchard":
+            g.field_designations.append(
+                {"rect": r, "type": "orchard", "kind": "orchard"})
+            _toast(g, "Orchard designated  (%d x %d)" % (r.w, r.h))
+        else:
+            _t = g.world.temperature(r.centerx, r.centery)
+            _h = g.world.humidity(r.centerx, r.centery)
+            _kind = (g.first_field_kind(_t, _h, r.centerx, r.centery)
+                     if getattr(g, "first_field_kind", None) else "wheat")
+            g.field_designations.append(
+                {"rect": r, "type": "field", "kind": _kind})
+            _toast(g, "Field designated  (%d x %d)" % (r.w, r.h))
+        if getattr(g, "sync_player_camp", None):
+            g.sync_player_camp(g)
+    except Exception:
+        _toast(g, "Could not designate there")
+    return True
+
+
 def _place_from_crosshair(g) -> bool:
     """Turn the crosshair's ground tile into the build menu's placement point."""
     tile = _aim_tile(g)
@@ -1055,6 +1099,14 @@ def _place_from_crosshair(g) -> bool:
         _toast(g, "Nothing in reach to build on")
         return True
     x, y = float(tile[0] * 32), float(tile[1] * 32)
+    if getattr(g, "placing", None) == "demolish":
+        try:
+            _said = g.demolish_at(x + 16.0, y + 16.0)
+            _toast(g, _said or "Nothing of yours there")
+        except Exception:
+            pass
+        g.placing = None
+        return True
     g._place_override = (x, y)
     try:
         g.try_place()
@@ -1077,6 +1129,8 @@ def interact(g) -> bool:
     except Exception:
         stack = None
     held = stack.defn.id if stack is not None else ""
+    if getattr(g, "field_design", False):
+        return _field_click_from_crosshair(g)
     if getattr(g, "placing", None) is not None:
         return _place_from_crosshair(g)
     if held == "bow":
@@ -1159,14 +1213,26 @@ def interact(g) -> bool:
 
 def _draw_placement_ghost(g, frame) -> None:
     """A green footprint under the crosshair while a build choice is armed."""
-    if getattr(g, "placing", None) is None:
+    if getattr(g, "placing", None) is None and not getattr(g, "field_design", False):
         return
     try:
         tile = _aim_tile(g)
         if tile is None:
             return
-        wx, wy = tile[0] * 32.0 + 16.0, tile[1] * 32.0 + 16.0
-        _facing, rect, _sight = g.placement_box(wx, wy)
+        wx, wy = tile[0] * 32.0, tile[1] * 32.0
+        if getattr(g, "field_design", False):
+            _st = getattr(g, "field_start", None)
+            if _st and _st[0] is not None:
+                _sx, _sy = _st[0]
+                _tx0, _ty0 = int(_sx // 32), int(_sy // 32)
+                _tx1, _ty1 = tile[0], tile[1]
+                rect = pygame.Rect(min(_tx0, _tx1) * 32, min(_ty0, _ty1) * 32,
+                                   (abs(_tx0 - _tx1) + 1) * 32,
+                                   (abs(_ty0 - _ty1) + 1) * 32)
+            else:
+                rect = pygame.Rect(tile[0] * 32, tile[1] * 32, 32, 32)
+        else:
+            _facing, rect, _sight = g.placement_box(wx, wy)
         fwd, right, up = _cam(g)
         ex, ey = _eye_xy(g, update=False)
 
