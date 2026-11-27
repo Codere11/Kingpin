@@ -2155,6 +2155,107 @@ def _draw_gun_viewmodel(g, screen, kind: str) -> None:
                              (mx - 16, my), (mx + 16, my), 2)
 
 
+def draw_horse_head(g, screen) -> None:
+    """The head and neck of the horse under the rider, in first person."""
+    try:
+        horse = getattr(g, "riding", None)
+        if horse is None:
+            return
+        import horseart
+        pal = horseart.PALETTES.get(getattr(horse, "coat", "brown"),
+                                    horseart.PALETTES["brown"])
+        coat = tuple(pal.get("coat", (126, 88, 56)))
+        coat2 = tuple(pal.get("coat2", (164, 120, 76)))
+        mane = tuple(pal.get("mane", (58, 38, 26)))
+        muzzle = tuple(pal.get("muzzle", (92, 62, 44)))
+        dark = tuple(pal.get("dark", (76, 52, 34)))
+        eye = tuple(pal.get("eye", (24, 16, 10)))
+        w, h = screen.get_size()
+        focal = min(w, h) / (2.0 * math.tan(math.radians(72.0) * 0.5))
+        cx, cy = w * 0.5, h * 0.5
+        try:
+            moving = bool(getattr(g.player, "moving", False))
+            now = pygame.time.get_ticks() / 1000.0
+            bob = math.sin(now * 8.5) * (4.0 if moving else 1.5)
+            sway = math.sin(now * 3.3) * (1.5 if moving else 0.5)
+        except Exception:
+            bob = sway = 0.0
+
+        def project(p):
+            x, y, z = p
+            if z <= 0.12:
+                return None
+            return (cx + focal * x / z, cy - focal * y / z + bob)
+
+        faces = []
+
+        def add(face_pts, color):
+            pts = []
+            for p in face_pts:
+                q = project(p)
+                if q is None:
+                    return
+                pts.append((q[0], q[1], p[2]))
+            n = _norm(_cross(_sub(face_pts[1], face_pts[0]),
+                             _sub(face_pts[2], face_pts[0])))
+            shade = 0.45 + 0.68 * abs(_dot(n, _LIGHT))
+            col = tuple(max(0, min(255, int(v * shade))) for v in color[:3])
+            faces.append((sum(p[2] for p in face_pts) / len(face_pts),
+                          [(q[0], q[1]) for q in pts], col))
+
+        # neck sloping up from the rider's chest
+        add([(-.20, -.50, .48), (.20, -.50, .48),
+             (.16, -.12, .77), (-.16, -.12, .77)], coat)
+        add([(-.20, -.50, .48), (.20, -.50, .48),
+             (.20, -.50, .58), (-.20, -.50, .58)], dark)
+        # head, a chunky tapered prism
+        outline = [(-.17, -.20), (.17, -.20), (.20, -.02),
+                   (.11, .12), (-.11, .12), (-.20, -.02)]
+        for face_pts, col in _vm_prism(outline, .78, 1.04, coat):
+            add(face_pts, col)
+        # muzzle
+        for face_pts, col in _vm_box(0, -.125, 1.12, .21, .17, .22, muzzle):
+            add(face_pts, col)
+        # ears
+        for sx in (-.105, .105):
+            for face_pts, col in _vm_box(sx + sway * .002, .12, .91,
+                                         .065, .14, .10, coat2):
+                add(face_pts, col)
+        # mane ridge
+        for face_pts, col in _vm_box(0, .035, .86, .085, .12, .32, mane):
+            add(face_pts, col)
+        # eyes and nostrils on the front of the face
+        for sx in (-.095, .095):
+            for face_pts, col in _vm_box(sx, -.055, 1.045, .045, .05, .018, eye):
+                add(face_pts, col)
+        for sx in (-.055, .055):
+            for face_pts, col in _vm_box(sx, -.17, 1.225, .035, .032, .012, dark):
+                add(face_pts, col)
+        # bridle straps
+        for sx in (-.15, .15):
+            for face_pts, col in _vm_box(sx, -.10, 1.10, .018, .24, .018,
+                                         (112, 72, 42)):
+                add(face_pts, col)
+        faces.sort(key=lambda item: item[0], reverse=True)
+        for _depth, pts, col in faces:
+            pygame.draw.polygon(screen, col, pts)
+            pygame.draw.polygon(screen, (42, 30, 20), pts, 1)
+        # reins, from the bit down toward the rider's hands
+        try:
+            a = project((-.11, -.18, 1.15))
+            b = project((-.30, -.52, .58))
+            c = project((.11, -.18, 1.15))
+            d = project((.30, -.52, .58))
+            if a and b:
+                pygame.draw.line(screen, (126, 78, 44), a[:2], b[:2], 3)
+            if c and d:
+                pygame.draw.line(screen, (126, 78, 44), c[:2], d[:2], 3)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def draw_viewmodel(g, screen) -> None:
     stack = None
     try:

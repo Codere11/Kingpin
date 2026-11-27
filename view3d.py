@@ -706,6 +706,8 @@ def _collect(g, yaw: float):
         card, ax, ay, wh = _animal_sprite(e, yaw)
         out.append((card, float(e.x), float(e.y), wh, ax, ay, ""))
     for e in list(getattr(g, "horses", ()) or ()):
+        if e is getattr(g, "riding", None):
+            continue          # the horse he is on is his first-person head
         if math.hypot(float(e.x) - ex, float(e.y) - ey) > lim:
             continue
         card, ax, ay, wh = _animal_sprite(e, yaw)
@@ -1822,6 +1824,12 @@ def draw_hud(g) -> None:
     except Exception:
         pass
     if not getattr(g, "hud_hidden", False) and not getattr(g.player, "dead", False):
+        try:
+            if getattr(g, "riding", None) is not None:
+                import mesh3d as _mesh
+                _mesh.draw_horse_head(g, screen)
+        except Exception:
+            pass
         _viewmodel(g, screen)
     if not getattr(g, "hud_hidden", False) and not getattr(g.player, "dead", False):
         try:
