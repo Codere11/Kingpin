@@ -253,18 +253,85 @@ def draw_level_screen(screen: pygame.Surface, t: float) -> None:
                             [(ox, 0), (ox + width, 0),
                              (ox + width + int(h * 0.45), h),
                              (ox + int(h * 0.45), h)])
-    # Sparse gold sparkles, deterministic but moving with t.
+    # A LOT of sparkle: three layers of gold dust, rising glints, and a
+    # handful of bright four-point stars.  All deterministic, but each mote
+    # gets its own drift and twinkle phase so the screen keeps glittering.
     rng = random.Random(91827)
-    for i in range(26):
-        sx = (rng.randrange(0, max(1, w)) + int(p * w * (0.08 + i * 0.006))) % max(1, w)
-        sy = (rng.randrange(0, max(1, h)) + int(p * h * (0.04 + i * 0.004))) % max(1, h)
-        size = 1 + (i % 3)
-        a = int((95 + 110 * (i % 5) / 4.0) * fade)
-        if a <= 0:
+    for i in range(210):
+        base_x = rng.random() * max(1, w)
+        base_y = rng.random() * max(1, h)
+        drift = rng.uniform(-0.10, 0.16)
+        rise = rng.uniform(0.04, 0.23)
+        sx = (base_x + p * w * drift) % max(1, w)
+        sy = (base_y - p * h * rise) % max(1, h)
+        twinkle = 0.5 + 0.5 * math.sin(
+            p * 19.0 + base_x * 0.061 + base_y * 0.037 + i * 1.7)
+        a = int((48 + 185 * twinkle) * fade)
+        if a <= 2:
             continue
-        pygame.draw.rect(overlay, (255, 238, 146, a),
-                         (sx, sy, size, size))
-        if size >= 2:
-            pygame.draw.line(overlay, (255, 252, 210, min(255, a + 20)),
-                             (sx - 3, sy + size // 2), (sx + 4, sy + size // 2), 1)
+        size = 1 + (i % 4)
+        gold = (255, 221, 104, min(255, a + 22))
+        white = (255, 252, 224, min(255, a + 35))
+        pygame.draw.rect(overlay, gold, (int(sx), int(sy), size, size))
+        if size >= 3 or twinkle > 0.78:
+            arm = 2 + int(4 * twinkle)
+            cx, cy = int(sx + size / 2), int(sy + size / 2)
+            pygame.draw.line(overlay, white, (cx - arm, cy), (cx + arm, cy), 1)
+            pygame.draw.line(overlay, white, (cx, cy - arm), (cx, cy + arm), 1)
+            if twinkle > 0.9:
+                pygame.draw.circle(overlay, (255, 244, 170, min(255, a - 40)),
+                                   (cx, cy), 4, 1)
+
+    # Near sparkles sweeping in from the frame, like light catching dust.
+    for i in range(54):
+        edge = i % 4
+        if edge == 0:
+            sx = rng.uniform(0.0, w)
+            sy = -12.0 + p * h * rng.uniform(0.25, 0.8)
+        elif edge == 1:
+            sx = w + 12.0 - p * w * rng.uniform(0.15, 0.55)
+            sy = rng.uniform(0.0, h)
+        elif edge == 2:
+            sx = rng.uniform(0.0, w)
+            sy = h + 12.0 - p * h * rng.uniform(0.2, 0.7)
+        else:
+            sx = -12.0 + p * w * rng.uniform(0.15, 0.55)
+            sy = rng.uniform(0.0, h)
+        twinkle = 0.5 + 0.5 * math.sin(p * 21.0 + i * 2.3)
+        a = int((80 + 160 * twinkle) * fade)
+        if a <= 2:
+            continue
+        arm = 2 + int(4 * twinkle)
+        x, y = int(sx), int(sy)
+        pygame.draw.circle(overlay, (255, 248, 195, a), (x, y), 2)
+        pygame.draw.line(overlay, (255, 243, 160, min(255, a + 18)),
+                         (x - arm, y), (x + arm, y), 1)
+        pygame.draw.line(overlay, (255, 243, 160, min(255, a + 18)),
+                         (x, y - arm), (x, y + arm), 1)
+
+    # Bigger four-point stars burst outward from the middle as the level lands.
+    burst = min(1.0, p * 1.55)
+    for i in range(28):
+        ang = i * 0.2243994753 + rng.uniform(-0.08, 0.08)
+        radius = (0.06 + burst * (0.30 + 0.28 * rng.random())) * min(w, h)
+        sx = w * 0.5 + math.cos(ang) * radius * 1.45
+        sy = h * 0.5 + math.sin(ang) * radius
+        twinkle = 0.45 + 0.55 * math.sin(p * 17.0 + i * 1.31)
+        a = int((90 + 155 * twinkle) * fade)
+        if a <= 2:
+            continue
+        arm = 3 + int(7 * twinkle)
+        x, y = int(sx), int(sy)
+        pygame.draw.line(overlay, (255, 250, 210, min(255, a + 20)),
+                         (x - arm, y), (x + arm, y), 2)
+        pygame.draw.line(overlay, (255, 250, 210, min(255, a + 20)),
+                         (x, y - arm), (x, y + arm), 2)
+        pygame.draw.line(overlay, (255, 229, 126, a),
+                         (x - arm // 2, y - arm // 2),
+                         (x + arm // 2, y + arm // 2), 1)
+        pygame.draw.line(overlay, (255, 229, 126, a),
+                         (x - arm // 2, y + arm // 2),
+                         (x + arm // 2, y - arm // 2), 1)
+        pygame.draw.rect(overlay, (255, 255, 238, min(255, a + 30)),
+                         (x - 1, y - 1, 3, 3))
     screen.blit(overlay, (0, 0))
