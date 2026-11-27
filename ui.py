@@ -57,6 +57,8 @@ class Hotbar:
         self.font_name = pygame.font.SysFont("dejavusans", 16, bold=True)
         self.font_small = pygame.font.SysFont("dejavusans", 12, bold=True)
         self.font_tiny = pygame.font.SysFont("dejavusans", 11)
+        self._cache_sig = None
+        self._cache_surf = None
 
     # -- selection ----------------------------------------------------------
     def cycle(self, delta: int) -> None:
@@ -116,6 +118,28 @@ class Hotbar:
 
     # -- drawing ------------------------------------------------------------
     def draw(self, screen: pygame.Surface) -> None:
+        # The slot art and labels only change when the inventory or selection
+        # changes.  Re-rendering eight icons, count labels and quality badges
+        # every frame was several milliseconds of HUD work for a picture that
+        # was already on screen.
+        sw, sh = screen.get_size()
+        limit = min(self.visible, self.inv.capacity)
+        sig = [sw, sh, self.inv.selected]
+        for i in range(limit):
+            st = self.inv.slots[i]
+            sig.append(None if st is None else
+                       (id(st), st.defn.id, st.count, getattr(st, "quality", None)))
+        sig = tuple(sig)
+        if self._cache_sig == sig and self._cache_surf is not None:
+            screen.blit(self._cache_surf, (0, 0))
+            return
+        surf = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        self._draw_hotbar(surf)
+        self._cache_sig = sig
+        self._cache_surf = surf
+        screen.blit(surf, (0, 0))
+
+    def _draw_hotbar(self, screen: pygame.Surface) -> None:
         sw, sh = screen.get_size()
         panel, rects = self._layout(sw, sh)
 

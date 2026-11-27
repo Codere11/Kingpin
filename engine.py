@@ -1673,8 +1673,7 @@ def run(g):
                 # economy passes, and several towns at once is what made the
                 # frame die at a gate. A town's books run when the man is near
                 # the town.
-                if (abs(village.x - g.player.x) < village.radius + 3000.0
-                        and abs(village.y - g.player.y) < village.radius + 3000.0):
+                if _near_town:
                     # THE TOWN'S BOOKS, TEN TIMES A SECOND. They are all
                     # day-guarded anyway; asking sixty times a second whether
                     # the day has changed was most of the town phase's cost.
@@ -2598,6 +2597,15 @@ def run(g):
             for village in g._LANE_TOWNS:
                 if not g.world_tick or g._W_ON:
                     break
+                # DISTANCE FIRST.  This loop used to scan every enemy for
+                # every town in the world, compute hostility for every town,
+                # and seed every town's gardens on the frame it first ran --
+                # all before asking whether the player was anywhere near it.
+                # A far town only needs this work when it is under siege.
+                _near_town = (abs(village.x - g.player.x) < village.radius + 3000.0
+                              and abs(village.y - g.player.y) < village.radius + 3000.0)
+                if not _near_town and village not in g.sieges:
+                    continue
                 if village in g.sieges:
                     g.world.enemies = g.enemies
                 # THE TOWN DECIDES FOR ITSELF WHETHER A WAR IS AT ITS GATE.

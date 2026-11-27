@@ -564,6 +564,36 @@ def _cam(g):
     return fwd, right, up
 
 
+def _eye_xy(g, update: bool = True):
+    """A softly followed eye position for rendering.
+
+    Simulation position is authoritative, but drawing every simulation step
+    directly made running and horse riding visibly step and hitch whenever a
+    frame took longer than the last.  The camera eases toward the player on
+    the horizontal plane; teleports and large corrections snap immediately.
+    """
+    px, py = float(g.player.x), float(g.player.y)
+    cx = getattr(g, "_v3_cam_x", None)
+    cy = getattr(g, "_v3_cam_y", None)
+    if cx is None or cy is None:
+        cx, cy = px, py
+    elif math.hypot(px - cx, py - cy) > 180.0:
+        cx, cy = px, py
+    elif update:
+        dt = max(0.0, min(0.075, float(getattr(g, "dt", 0.016))))
+        # Fast enough not to feel like lag, slow enough to absorb frame-time
+        # variation.  Riding gets a little more response than walking.
+        rate = 34.0 if getattr(g, "riding", None) is not None else 28.0
+        a = 1.0 - math.exp(-rate * dt)
+        cx += (px - cx) * a
+        cy += (py - cy) * a
+        if abs(px - cx) + abs(py - cy) < 0.04:
+            cx, cy = px, py
+    if update:
+        g._v3_cam_x, g._v3_cam_y = cx, cy
+    return cx, cy
+
+
 def _project(fwd, right, up, ex, ey, px, py, pz):
     dx, dy, dz = px - ex, py - ey, pz - EYE_Z
     cz = fwd[0] * dx + fwd[1] * dy + fwd[2] * dz
@@ -719,7 +749,7 @@ def _screen_target_under_crosshair(g):
     """
     try:
         fwd, right, up = _cam(g)
-        ex, ey = float(g.player.x), float(g.player.y)
+        ex, ey = _eye_xy(g, update=False)
         cx, cy = IW * 0.5, IH * 0.5
         best = None
         best_d = 1e18
@@ -1099,9 +1129,8 @@ def draw(g) -> None:
     screen = g.screen
     w, h = screen.get_size()
     frame = _ground_frame(g)
-
     fwd, right, up = _cam(g)
-    ex, ey = float(g.player.x), float(g.player.y)
+    ex, ey = _eye_xy(g)
     yaw = float(getattr(g, "v3d_yaw", 0.0))
     scene = mesh3d.build_scene(g, fwd, right, up, ex, ey)
     for img, wx, wy, wh, ax, ay, label in _collect(g, yaw):

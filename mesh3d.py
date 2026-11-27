@@ -559,12 +559,25 @@ def _crop_sprite(g, kind, elapsed, biome, blight):
 def add_crops(scene, g, radius=1400.0):
     try:
         import crop
-        plants = crop.visible_plants(g.world, scene.ex - radius, scene.ey - radius,
-                                     radius * 2.0, radius * 2.0, pad=120)
+        # Crop growth is slow.  Do not scan the crop index every single frame;
+        # a quarter-second bucket still advances stages promptly and leaves the
+        # renderer to draw the same fixed plant list.
+        _ck = (int(scene.ex // 192.0), int(scene.ey // 192.0),
+               int(float(getattr(g, "now", 0.0)) * 4.0))
+        _cc = getattr(g, "_v3_crop_query_cache", None)
+        if _cc is not None and _cc[0] == _ck:
+            plants = _cc[1]
+        else:
+            plants = crop.visible_plants(
+                g.world, scene.ex - radius, scene.ey - radius,
+                radius * 2.0, radius * 2.0, pad=120)
+            g._v3_crop_query_cache = (_ck, plants)
     except Exception:
         return
     for x, y, planted_at, kind, biome, blight in plants:
         if math.hypot(x - scene.ex, y - scene.ey) > radius:
+            continue
+        if _behind(scene, x, y, 36.0):
             continue
         elapsed = float(getattr(g, "now", 0.0)) - float(planted_at or g.now)
         img = _crop_sprite(g, kind, elapsed, biome, blight)
@@ -581,8 +594,11 @@ def _tile_colour(g, tx, ty):
     cache = getattr(g, "_v3_tile_colours", None)
     if not isinstance(cache, dict):
         cache = g._v3_tile_colours = {}
-    ver = int(getattr(getattr(g, "ground", None), "_version", 0) or 0)
-    key = (ver, tx, ty)
+    # Terrain colours at a world tile do not change when the background
+    # ground worker bumps its version counter.  Keying on that counter threw
+    # away every sampled tile colour each time the worker advanced, making
+    # the supposedly cached ground path re-sample hundreds of tiles a frame.
+    key = (int(tx), int(ty))
     got = cache.get(key)
     if got is not None:
         return got
@@ -689,7 +705,7 @@ def _add_natural_layer(scene, g, size, min_dist, max_dist):
                            top, ground=True)
 
 
-def add_ground_blocks(scene, g, radius=420.0):
+def add_ground_blocks(scene, g, radius=320.0):
     """The ground as actual square blocks, not a perspective image.
 
     Natural ground uses 2x2-tile blocks so the first-person view does not pay
@@ -699,7 +715,7 @@ def add_ground_blocks(scene, g, radius=420.0):
     """
     # A wide coarse layer first; the near 64-block layer and exact worked
     # tiles are drawn over it.
-    _add_natural_layer(scene, g, 256.0, 350.0, 3000.0)
+    _add_natural_layer(scene, g, 1024.0, 350.0, 3000.0)
     size = 64.0
     tx0 = int(math.floor((scene.ex - radius) / size))
     tx1 = int(math.ceil((scene.ex + radius) / size))
@@ -731,7 +747,13 @@ def add_ground_blocks(scene, g, radius=420.0):
         ptx1 = int((scene.ex + radius) // 32)
         pty0 = int((scene.ey - radius) // 32)
         pty1 = int((scene.ey + radius) // 32)
-        plots = g.world.plots_in_tile_range(ptx0, pty0, ptx1, pty1)
+        _pk = (ptx0, pty0, ptx1, pty1, int(float(getattr(g, "now", 0.0)) * 4.0))
+        _pc = getattr(g, "_v3_plot_query_cache", None)
+        if _pc is not None and _pc[0] == _pk:
+            plots = _pc[1]
+        else:
+            plots = g.world.plots_in_tile_range(ptx0, pty0, ptx1, pty1)
+            g._v3_plot_query_cache = (_pk, plots)
     except Exception:
         plots = ()
     for (tx, ty), plot in plots:
@@ -846,28 +868,40 @@ def add_built_blocks(scene, g, radius=1600.0):
     if not blocks:
         return
     tile = 32.0
+    cache = _cache(g)
     for (tx, ty), kind in list(blocks.items()):
         x = tx * tile + tile * 0.5
         y = ty * tile + tile * 0.5
         if math.hypot(x - scene.ex, y - scene.ey) > radius:
             continue
-        if kind == "bed":
-            _add_faces(scene, _bed_faces(tx, ty))
+        if _behind(scene, x, y, 24.0):
             continue
-        col = {"wood": (118, 78, 44), "ironwood": (104, 106, 106),
-               "tropical_wood": (218, 214, 198), "hide": (124, 86, 54),
-               "door": (126, 82, 46)}.get(kind, (118, 78, 44))
-        if kind == "door":
-            # A thin door leaf, open enough to read as a doorway.
-            _add_faces(scene, _box(x, y, 0.0, 28, 2.5, 48, col))
-            _add_faces(scene, _box(x + 11.5, y - 1.0, 24, 1.5, 3.5, 3,
-                                   (216, 190, 100)))
-        else:
-            h = 30.0 if kind != "hide" else 20.0
-            _add_faces(scene, _box(x, y, 0.0, 30, 30, h, col))
-            # a lighter top lip makes adjacent blocks read separately
-            _add_faces(scene, _box(x, y, h, 30.5, 30.5, 1.5,
-                                   tuple(min(255, int(c * 1.22)) for c in col)))
+        # Placed blocks are static between placement edits; rebuild their
+        # little boxes only when the tile or kind changes, not every frame.
+        key = ("built", tx, ty, kind)
+        faces = cache.get(key)
+        if faces is None:
+            faces = []
+            if kind == "bed":
+                faces = _bed_faces(tx, ty)
+            else:
+                col = {"wood": (118, 78, 44), "ironwood": (104, 106, 106),
+                       "tropical_wood": (218, 214, 198),
+                       "hide": (124, 86, 54),
+                       "door": (126, 82, 46)}.get(kind, (118, 78, 44))
+                if kind == "door":
+                    # A thin door leaf, open enough to read as a doorway.
+                    faces += _box(x, y, 0.0, 28, 2.5, 48, col)
+                    faces += _box(x + 11.5, y - 1.0, 24, 1.5, 3.5, 3,
+                                  (216, 190, 100))
+                else:
+                    h = 30.0 if kind != "hide" else 20.0
+                    faces += _box(x, y, 0.0, 30, 30, h, col)
+                    # a lighter top lip makes adjacent blocks read separately
+                    faces += _box(x, y, h, 30.5, 30.5, 1.5,
+                                  tuple(min(255, int(c * 1.22)) for c in col))
+            cache[key] = faces
+        _add_faces(scene, faces)
 
 
 def add_fire(scene, wp, now):
@@ -966,6 +1000,16 @@ def add_projectiles(scene, g):
 # ---------------------------------------------------------------------------
 # scene assembly
 # ---------------------------------------------------------------------------
+def _behind(scene, x: float, y: float, radius: float = 0.0) -> bool:
+    """Cheap object-level cull before generating/projecting its faces."""
+    dx, dy = float(x) - scene.ex, float(y) - scene.ey
+    cz = scene.fwd[0] * dx + scene.fwd[1] * dy
+    if cz < -max(32.0, radius):
+        return True
+    side = abs(scene.right[0] * dx + scene.right[1] * dy)
+    return side > max(120.0, radius + cz * 1.75)
+
+
 def build_scene(g, fwd, right, up, ex, ey):
     scene = Scene(fwd, right, up, ex, ey, bool(getattr(g, "night", False)))
     # trees -- nearest first, with a cap; the wider list is for collision too
@@ -976,6 +1020,9 @@ def build_scene(g, fwd, right, up, ex, ey):
     trees.sort(key=lambda t: (float(t.x) - ex) ** 2 + (float(t.y) - ey) ** 2)
     for t in trees[:140]:
         d = math.hypot(float(t.x) - ex, float(t.y) - ey)
+        if _behind(scene, float(t.x), float(t.y),
+                   max(20.0, float(getattr(t, "canopy_r", 20.0)) * 2.0)):
+            continue
         # DETAIL NEAR, A CHEAP CARD FAR AWAY.  Full low-poly trees are
         # expensive; a distant tree is two dozen pixels tall, so its old
         # sprite is both faster and just as readable.
@@ -995,12 +1042,18 @@ def build_scene(g, fwd, right, up, ex, ey):
         houses.extend(getattr(v, "houses", ()) or ())
     houses.extend(getattr(g, "built_houses", ()) or ())
     for h in houses:
+        if _behind(scene, float(h.x), float(h.y),
+                   max(80.0, float(getattr(h, "w", 100)) + float(getattr(h, "h", 90)))):
+            continue
         add_house(scene, g, h)
     works = []
     for v in getattr(g, "visible_villages", ()) or ():
         works.extend(getattr(v, "workplaces", ()) or ())
     works.extend(getattr(g, "placed_work", ()) or ())
     for wp in works:
+        if _behind(scene, float(wp.x), float(wp.y),
+                   max(60.0, float(getattr(wp, "w", 64)) + float(getattr(wp, "h", 64)))):
+            continue
         add_workplace(scene, g, wp)
         if getattr(wp, "kind", "") == "fireplace":
             add_fire(scene, wp, float(getattr(g, "now", 0.0)))
