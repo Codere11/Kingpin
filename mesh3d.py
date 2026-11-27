@@ -1147,6 +1147,40 @@ def add_built_props(scene, g):
         pass
 
 
+def add_ship(scene, g):
+    """The crown's ship as an actual low-poly vessel at the coast."""
+    try:
+        x, y = g.ship_pos()
+    except Exception:
+        return
+    if math.hypot(float(x) - scene.ex, float(y) - scene.ey) > 3000.0:
+        return
+    if _behind(scene, float(x), float(y), 130.0):
+        return
+    x, y = float(x), float(y)
+    dark, wood, pale = (64, 44, 28), (106, 68, 40), (176, 142, 94)
+    sail = (224, 218, 194)
+    faces = _box(x, y, 0.0, 112, 34, 15, dark)
+    faces += _box(x, y, 11.0, 102, 28, 5, wood)
+    faces += _box(x + 27, y, 8.0, 20, 22, 18, pale)
+    faces += _box(x - 38, y, 10.0, 18, 20, 8, wood)
+    # masts
+    faces += _box(x, y, 14.0, 4, 4, 100, dark)
+    faces += _box(x + 36, y, 14.0, 3, 3, 68, dark)
+    # sails, real world quads
+    scene.add_face(((x - 12, y, 102), (x - 12, y, 42),
+                    (x - 38, y, 48), (x - 38, y, 96)), sail)
+    scene.add_face(((x - 12, y, 102), (x + 26, y, 96),
+                    (x + 26, y, 52), (x - 12, y, 42)), sail)
+    scene.add_face(((x + 38, y, 70), (x + 38, y, 30),
+                    (x + 58, y, 36), (x + 58, y, 66)), sail)
+    # bowsprit and flag
+    faces += _box(x - 60, y, 13.0, 28, 2, 2, dark)
+    scene.add_face(((x, y, 114), (x, y, 104), (x + 18, y, 108)),
+                   (188, 62, 52))
+    _add_faces(scene, faces)
+
+
 def build_scene(g, fwd, right, up, ex, ey):
     scene = Scene(fwd, right, up, ex, ey, bool(getattr(g, "night", False)))
     # trees -- nearest first, with a cap; the wider list is for collision too
@@ -1203,6 +1237,7 @@ def build_scene(g, fwd, right, up, ex, ey):
     for _r in (getattr(g, "built_gates", ()) or ()):
         add_fence_rect(scene, g, _r, gate=True)
     add_built_props(scene, g)
+    add_ship(scene, g)
     add_crops(scene, g)
     add_ground_target(scene, g)
     add_projectiles(scene, g)

@@ -1119,20 +1119,11 @@ def run(g):
                          "at", int(g.player.x), int(g.player.y))
                 if (g.near_workplace() is not None
                       and getattr(g.near_workplace(), "kind", None) in ("mine", "prison")):
-                    plog.log("ENTER-TRY", getattr(g.near_workplace(), "kind", "?"),
-                             "door", getattr(g.near_workplace(), "door", None),
-                             "player", int(g.player.x), int(g.player.y))
-                    _wp = g.near_workplace()
-                    if getattr(_wp, "room", None) is None:
-                        _wp.room = mine.MineRoom(g.world.seed ^ id(_wp))
-                    g.mine_out = (g.player.x, g.player.y)
-                    g.inside_mine = _wp
-                    g.player._mine_latch = True      # let go of E first
-                    g.player.x, g.player.y = g.inside_mine.room.W / 2.0, \
-                        g.inside_mine.room.H - 70.0
-                    g.cam_x = g.player.x - g.vw / 2.0
-                    g.cam_y = g.player.y - g.vh / 2.0
-                    pygame.mouse.set_visible(False)
+                    # THE INTERIOR SYSTEM IS GONE.  A mine is now a place in
+                    # the same world, not a separate 2D room; do not transfer
+                    # the player into a legacy screen.
+                    g.toast("Mines are open-air now")
+                    continue
                 g._bv = g.near_board()
                 if g._bv is not None:
                     g.board_village = g._bv
