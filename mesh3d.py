@@ -1212,13 +1212,16 @@ def _draw_bow_viewmodel(g, screen) -> None:
     # hand at the grip
     pygame.draw.ellipse(surf, (188, 130, 90), (278, 248, 44, 36))
     pygame.draw.ellipse(surf, (120, 78, 50), (278, 248, 44, 36), 2)
+    # MIRROR THE BOW: the wooden curve belongs on the LEFT of the string
+    # from the player's view, with the hand on that side too.
+    surf = pygame.transform.flip(surf, True, False)
     # place it large on the right, slightly angled, like a held item
     sc = min(w, h) / 480.0
     if sc < 0.72:
         sc = 0.72
     surf = pygame.transform.smoothscale(
         surf, (max(1, int(360 * sc)), max(1, int(480 * sc))))
-    surf = pygame.transform.rotate(surf, -8)
+    surf = pygame.transform.rotate(surf, 8)
     rect = surf.get_rect()
     rect.midright = (w - 8 + int(bobx), int(h * 0.56) + int(boby))
     screen.blit(surf, rect)
