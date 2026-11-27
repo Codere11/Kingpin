@@ -686,22 +686,49 @@ def _aim_tile(g):
 _GUN_IDS = ("musket", "double_shot", "rifle", "shotgun")
 
 
+def _billboard_hit_dims(g, e, base_radius: float, base_height: float):
+    """Match the thing that is actually drawn, not an old body-sized guess.
+
+    Animal cards are deliberately larger than their old top-down bodies, and
+    the rabbit is the clearest case: a 64-unit-tall billboard was being shot
+    at with a 26-unit-tall hit cylinder, so an aimed shot could pass cleanly
+    over its head and land behind it.  Read the same sprite dimensions the
+    renderer uses and turn them into a capsule around the target.
+    """
+    try:
+        yaw = float(getattr(g, "v3d_yaw", 0.0))
+        card, _ax, _ay, world_h = _animal_sprite(e, yaw)
+        world_w = (float(world_h) * float(card.get_width())
+                   / max(1.0, float(card.get_height())))
+        radius = max(float(base_radius), world_w * 0.34)
+        height = max(float(base_height), float(world_h))
+        return radius, height
+    except Exception:
+        return float(base_radius), float(base_height)
+
+
 def _entity_hit_targets(g):
     targets = []
     for n in _candidate_people(g):
-        targets.append((n, 17.0, 78.0))
+        # The NPC card is 100x140; use a matching capsule rather than the
+        # old 17x78 torso-sized box.
+        targets.append((n, 30.0, 138.0))
     for e in list(getattr(g, "enemies", ()) or ()):
         if not getattr(e, "alive", True):
             continue
         kind = getattr(e, "kind", "")
         h = 82.0 if kind == "bison" else (58.0 if kind == "wolf" else 70.0)
-        targets.append((e, float(getattr(e, "radius", 12)) + 8.0, h))
+        r = float(getattr(e, "radius", 12)) + 8.0
+        r, h = _billboard_hit_dims(g, e, r, h)
+        targets.append((e, r, h))
     for e in list(getattr(g, "rabbits", ()) or ()):
         if getattr(e, "alive", True):
-            targets.append((e, 12.0, 26.0))
+            r, h = _billboard_hit_dims(g, e, 14.0, 54.0)
+            targets.append((e, r, h))
     for e in list(getattr(g, "horses", ()) or ()):
         if getattr(e, "alive", True):
-            targets.append((e, 18.0, 68.0))
+            r, h = _billboard_hit_dims(g, e, 18.0, 80.0)
+            targets.append((e, r, h))
     return targets
 
 
