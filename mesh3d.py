@@ -1285,14 +1285,13 @@ def _axe_item_surface(w: int, h: int):
     got = _AXE_SURF_CACHE.get(key)
     if got is not None:
         return got
-    # Only the head and upper half of the handle are on screen at rest.
-    full = _axe_texture()
-    tex = full.subsurface((0, 0, full.get_width(),
-                           max(1, int(full.get_height() * 0.62))))
+    # Full axe texture; the lower handle simply leaves the bottom of the
+    # screen instead of being clipped inside the texture.
+    tex = _axe_texture()
     tw, th = tex.get_size()
     # Large in the right third, angled forward/away from the camera.
     focal = min(w, h) / (2.0 * math.tan(math.radians(78.0) * 0.5))
-    base = (0.70, -0.10, 0.85)
+    base = (0.90, -0.35, 0.85)
     yaw = 0.50
     ca, sa = math.cos(yaw), math.sin(yaw)
 
@@ -1304,10 +1303,10 @@ def _axe_item_surface(w: int, h: int):
         return (w * 0.5 + focal * x / z,
                 h * 0.5 - focal * y / z)
 
-    tl = proj(-0.25, 0.42)
-    tr = proj(0.25, 0.42)
-    br = proj(0.25, -0.42)
-    bl = proj(-0.25, -0.42)
+    tl = proj(-0.50, 1.00)
+    tr = proj(0.50, 1.00)
+    br = proj(0.50, -1.00)
+    bl = proj(-0.50, -1.00)
     minx, maxx = int(math.floor(min(q[0] for q in (tl, tr, br, bl)))), \
         int(math.ceil(max(q[0] for q in (tl, tr, br, bl))))
     miny, maxy = int(math.floor(min(q[1] for q in (tl, tr, br, bl)))), \
