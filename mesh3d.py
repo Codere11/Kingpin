@@ -1071,7 +1071,7 @@ def _rot_z(p, cx, cy, a):
     return (cx + x * c - y * s, cy + x * s + y * c, p[2])
 
 
-def _item_faces(item_id, empty=False):
+def _item_faces(item_id, empty=False, bow_charge=0.0):
     if empty or not item_id:
         return _vm_box(14, -24, 55, 10, 16, 10, (184, 132, 94)) + \
                _vm_box(-2, -29, 55, 8, 13, 10, (174, 122, 86))
@@ -1116,8 +1116,15 @@ def _item_faces(item_id, empty=False):
         out += _vm_box(0, -9, 55, 7, 8, 7, (160, 112, 68))
         out += _vm_box(0, -1, 55, 9, 9, 9, (190, 132, 92))
         out += _vm_box(0, -55, 55, 1, 48, 1.2, (224, 224, 210))
+        pull = max(0.0, min(1.0, float(bow_charge) / 1.1))
+        if pull > 0.02:
+            # The nock and arrow slide back as the string is drawn.
+            nx = -7.0 - 15.0 * pull
+            out += _vm_box(nx, -30.0, 55, 20, 1.8, 1.8, (156, 106, 60))
+            out += _vm_box(nx - 13.0, -30.0, 55, 5, 4.5, 3.0, (226, 228, 232))
+            out += _vm_box(nx + 10.0, -30.0, 55, 1.2, 9.0, 1.2, (220, 218, 198))
         return out
-    if item_id in ("musket", "riftle", "rifle", "double_shot", "shotgun"):
+    if item_id in ("musket", "rifle", "double_shot", "shotgun"):
         wood, metal = (98, 62, 36), (142, 146, 154)
         if item_id == "musket":
             out = _vm_box(0, -14, 56, 8, 9, 30, wood)
@@ -1157,7 +1164,8 @@ def draw_viewmodel(g, screen) -> None:
     except Exception:
         pass
     item_id = stack.defn.id if stack is not None else ""
-    faces = _item_faces(item_id, empty=stack is None)
+    faces = _item_faces(item_id, empty=stack is None,
+                         bow_charge=float(getattr(g, "_v3_bow_charge", 0.0)))
     p = g.player
     try:
         swing = float(getattr(p, "swing_progress", 0.0) or 0.0)
@@ -1167,6 +1175,10 @@ def draw_viewmodel(g, screen) -> None:
     now = pygame.time.get_ticks() / 1000.0
     bobx = math.sin(now * 8.0) * (2.5 if moving else 0.8)
     boby = abs(math.cos(now * 8.0)) * (3.0 if moving else 1.0)
+    try:
+        boby += float(getattr(g, "v3d_pitch", 0.0)) * 15.0
+    except Exception:
+        pass
     ang = (-0.38 + 1.75 * swing) if swing > 0.0 else 0.0
     if item_id in ("musket", "rifle", "double_shot", "shotgun", "bow"):
         try:
@@ -1227,3 +1239,14 @@ def draw_viewmodel(g, screen) -> None:
         pygame.draw.polygon(screen, color, pts)
         if _z > 53:                         # a faint rim on the closest faces
             pygame.draw.polygon(screen, (34, 28, 22), pts, 1)
+    if item_id in ("musket", "double_shot", "rifle", "shotgun"):
+        try:
+            if float(getattr(p, "gun_cd", 0.0)) > 0.0:
+                mx, my = int(cx - 12), int(cy - 42 + boby)
+                for rr, col in ((26, (255, 196, 60)), (16, (255, 238, 150)),
+                                (7, (255, 255, 236))):
+                    pygame.draw.circle(screen, col, (mx, my), int(rr * 0.7))
+                pygame.draw.line(screen, (255, 244, 190),
+                                 (mx - 25, my), (mx + 25, my), 3)
+        except Exception:
+            pass

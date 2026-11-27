@@ -115,12 +115,93 @@ def _toast(g, text: str) -> None:
         pass
 
 
+def _update_shots(g, dt: float) -> None:
+    shots = getattr(g, "_v3_shots", None)
+    if isinstance(shots, list) and shots:
+        keep = []
+        for s in shots:
+            s["prev"] = (s["x"], s["y"], s["z"])
+            try:
+                if _advance_shot(g, s, dt):
+                    continue
+            except Exception:
+                continue
+            keep.append(s)
+        g._v3_shots = keep
+    flashes = getattr(g, "_v3_flashes", None)
+    if isinstance(flashes, list) and flashes:
+        for f in flashes:
+            f[3] = float(f[3]) - dt
+        g._v3_flashes = [f for f in flashes if f[3] > 0.0]
+    # A bow charges while the button is held; release looses the arrow.
+    try:
+        stack = g.inventory.selected_stack()
+        bow = stack is not None and stack.defn.id == "bow"
+    except Exception:
+        bow = False
+    if getattr(g, "_v3_bow_charging", False):
+        if not bow:
+            g._v3_bow_charging = False
+            g._v3_bow_charge = 0.0
+        elif pygame.mouse.get_pressed()[0]:
+            g._v3_bow_charge = min(1.1, float(getattr(g, "_v3_bow_charge", 0.0)) + dt)
+        else:
+            power = min(1.0, float(getattr(g, "_v3_bow_charge", 0.0)) / 1.1)
+            g._v3_bow_charging = False
+            g._v3_bow_charge = 0.0
+            if power > 0.12:
+                _fire3d(g, arrow=True, power=power)
+
+
+def _draw_shots(g, frame) -> None:
+    fwd, right, up = _cam(g)
+    ex, ey = float(g.player.x), float(g.player.y)
+    for s in getattr(g, "_v3_shots", ()) or ():
+        try:
+            p0 = _project(fwd, right, up, ex, ey,
+                          float(s["prev"][0]), float(s["prev"][1]), float(s["prev"][2]))
+            p1 = _project(fwd, right, up, ex, ey,
+                          float(s["x"]), float(s["y"]), float(s["z"]))
+            if p0 is None or p1 is None:
+                continue
+            x0, y0, _z0 = p0
+            x1, y1, _z1 = p1
+            if s.get("arrow"):
+                pygame.draw.line(frame, (218, 206, 178), (x0, y0), (x1, y1), 2)
+                dx, dy = x1 - x0, y1 - y0
+                n = math.hypot(dx, dy) or 1.0
+                dx, dy = dx / n, dy / n
+                px, py = -dy, dx
+                pygame.draw.polygon(frame, (236, 236, 226),
+                                    [(x1, y1),
+                                     (x1 - dx * 7 + px * 3, y1 - dy * 7 + py * 3),
+                                     (x1 - dx * 7 - px * 3, y1 - dy * 7 - py * 3)])
+            else:
+                pygame.draw.line(frame, (255, 214, 104), (x0, y0), (x1, y1), 3)
+                pygame.draw.line(frame, (255, 250, 208), (x0, y0), (x1, y1), 1)
+        except Exception:
+            pass
+    for x, y, z, ttl, _arrow in getattr(g, "_v3_flashes", ()) or ():
+        p = _project(fwd, right, up, ex, ey, float(x), float(y), float(z))
+        if p is None:
+            continue
+        sx, sy, _ = p
+        k = max(0.0, min(1.0, float(ttl) / 0.08))
+        rad = int(4 + 13 * k)
+        pygame.draw.circle(frame, (255, 226, 124), (int(sx), int(sy)), rad)
+        pygame.draw.circle(frame, (255, 250, 220), (int(sx), int(sy)), max(1, rad // 2))
+
+
 def tick(g, dt: float) -> None:
     """Mouse look.  Called once at the top of the frame, before movement."""
     if not active(g):
         _release_mouse(g)
         return
     _grab_mouse(g)
+    try:
+        _update_shots(g, dt)
+    except Exception:
+        pass
     dx, dy = pygame.mouse.get_rel()
     if dx or dy:
         g.v3d_yaw = (float(getattr(g, "v3d_yaw", 0.0)) + dx * 0.0032) % (2.0 * math.pi)
@@ -579,6 +660,196 @@ def _aim_tile(g):
     return int(wx // 32), int(wy // 32)
 
 
+_GUN_IDS = ("musket", "double_shot", "rifle", "shotgun")
+
+
+def _entity_hit_targets(g):
+    targets = []
+    for n in _candidate_people(g):
+        targets.append((n, 17.0, 78.0))
+    for e in list(getattr(g, "enemies", ()) or ()):
+        if not getattr(e, "alive", True):
+            continue
+        kind = getattr(e, "kind", "")
+        h = 82.0 if kind == "bison" else (58.0 if kind == "wolf" else 70.0)
+        targets.append((e, float(getattr(e, "radius", 12)) + 8.0, h))
+    for e in list(getattr(g, "rabbits", ()) or ()):
+        if getattr(e, "alive", True):
+            targets.append((e, 12.0, 26.0))
+    for e in list(getattr(g, "horses", ()) or ()):
+        if getattr(e, "alive", True):
+            targets.append((e, 18.0, 68.0))
+    return targets
+
+
+def _segment_cylinder(x0, y0, z0, x1, y1, z1, tx, ty, radius, height):
+    vx, vy = x1 - x0, y1 - y0
+    l2 = vx * vx + vy * vy
+    if l2 < 1e-9:
+        return None
+    t = ((tx - x0) * vx + (ty - y0) * vy) / l2
+    if t < 0.0 or t > 1.0:
+        return None
+    px, py = x0 + vx * t, y0 + vy * t
+    if (px - tx) ** 2 + (py - ty) ** 2 > radius * radius:
+        return None
+    z = z0 + (z1 - z0) * t
+    if z < 0.0 or z > height:
+        return None
+    return t
+
+
+def _damage_shot_target(g, target, dmg, weapon):
+    try:
+        if getattr(target, "alive", True) is False or getattr(target, "dead", False):
+            return
+    except Exception:
+        pass
+    try:
+        try:
+            target.take_damage(max(1, int(round(dmg))), record=False,
+                               attacker=g.player)
+        except TypeError:
+            target.take_damage(max(1, int(round(dmg))))
+    except Exception:
+        return
+    try:
+        g.combat.spawn_impact(float(target.x), float(target.y), (168, 44, 34))
+        g.blood.spawn(float(target.x), float(target.y), 7, 14.0)
+    except Exception:
+        pass
+    try:
+        import itemstory
+        itemstory.record(weapon, "killed", actor=g.player,
+                         place="the field", now=getattr(g, "now", 0.0),
+                         detail=getattr(target, "name", "someone"))
+    except Exception:
+        pass
+    # NPCs remember who shot them.
+    try:
+        import economy as _ec
+        _ec.wronged(target, g.player, 20.0, getattr(g, "now", 0.0))
+    except Exception:
+        pass
+
+
+def _advance_shot(g, shot, dt):
+    step = min(float(shot["speed"]) * dt,
+               max(0.0, float(shot["max"]) - float(shot["travel"])))
+    if step <= 0.0:
+        return True
+    x0, y0, z0 = shot["x"], shot["y"], shot["z"]
+    x1 = x0 + shot["dx"] * step
+    y1 = y0 + shot["dy"] * step
+    z1 = z0 + shot["dz"] * step
+    # Ground
+    if z1 <= 0.8 and shot["dz"] < -1e-5:
+        _t = (z0 - 0.8) / (z0 - z1)
+        _t = max(0.0, min(1.0, _t))
+        try:
+            g.combat.spawn_impact(x0 + (x1 - x0) * _t,
+                                  y0 + (y1 - y0) * _t, (132, 106, 72))
+        except Exception:
+            pass
+        shot["x"], shot["y"], shot["z"] = x1, y1, 0.8
+        return True
+    best = None
+    best_t = 2.0
+    for target, radius, height in _entity_hit_targets(g):
+        t = _segment_cylinder(x0, y0, z0, x1, y1, z1,
+                              float(target.x), float(target.y), radius, height)
+        if t is not None and t < best_t:
+            best, best_t = target, t
+    if best is not None:
+        _damage_shot_target(g, best, shot["dmg"], shot["weapon"])
+        shot["x"], shot["y"], shot["z"] = x1, y1, z1
+        return True
+    shot["x"], shot["y"], shot["z"] = x1, y1, z1
+    shot["travel"] = float(shot["travel"]) + step
+    return shot["travel"] >= float(shot["max"])
+
+
+def _fire3d(g, arrow=False, power=1.0) -> bool:
+    try:
+        stack = g.inventory.selected_stack()
+    except Exception:
+        stack = None
+    if stack is None:
+        return False
+    kind = stack.defn.id
+    p = g.player
+    if arrow and kind != "bow":
+        return False
+    if not arrow and kind not in _GUN_IDS:
+        return False
+    try:
+        if arrow:
+            if p.gun_cd > 0.0:
+                return False
+            if g.inventory.count_of("arrow") <= 0:
+                g.toast("No arrows")
+                return False
+            g.inventory.consume("arrow", 1)
+            p.gun_cd = 0.8
+            import guns
+            speed, max_dist = 975.0, 2200.0
+            import main as _m
+            dmg = max(1.0, _m.MELEE_DAMAGE * g.skills.axe_damage_scale()
+                      * (0.55 + 0.45 * max(0.0, min(1.0, power))))
+        else:
+            if p.reloading > 0.0 or p.gun_cd > 0.0:
+                return False
+            import guns
+            if p.mags.get(kind, 0) <= 0:
+                if g.inventory.count_of("ammo") <= 0:
+                    g.toast("No ammo")
+                    return False
+                p.reload_kind = kind
+                p.reload_total = guns.RELOAD_LO.get(kind, 5.0)
+                p.reloading = p.reload_total
+                g.toast("Reloading…")
+                return True
+            p.mags[kind] -= 1
+            p.gun_cd = guns.FIRE_CD.get(kind, 0.4)
+            speed, max_dist = 1800.0, 2600.0
+            dmg = guns.DAMAGE[kind]
+    except Exception as _e:
+        try:
+            import plog
+            plog.log("VIEW3D-FIRE3D", repr(_e)[:180])
+        except Exception:
+            pass
+        return False
+    yaw = float(getattr(g, "v3d_yaw", 0.0))
+    pitch = float(getattr(g, "v3d_pitch", 0.0))
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    fwd = (math.cos(yaw) * cp, math.sin(yaw) * cp, sp)
+    p.facing = (math.cos(yaw), math.sin(yaw))
+    ox = float(p.x) + fwd[0] * 26.0
+    oy = float(p.y) + fwd[1] * 26.0
+    oz = EYE_Z - 5.0 + fwd[2] * 26.0
+    shots = getattr(g, "_v3_shots", None)
+    if not isinstance(shots, list):
+        shots = g._v3_shots = []
+    shots.append({"x": ox, "y": oy, "z": oz,
+                  "dx": fwd[0], "dy": fwd[1], "dz": fwd[2],
+                  "speed": speed, "max": max_dist, "travel": 0.0,
+                  "dmg": dmg, "arrow": bool(arrow), "weapon": stack,
+                  "prev": (ox, oy, oz)})
+    flashes = getattr(g, "_v3_flashes", None)
+    if not isinstance(flashes, list):
+        flashes = g._v3_flashes = []
+    flashes.append([ox, oy, oz, 0.08, bool(arrow)])
+    try:
+        import sound
+        sound.play("shot_bow" if arrow else
+                   ("shot_rifle" if kind == "rifle" else "shot_musket"))
+        g.skills.gain_shooting()
+    except Exception:
+        pass
+    return True
+
+
 def _open_npc_card(g, npc) -> bool:
     try:
         import work
@@ -614,20 +885,13 @@ def interact(g) -> bool:
     except Exception:
         stack = None
     held = stack.defn.id if stack is not None else ""
-    if held in ("musket", "double_shot", "rifle", "shotgun", "bow"):
-        yaw = float(getattr(g, "v3d_yaw", 0.0))
-        g.player.facing = (math.cos(yaw), math.sin(yaw))
-        try:
-            import combat_actions
-            combat_actions.fire(g.player, g.inventory, g.skills, g.combat,
-                                g.cam_x, g.cam_y, 1.0, g.toast,
-                                aim_angle=yaw, aim_distance=2500.0)
-        except Exception as _gun:
-            try:
-                import plog
-                plog.log("VIEW3D-FIRE", repr(_gun)[:180])
-            except Exception:
-                pass
+    if held == "bow":
+        # Draw the bow while the button is held; release to loose the arrow.
+        g._v3_bow_charging = True
+        g._v3_bow_charge = 0.0
+        return True
+    if held in _GUN_IDS:
+        _fire3d(g, arrow=False)
         return True
     # A HELD AXE IS A WEAPON, NOT A CONVERSATION.  Clicking a person swings
     # even if the crosshair happens to be on them.
@@ -713,6 +977,10 @@ def draw(g) -> None:
         scene.add_shadow(wx, wy, max(7.0, wh * 0.22))
         scene.add_sprite(img, wx, wy, wh, ax=ax, ay=ay)
     scene.draw(frame)
+    try:
+        _draw_shots(g, frame)
+    except Exception:
+        pass
 
     # A little vignette makes the flat plane read as a view rather than a
     # diagram, and softens the edges at close range.
