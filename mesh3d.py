@@ -1277,7 +1277,9 @@ def _draw_axe_viewmodel(g, screen) -> None:
     moving = bool(getattr(p, "moving", False))
     bobx = math.sin(now * 8.0) * (1.8 if moving else 0.5)
     boby = abs(math.cos(now * 8.0)) * (1.8 if moving else 0.5)
-    base = (20.0 + bobx, -3.0 - boby, 88.0)
+    # Much closer than the old card: the axe should fill the lower-right
+    # like a real held tool, not sit in a tiny frame.
+    base = (19.0 + bobx, -4.0 - boby, 42.0)
     yaw = 0.52
     ca, sa = math.cos(yaw), math.sin(yaw)
 
@@ -1290,10 +1292,10 @@ def _draw_axe_viewmodel(g, screen) -> None:
         return (w * 0.5 + focal * x / z,
                 h * 0.5 - focal * y / z)
 
-    tl = proj(-16.0, 24.0)
-    tr = proj(16.0, 24.0)
-    br = proj(16.0, -24.0)
-    bl = proj(-16.0, -24.0)
+    tl = proj(-17.0, 27.0)
+    tr = proj(17.0, 27.0)
+    br = proj(17.0, -27.0)
+    bl = proj(-17.0, -27.0)
     # a small screen-space swing, pivoting at the right edge
     if swing > 0.0:
         px, py = br[0], br[1]
@@ -1303,24 +1305,9 @@ def _draw_axe_viewmodel(g, screen) -> None:
             x, y = q[0] - px, q[1] - py
             return (px + x * c - y * sn, py + x * sn + y * c)
         tl, tr, br, bl = sr(tl), sr(tr), sr(br), sr(bl)
-    # silhouette shadow, not a rectangular box
+    # NO BLACK SHADOW BOX.  The texture itself has the dark outline; the
+    # plane and perspective provide the depth.
     sxs = [q[0] for q in (tl, tr, br, bl)]
-    sys_ = [q[1] for q in (tl, tr, br, bl)]
-    x0, x1 = int(min(sxs)) - 10, int(max(sxs)) + 18
-    y0, y1 = int(min(sys_)) - 8, int(max(sys_)) + 20
-    if x1 > x0 and y1 > y0:
-        sh = pygame.Surface((x1 - x0, y1 - y0), pygame.SRCALPHA)
-        pygame.draw.polygon(sh, (0, 0, 0, 78),
-                            [(int(q[0] + 9 - x0), int(q[1] + 11 - y0))
-                             for q in (tl, tr, br, bl)])
-        screen.blit(sh, (x0, y0))
-    # depth edge: a darker offset plane behind the textured front
-    ex = 5.0
-    ey = 4.0
-    back = [(tl[0] + ex, tl[1] + ey), (tr[0] + ex, tr[1] + ey),
-            (br[0] + ex, br[1] + ey), (bl[0] + ex, bl[1] + ey)]
-    pygame.draw.polygon(screen, (58, 39, 24), back)
-    # column texture mapping, nearest-neighbour
     minx, maxx = int(min(sxs)), int(max(sxs))
     if maxx > minx:
         for x in range(max(0, minx), min(w - 1, maxx) + 1):
