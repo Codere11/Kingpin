@@ -1285,11 +1285,14 @@ def _axe_item_surface(w: int, h: int):
     got = _AXE_SURF_CACHE.get(key)
     if got is not None:
         return got
-    tex = _axe_texture()
+    # Only the head and upper half of the handle are on screen at rest.
+    full = _axe_texture()
+    tex = full.subsurface((0, 0, full.get_width(),
+                           max(1, int(full.get_height() * 0.62))))
     tw, th = tex.get_size()
-    # camera-space item plane: lower-right, angled forward/away
+    # Large in the right third, angled forward/away from the camera.
     focal = min(w, h) / (2.0 * math.tan(math.radians(78.0) * 0.5))
-    base = (0.42, -0.04, 0.94)
+    base = (0.70, -0.10, 0.85)
     yaw = 0.50
     ca, sa = math.cos(yaw), math.sin(yaw)
 
