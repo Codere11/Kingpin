@@ -39,7 +39,8 @@ def _record_kill_weapon(stack, victim, g) -> None:
         pass
 
 
-def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
+def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast,
+         aim_angle=None, aim_distance=None) -> None:
     stack = inventory.selected_stack()
     if stack is None or stack.defn.id not in (guns.MUSKET, guns.DOUBLE_SHOT,
                                              guns.RIFLE, guns.SHOTGUN, "bow"):
@@ -55,16 +56,21 @@ def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
             return
         inventory.consume("arrow", 1)
         player.gun_cd = 0.8
-        fx, fy = player.facing
+        angle = (float(aim_angle) if aim_angle is not None
+                 else player.facing_angle)
+        fx, fy = math.cos(angle), math.sin(angle)
         muzzle_x = player.x + fx * 30.0
         muzzle_y = player.y + fy * 30.0
-        mouse_x, mouse_y = pygame.mouse.get_pos()
-        wmouse_x, wmouse_y = mouse_x / zoom, mouse_y / zoom
-        distance = math.hypot((cam_x + wmouse_x) - muzzle_x,
-                              (cam_y + wmouse_y) - muzzle_y)
+        if aim_distance is not None:
+            distance = float(aim_distance)
+        else:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            wmouse_x, wmouse_y = mouse_x / zoom, mouse_y / zoom
+            distance = math.hypot((cam_x + wmouse_x) - muzzle_x,
+                                  (cam_y + wmouse_y) - muzzle_y)
         import main as _m
         dmg = max(1, round(_m.MELEE_DAMAGE * skills.axe_damage_scale()))
-        combat.fire(muzzle_x, muzzle_y, player.facing_angle, distance,
+        combat.fire(muzzle_x, muzzle_y, angle, distance,
                     shooter=player, owner="player", damage=dmg, team="player",
                     spread=skills.shot_spread(), arrow=True, weapon=stack)
         sound.play("shot_bow")
@@ -86,18 +92,23 @@ def fire(player, inventory, skills, combat, cam_x, cam_y, zoom, toast) -> None:
         return
     player.mags[kind] -= 1
     player.gun_cd = guns.FIRE_CD.get(kind, 0.4)
-    fx, fy = player.facing
+    angle = (float(aim_angle) if aim_angle is not None
+             else player.facing_angle)
+    fx, fy = math.cos(angle), math.sin(angle)
     px, py = -fy, fx
     muzzle_x = player.x + fx * 30.0 + px * 7.0
     muzzle_y = player.y + fy * 30.0 + py * 7.0
-    mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
-    wmouse_x, wmouse_y = mouse_x / zoom, mouse_y / zoom  # world space
-    distance = math.hypot((cam_x + wmouse_x) - muzzle_x,
-                          (cam_y + wmouse_y) - muzzle_y)
+    if aim_distance is not None:
+        distance = float(aim_distance)
+    else:
+        mouse_x, mouse_y = pygame.mouse.get_pos()          # window space
+        wmouse_x, wmouse_y = mouse_x / zoom, mouse_y / zoom  # world space
+        distance = math.hypot((cam_x + wmouse_x) - muzzle_x,
+                              (cam_y + wmouse_y) - muzzle_y)
     spread = skills.shot_spread()
     for _ in range(guns.PELLETS.get(kind, 1)):
         extra = 0.11 if kind == guns.SHOTGUN else 0.0   # only the shotgun scatters
-        combat.fire(muzzle_x, muzzle_y, player.facing_angle, distance,
+        combat.fire(muzzle_x, muzzle_y, angle, distance,
                     shooter=player, owner="player", damage=guns.DAMAGE[kind],
                     team="player", spread=spread + extra, weapon=stack)
     sound.play("shot_rifle" if kind == guns.RIFLE else "shot_musket")

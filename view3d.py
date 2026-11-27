@@ -614,6 +614,21 @@ def interact(g) -> bool:
     except Exception:
         stack = None
     held = stack.defn.id if stack is not None else ""
+    if held in ("musket", "double_shot", "rifle", "shotgun", "bow"):
+        yaw = float(getattr(g, "v3d_yaw", 0.0))
+        g.player.facing = (math.cos(yaw), math.sin(yaw))
+        try:
+            import combat_actions
+            combat_actions.fire(g.player, g.inventory, g.skills, g.combat,
+                                g.cam_x, g.cam_y, 1.0, g.toast,
+                                aim_angle=yaw, aim_distance=2500.0)
+        except Exception as _gun:
+            try:
+                import plog
+                plog.log("VIEW3D-FIRE", repr(_gun)[:180])
+            except Exception:
+                pass
+        return True
     # A HELD AXE IS A WEAPON, NOT A CONVERSATION.  Clicking a person swings
     # even if the crosshair happens to be on them.
     if held == "axe":

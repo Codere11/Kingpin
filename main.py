@@ -606,6 +606,12 @@ def main() -> None:
     # was also the one start that could not cut a tree for its first coin.
     if g.inventory.count_of("axe") <= 0:
         g.inventory.add("axe", 1)
+    if g.test_mode:
+        # TEST KIT: all the ranged tools, with enough ammunition to actually
+        # exercise reloads, bursts and arrow flight in the 3D view.
+        for _item, _qty in (("ammo", 50), ("arrow", 10), ("bow", 1),
+                            ("musket", 1), ("double_shot", 1), ("rifle", 1)):
+            g.inventory.add(_item, _qty)
     # THE PACK ON THE MAN. Dialogue and the yard's work need to move things
     # into and out of it, and neither is handed the local `inventory`; the
     # player is the one object they both already have.

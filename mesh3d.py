@@ -244,8 +244,11 @@ class Scene:
         self.add_face(pts, (34, 47, 32), ground=True, layer=1)
 
     def add_sprite(self, image, x, y, world_h=50.0, ax=None, ay=None):
-        base = self._cam((x, y, 0.0))
-        top = self._cam((x, y, world_h))
+        return self.add_float_sprite(image, x, y, 0.0, world_h, ax, ay)
+
+    def add_float_sprite(self, image, x, y, z, world_h=50.0, ax=None, ay=None):
+        base = self._cam((x, y, z))
+        top = self._cam((x, y, z + world_h))
         if base[2] <= NEAR or top[2] <= NEAR:
             return
         sx = float(IW * 0.5 + FOCAL * base[0] / base[2])
@@ -896,6 +899,70 @@ def add_fire(scene, wp, now):
 
 
 # ---------------------------------------------------------------------------
+# projectiles and muzzle flashes
+# ---------------------------------------------------------------------------
+_PROJECTILE_CACHE: dict = {}
+
+
+def _projectile_image(arrow=False, owner="player"):
+    key = ("arrow" if arrow else "bullet", owner)
+    got = _PROJECTILE_CACHE.get(key)
+    if got is not None:
+        return got
+    if arrow:
+        s = pygame.Surface((28, 8), pygame.SRCALPHA)
+        pygame.draw.line(s, (112, 76, 44), (1, 4), (24, 4), 3)
+        pygame.draw.line(s, (238, 236, 222), (24, 1), (28, 4), 2)
+        pygame.draw.line(s, (238, 236, 222), (24, 7), (28, 4), 2)
+        pygame.draw.line(s, (220, 218, 204), (2, 1), (8, 4), 1)
+        pygame.draw.line(s, (220, 218, 204), (2, 7), (8, 4), 1)
+    else:
+        s = pygame.Surface((18, 8), pygame.SRCALPHA)
+        col = (255, 212, 92) if owner == "player" else (255, 112, 66)
+        for i, a in ((0, 20), (1, 50), (2, 95)):
+            gs = pygame.Surface((18, 8), pygame.SRCALPHA)
+            pygame.draw.ellipse(gs, (*col, a), (i, i, 18 - i * 2, 8 - i * 2))
+            s.blit(gs, (0, 0))
+        pygame.draw.line(s, (255, 252, 220), (5, 4), (15, 4), 2)
+    _PROJECTILE_CACHE[key] = s
+    return s
+
+
+def add_projectiles(scene, g):
+    combat = getattr(g, "combat", None)
+    if combat is None:
+        return
+    try:
+        for b in list(getattr(combat, "bullets", ()) or ()):
+            img = _projectile_image(bool(getattr(b, "arrow", False)),
+                                    getattr(b, "owner", "player"))
+            scene.add_float_sprite(img, float(b.x), float(b.y), 44.0,
+                                   8.0, ax=img.get_width() * 0.5,
+                                   ay=img.get_height() * 0.5)
+        for x, y, _ang, ttl, owner in list(getattr(combat, "flashes", ()) or ()):
+            k = max(0.0, min(1.0, float(ttl) / 0.07))
+            if k <= 0.0:
+                continue
+            rad = int(4 + 14 * k)
+            img = pygame.Surface((rad * 2, rad * 2), pygame.SRCALPHA)
+            col = (255, 224, 120) if owner == "player" else (255, 142, 80)
+            for r, a in ((rad, 45), (max(2, rad - 3), 100),
+                         (max(1, rad - 7), 220)):
+                pygame.draw.circle(img, (*col, a), (rad, rad), r)
+            scene.add_float_sprite(img, float(x), float(y), 55.0,
+                                   float(rad * 2),
+                                   ax=rad, ay=rad)
+        for x, y, _vx, _vy, life, colour in list(getattr(combat, "impacts", ()) or ()):
+            sz = max(2, int(2 + 5 * float(life)))
+            img = pygame.Surface((sz * 2, sz * 2), pygame.SRCALPHA)
+            pygame.draw.circle(img, tuple(colour), (sz, sz), sz)
+            scene.add_float_sprite(img, float(x), float(y), 34.0,
+                                   float(sz * 2), ax=sz, ay=sz)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # scene assembly
 # ---------------------------------------------------------------------------
 def build_scene(g, fwd, right, up, ex, ey):
@@ -940,6 +1007,7 @@ def build_scene(g, fwd, right, up, ex, ey):
     add_built_blocks(scene, g)
     add_crops(scene, g)
     add_ground_target(scene, g)
+    add_projectiles(scene, g)
     return scene
 
 
@@ -1036,12 +1104,37 @@ def _item_faces(item_id, empty=False):
         else:
             out += _vm_box(0, -40, 55, 13, 10, 3, metal)
         return out
-    if item_id in ("musket", "rifle", "double_shot", "shotgun"):
+    if item_id == "bow":
+        # A bent wooden bow with a pale string and a wrapped grip.
+        limb_r = [(5, -4, 55), (10, -18, 55), (13, -32, 55),
+                  (12, -46, 55), (7, -56, 55)]
+        limb_l = [(-x, y, z) for (x, y, z) in reversed(limb_r)]
+        out = _vm_prism([(x, y) for (x, y, _z) in limb_r], 52.0, 58.0,
+                        (112, 74, 42))
+        out += _vm_prism([(x, y) for (x, y, _z) in limb_l], 52.0, 58.0,
+                         (112, 74, 42))
+        out += _vm_box(0, -9, 55, 7, 8, 7, (160, 112, 68))
+        out += _vm_box(0, -1, 55, 9, 9, 9, (190, 132, 92))
+        out += _vm_box(0, -55, 55, 1, 48, 1.2, (224, 224, 210))
+        return out
+    if item_id in ("musket", "riftle", "rifle", "double_shot", "shotgun"):
         wood, metal = (98, 62, 36), (142, 146, 154)
-        out = _vm_box(0, -14, 56, 7, 8, 26, wood)
-        out += _vm_box(0, -15, 72, 4, 4, 34, metal)
-        out += _vm_box(0, -21, 62, 2, 3, 7, metal)
-        out += _vm_box(0, -3, 57, 8, 9, 8, (176, 120, 82))
+        if item_id == "musket":
+            out = _vm_box(0, -14, 56, 8, 9, 30, wood)
+            out += _vm_box(0, -15, 76, 4, 4, 40, metal)
+            out += _vm_box(0, -21, 67, 2, 3, 8, metal)
+            out += _vm_box(0, -3, 57, 9, 10, 9, (176, 120, 82))
+        elif item_id == "double_shot":
+            out = _vm_box(0, -14, 56, 10, 9, 26, wood)
+            out += _vm_box(-4, -15, 73, 4, 4, 38, metal)
+            out += _vm_box(4, -15, 73, 4, 4, 38, metal)
+            out += _vm_box(0, -21, 66, 3, 3, 8, metal)
+            out += _vm_box(0, -3, 57, 9, 10, 9, (176, 120, 82))
+        else:
+            out = _vm_box(0, -14, 56, 7, 8, 34, wood)
+            out += _vm_box(0, -15, 78, 3.5, 3.5, 48, metal)
+            out += _vm_box(0, -22, 70, 2, 3, 9, metal)
+            out += _vm_box(0, -4, 57, 8, 9, 9, (176, 120, 82))
         return out
     if item_id in ("bottle", "beer", "liqueur", "mezcal", "steelka",
                    "banana_liqueur", "braggot", "chocolate_stout",
@@ -1075,7 +1168,7 @@ def draw_viewmodel(g, screen) -> None:
     bobx = math.sin(now * 8.0) * (2.5 if moving else 0.8)
     boby = abs(math.cos(now * 8.0)) * (3.0 if moving else 1.0)
     ang = (-0.38 + 1.75 * swing) if swing > 0.0 else 0.0
-    if item_id in ("musket", "rifle", "double_shot", "shotgun"):
+    if item_id in ("musket", "rifle", "double_shot", "shotgun", "bow"):
         try:
             if float(getattr(p, "gun_cd", 0.0)) > 0.0:
                 boby += 4.0
