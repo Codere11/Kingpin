@@ -1258,6 +1258,40 @@ def _draw_chop_bar(g, screen) -> None:
 _CHAT_FONT = None
 
 
+def _draw_naming(g, screen) -> None:
+    """The settlement-naming card, over the first-person view."""
+    if not getattr(g, "naming_open", False):
+        return
+    try:
+        vw, vh = screen.get_size()
+        panel = pygame.Rect(vw // 2 - 230, vh // 2 - 80, 460, 160)
+        shade = pygame.Surface((vw, vh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 170))
+        screen.blit(shade, (0, 0))
+        pygame.draw.rect(screen, (26, 26, 30), panel, border_radius=10)
+        pygame.draw.rect(screen, (150, 118, 78), panel, 2, border_radius=10)
+        font = getattr(g, "font", None) or pygame.font.SysFont("dejavusans", 18)
+        title = font.render("NAME YOUR SETTLEMENT", True, (238, 224, 190))
+        screen.blit(title, (panel.centerx - title.get_width() // 2,
+                            panel.top + 14))
+        placeholder = str(getattr(g, "naming_placeholder", "") or "Settlement")
+        text = str(getattr(g, "naming_text", "") or "")
+        shown = text if text else placeholder
+        entry = font.render(shown, True,
+                            (232, 220, 180) if text else (150, 140, 120))
+        box = pygame.Rect(panel.centerx - 160, panel.top + 48, 320, 34)
+        pygame.draw.rect(screen, (12, 12, 16), box, border_radius=6)
+        pygame.draw.rect(screen, (150, 118, 78), box, 1, border_radius=6)
+        screen.blit(entry, (box.left + 10,
+                            box.centery - entry.get_height() // 2))
+        hint = font.render('type a name, then Enter      [Esc] keep "%s"' % placeholder,
+                           True, (196, 226, 168))
+        screen.blit(hint, (panel.centerx - hint.get_width() // 2,
+                           panel.bottom - 30))
+    except Exception:
+        pass
+
+
 def _draw_chat_cloud(g, screen) -> None:
     """One nearby speaker, one cloud, above their head, for at least 5 s."""
     global _CHAT_FONT
@@ -1428,3 +1462,4 @@ def draw_hud(g) -> None:
         g.draw_persona_card()
     except Exception:
         pass
+    _draw_naming(g, screen)
