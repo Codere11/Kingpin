@@ -1373,6 +1373,32 @@ def _draw_axe_viewmodel(g, screen) -> None:
         screen.blit(surf, (ox, oy))
 
 
+def _bow_cube_faces(cx: float, cy: float, cz: float,
+                    sx: float, sy: float, sz: float,
+                    base: tuple[int, int, int]) -> list:
+    """Six quads for one chunky bow-segment cube."""
+    hx, hy, hz = sx * 0.5, sy * 0.5, sz * 0.5
+    p = [
+        (cx - hx, cy - hy, cz - hz),
+        (cx + hx, cy - hy, cz - hz),
+        (cx + hx, cy + hy, cz - hz),
+        (cx - hx, cy + hy, cz - hz),
+        (cx - hx, cy - hy, cz + hz),
+        (cx + hx, cy - hy, cz + hz),
+        (cx + hx, cy + hy, cz + hz),
+        (cx - hx, cy + hy, cz + hz),
+    ]
+    quads = (
+        (0, 1, 2, 3),  # front
+        (4, 5, 6, 7),  # back
+        (0, 4, 7, 3),  # left
+        (1, 5, 6, 2),  # right
+        (0, 1, 5, 4),  # bottom
+        (3, 2, 6, 7),  # top
+    )
+    return [[p[i] for i in q] for q in quads]
+
+
 def _draw_bow_viewmodel(g, screen) -> None:
     """The approved chunky 3D bow stick, string, and late-spawned arrow."""
     w, h = screen.get_size()
