@@ -1165,11 +1165,32 @@ def draw_hud(g) -> None:
         except Exception:
             pass
     try:
-        if (not getattr(g.player, "dead", False)
-                and float(getattr(g.player, "level_flash", 0.0)) > 0.0):
-            import effects as _effects
-            _effects.draw_level_screen(
-                screen, 1.0 - float(g.player.level_flash) / g.player.LEVEL_FLASH)
+        if not getattr(g.player, "dead", False):
+            # A real screen-level fallback: watch the skill total itself, not
+            # only player.level_flash.  If a learning path forgot the flag, or
+            # a slow frame eats the 1.6 s flash before it is presented, the
+            # screen shine still starts on the frame the level actually rose.
+            _skills = getattr(g, "skills", None)
+            _total = int(_skills.levels_total()) if _skills is not None else 0
+            _seen = getattr(g, "_v3_level_seen", None)
+            if _seen is None:
+                g._v3_level_seen = _total
+            elif _total > int(_seen):
+                g._v3_level_screen_at = pygame.time.get_ticks() / 1000.0
+                g._v3_level_seen = _total
+            else:
+                g._v3_level_seen = _total
+            _started = float(getattr(g, "_v3_level_screen_at", 0.0) or 0.0)
+            _elapsed = pygame.time.get_ticks() / 1000.0 - _started
+            _flash = float(getattr(g.player, "level_flash", 0.0) or 0.0)
+            if _flash > 0.0:
+                _elapsed = 1.6 * (1.0 - _flash / g.player.LEVEL_FLASH)
+                if _started <= 0.0:
+                    g._v3_level_screen_at = (pygame.time.get_ticks() / 1000.0
+                                             - _elapsed)
+            if 0.0 <= _elapsed < 1.6:
+                import effects as _effects
+                _effects.draw_level_screen(screen, _elapsed / 1.6)
     except Exception:
         pass
     if not getattr(g, "hud_hidden", False):

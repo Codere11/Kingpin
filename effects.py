@@ -229,6 +229,9 @@ def draw_level_screen(screen: pygame.Surface, t: float) -> None:
     if fade <= 0.01:
         return
     overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+    # A pale gold wash makes the level moment unmistakable even when the
+    # player is looking away from his own body.
+    overlay.fill((255, 226, 122, int(34 * fade)))
     # Gold edge glow, strongest at the frame.
     for i in range(14):
         a = int(58 * fade * (1.0 - i / 14.0))

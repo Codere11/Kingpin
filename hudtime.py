@@ -13,9 +13,17 @@ import pygame
 
 def award_levels(skills, player) -> None:
     """A REAL level-up wears the shine."""
-    if skills.just_leveled:
+    now_levels = skills.levels_total()
+    # Keep a last-seen total as a safety net: even if a learning path forgets
+    # to raise just_leveled (including the old first-level edge case), a
+    # genuine increase in the total still gets the screen shine.
+    last = getattr(player, "_last_level_total", None)
+    if last is None:
+        last = now_levels
+    if skills.just_leveled or now_levels > last:
         skills.just_leveled = False
         player.level_flash = player.LEVEL_FLASH
+    player._last_level_total = now_levels
 
 
 def clamp_world(player, world_half: float) -> None:

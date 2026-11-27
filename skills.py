@@ -101,7 +101,10 @@ class Skills:
         """Raise the flag if this gain crossed a level. The player and every
         NPC both wear it: the player shines via award_levels(), an NPC shines
         the same way when he is on screen (see NPC.draw)."""
-        if before and self.levels_total() > before:
+        if self.levels_total() > before:
+            # The first level matters too.  The old `before and` guard meant
+            # going from 0 to 1 raised no flag, so the very first level-up a
+            # new player earned never showed its shine.
             self.just_leveled = True
 
     # -- the one way anybody learns -----------------------------------------
