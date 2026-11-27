@@ -1194,63 +1194,97 @@ def _bow_texture(pull: float):
     return s
 
 
+def _bow_cube_faces(cx, cy, cz, sx, sy, sz, color):
+    hx, hy, hz = sx * 0.5, sy * 0.5, sz * 0.5
+    corners = [(-hx, -hy, -hz), (hx, -hy, -hz), (hx, hy, -hz), (-hx, hy, -hz),
+               (-hx, -hy, hz), (hx, -hy, hz), (hx, hy, hz), (-hx, hy, hz)]
+    p = [(cx + x, cy + y, cz + z) for (x, y, z) in corners]
+    quads = ((0, 1, 2, 3), (7, 6, 5, 4), (0, 4, 5, 1),
+             (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0))
+    return [tuple(p[i] for i in q) for q in quads]
+
+
 def _draw_bow_viewmodel(g, screen) -> None:
-    """Map the side-view bow texture onto a 3D item plane, angled forward."""
+    """The approved chunky 3D stick, in-game.  No string or arrow yet."""
     w, h = screen.get_size()
-    p = g.player
-    now = pygame.time.get_ticks() / 1000.0
-    moving = bool(getattr(p, "moving", False))
-    bobx = math.sin(now * 7.0) * (1.2 if moving else 0.4)
-    boby = abs(math.cos(now * 7.0)) * (1.2 if moving else 0.4)
     pull = max(0.0, min(1.0, float(getattr(g, "_v3_bow_charge", 0.0)) / 1.1))
-    tex = _bow_texture(pull)
-    focal = min(w, h) * 1.12
-    base = (20.0 + bobx, -3.0 - boby, 88.0)
-    yaw = 0.52
-    ca, sa = math.cos(yaw), math.sin(yaw)
+    if pull <= 0.001:
+        # The approved rest image: old sparse blocks, one dolly step closer.
+        pts = []
+        n = 15
+        dolly = 0.68
+        for i in range(n):
+            t = i / (n - 1.0) * 2.0 - 1.0
+            bulge = 1.0 - t * t
+            x = 0.48 - 0.19 * bulge
+            y = t * 0.52
+            z = (1.85 + 0.10 * (t * t)) * dolly
+            pts.append((x, y, z))
+        legacy = True
+        step = 0.035
+    else:
+        # The approved drawn image: more blocks as the curve stretches,
+        # continuous underlay, no per-block gaps.
+        def _at(t):
+            bulge = 1.0 - t * t
+            x = 0.48 - 0.19 * bulge
+            y = t * 0.52
+            tip_pull = 0.10 - 1.40 * pull
+            z = 1.85 + tip_pull * (t * t)
+            return (x, y, z)
+        dense = [_at(-1.0 + 2.0 * i / 4000.0) for i in range(4001)]
+        pts = [dense[0]]
+        last = dense[0]
+        step = 0.035
+        for p in dense[1:]:
+            d = math.sqrt((p[0] - last[0]) ** 2 +
+                          (p[1] - last[1]) ** 2 +
+                          (p[2] - last[2]) ** 2)
+            if d >= step:
+                pts.append(p)
+                last = p
+        if pts[-1] != dense[-1]:
+            pts.append(dense[-1])
+        legacy = False
+    fov = math.radians(125.0)
+    focal = min(w, h) / (2.0 * math.tan(fov * 0.5))
 
-    def proj(lx, ly):
-        # camera-space item plane: side-view texture, tilted about Y
-        x, z = lx, 0.0
-        x, z = x * ca + z * sa, -x * sa + z * ca
-        x += base[0]
-        y = base[1] + ly
-        z += base[2]
-        return (w * 0.5 + focal * x / z,
-                h * 0.5 - focal * y / z)
+    def proj(p):
+        if p[2] <= 0.01:
+            return None
+        return (w * 0.5 + focal * p[0] / p[2],
+                h * 0.5 - focal * p[1] / p[2])
 
-    # corners: texture is 64 x 96, plane 32 x 48 local units
-    tl = proj(-16.0, 24.0)
-    tr = proj(16.0, 24.0)
-    br = proj(16.0, -24.0)
-    bl = proj(-16.0, -24.0)
-    # Minecraft-like drop shadow behind the plane
-    sxs = [q[0] for q in (tl, tr, br, bl)]
-    sys_ = [q[1] for q in (tl, tr, br, bl)]
-    x0, x1 = int(min(sxs)) - 12, int(max(sxs)) + 20
-    y0, y1 = int(min(sys_)) - 10, int(max(sys_)) + 24
-    if x1 > x0 and y1 > y0:
-        sh = pygame.Surface((x1 - x0, y1 - y0), pygame.SRCALPHA)
-        off = (10 - x0, 12 - y0)
-        pts = [(int(q[0] + off[0]), int(q[1] + off[1]))
-               for q in (tl, tr, br, bl)]
-        pygame.draw.polygon(sh, (0, 0, 0, 85), pts)
-        screen.blit(sh, (x0, y0))
-    # Perspective texture mapping by vertical columns; nearest scaling keeps
-    # the source texture deliberately pixelated.
-    minx, maxx = int(min(sxs)), int(max(sxs))
-    if maxx > minx:
-        for x in range(max(0, minx), min(w - 1, maxx) + 1):
-            u = (x - minx) / float(maxx - minx)
-            top = tl[1] + (tr[1] - tl[1]) * u
-            bot = bl[1] + (br[1] - bl[1]) * u
-            if bot <= top:
+    pts2 = [proj(p) for p in pts]
+    if not legacy and len(pts2) >= 2:
+        pygame.draw.lines(screen, (52, 32, 18), False, pts2, 38)
+        pygame.draw.lines(screen, (126, 82, 44), False, pts2, 28)
+        pygame.draw.lines(screen, (176, 118, 62), False, pts2, 8)
+
+    ops = []
+    for i, p in enumerate(pts):
+        end_cube = i == 0 or i == len(pts) - 1
+        if legacy:
+            sx = sy = 0.095 if end_cube else 0.072
+            sz = 0.085 if end_cube else 0.065
+        else:
+            sx = sy = 0.105 if end_cube else 0.085
+            sz = 0.095 if end_cube else 0.075
+        base = (126, 82, 44) if i % 2 else (142, 94, 50)
+        for face in _bow_cube_faces(p[0], p[1], p[2], sx, sy, sz, base):
+            n = _norm(_cross(_sub(face[1], face[0]), _sub(face[2], face[0])))
+            d = abs(_dot(n, _LIGHT))
+            shade = 0.50 + 0.58 * d
+            col = tuple(max(0, min(255, int(v * shade))) for v in base)
+            poly = [proj(q) for q in face]
+            if any(q is None for q in poly):
                 continue
-            sx = min(tex.get_width() - 1, max(0, int(u * tex.get_width())))
-            strip = tex.subsurface((sx, 0, 1, tex.get_height()))
-            dh = max(1, int(bot - top))
-            strip = pygame.transform.scale(strip, (1, dh))
-            screen.blit(strip, (x, int(top)))
+            ops.append((sum(q[2] for q in face) / 4.0, poly, col))
+    ops.sort(key=lambda op: op[0], reverse=True)
+    for _z, poly, col in ops:
+        pygame.draw.polygon(screen, col, poly)
+        if legacy:
+            pygame.draw.polygon(screen, (42, 28, 16), poly, 1)
 
 
 def draw_viewmodel(g, screen) -> None:
