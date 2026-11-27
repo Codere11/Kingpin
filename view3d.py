@@ -1192,6 +1192,100 @@ def _place_from_crosshair(g) -> bool:
     return True
 
 
+def _use_item_3d(g, held: str) -> bool:
+    """Food, drink and small use-on-click items from the crosshair."""
+    try:
+        import economy as _economy
+        import items as _items
+        food = tuple(getattr(_economy, "FOOD", ()) or ())
+    except Exception:
+        _economy = None
+        _items = None
+        food = ()
+    eat_restore = float(getattr(g, "EAT_RESTORE", 35.0) or 35.0)
+    if held == "first_aid":
+        try:
+            g.use_first_aid()
+            return True
+        except Exception:
+            return False
+    if held in ("banana_bread", "honey_toast", "chili_chocolate",
+                "berry_tart", "meat_pie", "highflower_tea"):
+        if g.inventory.consume(held, 1):
+            try:
+                import localstyles as _ls
+                _ls.apply_player(g.player, held, getattr(g, "now", 0.0))
+            except Exception:
+                pass
+            g.player.eat(eat_restore)
+            g.toast("Ate the %s" % _items.get(held).name.lower())
+        else:
+            g.toast("None left")
+        return True
+    if held == "honey_cigar":
+        if g.inventory.consume(held, 1):
+            g.toast("Smoked the honey-cured cigar")
+        else:
+            g.toast("None left")
+        return True
+    if held in ("steel_ale", "steelworm", "bananale", "braggot",
+                "chocolate_stout", "melomel", "cactus_mead"):
+        if g.inventory.consume(held, 1):
+            try:
+                import localstyles as _ls
+                _ls.apply_player(g.player, held, getattr(g, "now", 0.0))
+            except Exception:
+                pass
+            g.toast("Drank the %s" % _items.get(held).name.lower())
+        else:
+            g.toast("None left")
+        return True
+    if held in food:
+        if g.inventory.consume(held, 1):
+            g.player.eat(eat_restore)
+            g.toast("Ate some %s" % _items.get(held).name.lower())
+        else:
+            g.toast("None of that left")
+        return True
+    if held == "cooked_meat":
+        if g.inventory.consume(held, 1):
+            g.player.eat(g.player.max_hunger)
+            g.toast("Ate cooked meat   -   full up")
+        else:
+            g.toast("No cooked meat")
+        return True
+    if held == "banana_liqueur":
+        if g.inventory.consume(held, 1):
+            g.player.quicken(180.0)
+            g.toast("Banana liqueur   -   speed for 3 minutes")
+        else:
+            g.toast("No banana liqueur left")
+        return True
+    if held == "chocolate":
+        if g.inventory.consume(held, 1):
+            g.toast("Ate the chocolate")
+        else:
+            g.toast("No chocolate left")
+        return True
+    if held == "chili_mezcal":
+        if g.inventory.consume(held, 1):
+            if g.player.gain_max_health(0.35):
+                g.toast("Drank the chili mezcal   -   maximum health +35%")
+            else:
+                g.toast("The chili mezcal has already changed your body")
+        else:
+            g.toast("No chili mezcal left")
+        return True
+    if held == "chili_beer":
+        if g.inventory.consume(held, 1):
+            g.player.health = g.player.max_health
+            g.toast("Drank the chili beer   -   health restored")
+        else:
+            g.toast("No chili beer left")
+        return True
+    return False
+
+
 def interact(g) -> bool:
     """Crosshair click: axe attack, NPC card, or block placement."""
     try:
@@ -1247,21 +1341,40 @@ def interact(g) -> bool:
         return True
     npc = _aim_npc(g)
     if npc is not None:
+        # Communication mode is a word, not a trade card.
+        if getattr(g, "comm", None) in ("insult", "praise", "threaten"):
+            try:
+                import comm as _comm
+                ok, left = _comm.use_comm(npc, g.comm, g.now, g)
+                if ok:
+                    _comm.spawn_cloud(g.player.x, g.player.y, g.comm)
+                    g.player.swing_cd = g.player.skill_axe_cd
+                    g.toast("You %s %s" % (
+                        {"praise": "praised", "insult": "insulted",
+                         "threaten": "threatened"}[g.comm],
+                        getattr(npc, "name", "him")))
+                else:
+                    g.toast("You've said your piece to %s today"
+                            % getattr(npc, "name", "him"))
+            except Exception:
+                pass
+            return True
         return _open_npc_card(g, npc)
+    if stack is not None and _use_item_3d(g, held):
+        return True
     if stack is not None and held == "pickaxe":
+        yaw = float(getattr(g, "v3d_yaw", 0.0))
+        g.player.facing = (math.cos(yaw), math.sin(yaw))
         try:
-            g.work_lanes = g._WORK
+            g.use_pickaxe()
         except Exception:
-            pass
-        try:
-            g.truth = g._TRUTH
-        except Exception:
-            pass
-        try:
-            import combat_actions
-            combat_actions.use_axe(g, 0)
-        except Exception:
-            pass
+            try:
+                import combat_actions
+                combat_actions.use_pickaxe(g.player, g.combat, g.ore_field,
+                                          g.inventory, g.pay_share, g.mark_dirty,
+                                          g.toast)
+            except Exception:
+                pass
         return True
     if stack is not None:
         item_id = stack.defn.id

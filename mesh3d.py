@@ -1020,6 +1020,133 @@ def _behind(scene, x: float, y: float, radius: float = 0.0) -> bool:
     return side > max(120.0, radius + cz * 1.75)
 
 
+def add_fence_rect(scene, g, rect, gate=False):
+    """A real rail fence/gate on the ground, not an invisible collider."""
+    try:
+        x0, y0, x1, y1 = rect.left, rect.top, rect.right, rect.bottom
+        cx, cy = (x0 + x1) * 0.5, (y0 + y1) * 0.5
+        if math.hypot(cx - scene.ex, cy - scene.ey) > 1200.0:
+            return
+        if _behind(scene, cx, cy, max(rect.w, rect.h) + 20.0):
+            return
+        horizontal = rect.w >= rect.h
+        key = ("fenceviz", x0, y0, x1, y1, bool(gate))
+        cache = _cache(g)
+        faces = cache.get(key)
+        if faces is None:
+            faces = []
+            wood_d, wood = (78, 50, 28), (142, 96, 52)
+            if horizontal:
+                length = rect.w
+                faces += _box(cx, cy, 0, length, 5, 8, wood_d)
+                faces += _box(cx, cy - 4, 22, length, 4, 4, wood)
+                faces += _box(cx, cy + 4, 22, length, 4, 4, wood)
+                for px in (x0 + 6, x1 - 6):
+                    faces += _box(px, cy, 0, 8, 8, 34, wood_d)
+                    faces += _box(px, cy, 32, 10, 10, 3, wood)
+            else:
+                length = rect.h
+                faces += _box(cx, cy, 0, 5, length, 8, wood_d)
+                faces += _box(cx - 4, cy, 22, 4, length, 4, wood)
+                faces += _box(cx + 4, cy, 22, 4, length, 4, wood)
+                for py in (y0 + 6, y1 - 6):
+                    faces += _box(cx, py, 0, 8, 8, 34, wood_d)
+                    faces += _box(cx, py, 32, 10, 10, 3, wood)
+            cache[key] = faces
+        _add_faces(scene, faces)
+    except Exception:
+        pass
+
+
+def add_built_props(scene, g):
+    """Chests, signs, feed boxes, corpses, ore, wild plants and ships."""
+    # chests
+    for ch in list(getattr(g, "built_chests", ()) or ()):
+        x, y = float(getattr(ch, "x", 0.0)), float(getattr(ch, "y", 0.0))
+        if math.hypot(x - scene.ex, y - scene.ey) > 1400.0 or _behind(scene, x, y, 26):
+            continue
+        key = ("chestviz", id(ch))
+        faces = _cache(g).get(key)
+        if faces is None:
+            faces = _box(x, y, 0, 28, 28, 18, (128, 88, 50))
+            faces += _box(x, y, 17, 30, 30, 5, (158, 112, 64))
+            faces += _box(x, y, 19, 5, 31, 2, (72, 52, 32))
+            faces += _box(x, y, 21, 7, 7, 4, (216, 190, 100))
+            _cache(g)[key] = faces
+        _add_faces(scene, faces)
+    # sign-posts
+    for sg in list(getattr(g, "built_signs", ()) or ()):
+        x, y = float(getattr(sg, "x", 0.0)), float(getattr(sg, "y", 0.0))
+        if math.hypot(x - scene.ex, y - scene.ey) > 1200.0 or _behind(scene, x, y, 18):
+            continue
+        key = ("signviz", id(sg))
+        faces = _cache(g).get(key)
+        if faces is None:
+            faces = _box(x, y, 0, 6, 6, 38, (112, 76, 44))
+            faces += _box(x, y, 31, 26, 4, 15, (162, 122, 72))
+            faces += _box(x, y, 36, 21, 5, 2, (216, 190, 120))
+            _cache(g)[key] = faces
+        _add_faces(scene, faces)
+    # feed boxes
+    for fb in list(getattr(g, "built_foodboxes", ()) or ()):
+        x, y = float(getattr(fb, "x", 0.0)), float(getattr(fb, "y", 0.0))
+        if math.hypot(x - scene.ex, y - scene.ey) > 1200.0 or _behind(scene, x, y, 18):
+            continue
+        key = ("foodboxviz", id(fb))
+        faces = _cache(g).get(key)
+        if faces is None:
+            faces = _box(x, y, 0, 28, 20, 7, (110, 76, 46))
+            faces += _box(x, y, 5, 22, 14, 7, (174, 132, 78))
+            faces += _box(x, y, 11, 23, 15, 2, (188, 168, 96))
+            _cache(g)[key] = faces
+        _add_faces(scene, faces)
+    # bodies: a small dark card in the same painter as the world
+    try:
+        import corpse as _corpse
+        for c in list(getattr(_corpse, "CORPSES", ()) or ()):
+            if c.is_gone(float(getattr(g, "now", 0.0))):
+                continue
+            if math.hypot(c.x - scene.ex, c.y - scene.ey) > 900.0 or _behind(scene, c.x, c.y, 24):
+                continue
+            surf = pygame.Surface((48, 64), pygame.SRCALPHA)
+            c.draw(surf, c.x - 24, c.y - 44, float(getattr(g, "now", 0.0)))
+            scene.add_sprite(surf, c.x, c.y, 34.0, ax=24.0, ay=44.0)
+    except Exception:
+        pass
+    # wild crops
+    try:
+        import wildcrop as _wild
+        import crop as _crop
+        vis = _wild.visible(g.world, getattr(g, "visible_villages", ()),
+                            scene.ex - 800, scene.ey - 800, 1600, 1600, pad=80)
+        for x, y, kind, stage in vis:
+            if math.hypot(x - scene.ex, y - scene.ey) > 900.0 or _behind(scene, x, y, 24):
+                continue
+            age = (stage + 0.4) * _crop.GROW_SECONDS / 4.0
+            img = _crop_sprite(g, kind, age, None, False)
+            scene.add_sprite(img, x, y, 40.0, ax=32.0, ay=84.0)
+    except Exception:
+        pass
+    # ore seams
+    try:
+        for chunk in (g.ore_field.visible(scene.ex - 900, scene.ey - 900, 1800, 1800)
+                      if getattr(g, "ore_field", None) is not None else ()):
+            if math.hypot(chunk.x - scene.ex, chunk.y - scene.ey) > 900.0 or _behind(scene, chunk.x, chunk.y, 30):
+                continue
+            key = ("oreviz", chunk.variant, round(float(chunk.x), 1),
+                   round(float(chunk.y), 1))
+            faces = _cache(g).get(key)
+            if faces is None:
+                col = (92, 96, 104)
+                faces = _box(chunk.x, chunk.y, 0, 34, 28, 20, (72, 76, 80))
+                faces += _box(chunk.x - 5, chunk.y - 3, 16, 18, 14, 13, col)
+                faces += _box(chunk.x + 7, chunk.y + 5, 10, 12, 10, 10, (130, 86, 56))
+                _cache(g)[key] = faces
+            _add_faces(scene, faces)
+    except Exception:
+        pass
+
+
 def build_scene(g, fwd, right, up, ex, ey):
     scene = Scene(fwd, right, up, ex, ey, bool(getattr(g, "night", False)))
     # trees -- nearest first, with a cap; the wider list is for collision too
@@ -1069,6 +1196,13 @@ def build_scene(g, fwd, right, up, ex, ey):
             add_fire(scene, wp, float(getattr(g, "now", 0.0)))
     add_ground_blocks(scene, g)
     add_built_blocks(scene, g)
+    for _r in (getattr(g, "built_fences", ()) or ()):
+        add_fence_rect(scene, g, _r)
+    for _r in (getattr(g, "camp_walls", ()) or ()):
+        add_fence_rect(scene, g, _r)
+    for _r in (getattr(g, "built_gates", ()) or ()):
+        add_fence_rect(scene, g, _r, gate=True)
+    add_built_props(scene, g)
     add_crops(scene, g)
     add_ground_target(scene, g)
     add_projectiles(scene, g)
