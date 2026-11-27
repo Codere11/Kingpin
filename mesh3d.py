@@ -1194,6 +1194,35 @@ def _bow_texture(pull: float):
     return s
 
 
+_BOW_ARROW_PIXELS = None
+
+
+def _bow_arrow_pixels():
+    """A deliberately chunky pixel arrow, not a smooth vector/icon."""
+    global _BOW_ARROW_PIXELS
+    if _BOW_ARROW_PIXELS is not None:
+        return _BOW_ARROW_PIXELS
+    s = pygame.Surface((48, 12), pygame.SRCALPHA)
+    # shaft
+    pygame.draw.rect(s, (104, 68, 36), (7, 5, 33, 3))
+    pygame.draw.rect(s, (174, 122, 66), (9, 5, 28, 1))
+    # fletching: two feather blocks at the tail
+    pygame.draw.rect(s, (238, 236, 222), (1, 2, 10, 3))
+    pygame.draw.rect(s, (238, 236, 222), (1, 7, 10, 3))
+    pygame.draw.rect(s, (204, 202, 190), (1, 4, 8, 1))
+    pygame.draw.rect(s, (204, 202, 190), (1, 7, 8, 1))
+    # dark separations keep the fletching readable at low resolution
+    pygame.draw.line(s, (110, 72, 42), (8, 2), (8, 4), 1)
+    pygame.draw.line(s, (110, 72, 42), (8, 7), (8, 10), 1)
+    # chunky metal head
+    pygame.draw.polygon(s, (214, 220, 228),
+                        [(37, 2), (47, 5), (47, 7), (37, 10)])
+    pygame.draw.polygon(s, (244, 246, 248),
+                        [(40, 4), (47, 5), (47, 7), (40, 8)], 1)
+    _BOW_ARROW_PIXELS = s
+    return s
+
+
 def _bow_cube_faces(cx, cy, cz, sx, sy, sz, color):
     hx, hy, hz = sx * 0.5, sy * 0.5, sz * 0.5
     corners = [(-hx, -hy, -hz), (hx, -hy, -hz), (hx, hy, -hz), (-hx, hy, -hz),
@@ -1312,23 +1341,14 @@ def _draw_bow_viewmodel(g, screen) -> None:
             ax, ay = a
             bx, by = b
             dx, dy = bx - ax, by - ay
-            n = math.hypot(dx, dy) or 1.0
-            dx, dy = dx / n, dy / n
-            px, py = -dy, dx
-            # shaft
-            pygame.draw.line(screen, (232, 226, 204),
-                             (int(ax), int(ay)), (int(bx), int(by)), 2)
-            # fletching at the string midpoint
-            for sgn in (-1.0, 1.0):
-                pygame.draw.line(screen, (242, 242, 228),
-                                 (int(ax), int(ay)),
-                                 (int(ax - dx * 9 + px * 5 * sgn),
-                                  int(ay - dy * 9 + py * 5 * sgn)), 2)
-            # metal head at the middle of the stick
-            pygame.draw.polygon(screen, (210, 218, 228),
-                                [(int(bx), int(by)),
-                                 (int(bx - dx * 7 + px * 3), int(by - dy * 7 + py * 3)),
-                                 (int(bx - dx * 7 - px * 3), int(by - dy * 7 - py * 3))])
+            length = max(28, int(math.hypot(dx, dy)))
+            ang = math.degrees(math.atan2(dy, dx))
+            img = _bow_arrow_pixels()
+            img = pygame.transform.scale(img, (length, max(8, length // 4)))
+            img = pygame.transform.rotate(img, -ang)
+            rect = img.get_rect(center=(int((ax + bx) * 0.5),
+                                       int((ay + by) * 0.5)))
+            screen.blit(img, rect)
 
 
 def draw_viewmodel(g, screen) -> None:
