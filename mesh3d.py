@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 import random
 
+import numpy as np
 import pygame
 
 # Keep in step with view3d.  The internal frame is small; scaling up is the
@@ -1260,76 +1261,114 @@ def _axe_texture():
     return s
 
 
-def _draw_axe_viewmodel(g, screen) -> None:
-    """Map the pixelaxe onto a forward-angled 3D item plane, with depth/shadow."""
-    w, h = screen.get_size()
-    p = g.player
-    pull = 0.0
+_AXE_SURF_CACHE: dict = {}
+
+
+def _homography(src, dst):
+    """Map source rectangle corners to destination corners."""
+    A = []
+    b = []
+    for (x, y), (u, v) in zip(src, dst):
+        A.append([x, y, 1, 0, 0, 0, -u * x, -u * y])
+        b.append(u)
+        A.append([0, 0, 0, x, y, 1, -v * x, -v * y])
+        b.append(v)
+    h = np.linalg.solve(np.asarray(A, np.float64), np.asarray(b, np.float64))
+    return np.array([[h[0], h[1], h[2]],
+                     [h[3], h[4], h[5]],
+                     [h[6], h[7], 1.0]], dtype=np.float64)
+
+
+def _axe_item_surface(w: int, h: int):
+    """A true perspective-mapped pixel axe item surface, cached per size."""
+    key = (int(w), int(h))
+    got = _AXE_SURF_CACHE.get(key)
+    if got is not None:
+        return got
     tex = _axe_texture()
-    fov = math.radians(125.0)
-    focal = min(w, h) / (2.0 * math.tan(fov * 0.5))
-    # swing the item a little, like the old viewmodel
-    try:
-        swing = float(getattr(p, "swing_progress", 0.0) or 0.0)
-    except Exception:
-        swing = 0.0
-    now = pygame.time.get_ticks() / 1000.0
-    moving = bool(getattr(p, "moving", False))
-    bobx = math.sin(now * 8.0) * (1.8 if moving else 0.5)
-    boby = abs(math.cos(now * 8.0)) * (1.8 if moving else 0.5)
-    # Much closer than the old card: the axe should fill the lower-right
-    # like a real held tool, not sit in a tiny frame.
-    base = (19.0 + bobx, -4.0 - boby, 42.0)
-    yaw = 0.52
+    tw, th = tex.get_size()
+    # camera-space item plane: lower-right, angled forward/away
+    focal = min(w, h) / (2.0 * math.tan(math.radians(78.0) * 0.5))
+    base = (0.42, -0.04, 0.94)
+    yaw = 0.50
     ca, sa = math.cos(yaw), math.sin(yaw)
 
     def proj(lx, ly):
-        x, z = lx, 0.0
-        x, z = x * ca + z * sa, -x * sa + z * ca
+        x, z = lx * ca, -lx * sa
         x += base[0]
         y = base[1] + ly
         z += base[2]
         return (w * 0.5 + focal * x / z,
                 h * 0.5 - focal * y / z)
 
-    tl = proj(-17.0, 27.0)
-    tr = proj(17.0, 27.0)
-    br = proj(17.0, -27.0)
-    bl = proj(-17.0, -27.0)
-    # a small screen-space swing, pivoting at the right edge
+    tl = proj(-0.25, 0.42)
+    tr = proj(0.25, 0.42)
+    br = proj(0.25, -0.42)
+    bl = proj(-0.25, -0.42)
+    minx, maxx = int(math.floor(min(q[0] for q in (tl, tr, br, bl)))), \
+        int(math.ceil(max(q[0] for q in (tl, tr, br, bl))))
+    miny, maxy = int(math.floor(min(q[1] for q in (tl, tr, br, bl)))), \
+        int(math.ceil(max(q[1] for q in (tl, tr, br, bl))))
+    dw, dh = max(1, maxx - minx + 1), max(1, maxy - miny + 1)
+    # inverse homography: destination pixel -> source texture pixel
+    H = _homography([(0, 0), (tw, 0), (tw, th), (0, th)],
+                    [tl, tr, br, bl])
+    Hi = np.linalg.inv(H)
+    xs = np.arange(minx, maxx + 1, dtype=np.float64)
+    ys = np.arange(miny, maxy + 1, dtype=np.float64)
+    X, Y = np.meshgrid(xs, ys)
+    den = Hi[2, 0] * X + Hi[2, 1] * Y + Hi[2, 2]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        u = (Hi[0, 0] * X + Hi[0, 1] * Y + Hi[0, 2]) / den
+        v = (Hi[1, 0] * X + Hi[1, 1] * Y + Hi[1, 2]) / den
+    mask = (den > 1e-9) & (u >= 0) & (u < tw) & (v >= 0) & (v < th)
+    arr3 = pygame.surfarray.array3d(tex)
+    alpha = pygame.surfarray.array_alpha(tex)
+    rgba = np.zeros((tw, th, 4), dtype=np.uint8)
+    rgba[..., :3] = arr3
+    rgba[..., 3] = alpha
+    sx = np.clip(u.astype(np.int32), 0, tw - 1)
+    sy = np.clip(v.astype(np.int32), 0, th - 1)
+    out = np.zeros((dh, dw, 4), dtype=np.uint8)
+    vals = rgba[sx, sy]
+    out[mask] = vals[mask]
+    # pygame surfarray is x-major
+    surf = pygame.Surface((dw, dh), pygame.SRCALPHA)
+    surfarr = pygame.surfarray.pixels3d(surf)
+    surfa = pygame.surfarray.pixels_alpha(surf)
+    surfarr[:] = out[..., :3].swapaxes(0, 1)
+    surfa[:] = out[..., 3].swapaxes(0, 1)
+    del surfarr, surfa
+    _AXE_SURF_CACHE[key] = (surf, minx, miny, swing_pivot(tl, tr, br, bl))
+    return _AXE_SURF_CACHE[key]
+
+
+def swing_pivot(tl, tr, br, bl):
+    return (br[0], br[1])
+
+
+def _draw_axe_viewmodel(g, screen) -> None:
+    """Draw a proper perspective-mapped pixel axe; no card, no shadow box."""
+    w, h = screen.get_size()
+    try:
+        surf, ox, oy, pivot = _axe_item_surface(w, h)
+    except Exception:
+        return
+    try:
+        swing = float(getattr(g.player, "swing_progress", 0.0) or 0.0)
+    except Exception:
+        swing = 0.0
     if swing > 0.0:
-        px, py = br[0], br[1]
-        a = (-0.35 + 1.6 * swing)
-        c, sn = math.cos(a), math.sin(a)
-        def sr(q):
-            x, y = q[0] - px, q[1] - py
-            return (px + x * c - y * sn, py + x * sn + y * c)
-        tl, tr, br, bl = sr(tl), sr(tr), sr(br), sr(bl)
-    # NO BLACK SHADOW BOX.  The texture itself has the dark outline; the
-    # plane and perspective provide the depth.
-    sxs = [q[0] for q in (tl, tr, br, bl)]
-    minx, maxx = int(min(sxs)), int(max(sxs))
-    if maxx > minx:
-        for x in range(max(0, minx), min(w - 1, maxx) + 1):
-            u = (x - minx) / float(maxx - minx)
-            top = tl[1] + (tr[1] - tl[1]) * u
-            bot = bl[1] + (br[1] - bl[1]) * u
-            if bot <= top:
-                continue
-            sx = min(tex.get_width() - 1, max(0, int(u * tex.get_width())))
-            strip = tex.subsurface((sx, 0, 1, tex.get_height()))
-            strip = pygame.transform.scale(strip, (1, max(1, int(bot - top))))
-            screen.blit(strip, (x, int(top)))
-
-
-def _bow_cube_faces(cx, cy, cz, sx, sy, sz, color):
-    hx, hy, hz = sx * 0.5, sy * 0.5, sz * 0.5
-    corners = [(-hx, -hy, -hz), (hx, -hy, -hz), (hx, hy, -hz), (-hx, hy, -hz),
-               (-hx, -hy, hz), (hx, -hy, hz), (hx, hy, hz), (-hx, hy, hz)]
-    p = [(cx + x, cy + y, cz + z) for (x, y, z) in corners]
-    quads = ((0, 1, 2, 3), (7, 6, 5, 4), (0, 4, 5, 1),
-             (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0))
-    return [tuple(p[i] for i in q) for q in quads]
+        # Keep the swing: rotate the cached item about its lower-right grip.
+        ang = -0.35 + 1.6 * swing
+        piv = (pivot[0] - ox, pivot[1] - oy)
+        surf = pygame.transform.rotate(surf, math.degrees(ang))
+        # Rotating changes the size; anchor the lower-right grip loosely.
+        rect = surf.get_rect()
+        rect.bottomright = (int(pivot[0]) + 8, int(pivot[1]) + 14)
+        screen.blit(surf, rect)
+    else:
+        screen.blit(surf, (ox, oy))
 
 
 def _draw_bow_viewmodel(g, screen) -> None:
