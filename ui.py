@@ -192,6 +192,28 @@ class Hotbar:
         pygame.draw.rect(screen, (70, 70, 78), (x, y, bar_w, bar_h), 1,
                          border_radius=3)
 
+    def draw_action(self, screen: pygame.Surface, player) -> None:
+        """The top action bar: reloading first, otherwise the axe cooldown.
+
+        Guns and the axe share the exact same bar, so a reload reads as one
+        more wind-up in the same place instead of a second HUD element.
+        """
+        try:
+            reloading = max(0.0, float(getattr(player, "reloading", 0.0)))
+            reload_total = max(0.0, float(getattr(player, "reload_total", 0.0)))
+        except Exception:
+            reloading, reload_total = 0.0, 0.0
+        if reloading > 0.0 and reload_total > 0.0:
+            ratio = 1.0 - reloading / reload_total
+            self.draw_swing(screen, ratio, False)
+            return
+        try:
+            cd = max(0.0, float(getattr(player, "swing_cd", 0.0)))
+            total = max(0.001, float(getattr(player, "skill_axe_cd", 1.0)))
+        except Exception:
+            cd, total = 0.0, 1.0
+        self.draw_swing(screen, 1.0 - min(1.0, cd / total), cd <= 0.001)
+
     def draw_hunger(self, screen: pygame.Surface, ratio: float) -> None:
         sw, sh = screen.get_size()
         panel, _ = self._layout(sw, sh)

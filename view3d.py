@@ -1322,10 +1322,7 @@ def draw_hud(g) -> None:
         _crosshair(screen)
         try:
             g.hotbar.draw(screen)
-            _cd = max(0.0, float(getattr(g.player, "swing_cd", 0.0)))
-            _tot = max(0.001, float(getattr(g.player, "skill_axe_cd", 1.0)))
-            _ready = _cd <= 0.001
-            g.hotbar.draw_swing(screen, 1.0 - min(1.0, _cd / _tot), _ready)
+            g.hotbar.draw_action(screen, g.player)
             g.hotbar.draw_stamina(screen, g.player.stamina / g.player.max_stamina,
                                   getattr(g.player, "exhausted", False))
             g.hotbar.draw_hunger(screen, g.player.hunger / g.player.max_hunger)
