@@ -1212,7 +1212,7 @@ def _draw_bow_viewmodel(g, screen) -> None:
         # The approved rest image: old sparse blocks, one dolly step closer.
         pts = []
         n = 15
-        dolly = 0.68
+        dolly = 0.34          # twice as close to the eyes as before
         for i in range(n):
             t = i / (n - 1.0) * 2.0 - 1.0
             bulge = 1.0 - t * t
