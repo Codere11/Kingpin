@@ -44,7 +44,9 @@ _BLOCKERS = (
     "workshop_open", "confirm_open", "pause_open", "map_open",
     "worker_panel_open", "npc_card_open", "horse_panel_open", "board_open",
     "smith_open", "artisan_open", "naming_open", "market_open",
-    "research_open", "game_over",
+    "research_open", "sign_open", "stall_open", "body_open", "folder_open",
+    "gunsmith_open", "smith_panel_open", "barracks_open", "compass_open",
+    "game_over",
 )
 
 
@@ -52,6 +54,7 @@ def _blocked(g) -> bool:
     return any(bool(getattr(g, name, False)) for name in _BLOCKERS) \
         or getattr(g, "inside_house", None) is not None \
         or getattr(g, "inside_mine", None) is not None \
+        or bool(getattr(g, "field_design", False)) \
         or bool(getattr(g, "comm_mode", False)) \
         or bool(getattr(getattr(g, "dialogue_panel", None), "open_", False))
 
@@ -1129,8 +1132,6 @@ def interact(g) -> bool:
     except Exception:
         stack = None
     held = stack.defn.id if stack is not None else ""
-    if getattr(g, "field_design", False):
-        return _field_click_from_crosshair(g)
     if getattr(g, "placing", None) is not None:
         return _place_from_crosshair(g)
     if held == "bow":
@@ -1213,26 +1214,14 @@ def interact(g) -> bool:
 
 def _draw_placement_ghost(g, frame) -> None:
     """A green footprint under the crosshair while a build choice is armed."""
-    if getattr(g, "placing", None) is None and not getattr(g, "field_design", False):
+    if getattr(g, "placing", None) is None:
         return
     try:
         tile = _aim_tile(g)
         if tile is None:
             return
         wx, wy = tile[0] * 32.0, tile[1] * 32.0
-        if getattr(g, "field_design", False):
-            _st = getattr(g, "field_start", None)
-            if _st and _st[0] is not None:
-                _sx, _sy = _st[0]
-                _tx0, _ty0 = int(_sx // 32), int(_sy // 32)
-                _tx1, _ty1 = tile[0], tile[1]
-                rect = pygame.Rect(min(_tx0, _tx1) * 32, min(_ty0, _ty1) * 32,
-                                   (abs(_tx0 - _tx1) + 1) * 32,
-                                   (abs(_ty0 - _ty1) + 1) * 32)
-            else:
-                rect = pygame.Rect(tile[0] * 32, tile[1] * 32, 32, 32)
-        else:
-            _facing, rect, _sight = g.placement_box(wx, wy)
+        _facing, rect, _sight = g.placement_box(wx, wy)
         fwd, right, up = _cam(g)
         ex, ey = _eye_xy(g, update=False)
 
@@ -1394,6 +1383,101 @@ def _draw_chop_bar(g, screen) -> None:
 _CHAT_FONT = None
 
 
+def _draw_artisan_panel(g, screen) -> None:
+    if not (getattr(g, "artisan_open", False)
+            and getattr(g, "artisan_bench", None) is not None):
+        return
+    try:
+        vw, vh = screen.get_size()
+        w, h = 460, 240
+        panel = pygame.Rect((vw - w) // 2, (vh - h) // 2, w, h)
+        left = pygame.Rect(vw // 2 - 70, panel.y + 68, 26, 26)
+        right = pygame.Rect(vw // 2 + 44, panel.y + 68, 26, 26)
+        shade = pygame.Surface((vw, vh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 170))
+        screen.blit(shade, (0, 0))
+        pygame.draw.rect(screen, (26, 26, 30), panel, border_radius=10)
+        pygame.draw.rect(screen, (150, 118, 78), panel, 2, border_radius=10)
+        font = getattr(g, "font", None) or pygame.font.SysFont("dejavusans", 18)
+        title = font.render("ARTISAN'S BENCH", True, (238, 224, 190))
+        screen.blit(title, (panel.centerx - title.get_width() // 2, panel.top + 12))
+        leaf = getattr(g.artisan_bench, "leaf", None)
+        prod = getattr(g.artisan_bench, "product", None)
+        makes = font.render("makes %s from %s" % (prod or "-", leaf or "-"),
+                            True, (232, 200, 118))
+        screen.blit(makes, (panel.centerx - makes.get_width() // 2, panel.top + 42))
+        for rr in (left, right):
+            pygame.draw.rect(screen, (70, 60, 44), rr, border_radius=4)
+            pygame.draw.rect(screen, (150, 118, 78), rr, 1, border_radius=4)
+        for rr, sym in ((left, "<"), (right, ">")):
+            txt = font.render(sym, True, (226, 200, 150))
+            screen.blit(txt, (rr.centerx - txt.get_width() // 2,
+                              rr.centery - txt.get_height() // 2))
+        art = getattr(g.artisan_bench, "artisan", None)
+        who = getattr(art, "name", "no artisan assigned") if art is not None else "no artisan assigned"
+        wtxt = font.render("artisan: %s" % who, True, (216, 212, 200))
+        screen.blit(wtxt, (panel.centerx - wtxt.get_width() // 2, panel.top + 104))
+        hint = font.render("takes 10 leaf from a chest, makes 10 goods      [E] close",
+                           True, (196, 226, 168))
+        screen.blit(hint, (panel.centerx - hint.get_width() // 2, panel.bottom - 28))
+    except Exception:
+        pass
+
+
+def _draw_smith_panel(g, screen) -> None:
+    if not (getattr(g, "smith_open", False)
+            and getattr(g, "smith_shop", None) is not None):
+        return
+    try:
+        vw, vh = screen.get_size()
+        worker = g.smith_shop.worker
+        orders = list(getattr(worker, "tool_orders", ()) or ())
+        panel = pygame.Rect(vw // 2 - 220, vh // 2 - 150, 440, 300)
+        shade = pygame.Surface((vw, vh), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 170))
+        screen.blit(shade, (0, 0))
+        pygame.draw.rect(screen, (26, 26, 30), panel, border_radius=10)
+        pygame.draw.rect(screen, (150, 118, 78), panel, 2, border_radius=10)
+        font = getattr(g, "font", None) or pygame.font.SysFont("dejavusans", 18)
+        titles = {"smith": "THE FORGE", "mine": "THE PIT HEAD",
+                  "lab": "THE LABORATORY", "brewery": "THE BREWHOUSE"}
+        head = titles.get(getattr(worker, "kind", "") if worker else "", "THE BENCH")
+        village = getattr(worker, "village", None) if worker else None
+        head += "   -   %s's" % (getattr(village, "name", "the village") if village else "the village")
+        screen.blit(font.render(head, True, (238, 224, 190)), (panel.x + 14, panel.y + 12))
+        screen.blit(font.render("iron in stock: %d"
+                                % int(getattr(worker, "stock", {}).get("iron", 0)),
+                                True, (232, 200, 118)), (panel.x + 14, panel.y + 38))
+        yy = panel.y + 66
+        if not orders:
+            screen.blit(font.render("nothing booked", True, (150, 146, 138)),
+                        (panel.x + 14, yy))
+        for who, want in orders[:9]:
+            screen.blit(font.render("%s wants a %s" % (getattr(who, "name", "someone"), want),
+                                    True, (216, 212, 200)), (panel.x + 14, yy))
+            yy += 22
+        if worker is not None:
+            held = {k: int(v) for k, v in getattr(worker, "stock", {}).items()
+                    if k in ("axe", "shovel", "pickaxe") and v}
+            if held:
+                screen.blit(font.render("on the shelf: " + ", ".join(
+                    "%d %s" % (q, i) for i, q in held.items()), True,
+                    (200, 200, 190)), (panel.x + 14, panel.bottom - 44))
+        kind = getattr(g.smith_shop, "kind", "")
+        hint = {"smith": "[Space] forge a tool", "mine": "[Space] break out iron",
+                "lab": "[Space] work the leaf",
+                "brewery": ("[Space] draw the brew"
+                            if getattr(g.player, "brew", None) is not None
+                            else "[Space] start a mash")}.get(kind, "")
+        screen.blit(font.render("%s      [E] close   " % hint, True, (196, 226, 168)),
+                    (panel.x + 14, panel.bottom - 24))
+        if getattr(g, "work_msg", ""):
+            screen.blit(font.render(g.work_msg, True, (240, 206, 130)),
+                        (panel.x + 14, panel.bottom - 46))
+    except Exception:
+        pass
+
+
 def _draw_naming(g, screen) -> None:
     """The settlement-naming card, over the first-person view."""
     if not getattr(g, "naming_open", False):
@@ -1424,6 +1508,19 @@ def _draw_naming(g, screen) -> None:
                            True, (196, 226, 168))
         screen.blit(hint, (panel.centerx - hint.get_width() // 2,
                            panel.bottom - 30))
+    except Exception:
+        pass
+
+
+def draw_view_fade(g, screen) -> None:
+    """A short black cover used when fields/orchards switch modes."""
+    try:
+        a = max(0, min(255, int(getattr(g, "_view_fade_alpha", 0) or 0)))
+        if a <= 0:
+            return
+        shade = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, a))
+        screen.blit(shade, (0, 0))
     except Exception:
         pass
 
@@ -1586,6 +1683,14 @@ def draw_hud(g) -> None:
         ("market_open", "market_panel"),
         ("board_open", "board_panel"),
         ("horse_panel_open", "horse_panel"),
+        ("sign_open", "sign_panel"),
+        ("stall_open", "stall_panel"),
+        ("body_open", "body_panel"),
+        ("folder_open", "folder_panel"),
+        ("gunsmith_open", "gunsmith_panel"),
+        ("smith_panel_open", "smith_panel"),
+        ("barracks_open", "barracks_panel"),
+        ("compass_open", "compass_menu"),
     ):
         if not getattr(g, attr, False):
             continue
@@ -1604,6 +1709,8 @@ def draw_hud(g) -> None:
                 obj.draw(screen)
         except Exception:
             pass
+    _draw_smith_panel(g, screen)
+    _draw_artisan_panel(g, screen)
     try:
         if getattr(g, "map_open", False):
             import map as mapmod
@@ -1619,3 +1726,4 @@ def draw_hud(g) -> None:
     except Exception:
         pass
     _draw_naming(g, screen)
+    draw_view_fade(g, screen)

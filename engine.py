@@ -378,6 +378,18 @@ def run(g):
         g.dt = min(g.clock.tick(FPS) / 1000.0, 0.05)
         g._PH["f"] += 1
         g.dt = min(g.dt * g.time_scale, 0.5)          # test-mode speed-up
+        # Fade timer for the 3D <-> top-down designation switch.
+        if float(getattr(g, "_view_fade_alpha", 0.0) or 0.0) > 0.0:
+            g._view_fade_alpha = max(0.0, float(g._view_fade_alpha)
+                                    - g.dt * 760.0)
+        # A field/orchard chosen from first person stays in top-down for as
+        # long as designation is active; leave it by returning to the view
+        # the player came from.
+        if (getattr(g, "_field_return_3d", False)
+                and not getattr(g, "field_design", False)):
+            g._field_return_3d = False
+            g.view3d = True
+            g._view_fade_alpha = 255.0
         try:
             view3d.tick(g, g.dt)
         except Exception as _v3t:
@@ -909,9 +921,19 @@ def run(g):
                         if g.choice in ("field", "orchard"):
                             # SETTLEMENT MODE: freeze the player, free the camera,
                             # and let him drag out a field/orchard designation.
+                            # From first person, field work is deliberately a
+                            # top-down mode: fade into it and stay there until
+                            # designation ends.
+                            if getattr(g, "view3d", False):
+                                g._field_return_3d = True
+                                g.view3d = False
+                                view3d._release_mouse(g)
+                            else:
+                                g._field_return_3d = False
                             g.field_design = True
                             g.field_mode = g.choice
                             g.field_start[0] = None
+                            g._view_fade_alpha = 255.0
                             pygame.mouse.set_visible(True)
                         else:
                             g.placing = g.choice
@@ -4402,6 +4424,10 @@ def run(g):
                          "at", "%d,%d" % (int(g.player.x), int(g.player.y)),
                          "dead", g.player.dead)
                 g._dump_trace("SLOW FRAME %dms" % int(g._fms))
+        except Exception:
+            pass
+        try:
+            view3d.draw_view_fade(g, g.screen)
         except Exception:
             pass
         pygame.display.flip()
