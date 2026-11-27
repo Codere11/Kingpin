@@ -680,6 +680,10 @@ def _collect(g, yaw: float):
     for npc in people:
         if not getattr(npc, "alive", True) or getattr(npc, "in_interior", False):
             continue
+        # A trader riding a horse is drawn above the saddle with the horse,
+        # not as a second standing figure in its body.
+        if getattr(npc, "trader_horse", None) is not None:
+            continue
         d = math.hypot(float(npc.x) - ex, float(npc.y) - ey)
         if d > lim:
             continue
@@ -1491,6 +1495,17 @@ def draw(g) -> None:
     for img, wx, wy, wh, ax, ay, label in _collect(g, yaw):
         scene.add_shadow(wx, wy, max(7.0, wh * 0.22))
         scene.add_sprite(img, wx, wy, wh, ax=ax, ay=ay)
+    # Riders sit on the horse, not in its hooves.
+    try:
+        for _n in _candidate_people(g):
+            _h = getattr(_n, "trader_horse", None)
+            if _h is None or not getattr(_n, "alive", True):
+                continue
+            _card = _npc_sprite(_n, back=False)
+            scene.add_float_sprite(_card, float(_n.x), float(_n.y), 43.0,
+                                   74.0, ax=50.0, ay=138.0)
+    except Exception:
+        pass
     scene.draw(frame)
     try:
         _draw_shots(g, frame)

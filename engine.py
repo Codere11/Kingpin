@@ -1111,6 +1111,14 @@ def run(g):
                 if g.near_horse() is not None:
                     g.mount(g.near_horse())
                     continue
+                try:
+                    _sx, _sy = g.ship_pos()
+                    if math.hypot(g.player.x - _sx, g.player.y - _sy) < 190.0:
+                        g.open_market()
+                        pygame.mouse.set_visible(True)
+                        continue
+                except Exception:
+                    pass
                 plog.log("E-KEY", "board", g.near_board() is not None,
                          "stall", g.near_stall() is not None,
                          "chest", g.near_chest() is not None,
