@@ -1205,7 +1205,7 @@ def _bow_cube_faces(cx, cy, cz, sx, sy, sz, color):
 
 
 def _draw_bow_viewmodel(g, screen) -> None:
-    """The approved chunky 3D stick, in-game.  No string or arrow yet."""
+    """The approved chunky 3D bow stick, string, and late-spawned arrow."""
     w, h = screen.get_size()
     pull = max(0.0, min(1.0, float(getattr(g, "_v3_bow_charge", 0.0)) / 1.1))
     if pull <= 0.001:
@@ -1285,6 +1285,50 @@ def _draw_bow_viewmodel(g, screen) -> None:
         pygame.draw.polygon(screen, col, poly)
         if legacy:
             pygame.draw.polygon(screen, (42, 28, 16), poly, 1)
+
+    # THE STRING: connects the top and bottom tips of the stick and stays
+    # visible in both states.  Draw it over the wood.
+    if pts2 and pts2[0] is not None and pts2[-1] is not None:
+        t2, b2 = pts2[0], pts2[-1]
+        pygame.draw.line(screen, (42, 32, 22),
+                         (int(t2[0]), int(t2[1])),
+                         (int(b2[0]), int(b2[1])), 4)
+        pygame.draw.line(screen, (236, 232, 214),
+                         (int(t2[0]), int(t2[1])),
+                         (int(b2[0]), int(b2[1])), 2)
+
+    # THE ARROW: only once the draw is nearly finished.  Feathers sit at the
+    # middle of the string; the head sits at the middle of the stick.
+    if not legacy and pull >= 0.78 and len(pts) >= 3:
+        top = pts[0]
+        bot = pts[-1]
+        smid = ((top[0] + bot[0]) * 0.5,
+                (top[1] + bot[1]) * 0.5,
+                (top[2] + bot[2]) * 0.5)
+        bowmid = pts[len(pts) // 2]
+        a = proj(smid)
+        b = proj(bowmid)
+        if a is not None and b is not None:
+            ax, ay = a
+            bx, by = b
+            dx, dy = bx - ax, by - ay
+            n = math.hypot(dx, dy) or 1.0
+            dx, dy = dx / n, dy / n
+            px, py = -dy, dx
+            # shaft
+            pygame.draw.line(screen, (232, 226, 204),
+                             (int(ax), int(ay)), (int(bx), int(by)), 2)
+            # fletching at the string midpoint
+            for sgn in (-1.0, 1.0):
+                pygame.draw.line(screen, (242, 242, 228),
+                                 (int(ax), int(ay)),
+                                 (int(ax - dx * 9 + px * 5 * sgn),
+                                  int(ay - dy * 9 + py * 5 * sgn)), 2)
+            # metal head at the middle of the stick
+            pygame.draw.polygon(screen, (210, 218, 228),
+                                [(int(bx), int(by)),
+                                 (int(bx - dx * 7 + px * 3), int(by - dy * 7 + py * 3)),
+                                 (int(bx - dx * 7 - px * 3), int(by - dy * 7 - py * 3))])
 
 
 def draw_viewmodel(g, screen) -> None:
