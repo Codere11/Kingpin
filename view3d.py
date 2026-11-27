@@ -700,11 +700,70 @@ def _billboard_hit_dims(g, e, base_radius: float, base_height: float):
         card, _ax, _ay, world_h = _animal_sprite(e, yaw)
         world_w = (float(world_h) * float(card.get_width())
                    / max(1.0, float(card.get_height())))
-        radius = max(float(base_radius), world_w * 0.34)
+        radius = max(float(base_radius), world_w * 0.48)
         height = max(float(base_height), float(world_h))
         return radius, height
     except Exception:
         return float(base_radius), float(base_height)
+
+
+
+def _screen_target_under_crosshair(g):
+    """Find the visible billboard the crosshair is actually on.
+
+    This is the final guard against a pure world-space ray disagreeing with a
+    camera-facing billboard: the sprite the player can see is a rectangle on
+    the screen, so use that same rectangle.  The returned target and vertical
+    aim point let a fired shot go through the visible body rather than just
+    past its old, much smaller world-space capsule.
+    """
+    try:
+        fwd, right, up = _cam(g)
+        ex, ey = float(g.player.x), float(g.player.y)
+        cx, cy = IW * 0.5, IH * 0.5
+        best = None
+        best_d = 1e18
+
+        def consider(e, card, ax, ay, world_h):
+            nonlocal best, best_d
+            base = _project(fwd, right, up, ex, ey, float(e.x), float(e.y), 0.0)
+            top = _project(fwd, right, up, ex, ey, float(e.x), float(e.y), float(world_h))
+            if base is None or top is None:
+                return
+            sh = abs(float(base[1]) - float(top[1]))
+            if sh < 2.0:
+                return
+            scale = sh / max(1.0, float(card.get_height()))
+            dw = float(card.get_width()) * scale
+            dh = float(card.get_height()) * scale
+            x0 = float(base[0]) - float(ax) * scale
+            y0 = float(base[1]) - float(ay) * scale
+            if x0 - 2.0 <= cx <= x0 + dw + 2.0 and y0 - 2.0 <= cy <= y0 + dh + 2.0:
+                d = math.hypot(float(e.x) - ex, float(e.y) - ey)
+                if d < best_d:
+                    best_d = d
+                    best = (e, float(world_h))
+
+        for n in _candidate_people(g):
+            # NPC cards are 100x140 with the feet anchor at 138.
+            consider(n, pygame.Surface((100, 140), pygame.SRCALPHA),
+                     50.0, 138.0, 82.0)
+        for e in list(getattr(g, "enemies", ()) or ()):
+            if not getattr(e, "alive", True):
+                continue
+            card, ax, ay, wh = _animal_sprite(e, float(getattr(g, "v3d_yaw", 0.0)))
+            consider(e, card, ax, ay, wh)
+        for e in list(getattr(g, "rabbits", ()) or ()):
+            if getattr(e, "alive", True):
+                card, ax, ay, wh = _animal_sprite(e, float(getattr(g, "v3d_yaw", 0.0)))
+                consider(e, card, ax, ay, wh)
+        for e in list(getattr(g, "horses", ()) or ()):
+            if getattr(e, "alive", True):
+                card, ax, ay, wh = _animal_sprite(e, float(getattr(g, "v3d_yaw", 0.0)))
+                consider(e, card, ax, ay, wh)
+        return best
+    except Exception:
+        return None
 
 
 def _entity_hit_targets(g):
@@ -875,6 +934,28 @@ def _fire3d(g, arrow=False, power=1.0) -> bool:
     cp, sp = math.cos(pitch), math.sin(pitch)
     fwd = (math.cos(yaw) * cp, math.sin(yaw) * cp, sp)
     p.facing = (math.cos(yaw), math.sin(yaw))
+    # A shot fired while the crosshair is visibly on a billboard should hit
+    # that billboard, not merely pass near its old world-space capsule.  This
+    # small correction is derived from the same projected rectangle the
+    # renderer draws; with no target under the crosshair, the camera ray is
+    # used unchanged.
+    _ct = _screen_target_under_crosshair(g)
+    if _ct is not None:
+        _t, _th = _ct
+        _tx, _ty, _tz = float(_t.x), float(_t.y), max(4.0, _th * 0.50)
+        _ox = float(p.x) + fwd[0] * 26.0
+        _oy = float(p.y) + fwd[1] * 26.0
+        _oz = EYE_Z - 5.0 + fwd[2] * 26.0
+        _dx, _dy, _dz = _tx - _ox, _ty - _oy, _tz - _oz
+        _dn = math.sqrt(_dx * _dx + _dy * _dy + _dz * _dz)
+        if _dn > 0.001:
+            fwd = (_dx / _dn, _dy / _dn, _dz / _dn)
+            try:
+                import plog
+                plog.log("V3-SHOT-AIM", "target", getattr(_t, "kind", "person"),
+                         "d", round(_dn, 1), "z", round(_tz, 1))
+            except Exception:
+                pass
     ox = float(p.x) + fwd[0] * 26.0
     oy = float(p.y) + fwd[1] * 26.0
     oz = EYE_Z - 5.0 + fwd[2] * 26.0
