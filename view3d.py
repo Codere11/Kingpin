@@ -52,7 +52,6 @@ def _blocked(g) -> bool:
     return any(bool(getattr(g, name, False)) for name in _BLOCKERS) \
         or getattr(g, "inside_house", None) is not None \
         or getattr(g, "inside_mine", None) is not None \
-        or getattr(g, "placing", None) is not None \
         or bool(getattr(g, "field_design", False)) \
         or bool(getattr(g, "comm_mode", False)) \
         or bool(getattr(getattr(g, "dialogue_panel", None), "open_", False))
@@ -213,6 +212,16 @@ def tick(g, dt: float) -> None:
         g.v3d_yaw = (float(getattr(g, "v3d_yaw", 0.0)) + dx * 0.0032) % (2.0 * math.pi)
         p = float(getattr(g, "v3d_pitch", 0.0)) - dy * 0.0028
         g.v3d_pitch = max(-1.15, min(1.15, p))
+    # Right-click cancels a placement; otherwise right-click still aims a gun.
+    try:
+        if getattr(g, "placing", None) is not None and pygame.mouse.get_pressed()[2]:
+            g.placing = None
+            try:
+                g.plot_start[0] = None
+            except Exception:
+                pass
+    except Exception:
+        pass
     # RIGHT-CLICK AIM.  A gun is pulled from the hip into the sight line while
     # the button is held; releasing it eases back.  The actual shot still uses
     # the camera yaw/pitch, so the 3D barrel and the crosshair agree.
@@ -1039,6 +1048,28 @@ def _open_npc_card(g, npc) -> bool:
         return False
 
 
+def _place_from_crosshair(g) -> bool:
+    """Turn the crosshair's ground tile into the build menu's placement point."""
+    tile = _aim_tile(g)
+    if tile is None:
+        _toast(g, "Nothing in reach to build on")
+        return True
+    x, y = float(tile[0] * 32), float(tile[1] * 32)
+    g._place_override = (x, y)
+    try:
+        g.try_place()
+    except Exception as _pe:
+        try:
+            import plog
+            plog.log("VIEW3D-PLACE", repr(_pe)[:180])
+        except Exception:
+            pass
+        _toast(g, "Could not place there")
+    finally:
+        g._place_override = None
+    return True
+
+
 def interact(g) -> bool:
     """Crosshair click: axe attack, NPC card, or block placement."""
     try:
@@ -1046,6 +1077,8 @@ def interact(g) -> bool:
     except Exception:
         stack = None
     held = stack.defn.id if stack is not None else ""
+    if getattr(g, "placing", None) is not None:
+        return _place_from_crosshair(g)
     if held == "bow":
         # Draw the bow while the button is held; release to loose the arrow.
         g._v3_bow_charging = True
@@ -1124,6 +1157,42 @@ def interact(g) -> bool:
     return False
 
 
+def _draw_placement_ghost(g, frame) -> None:
+    """A green footprint under the crosshair while a build choice is armed."""
+    if getattr(g, "placing", None) is None:
+        return
+    try:
+        tile = _aim_tile(g)
+        if tile is None:
+            return
+        wx, wy = tile[0] * 32.0 + 16.0, tile[1] * 32.0 + 16.0
+        _facing, rect, _sight = g.placement_box(wx, wy)
+        fwd, right, up = _cam(g)
+        ex, ey = _eye_xy(g, update=False)
+
+        def corner(x, y, z):
+            return _project(fwd, right, up, ex, ey, x, y, z)
+
+        for z, color in ((1.0, (150, 238, 126)), (26.0, (104, 190, 92))):
+            pts = [corner(rect.left, rect.top, z),
+                   corner(rect.right, rect.top, z),
+                   corner(rect.right, rect.bottom, z),
+                   corner(rect.left, rect.bottom, z)]
+            if all(p is not None for p in pts):
+                pygame.draw.lines(frame, color, True,
+                                  [(int(p[0]), int(p[1])) for p in pts], 2)
+        # corner posts make the footprint read as a volume, not a decal
+        for x, y in ((rect.left, rect.top), (rect.right, rect.top),
+                     (rect.right, rect.bottom), (rect.left, rect.bottom)):
+            a, b = corner(x, y, 1.0), corner(x, y, 26.0)
+            if a is not None and b is not None:
+                pygame.draw.line(frame, (136, 220, 112),
+                                 (int(a[0]), int(a[1])),
+                                 (int(b[0]), int(b[1])), 1)
+    except Exception:
+        pass
+
+
 def draw(g) -> None:
     """Draw the internal 3D frame and scale it to the window."""
     screen = g.screen
@@ -1141,6 +1210,7 @@ def draw(g) -> None:
         _draw_shots(g, frame)
     except Exception:
         pass
+    _draw_placement_ghost(g, frame)
 
     # A little vignette makes the flat plane read as a view rather than a
     # diagram, and softens the edges at close range.
@@ -1395,6 +1465,26 @@ def draw_hud(g) -> None:
             font = g.font
             txt = font.render("[V] top-down", True, (220, 216, 198))
             screen.blit(txt, (g.vw - txt.get_width() - 16, g.vh - 28))
+        except Exception:
+            pass
+        try:
+            if getattr(g, "placing", None) is not None:
+                _hint = "Left click: place        Right click: cancel"
+            else:
+                _wp = g.near_workplace()
+                _kind = getattr(_wp, "kind", "") if _wp is not None else ""
+                _hint = ""
+                if _kind == "workshop":
+                    _hint = "[E] Use workbench"
+                elif _kind == "lab":
+                    _hint = "[E] Use artisan bench"
+                elif _kind in ("smith", "brewery", "research", "weaver", "spice",
+                               "medicine_hut", "fireplace"):
+                    _hint = "[E] Use %s" % _kind.replace("_", " ")
+            if _hint:
+                _lab = g.font.render(_hint, True, (236, 226, 188))
+                screen.blit(_lab, (screen.get_width() // 2 - _lab.get_width() // 2,
+                                    screen.get_height() - 150))
         except Exception:
             pass
     _draw_toast(g, screen)

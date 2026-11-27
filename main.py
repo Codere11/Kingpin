@@ -1345,6 +1345,11 @@ def main() -> None:
 
     def try_place() -> None:
         
+        # A 3D placement sets this to the ground point under the crosshair.
+        # The top-down path leaves it empty and keeps using the world mouse.
+        _place_override = getattr(g, "_place_override", None)
+        _pos_for_this_place = (lambda: _place_override
+                               if _place_override is not None else placement_pos())
         _g = SimpleNamespace(
             placing=g.placing, player=g.player, inventory=g.inventory,
             built_houses=g.built_houses, built_fences=g.built_fences,
@@ -1356,7 +1361,7 @@ def main() -> None:
             build_cost=build_cost, build_materials=build_materials,
             build_w=BUILD_W, build_h=BUILD_H, build_house_cost=BUILD_COST,
             can_place=can_place, demolish_at=demolish_at,
-            placement_pos=placement_pos, placement_box=placement_box,
+            placement_pos=_pos_for_this_place, placement_box=placement_box,
             mark_dirty=mark_dirty, toast=toast)
         _before_place = g.placing
         g.placing = placement.try_place(_g)
