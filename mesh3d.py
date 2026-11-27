@@ -1403,6 +1403,43 @@ def swing_pivot(tl, tr, br, bl):
 
 
 
+_PICKAXE_TEX = None
+
+
+def _pickaxe_texture():
+    """A low-resolution double-headed pickaxe, drawn as a held tool."""
+    global _PICKAXE_TEX
+    if _PICKAXE_TEX is not None:
+        return _PICKAXE_TEX
+    s = pygame.Surface((64, 96), pygame.SRCALPHA)
+    wood_d, wood, wood_l = (62, 40, 24), (122, 82, 44), (176, 118, 62)
+    steel_d, steel, edge = (68, 74, 82), (154, 162, 174), (238, 242, 248)
+    # handle and grip
+    pygame.draw.line(s, wood_d, (50, 94), (27, 25), 10)
+    pygame.draw.line(s, wood, (50, 94), (27, 25), 7)
+    pygame.draw.line(s, wood_l, (47, 88), (30, 34), 2)
+    for k in range(3):
+        yy = 68 + k * 7
+        pygame.draw.line(s, (70, 44, 26),
+                         (44 - k * 2, yy), (52 - k * 2, yy + 1), 2)
+    # the head: a long curved double pick
+    head = [(5, 22), (12, 13), (24, 15), (31, 10), (40, 15), (56, 10),
+            (59, 19), (44, 24), (35, 22), (29, 27), (20, 24), (13, 29)]
+    pygame.draw.polygon(s, steel_d, head)
+    pygame.draw.polygon(s, steel, [(x + 1, y + 1) for (x, y) in head])
+    pygame.draw.polygon(s, edge, [(9, 15), (17, 17), (25, 18), (30, 12),
+                                  (36, 18), (48, 14), (53, 17), (39, 20),
+                                  (27, 22), (17, 20)])
+    pygame.draw.polygon(s, (42, 40, 40), head, 1)
+    # eye and binding
+    pygame.draw.circle(s, (35, 34, 34), (28, 19), 4)
+    pygame.draw.circle(s, steel_d, (28, 19), 3, 1)
+    for yy in (30, 34):
+        pygame.draw.line(s, (55, 38, 24), (17, yy), (24, yy + 1), 2)
+    _PICKAXE_TEX = s
+    return s
+
+
 _SHOVEL_TEX = None
 
 
@@ -1908,6 +1945,13 @@ def draw_viewmodel(g, screen) -> None:
         return
     if item_id in _GUN_VIEW_IDS:
         _draw_gun_viewmodel(g, screen, item_id)
+        return
+    if item_id == "pickaxe":
+        # A proper double-headed pick, built at the same scale as the axe.
+        _draw_item_viewmodel(
+            g, screen, item_id, stack,
+            pose=((0.90, -0.35, 0.85), 0.50, 0.50, 1.00),
+            texture=_pickaxe_texture())
         return
     if item_id == "shovel":
         # The shovel is the axe's brother: a long tool angled into the lower

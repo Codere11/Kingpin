@@ -1095,6 +1095,73 @@ def _field_click_from_crosshair(g) -> bool:
     return True
 
 
+def _farm_click3d(g, held: str) -> bool:
+    """Tilling, watering, planting and harvesting under the 3D crosshair."""
+    tile = _aim_tile(g)
+    if tile is None:
+        return False
+    tx, ty = int(tile[0]), int(tile[1])
+    try:
+        import crop
+        import farm
+        import wildcrop
+    except Exception:
+        return False
+    try:
+        world = g.world
+        plot = world.plot_at(tx, ty)
+        # Harvest comes before planting, exactly as in the top-down path.
+        if plot is not None and plot.kind in (crop.LEAF_KINDS + crop.FOOD_KINDS
+                                              + crop.FIBRE_KINDS):
+            grade = g.skills.tobacco_grade() if plot.kind in crop.LEAF_KINDS else None
+            ok = farm.harvest(world, g.inventory, plot, g.now, g.toast, grade,
+                              skill=g.skills.farming, tx=tx, ty=ty,
+                              share=getattr(g, "pay_share", None),
+                              camp=getattr(g, "player_camp", None))
+            if ok:
+                try:
+                    import playlog as _pl
+                    _pl.record(g, "action", action="harvest", crop=plot.kind)
+                except Exception:
+                    pass
+                g.skills.gain_farming(0.02)
+                if ((tx, ty) in getattr(g, "village_plots", ())
+                        and not getattr(g, "tile_is_mine", lambda a, b: True)(tx, ty)):
+                    if getattr(g, "commit_crime", None):
+                        g.commit_crime()
+                return True
+        try:
+            wild = wildcrop.at(world, tx, ty, getattr(g, "visible_villages", ()))
+        except Exception:
+            wild = None
+        if wild is not None:
+            wildcrop.harvest(world, tx, ty, wild[0], wild[1], g.inventory,
+                             g.toast, share=getattr(g, "pay_share", None))
+            g.skills.gain_farming(0.02)
+            return True
+        if held == "shovel":
+            farm.dig(world, g.ground, tx, ty, g.toast)
+            return True
+        if held == "watering_can":
+            farm.water(world, g.ground, tx, ty, g.toast)
+            return True
+        if held in crop.SEED_CROP:
+            sown = farm.plant(world, g.ground, g.inventory, tx, ty, g.now,
+                              g.toast, held, g.skills.farming)
+            if sown and getattr(g, "tile_is_mine", lambda a, b: True)(tx, ty):
+                if not isinstance(getattr(g.player, "plots", None), set):
+                    g.player.plots = set()
+                g.player.plots.add((tx, ty))
+            return True
+    except Exception as _fe:
+        try:
+            import plog
+            plog.log("VIEW3D-FARM", repr(_fe)[:180])
+        except Exception:
+            pass
+    return False
+
+
 def _place_from_crosshair(g) -> bool:
     """Turn the crosshair's ground tile into the build menu's placement point."""
     tile = _aim_tile(g)
@@ -1134,6 +1201,9 @@ def interact(g) -> bool:
     held = stack.defn.id if stack is not None else ""
     if getattr(g, "placing", None) is not None:
         return _place_from_crosshair(g)
+    if held not in ("bow", "musket", "rifle", "double_shot", "shotgun", "axe"):
+        if _farm_click3d(g, held):
+            return True
     if held == "bow":
         # Draw the bow while the button is held; release to loose the arrow.
         g._v3_bow_charging = True
@@ -1178,7 +1248,7 @@ def interact(g) -> bool:
     npc = _aim_npc(g)
     if npc is not None:
         return _open_npc_card(g, npc)
-    if stack is not None and held in ("pickaxe", "shovel"):
+    if stack is not None and held == "pickaxe":
         try:
             g.work_lanes = g._WORK
         except Exception:
