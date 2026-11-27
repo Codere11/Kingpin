@@ -1157,56 +1157,100 @@ def _item_faces(item_id, empty=False, bow_charge=0.0):
            _vm_box(0, -2, 56, 9, 10, 9, (190, 132, 92))
 
 
+_BOW_TEX_CACHE: dict = {}
+
+
+def _bow_texture(pull: float):
+    """A low-resolution side-view bow texture: stick left, string right."""
+    key = int(max(0.0, min(1.0, pull)) * 10.0)
+    got = _BOW_TEX_CACHE.get(key)
+    if got is not None:
+        return got
+    s = pygame.Surface((64, 96), pygame.SRCALPHA)
+    curve = [(33, 5), (22, 15), (15, 28), (12, 48), (15, 68),
+             (22, 81), (33, 91)]
+    pygame.draw.lines(s, (54, 32, 18), False, curve, 8)
+    pygame.draw.lines(s, (128, 83, 43), False, curve, 5)
+    pygame.draw.lines(s, (174, 116, 60), False, curve, 2)
+    pygame.draw.circle(s, (54, 32, 18), curve[0], 5)
+    pygame.draw.circle(s, (54, 32, 18), curve[-1], 5)
+    # grip on the stick
+    pygame.draw.rect(s, (78, 48, 26), (14, 38, 14, 12))
+    pygame.draw.rect(s, (152, 100, 52), (16, 40, 10, 8))
+    # string: tip -> nock -> tip, nock pulled right as the bow is charged
+    nx = 38 + 9 * pull
+    pygame.draw.line(s, (222, 220, 200), (33, 5), (int(nx), 48), 2)
+    pygame.draw.line(s, (222, 220, 200), (int(nx), 48), (33, 91), 2)
+    # arrow pointing forward/right
+    pygame.draw.line(s, (92, 60, 32), (int(nx), 48), (62, 48), 4)
+    pygame.draw.line(s, (154, 104, 58), (int(nx), 48), (62, 48), 2)
+    pygame.draw.polygon(s, (218, 224, 232), [(62, 48), (54, 43), (54, 53)])
+    pygame.draw.line(s, (224, 220, 204), (int(nx), 48), (int(nx) - 6, 44), 2)
+    pygame.draw.line(s, (224, 220, 204), (int(nx), 48), (int(nx) - 6, 52), 2)
+    # hand at the grip
+    pygame.draw.rect(s, (188, 130, 90), (26, 43, 12, 12), border_radius=3)
+    pygame.draw.rect(s, (120, 78, 50), (26, 43, 12, 12), 1, border_radius=3)
+    _BOW_TEX_CACHE[key] = s
+    return s
+
+
 def _draw_bow_viewmodel(g, screen) -> None:
-    """A pixelated side-on Minecraft-style bow, with stick left of the string."""
+    """Map the side-view bow texture onto a 3D item plane, angled forward."""
     w, h = screen.get_size()
     p = g.player
     now = pygame.time.get_ticks() / 1000.0
     moving = bool(getattr(p, "moving", False))
-    bobx = math.sin(now * 7.0) * (1.5 if moving else 0.4)
-    boby = abs(math.cos(now * 7.0)) * (1.5 if moving else 0.5)
+    bobx = math.sin(now * 7.0) * (1.2 if moving else 0.4)
+    boby = abs(math.cos(now * 7.0)) * (1.2 if moving else 0.4)
     pull = max(0.0, min(1.0, float(getattr(g, "_v3_bow_charge", 0.0)) / 1.1))
-    # Draw at low resolution, then nearest-scale up: chunky, deliberate pixels.
-    ss = pygame.Surface((100, 140), pygame.SRCALPHA)
-    nock_x = 56 + 14 * pull
-    top = (52, 7)
-    bottom = (52, 133)
-    # The curved stick: left of the string, made from coarse line segments.
-    curve = [(52, 7), (29, 30), (20, 55), (20, 82), (29, 108), (52, 133)]
-    pygame.draw.lines(ss, (62, 40, 24), False, curve, 13)
-    pygame.draw.lines(ss, (120, 80, 44), False, curve, 8)
-    pygame.draw.lines(ss, (176, 118, 64), False, curve, 3)
-    pygame.draw.circle(ss, (72, 46, 26), top, 7)
-    pygame.draw.circle(ss, (72, 46, 26), bottom, 7)
-    # grip at the middle of the stick
-    pygame.draw.rect(ss, (82, 52, 30), (22, 57, 28, 15), border_radius=3)
-    pygame.draw.rect(ss, (154, 102, 54), (24, 59, 24, 11), border_radius=2)
-    # string connects the two stick tips to the nock
-    pygame.draw.line(ss, (226, 222, 202), top, (int(nock_x), 70), 2)
-    pygame.draw.line(ss, (226, 222, 202), (int(nock_x), 70), bottom, 2)
-    # nocked arrow, pointing forward/right
-    pygame.draw.line(ss, (94, 64, 36), (int(nock_x), 70), (94, 70), 4)
-    pygame.draw.line(ss, (158, 112, 64), (int(nock_x), 70), (94, 70), 2)
-    pygame.draw.polygon(ss, (218, 224, 232), [(94, 70), (85, 65), (85, 75)])
-    pygame.draw.line(ss, (226, 222, 204), (int(nock_x), 70), (int(nock_x) - 8, 65), 2)
-    pygame.draw.line(ss, (226, 222, 204), (int(nock_x), 70), (int(nock_x) - 8, 75), 2)
-    # hand on the grip
-    pygame.draw.rect(ss, (190, 132, 92), (38, 63, 22, 18), border_radius=5)
-    pygame.draw.rect(ss, (122, 80, 50), (38, 63, 22, 18), 2, border_radius=5)
-    # Minecraft-like drop shadow: a dark offset silhouette behind the item.
-    sh = pygame.Surface((100, 140), pygame.SRCALPHA)
-    shadow_curve = [(x + 3, y + 5) for (x, y) in curve]
-    pygame.draw.lines(sh, (0, 0, 0, 95), False, shadow_curve, 13)
-    sc = max(1.0, min(w, h) / 240.0)
-    size = (max(1, int(100 * sc)), max(1, int(140 * sc)))
-    ss = pygame.transform.scale(ss, size)
-    sh = pygame.transform.scale(sh, size)
-    rect = ss.get_rect()
-    rect.midright = (w - 18 + int(bobx), int(h * 0.62) + int(boby))
-    sh_rect = sh.get_rect()
-    sh_rect.midright = (rect.midright[0] + 5, rect.midright[1] + 8)
-    screen.blit(sh, sh_rect)
-    screen.blit(ss, rect)
+    tex = _bow_texture(pull)
+    focal = min(w, h) * 1.12
+    base = (20.0 + bobx, -3.0 - boby, 88.0)
+    yaw = 0.52
+    ca, sa = math.cos(yaw), math.sin(yaw)
+
+    def proj(lx, ly):
+        # camera-space item plane: side-view texture, tilted about Y
+        x, z = lx, 0.0
+        x, z = x * ca + z * sa, -x * sa + z * ca
+        x += base[0]
+        y = base[1] + ly
+        z += base[2]
+        return (w * 0.5 + focal * x / z,
+                h * 0.5 - focal * y / z)
+
+    # corners: texture is 64 x 96, plane 32 x 48 local units
+    tl = proj(-16.0, 24.0)
+    tr = proj(16.0, 24.0)
+    br = proj(16.0, -24.0)
+    bl = proj(-16.0, -24.0)
+    # Minecraft-like drop shadow behind the plane
+    sxs = [q[0] for q in (tl, tr, br, bl)]
+    sys_ = [q[1] for q in (tl, tr, br, bl)]
+    x0, x1 = int(min(sxs)) - 12, int(max(sxs)) + 20
+    y0, y1 = int(min(sys_)) - 10, int(max(sys_)) + 24
+    if x1 > x0 and y1 > y0:
+        sh = pygame.Surface((x1 - x0, y1 - y0), pygame.SRCALPHA)
+        off = (10 - x0, 12 - y0)
+        pts = [(int(q[0] + off[0]), int(q[1] + off[1]))
+               for q in (tl, tr, br, bl)]
+        pygame.draw.polygon(sh, (0, 0, 0, 85), pts)
+        screen.blit(sh, (x0, y0))
+    # Perspective texture mapping by vertical columns; nearest scaling keeps
+    # the source texture deliberately pixelated.
+    minx, maxx = int(min(sxs)), int(max(sxs))
+    if maxx > minx:
+        for x in range(max(0, minx), min(w - 1, maxx) + 1):
+            u = (x - minx) / float(maxx - minx)
+            top = tl[1] + (tr[1] - tl[1]) * u
+            bot = bl[1] + (br[1] - bl[1]) * u
+            if bot <= top:
+                continue
+            sx = min(tex.get_width() - 1, max(0, int(u * tex.get_width())))
+            strip = tex.subsurface((sx, 0, 1, tex.get_height()))
+            dh = max(1, int(bot - top))
+            strip = pygame.transform.scale(strip, (1, dh))
+            screen.blit(strip, (x, int(top)))
 
 
 def draw_viewmodel(g, screen) -> None:
