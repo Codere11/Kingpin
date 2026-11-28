@@ -1324,6 +1324,8 @@ class ShipMarketPanel:
         self.held_from = None
         self.selected = 0
         self.hover = None
+        self.scroll = 0
+        self._goods_view = None
         self.font = pygame.font.SysFont("dejavusans", 18, bold=True)
         self.font_small = pygame.font.SysFont("dejavusans", 14, bold=True)
         self.font_tiny = pygame.font.SysFont("dejavusans", 11)
@@ -1352,12 +1354,21 @@ class ShipMarketPanel:
         hold_h = self.HOLD_ROWS * slot + (self.HOLD_ROWS + 1) * pad
         rx = lx + grid_w + 20
         rw = max(200, sw - rx - 16)
-        goods_rects = []
         gy = ly + 28
-        for i in range(len(self._goods())):
-            goods_rects.append(pygame.Rect(rx, gy + i * 52, rw, 46))
-        hist = pygame.Rect(rx, gy + len(self._goods()) * 52 + 8, rw, 140)
-        sell = pygame.Rect(rx + rw // 2 - 90, hist.bottom + 10, 180, 40)
+        # The market list is a fixed viewport with its own scroll.  It used
+        # to grow straight down the screen, so half the sellable goods (and
+        # the sell button) were outside the window.
+        hist_h = 140
+        sell_h = 40
+        rows = max(2, (sh - gy - hist_h - sell_h - 38) // 52)
+        goods = self._goods()
+        self.scroll = max(0, min(max(0, len(goods) - rows), int(self.scroll)))
+        self._goods_rows = rows
+        self._goods_view = pygame.Rect(rx, gy, rw, rows * 52 - 6)
+        goods_rects = [pygame.Rect(rx, gy + (i - self.scroll) * 52, rw, 46)
+                       for i in range(len(goods))]
+        hist = pygame.Rect(rx, gy + rows * 52 + 8, rw, hist_h)
+        sell = pygame.Rect(rx + rw // 2 - 90, hist.bottom + 10, 180, sell_h)
         return (lx, ly, player_rects, hold_rects, y, hold_y, rx, rw,
                 goods_rects, hist, sell)
 
@@ -1379,7 +1390,12 @@ class ShipMarketPanel:
         if surface is None:
             return None
         (_lx, _ly, pr, hr, _y, _hy, _rx, _rw, gr, _hist, _sell) = self._layout(*surface.get_size())
+        view = getattr(self, "_goods_view", None)
+        if view is not None and not view.collidepoint(pos):
+            return None
         for i, r in enumerate(gr):
+            if view is not None and not view.colliderect(r):
+                continue
             if r.collidepoint(pos):
                 return i
         return None
@@ -1391,6 +1407,12 @@ class ShipMarketPanel:
         return self._layout(*surface.get_size())[10]
 
     def handle_event(self, event):
+        if event.type == pygame.MOUSEWHEEL:
+            self.scroll -= int(event.y)
+            surface = pygame.display.get_surface()
+            if surface is not None:
+                self._layout(*surface.get_size())
+            return None
         if event.type == pygame.MOUSEMOTION:
             self.hover = event.pos
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -1518,11 +1540,16 @@ class ShipMarketPanel:
                         except Exception:
                             pass
                         break
-        # right goods list
+        # right goods list -- clipped to its own scroll viewport
         t = self.font.render("THE MARKET", True, (238, 224, 190))
         screen.blit(t, (rx + 4, ly))
+        view = getattr(self, "_goods_view", None)
+        if view is not None:
+            screen.set_clip(view)
         for i, good in enumerate(self._goods()):
             rect = gr[i]
+            if view is not None and not view.colliderect(rect):
+                continue
             base = self.g.market["base"].get(good, market.spec(good)[0])
             hist = self.g.market["history"].get(good, [base])
             trend = ""
@@ -1543,6 +1570,20 @@ class ShipMarketPanel:
             have = self._hold_count(good)
             hv = self.font_tiny.render("in hold: %d" % have, True, (150, 146, 134))
             screen.blit(hv, (rect.left + 48, rect.bottom - 18))
+        if view is not None:
+            screen.set_clip(None)
+            # scrollbar / hint
+            if len(self._goods()) > self._goods_rows:
+                bar = pygame.Rect(view.right - 6, view.top, 4, view.height)
+                pygame.draw.rect(screen, (46, 42, 38), bar, border_radius=2)
+                frac = self._goods_rows / float(len(self._goods()))
+                knob_h = max(16, int(bar.height * frac))
+                max_scroll = max(1, len(self._goods()) - self._goods_rows)
+                knob_y = bar.top + int((bar.height - knob_h) * self.scroll / max_scroll)
+                pygame.draw.rect(screen, ACCENT, (bar.x, knob_y, bar.w, knob_h),
+                                 border_radius=2)
+                hint = self.font_tiny.render("wheel: scroll", True, (174, 164, 144))
+                screen.blit(hint, (view.right - hint.get_width() - 14, view.top + 2))
         # price history for the selected good
         good = self._goods()[self.selected]
         base = self.g.market["base"].get(good, market.spec(good)[0])

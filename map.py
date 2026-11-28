@@ -53,7 +53,7 @@ MIN_HALF = 1200.0        # the closest you may zoom: about two villages wide
 # THE MAP IS A LOCAL CHART, NOT THE WHOLE PLANET.  It follows the player and
 # never zooms far enough out to remove the need to travel.
 MAP_START_HALF = 120000.0
-MAX_HALF = 120000.0
+MAX_HALF = WORLD_HALF
 
 ZOOM_STEP = 1.16         # per notch: smooth, and you can always get back
 PAN_RATE = 0.25          # a full screen in about four seconds, at any zoom
@@ -522,10 +522,10 @@ def handle_input(dt: float, player, mouse_pos=None, wheel: int = 0) -> None:
         dy -= speed
     if keys[pygame.K_s] or keys[pygame.K_DOWN]:
         dy += speed
-    # The chart tracks the player; panning away would reveal places he has
-    # not travelled to.  Movement keys are intentionally ignored here.
-    _VIEW["cx"] = float(getattr(player, "x", _VIEW["cx"]))
-    _VIEW["cy"] = float(getattr(player, "y", _VIEW["cy"]))
+    # The chart is a pannable window.  It starts focused on the player, but
+    # WASD/arrows move the paper itself; C is the explicit recenter.
+    _VIEW["cx"] = float(_VIEW["cx"]) + dx
+    _VIEW["cy"] = float(_VIEW["cy"]) + dy
     if keys[pygame.K_q] or keys[pygame.K_MINUS] or keys[pygame.K_KP_MINUS]:
         _zoom(1.0 / ZOOM_STEP ** (dt * 60.0 / 6.0))
     if keys[pygame.K_e] or keys[pygame.K_EQUALS] or keys[pygame.K_KP_PLUS]:
