@@ -902,6 +902,8 @@ def run(g):
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_m,
                                                                   pygame.K_ESCAPE):
                     g.map_open = False
+                elif event.type == pygame.MOUSEWHEEL:
+                    g._map_wheel = int(getattr(g, "_map_wheel", 0) or 0) + int(event.y)
             elif g.trade_open:
                 if event.type == pygame.KEYDOWN and event.key in (pygame.K_e,
                                                                   pygame.K_ESCAPE):

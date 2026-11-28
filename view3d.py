@@ -1982,6 +1982,9 @@ def draw_hud(g) -> None:
     try:
         if getattr(g, "map_open", False):
             import map as mapmod
+            _wheel = int(getattr(g, "_map_wheel", 0) or 0)
+            g._map_wheel = 0
+            mapmod.handle_input(g.dt, g.player, wheel=_wheel)
             mapmod.draw(screen, g.world, g.player, g._nearest_town(),
                         g.hub_world.hubs,
                         settlements=list(g.villages.villages),
